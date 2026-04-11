@@ -1,0 +1,16 @@
+# Broker SEMP endpoints
+solace_1_url      = "http://127.0.0.1:8080"
+solace_1_username = "admin"
+solace_1_password = "admin"
+
+solace_2_url      = "http://127.0.0.1:8090"
+solace_2_username = "admin"
+solace_2_password = "admin"
+
+# Client credentials
+default_client_password = "default"
+trace_password          = "trace"
+dmr_password            = "cluster"
+
+# Set to true to activate the event mesh DMR links
+dmr_enabled = false

@@ -1,0 +1,16 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+terraform.tfvars
+
+# Runtime
+.env

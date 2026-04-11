@@ -1,0 +1,119 @@
+networks:
+  solace_net:
+    name: solace_net
+    external: false
+    driver: bridge
+
+services:
+  jaeger:
+    image: ${JAEGER_IMG}
+    command: ["--memory.max-traces=1000"]
+    hostname: jaeger
+    container_name: jaeger
+    networks:
+      - solace_net
+    ports:
+      - "16685:16685"
+      - "16686:16686"
+      - "16687:16687"
+      - "14268:14268"
+      - "14250:14250"
+
+  otel-collector:
+    image: ${OTELCOL_IMG}
+    command: ["--config=/etc/otel-collector-config.yaml", "${OTELCOL_ARGS}"]
+    hostname: otel-collector
+    container_name: otel-collector
+    networks:
+      - solace_net
+    volumes:
+      - ./config/otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "1888:1888"   # pprof extension
+      - "8888:8888"   # Prometheus metrics exposed by the collector
+      - "8889:8889"   # Prometheus exporter metrics
+      - "13133:13133" # health_check extension
+      - "4317:4317"   # OTLP gRPC receiver
+      - "55679:55679" # zpages extension
+    depends_on:
+      - jaeger
+
+  solace-1:
+    image: ${PUBSUB_IMG}
+    hostname: solace-1
+    container_name: solace-1
+    networks:
+      - solace_net
+    env_file:
+      - ./config/solace-1/solace_config_keys.env
+    ports:
+      - "2222:2222"
+      - "8080:8080"
+      - "55443:55443"
+      - "55445:55445"
+      - "55557:55555"
+      - "5671:5671"
+      - "5672:5672"
+      - "5550:5550"
+      - "1943:1943"
+      - "8008:8008"
+      - "1883:1883"
+      - "8883:8883"
+      - "8000:8000"
+      - "8443:8443"
+      - "9000:9000"
+      - "9443:8443"
+    shm_size: 1g
+    ulimits:
+      core: -1
+      nofile:
+        soft: 2448
+        hard: 1048576
+
+  solace-2:
+    image: ${PUBSUB_IMG}
+    hostname: solace-2
+    container_name: solace-2
+    networks:
+      - solace_net
+    env_file:
+      - ./config/solace-2/solace_config_keys.env
+    ports:
+      - "2223:2222"
+      - "8090:8080"
+      - "55444:55443"
+      - "55446:55445"
+      - "55558:55555"
+      - "5673:5671"
+      - "5674:5672"
+      - "5551:5550"
+      - "1944:1943"
+      - "8009:8008"
+    shm_size: 1g
+    ulimits:
+      core: -1
+      nofile:
+        soft: 2448
+        hard: 1048576
+
+  event-management-agent:
+    image: ${EMA_IMG}
+    hostname: event-management-agent
+    container_name: event-management-agent
+    networks:
+      - solace_net
+    env_file:
+      - ./config/event-management-agent/ema_config_keys.env
+    ports:
+      - "8180:8180"
+    volumes:
+      - ./config/event-management-agent/amartens_ema.yml:/config/ema.yml
+    ulimits:
+      core: -1
+      nofile:
+        soft: 2448
+        hard: 16392
+    restart: on-failure
+    depends_on:
+      - solace-1
+      - solace-2

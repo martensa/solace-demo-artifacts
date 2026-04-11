@@ -1,0 +1,127 @@
+springdoc:
+  packages-to-scan: com.solace.maas.ep.event.management.agent.scanManager.rest
+  api-docs:
+    path: /docs/event-management-agent
+  swagger-ui:
+    path: /event-management-agent/swagger-ui.html
+server:
+  port: 8180
+spring:
+  servlet:
+    multipart:
+      max-file-size: ${MAX_FILE_SIZE:5MB}
+      max-request-size: ${MAX_REQUEST_SIZE:5MB}
+  datasource:
+    url: jdbc:h2:file:./data/cache;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    driver-class-name: org.h2.Driver
+    password: 27wfio1HGc
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    defer-datasource-initialization: true
+  main:
+    allow-bean-definition-overriding: true
+camel:
+  main:
+    use-mdc-logging: true
+kafka:
+  client:
+    config:
+      reconnections:
+        max-backoff:
+          value: 1000
+          unit: milliseconds
+        backoff:
+          value: 50
+          unit: milliseconds
+      connections:
+        max-idle:
+          value: 10000
+          unit: milliseconds
+        request-timeout:
+          value: 5000
+          unit: milliseconds
+        timeout:
+          value: 60000
+          unit: milliseconds
+eventPortal:
+  runtimeAgentId: ${EP_RUNTIME_AGENT_ID:jmaq2bca4wx}
+  organizationId: ${EP_ORGANIZATION_ID:seall}
+  gateway:
+    id: g527g4hnak7
+    name: US East EVMR
+    messaging:
+      standalone: false
+      rtoSession: false
+      enableHeartbeats: true
+      testHeartbeats: true
+      connections:
+      - name: eventPortalGateway
+        authenticationType: ${EP_GATEWAY_AUTH:basicAuthentication}
+        msgVpn: ${EP_GATEWAY_MSGVPN:us-east-evmr}
+        url: ${EP_GATEWAY_URL:tcps://prod-us-evmr.messaging.solace.cloud:55443}
+        users:
+        - clientName: client_jmaq2bca4wx
+          username: ${EP_GATEWAY_USERNAME:org-seall-zpfsf1x4voz-jmaq2bca4wx}
+          password: 4U0R!!QI8yJ.3!GOw=qfR4O7
+          name: messaging1
+        proxyEnabled: ${SOLACE_PROXY_ENABLED:false}
+        proxyType: ${SOLACE_PROXY_TYPE:http}
+        proxyHost: ${SOLACE_PROXY_HOST:localhost}
+        proxyPort: ${SOLACE_PROXY_PORT:8443}
+        proxyUsername: ${SOLACE_PROXY_USERNAME:}
+        proxyPassword: ${SOLACE_PROXY_PASSWORD:}
+  topicPrefix: ${EP_TOPIC_PREFIX:sc/ep/runtime}
+plugins:
+  resources:
+  - id: ied2vlmhqvd
+    type: solace
+    name: solace-1
+    connections:
+    - name: solace-1
+      url: http://host.docker.internal:8080
+      properties:
+      - name: msgVpn
+        value: amartens-test
+      - name: sempPageSize
+        value: 100
+      authentication:
+      - properties:
+        - name: type
+          value: basicAuthentication
+        protocol: semp
+        credentials:
+        - properties:
+          - name: username
+            value: admin
+          - name: password
+            value: ${solace1_SOLACE_SEMP_PASSWORD}
+          source: ENVIRONMENT_VARIABLE
+          operations:
+          - name: ALL
+  - id: syrg16f7wk9
+    type: solace
+    name: solace-2
+    connections:
+    - name: solace-2
+      url: http://host.docker.internal:8090
+      properties:
+      - name: msgVpn
+        value: amartens-test
+      - name: sempPageSize
+        value: 100
+      authentication:
+      - properties:
+        - name: type
+          value: basicAuthentication
+        protocol: semp
+        credentials:
+        - properties:
+          - name: username
+            value: admin
+          - name: password
+            value: ${solace2_SOLACE_SEMP_PASSWORD}
+          source: ENVIRONMENT_VARIABLE
+          operations:
+          - name: ALL
