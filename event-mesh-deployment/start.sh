@@ -6,12 +6,12 @@ cp .env.example .env
 docker compose up -d
 
 echo "Waiting for solace-1 SEMP to become ready..."
-until curl -sf -o /dev/null http://127.0.0.1:8080/SEMP/v2/config/about; do
+until curl -sf -o /dev/null -u admin:admin http://127.0.0.1:8080/SEMP/v2/config/about; do
   sleep 2
 done
 
 echo "Waiting for solace-2 SEMP to become ready..."
-until curl -sf -o /dev/null http://127.0.0.1:8090/SEMP/v2/config/about; do
+until curl -sf -o /dev/null -u admin:admin http://127.0.0.1:8090/SEMP/v2/config/about; do
   sleep 2
 done
 
