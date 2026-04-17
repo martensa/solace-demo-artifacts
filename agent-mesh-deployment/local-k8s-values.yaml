@@ -1,0 +1,179 @@
+# SAM Core Configuration
+sam:
+  communityMode: false
+
+  # Authentication and authorization configuration
+  # When enabled, SAM will enforce RBAC authorization
+  # When disabled (for dev/quickstart), all users have admin access
+  authorization:
+    enabled: true
+
+  # Use localhost for local development
+  dnsName: "sam.solace.lab"
+
+  # Session secret -- override via --set in start.sh
+  sessionSecretKey: ""
+
+  # OIDC configuration -- override via --set in start.sh
+  oauthProvider:
+    keycloak:
+      issuer: ""
+      client_id: ""
+      client_secret: ""
+      redirect_uri: ""
+      scope: "openid email profile"
+
+  authenticationRbac:
+    # Define custom roles (optional)
+    customRoles:
+      operator:
+        description: "System operator"
+        scopes:
+          - "tool:basic:*"
+          - "tool:advanced:read"
+          - "tool:artifact:load"
+          - "tool:artifact:create"
+          - "monitor/namespace/*:a2a_messages:subscribe"
+
+      viewer:
+        description: "Read-only access"
+        scopes:
+          - "tool:basic:read"
+          - "tool:artifact:load"
+          - "monitor/namespace/*:a2a_messages:subscribe"
+
+      data_engineer:
+        description: "Data engineering team with access to data tools"
+        scopes:
+          - "artifact:*"
+          - "tool:data:*"
+          - "sam:connectors:read"
+
+      power_user:
+        description: "Advanced user with broader tool access"
+        scopes:
+          - "artifact:*"
+          - "tool:*"
+          - "sam:agent_builder:read"
+          - "sam:connectors:*"
+          - "sam:deployments:read"
+
+    # Static user assignments (leave empty when using idpClaims)
+    users: []
+
+    # Dynamic role assignment from IDP claims
+    idpClaims:
+      enabled: true
+      oidcProvider: "keycloak"
+      claimKey: "groups"
+      # Map IDP claim values to SAM roles (built-in or custom)
+      mappings:
+        "admin-group": ["sam_admin"]
+        "engineering-team": ["sam_user"]
+        "data-analysts": ["data_engineer"]
+
+    # Default roles for users whose claims do not match
+    defaultRoles:
+      - "viewer"
+
+  # Optional URL overrides for local development
+  frontendServerUrl: ""
+  platformServiceUrl: ""
+
+  cors:
+    allowedOriginRegex: ""
+
+  taskLogging:
+    enabled: true
+    logStatusUpdates: true
+    logArtifactEvents: false
+    logFileParts: true
+    maxFilePartSizeBytes: 10240
+    hybridBuffer:
+      enabled: true
+      flushThreshold: 10
+
+# Solace Broker Configuration
+# Connects to the sam VPN on solace-1 from event-mesh-deployment
+broker:
+  url: "ws://host.docker.internal:8008"
+  clientUsername: "default"
+  password: "default"
+  vpn: "sam"
+
+# LLM Service Configuration
+# API key is injected via --set in start.sh
+llmService:
+  planningModel: "openai/claude-sonnet-4-6"
+  generalModel: "openai/claude-sonnet-4-6"
+  reportModel: "openai/claude-sonnet-4-6"
+  imageModel: "openai/azure-dalle-3"
+  transcriptionModel: "openai/whisper"
+  llmServiceEndpoint: "https://lite-llm.mymaas.net"
+  llmServiceApiKey: ""
+
+environmentVariables: {}
+
+# Kubernetes Service Configuration
+service:
+  type: ClusterIP
+  annotations: {}
+  tls:
+    enabled: false
+    passphrase: ""
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    cert-manager.io/cluster-issuer: "solace-ca-clusterissuer"
+  autoConfigurePaths: true
+  host: "sam.solace.lab"
+  tls:
+    - secretName: sam-tls
+      hosts:
+        - sam.solace.lab
+
+# Persistence Configuration
+global:
+  persistence:
+    enabled: true
+    namespaceId: "sam-solace-lab"
+
+# SAM Deployment Configuration
+samDeployment:
+  serviceAccount:
+    name: solace-agent-mesh-sa
+    annotations: {}
+
+  imagePullSecret: "registry-pull-secret"
+
+  # Main SAM Image
+  image:
+    repository: registry.solace.lab/solace-agent-mesh-enterprise
+    tag: 1.97.2
+    pullPolicy: Always
+
+  # Agent Deployer image
+  agentDeployer:
+    image:
+      repository: registry.solace.lab/sam-agent-deployer
+      tag: 1.7.0
+      pullPolicy: Always
+    version: "k8s-1.2.4"
+    chartBaseUrl: "https://solaceproducts.github.io/solace-agent-mesh-helm-quickstart"
+    chartVersion: "1.2.4"
+    localCharts:
+      enabled: false
+
+  rollout:
+    rollingUpdate: {}
+    strategy: RollingUpdate
+
+dataStores:
+  objectStorage:
+    workloadIdentity:
+      enabled: false

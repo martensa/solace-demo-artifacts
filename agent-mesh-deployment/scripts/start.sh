@@ -1,0 +1,72 @@
+#!/bin/sh
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# --- Load environment variables -----------------------------------
+if [ ! -f "$PROJECT_DIR/.env" ]; then
+  echo "No .env file found. Copying .env.example to .env ..."
+  cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
+  echo "Please edit .env with your credentials, then re-run."
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+. "$PROJECT_DIR/.env"
+
+# --- Validate required variables ----------------------------------
+missing=""
+for var in SAM_NAMESPACE SAM_RELEASE SAM_SESSION_SECRET_KEY \
+           KEYCLOAK_ISSUER KEYCLOAK_CLIENT_ID KEYCLOAK_CLIENT_SECRET \
+           KEYCLOAK_REDIRECT_URI LLM_SERVICE_API_KEY; do
+  eval val=\$$var
+  if [ -z "$val" ] || [ "$val" = "changeme" ]; then
+    missing="$missing $var"
+  fi
+done
+
+if [ -n "$missing" ]; then
+  echo "ERROR: The following variables in .env are missing or"
+  echo "still set to the placeholder value:"
+  echo " $missing"
+  exit 1
+fi
+
+# --- Helm repo ----------------------------------------------------
+helm repo add solace-agent-mesh \
+  https://solaceproducts.github.io/solace-agent-mesh-helm-quickstart/ \
+  2>/dev/null || true
+helm repo update solace-agent-mesh
+
+# --- Namespace and pull secret ------------------------------------
+kubectl create namespace "$SAM_NAMESPACE" 2>/dev/null || true
+
+# --- Install / Upgrade --------------------------------------------
+helm upgrade --install "$SAM_RELEASE" \
+  solace-agent-mesh/solace-agent-mesh \
+  --namespace "$SAM_NAMESPACE" \
+  --values "$PROJECT_DIR/local-k8s-values.yaml" \
+  --set sam.sessionSecretKey="$SAM_SESSION_SECRET_KEY" \
+  --set sam.oauthProvider.keycloak.issuer="$KEYCLOAK_ISSUER" \
+  --set sam.oauthProvider.keycloak.client_id="$KEYCLOAK_CLIENT_ID" \
+  --set sam.oauthProvider.keycloak.client_secret="$KEYCLOAK_CLIENT_SECRET" \
+  --set sam.oauthProvider.keycloak.redirect_uri="$KEYCLOAK_REDIRECT_URI" \
+  --set llmService.llmServiceApiKey="$LLM_SERVICE_API_KEY" \
+  --set samDeployment.imagePullSecret="$REGISTRY_PULL_SECRET"
+
+echo ""
+echo "Waiting for pods to become ready ..."
+kubectl wait --for=condition=ready pod \
+  -l app.kubernetes.io/instance="$SAM_RELEASE" \
+  --namespace "$SAM_NAMESPACE" \
+  --timeout=300s 2>/dev/null || true
+
+echo ""
+helm status "$SAM_RELEASE" --namespace "$SAM_NAMESPACE"
+echo ""
+kubectl get pods \
+  -l app.kubernetes.io/instance="$SAM_RELEASE" \
+  --namespace "$SAM_NAMESPACE"
+echo ""
+echo "Solace Agent Mesh deployment complete."
