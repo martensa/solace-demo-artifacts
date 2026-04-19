@@ -1,5 +1,5 @@
-#!/bin/sh
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -19,61 +19,66 @@ KEYCLOAK_REALM="${KEYCLOAK_REALM:-solace-lab}"
 KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 SAM_CLIENT_ID="${KEYCLOAK_CLIENT_ID:-solace-agent-mesh}"
-SAM_REDIRECT_URI="${KEYCLOAK_REDIRECT_URI:-https://sam.solace.lab/callback}"
 SAM_DNS_NAME="sam.solace.lab"
 
+# --- Check dependencies -------------------------------------------
+if ! command -v jq >/dev/null 2>&1; then
+  echo "ERROR: jq is required but not installed."
+  echo "Install with: brew install jq (macOS) or apt install jq (Linux)"
+  exit 1
+fi
+
 # --- Obtain admin token -------------------------------------------
-echo "Obtaining Keycloak admin token ..."
-TOKEN=$(curl -sf -X POST \
+echo "Obtaining Keycloak admin token from ${KEYCLOAK_URL} ..."
+TOKEN_RESPONSE=$(curl -sk -X POST \
   "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=password" \
   -d "client_id=admin-cli" \
   -d "username=${KEYCLOAK_ADMIN_USER}" \
-  -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
-  | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+  -d "password=${KEYCLOAK_ADMIN_PASSWORD}")
+
+TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
 
 if [ -z "$TOKEN" ]; then
-  echo "ERROR: Failed to obtain admin token."
-  echo "Check KEYCLOAK_URL, KEYCLOAK_ADMIN_USER, and"
-  echo "KEYCLOAK_ADMIN_PASSWORD in .env."
+  echo "ERROR: Failed to obtain admin token. Response:"
+  echo "$TOKEN_RESPONSE"
   exit 1
 fi
 
 BASE="${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}"
 
-# --- Check if client already exists -------------------------------
-EXISTING=$(curl -sf -o /dev/null -w "%{http_code}" \
-  "${BASE}/clients?clientId=${SAM_CLIENT_ID}" \
-  -H "Authorization: Bearer ${TOKEN}")
-
-if [ "$EXISTING" = "200" ]; then
-  CLIENT_UUID=$(curl -sf \
-    "${BASE}/clients?clientId=${SAM_CLIENT_ID}" \
+# --- Helper: find client UUID by clientId -------------------------
+get_client_uuid() {
+  curl -sk "${BASE}/clients?clientId=${SAM_CLIENT_ID}" \
     -H "Authorization: Bearer ${TOKEN}" \
-    | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1)
+    | jq -r --arg c "$SAM_CLIENT_ID" \
+        '.[] | select(.clientId==$c) | .id' \
+    | head -1
+}
 
-  if [ -n "$CLIENT_UUID" ]; then
-    echo "Client '${SAM_CLIENT_ID}' already exists (${CLIENT_UUID})."
-    echo "Fetching client secret ..."
-    SECRET=$(curl -sf \
-      "${BASE}/clients/${CLIENT_UUID}/client-secret" \
-      -H "Authorization: Bearer ${TOKEN}" \
-      | sed -n 's/.*"value":"\([^"]*\)".*/\1/p')
-    echo ""
-    echo "Client ID:     ${SAM_CLIENT_ID}"
-    echo "Client Secret: ${SECRET}"
-    echo ""
-    echo "Set these in your .env file:"
-    echo "  KEYCLOAK_CLIENT_ID=${SAM_CLIENT_ID}"
-    echo "  KEYCLOAK_CLIENT_SECRET=${SECRET}"
-    exit 0
-  fi
+# --- Check if client already exists -------------------------------
+CLIENT_UUID=$(get_client_uuid)
+
+if [ -n "$CLIENT_UUID" ]; then
+  echo "Client '${SAM_CLIENT_ID}' already exists (${CLIENT_UUID})."
+  echo "Fetching client secret ..."
+  SECRET=$(curl -sk \
+    "${BASE}/clients/${CLIENT_UUID}/client-secret" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    | jq -r '.value // empty')
+  echo ""
+  echo "Client ID:     ${SAM_CLIENT_ID}"
+  echo "Client Secret: ${SECRET}"
+  echo ""
+  echo "Set this in your .env file:"
+  echo "  KEYCLOAK_CLIENT_SECRET=${SECRET}"
+  exit 0
 fi
 
 # --- Create the OIDC client --------------------------------------
 echo "Creating OIDC client '${SAM_CLIENT_ID}' ..."
-HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" -X POST \
+HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -X POST \
   "${BASE}/clients" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
@@ -100,11 +105,8 @@ if [ "$HTTP_CODE" != "201" ]; then
   exit 1
 fi
 
-# --- Get client UUID ----------------------------------------------
-CLIENT_UUID=$(curl -sf \
-  "${BASE}/clients?clientId=${SAM_CLIENT_ID}" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1)
+# --- Look up client UUID after creation ---------------------------
+CLIENT_UUID=$(get_client_uuid)
 
 if [ -z "$CLIENT_UUID" ]; then
   echo "ERROR: Client created but UUID lookup failed."
@@ -114,7 +116,7 @@ fi
 # --- Add group membership mapper ---------------------------------
 # SAM RBAC expects a "groups" claim in the ID token
 echo "Adding group membership protocol mapper ..."
-curl -sf -o /dev/null -X POST \
+curl -sk -o /dev/null -X POST \
   "${BASE}/clients/${CLIENT_UUID}/protocol-mappers/models" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
@@ -132,10 +134,10 @@ curl -sf -o /dev/null -X POST \
   }"
 
 # --- Fetch client secret ------------------------------------------
-SECRET=$(curl -sf \
+SECRET=$(curl -sk \
   "${BASE}/clients/${CLIENT_UUID}/client-secret" \
   -H "Authorization: Bearer ${TOKEN}" \
-  | sed -n 's/.*"value":"\([^"]*\)".*/\1/p')
+  | jq -r '.value // empty')
 
 echo ""
 echo "OIDC client created successfully."
@@ -143,6 +145,5 @@ echo ""
 echo "Client ID:     ${SAM_CLIENT_ID}"
 echo "Client Secret: ${SECRET}"
 echo ""
-echo "Set these in your .env file:"
-echo "  KEYCLOAK_CLIENT_ID=${SAM_CLIENT_ID}"
+echo "Set this in your .env file:"
 echo "  KEYCLOAK_CLIENT_SECRET=${SECRET}"

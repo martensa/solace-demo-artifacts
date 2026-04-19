@@ -1,5 +1,5 @@
-#!/bin/sh
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -19,22 +19,31 @@ KEYCLOAK_REALM="${KEYCLOAK_REALM:-solace-lab}"
 KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 
-GROUPS="admin user viewer data_engineer power_user"
-USERS="viewer data_engineer power_user"
+SAM_GROUPS="admin user viewer data_engineer power_user"
+SAM_USERS="viewer data_engineer power_user"
+
+# --- Check dependencies -------------------------------------------
+if ! command -v jq >/dev/null 2>&1; then
+  echo "ERROR: jq is required but not installed."
+  echo "Install with: brew install jq (macOS) or apt install jq (Linux)"
+  exit 1
+fi
 
 # --- Obtain admin token -------------------------------------------
-echo "Obtaining Keycloak admin token ..."
-TOKEN=$(curl -sf -X POST \
+echo "Obtaining Keycloak admin token from ${KEYCLOAK_URL} ..."
+TOKEN_RESPONSE=$(curl -sk -X POST \
   "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=password" \
   -d "client_id=admin-cli" \
   -d "username=${KEYCLOAK_ADMIN_USER}" \
-  -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
-  | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+  -d "password=${KEYCLOAK_ADMIN_PASSWORD}")
+
+TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
 
 if [ -z "$TOKEN" ]; then
-  echo "ERROR: Failed to obtain admin token."
+  echo "ERROR: Failed to obtain admin token. Response:"
+  echo "$TOKEN_RESPONSE"
   exit 1
 fi
 
@@ -43,45 +52,52 @@ BASE="${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}"
 # --- Helper: find group UUID by name ------------------------------
 get_group_id() {
   NAME="$1"
-  curl -sf "${BASE}/groups?search=${NAME}&exact=true" \
+  curl -sk "${BASE}/groups?search=${NAME}&exact=true" \
     -H "Authorization: Bearer ${TOKEN}" \
-    | sed -n 's/.*"id":"\([^"]*\)","name":"'"${NAME}"'".*/\1/p' \
+    | jq -r --arg n "$NAME" '.[] | select(.name==$n) | .id' \
     | head -1
 }
 
 # --- Helper: find user UUID by username ---------------------------
 get_user_id() {
   NAME="$1"
-  curl -sf "${BASE}/users?username=${NAME}&exact=true" \
+  curl -sk "${BASE}/users?username=${NAME}&exact=true" \
     -H "Authorization: Bearer ${TOKEN}" \
-    | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' \
+    | jq -r --arg n "$NAME" '.[] | select(.username==$n) | .id' \
     | head -1
 }
 
 # --- Create groups -----------------------------------------------
-for GROUP in $GROUPS; do
+for GROUP in $SAM_GROUPS; do
   EXISTING=$(get_group_id "$GROUP")
   if [ -n "$EXISTING" ]; then
-    echo "Group '${GROUP}' already exists."
+    echo "Group '${GROUP}' already exists (${EXISTING})."
     continue
   fi
 
   echo "Creating group '${GROUP}' ..."
-  curl -sf -o /dev/null -X POST "${BASE}/groups" \
+  HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -X POST \
+    "${BASE}/groups" \
     -H "Authorization: Bearer ${TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "{\"name\":\"${GROUP}\"}"
+    -d "{\"name\":\"${GROUP}\"}")
+
+  if [ "$HTTP_CODE" != "201" ]; then
+    echo "ERROR: Failed to create group '${GROUP}' (HTTP ${HTTP_CODE})."
+    exit 1
+  fi
 done
 
 # --- Create users and assign groups -------------------------------
-for USER in $USERS; do
+for USER in $SAM_USERS; do
   EXISTING=$(get_user_id "$USER")
   if [ -n "$EXISTING" ]; then
-    echo "User '${USER}' already exists."
+    echo "User '${USER}' already exists (${EXISTING})."
     USER_UUID="$EXISTING"
   else
     echo "Creating user '${USER}' ..."
-    curl -sf -o /dev/null -X POST "${BASE}/users" \
+    HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -X POST \
+      "${BASE}/users" \
       -H "Authorization: Bearer ${TOKEN}" \
       -H "Content-Type: application/json" \
       -d "{
@@ -94,23 +110,28 @@ for USER in $USERS; do
           \"value\": \"${USER}\",
           \"temporary\": false
         }]
-      }"
+      }")
+
+    if [ "$HTTP_CODE" != "201" ]; then
+      echo "ERROR: Failed to create user '${USER}' (HTTP ${HTTP_CODE})."
+      exit 1
+    fi
     USER_UUID=$(get_user_id "$USER")
   fi
 
   if [ -z "$USER_UUID" ]; then
     echo "ERROR: Could not resolve UUID for user '${USER}'."
-    continue
+    exit 1
   fi
 
   GROUP_UUID=$(get_group_id "$USER")
   if [ -z "$GROUP_UUID" ]; then
     echo "ERROR: Group '${USER}' not found."
-    continue
+    exit 1
   fi
 
   echo "Assigning user '${USER}' to group '${USER}' ..."
-  curl -sf -o /dev/null -X PUT \
+  curl -sk -o /dev/null -X PUT \
     "${BASE}/users/${USER_UUID}/groups/${GROUP_UUID}" \
     -H "Authorization: Bearer ${TOKEN}"
 done
@@ -130,7 +151,7 @@ for NAME in admin user; do
   fi
 
   echo "Assigning existing user '${NAME}' to group '${NAME}' ..."
-  curl -sf -o /dev/null -X PUT \
+  curl -sk -o /dev/null -X PUT \
     "${BASE}/users/${USER_UUID}/groups/${GROUP_UUID}" \
     -H "Authorization: Bearer ${TOKEN}"
 done

@@ -1,5 +1,5 @@
-#!/bin/sh
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -16,32 +16,41 @@ KEYCLOAK_REALM="${KEYCLOAK_REALM:-solace-lab}"
 KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 
-GROUPS="admin user viewer data_engineer power_user"
-USERS="viewer data_engineer power_user"
+SAM_GROUPS="admin user viewer data_engineer power_user"
+SAM_USERS="viewer data_engineer power_user"
+
+# --- Check dependencies -------------------------------------------
+if ! command -v jq >/dev/null 2>&1; then
+  echo "ERROR: jq is required but not installed."
+  exit 1
+fi
 
 # --- Obtain admin token -------------------------------------------
 echo "Obtaining Keycloak admin token ..."
-TOKEN=$(curl -sf -X POST \
+TOKEN_RESPONSE=$(curl -sk -X POST \
   "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=password" \
   -d "client_id=admin-cli" \
   -d "username=${KEYCLOAK_ADMIN_USER}" \
-  -d "password=${KEYCLOAK_ADMIN_PASSWORD}" \
-  | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+  -d "password=${KEYCLOAK_ADMIN_PASSWORD}")
+
+TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
 
 if [ -z "$TOKEN" ]; then
-  echo "ERROR: Failed to obtain admin token."
+  echo "ERROR: Failed to obtain admin token. Response:"
+  echo "$TOKEN_RESPONSE"
   exit 1
 fi
 
 BASE="${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}"
 
 # --- Delete users -------------------------------------------------
-for USER in $USERS; do
-  USER_UUID=$(curl -sf "${BASE}/users?username=${USER}&exact=true" \
+for USER in $SAM_USERS; do
+  USER_UUID=$(curl -sk "${BASE}/users?username=${USER}&exact=true" \
     -H "Authorization: Bearer ${TOKEN}" \
-    | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1)
+    | jq -r --arg n "$USER" '.[] | select(.username==$n) | .id' \
+    | head -1)
 
   if [ -z "$USER_UUID" ]; then
     echo "User '${USER}' not found, skipping."
@@ -49,17 +58,17 @@ for USER in $USERS; do
   fi
 
   echo "Deleting user '${USER}' ..."
-  curl -sf -o /dev/null -X DELETE \
+  curl -sk -o /dev/null -X DELETE \
     "${BASE}/users/${USER_UUID}" \
     -H "Authorization: Bearer ${TOKEN}"
 done
 
 # --- Delete groups ------------------------------------------------
 # Also removes group memberships of pre-existing users (admin, user)
-for GROUP in $GROUPS; do
-  GROUP_UUID=$(curl -sf "${BASE}/groups?search=${GROUP}&exact=true" \
+for GROUP in $SAM_GROUPS; do
+  GROUP_UUID=$(curl -sk "${BASE}/groups?search=${GROUP}&exact=true" \
     -H "Authorization: Bearer ${TOKEN}" \
-    | sed -n 's/.*"id":"\([^"]*\)","name":"'"${GROUP}"'".*/\1/p' \
+    | jq -r --arg n "$GROUP" '.[] | select(.name==$n) | .id' \
     | head -1)
 
   if [ -z "$GROUP_UUID" ]; then
@@ -68,7 +77,7 @@ for GROUP in $GROUPS; do
   fi
 
   echo "Deleting group '${GROUP}' ..."
-  curl -sf -o /dev/null -X DELETE \
+  curl -sk -o /dev/null -X DELETE \
     "${BASE}/groups/${GROUP_UUID}" \
     -H "Authorization: Bearer ${TOKEN}"
 done

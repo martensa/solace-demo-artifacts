@@ -10,6 +10,7 @@ and requires a running Solace Event Mesh as its messaging backbone.
 - Kubernetes cluster (local or remote)
 - Helm 3
 - kubectl configured for your cluster
+- curl and jq (used by the Keycloak setup scripts)
 - NGINX Ingress Controller with cert-manager
 - Solace Event Mesh running
   (see `../event-mesh-deployment/start.sh`)
