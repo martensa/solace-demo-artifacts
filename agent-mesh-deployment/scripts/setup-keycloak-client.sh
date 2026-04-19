@@ -20,7 +20,7 @@ KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 SAM_CLIENT_ID="${KEYCLOAK_CLIENT_ID:-solace-agent-mesh}"
 SAM_REDIRECT_URI="${KEYCLOAK_REDIRECT_URI:-https://sam.solace.lab/callback}"
-SAM_DNS_NAME="${SAM_DNS_NAME:-sam.solace.lab}"
+SAM_DNS_NAME="sam.solace.lab"
 
 # --- Obtain admin token -------------------------------------------
 echo "Obtaining Keycloak admin token ..."

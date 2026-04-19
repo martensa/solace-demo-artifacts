@@ -4,6 +4,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# --- Deployment defaults ------------------------------------------
+SAM_NAMESPACE="sam-solace-lab"
+SAM_RELEASE="agent-mesh"
+
 # --- Load environment variables -----------------------------------
 if [ ! -f "$PROJECT_DIR/.env" ]; then
   echo "No .env file found. Copying .env.example to .env ..."
@@ -17,8 +21,7 @@ fi
 
 # --- Validate required variables ----------------------------------
 missing=""
-for var in SAM_NAMESPACE SAM_RELEASE SAM_SESSION_SECRET_KEY \
-           KEYCLOAK_ISSUER KEYCLOAK_CLIENT_ID KEYCLOAK_CLIENT_SECRET \
+for var in KEYCLOAK_ISSUER KEYCLOAK_CLIENT_ID KEYCLOAK_CLIENT_SECRET \
            KEYCLOAK_REDIRECT_URI LLM_SERVICE_API_KEY; do
   eval val=\$$var
   if [ -z "$val" ] || [ "$val" = "changeme" ]; then
@@ -47,13 +50,11 @@ helm upgrade --install "$SAM_RELEASE" \
   solace-agent-mesh/solace-agent-mesh \
   --namespace "$SAM_NAMESPACE" \
   --values "$PROJECT_DIR/local-k8s-values.yaml" \
-  --set sam.sessionSecretKey="$SAM_SESSION_SECRET_KEY" \
   --set sam.oauthProvider.keycloak.issuer="$KEYCLOAK_ISSUER" \
   --set sam.oauthProvider.keycloak.client_id="$KEYCLOAK_CLIENT_ID" \
   --set sam.oauthProvider.keycloak.client_secret="$KEYCLOAK_CLIENT_SECRET" \
   --set sam.oauthProvider.keycloak.redirect_uri="$KEYCLOAK_REDIRECT_URI" \
-  --set llmService.llmServiceApiKey="$LLM_SERVICE_API_KEY" \
-  --set samDeployment.imagePullSecret="$REGISTRY_PULL_SECRET"
+  --set llmService.llmServiceApiKey="$LLM_SERVICE_API_KEY"
 
 echo ""
 echo "Waiting for pods to become ready ..."

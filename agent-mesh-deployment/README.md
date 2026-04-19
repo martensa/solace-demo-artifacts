@@ -55,9 +55,6 @@ in the next step.
 
 The file contains:
 
-- **SAM_NAMESPACE** -- Kubernetes namespace (`sam-ent-k8s`)
-- **SAM_RELEASE** -- Helm release name (`agent-mesh`)
-- **SAM_SESSION_SECRET_KEY** -- Session signing secret
 - **KEYCLOAK_URL** -- Keycloak base URL
 - **KEYCLOAK_REALM** -- Keycloak realm name
 - **KEYCLOAK_ADMIN_USER** / **KEYCLOAK_ADMIN_PASSWORD** --
@@ -67,7 +64,11 @@ The file contains:
 - **KEYCLOAK_REDIRECT_URI** -- OIDC redirect URI
 - **KEYCLOAK_ISSUER** -- OIDC issuer URL
 - **LLM_SERVICE_API_KEY** -- API key for the LLM service
-- **REGISTRY_PULL_SECRET** -- Name of the image pull secret
+
+Deployment-level settings (namespace `sam-solace-lab`, release name
+`agent-mesh`, DNS name `sam.solace.lab`, image pull secret
+`registry-pull-secret`) are defined in the scripts and the
+Helm values file.
 
 ### 2. Create the Keycloak OIDC client
 
@@ -83,7 +84,20 @@ is included in tokens (required for SAM RBAC).
 The script prints the generated client secret. Copy it into
 your `.env` file as `KEYCLOAK_CLIENT_SECRET`.
 
-### 3. Deploy
+### 3. Create Keycloak groups and demo users
+
+```bash
+./scripts/setup-keycloak-users.sh
+```
+
+This creates five groups (`admin`, `user`, `viewer`,
+`data_engineer`, `power_user`) and three demo users
+(`viewer`, `data_engineer`, `power_user`) with password
+equal to the username. Each user is assigned to the group
+matching their name. Pre-existing `admin` and `user`
+users are automatically assigned to their groups.
+
+### 4. Deploy
 
 ```bash
 ./scripts/start.sh
@@ -99,14 +113,15 @@ The script performs the following steps:
 5. Waits for pods to become ready
 6. Prints the Helm release status and pod list
 
-### 4. Teardown
+### 5. Teardown
 
 ```bash
 ./scripts/stop.sh
 ```
 
 This uninstalls the Helm release, deletes PVCs, removes
-the namespace, and deletes the Keycloak OIDC client.
+the namespace, removes the Keycloak users and groups, and
+deletes the Keycloak OIDC client.
 
 ## Upgrade
 
@@ -116,7 +131,7 @@ To upgrade SAM to a new version:
 helm repo update solace-agent-mesh
 helm upgrade agent-mesh \
   solace-agent-mesh/solace-agent-mesh \
-  -n sam-ent-k8s \
+  -n sam-solace-lab \
   --reuse-values \
   --set samDeployment.image.tag=<new-sam-tag> \
   --set samDeployment.agentDeployer.image.tag=<new-deployer-tag>
@@ -125,7 +140,7 @@ helm upgrade agent-mesh \
 To inspect current values:
 
 ```bash
-helm get values agent-mesh -n sam-ent-k8s
+helm get values agent-mesh -n sam-solace-lab
 ```
 
 ## Loading Images into a Local Registry
@@ -148,23 +163,38 @@ docker push \
 
 ## Configuration
 
-### Secrets (via .env)
+### Environment variables (via .env)
 
-All sensitive values are kept out of the Helm values file and
-injected at deploy time via `--set` flags. See `.env.example`
-for the full list.
+The following `.env` values are passed to Helm via `--set`
+at deploy time and overlay the empty placeholders in
+`local-k8s-values.yaml`:
+
+- `KEYCLOAK_ISSUER`
+- `KEYCLOAK_CLIENT_ID`
+- `KEYCLOAK_CLIENT_SECRET`
+- `KEYCLOAK_REDIRECT_URI`
+- `LLM_SERVICE_API_KEY`
+
+Keycloak admin credentials (`KEYCLOAK_URL`, `KEYCLOAK_REALM`,
+`KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD`) are only
+consumed by the Keycloak setup and teardown scripts and
+never passed to Helm.
 
 ### Helm Values (local-k8s-values.yaml)
 
-Non-sensitive configuration is defined in `local-k8s-values.yaml`.
-Key sections:
+All non-sensitive configuration plus demo-only defaults are
+defined in `local-k8s-values.yaml`. Key sections:
 
-- **sam** -- Core SAM config (RBAC, roles, task logging)
+- **sam** -- Core SAM config (session key, RBAC, roles,
+  task logging, OIDC provider structure)
 - **broker** -- Solace broker connection
-  (`ws://host.docker.internal:8008`, VPN `sam`)
+  (`ws://host.docker.internal:8008`, VPN `sam`,
+  default credentials from event-mesh-deployment)
 - **llmService** -- LLM model selection and endpoint
-- **ingress** -- NGINX ingress with TLS via cert-manager
-- **samDeployment** -- Image repositories, tags, and deployer
+- **ingress** -- NGINX ingress host (`sam.solace.lab`)
+  with TLS via cert-manager
+- **samDeployment** -- Image repositories, tags, deployer,
+  and image pull secret name (`registry-pull-secret`)
 
 ### Broker Connection
 
@@ -178,19 +208,30 @@ event-mesh-deployment:
 
 ### RBAC Roles
 
-The deployment defines four custom roles in addition to the
-built-in `sam_admin` and `sam_user` roles:
+The deployment defines three custom roles in addition to
+the built-in `sam_admin` (full access) and `sam_user`
+(basic access) roles. Scope syntax follows the SAM Helm
+Quickstart documentation:
 
-- **operator** -- System operator with basic and advanced
-  tool access
-- **viewer** -- Read-only access
-- **data_engineer** -- Data tools and connector read access
+- **viewer** -- Read-only access to deployments, artifacts,
+  and connectors
+- **data_engineer** -- Data tools plus artifact and
+  connector read/write access
 - **power_user** -- Broad tool access with agent builder
-  and connector management
+  read and full connector management
 
-Role assignment is driven by Keycloak group claims. Users
-whose claims do not match any mapping receive the `viewer`
-role by default.
+Role assignment is driven by Keycloak group claims. The
+`setup-keycloak-users.sh` script creates the following
+group-to-role mapping:
+
+- Group `admin` -- `sam_admin`
+- Group `user` -- `sam_user`
+- Group `viewer` -- `viewer`
+- Group `data_engineer` -- `data_engineer`
+- Group `power_user` -- `power_user`
+
+Users whose claims do not match any mapping receive the
+`viewer` role by default.
 
 ## Directory Structure
 
@@ -202,6 +243,8 @@ agent-mesh-deployment/
   scripts/
     setup-keycloak-client.sh      Create OIDC client
     teardown-keycloak-client.sh   Delete OIDC client
+    setup-keycloak-users.sh       Create groups + demo users
+    teardown-keycloak-users.sh    Delete groups + demo users
     start.sh                      Deploy SAM
     stop.sh                       Full teardown
   CLAUDE.md                       Claude Code instructions
@@ -217,3 +260,10 @@ Once deployed, SAM is available at:
 
 Ensure your DNS or `/etc/hosts` points `sam.solace.lab` to
 your ingress controller IP.
+
+## References
+
+- Solace Agent Mesh product documentation:
+  <https://solacelabs.github.io/solace-agent-mesh/docs/documentation/getting-started>
+- Solace Agent Mesh Helm chart documentation:
+  <https://solaceproducts.github.io/solace-agent-mesh-helm-quickstart/docs/>

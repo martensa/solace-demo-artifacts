@@ -51,9 +51,13 @@ Start the Event Mesh first, then deploy Agent Mesh:
 ```bash
 cd event-mesh-deployment
 ./start.sh
+
 cd ../agent-mesh-deployment
-cp .env.example .env   # edit with your credentials
-./scripts/start.sh
+cp .env.example .env                 # edit LLM_SERVICE_API_KEY
+./scripts/setup-keycloak-client.sh   # creates OIDC client
+# paste the printed client secret into .env
+./scripts/setup-keycloak-users.sh    # creates groups + demo users
+./scripts/start.sh                   # helm install
 ```
 
 See the component READMEs for full details.

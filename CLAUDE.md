@@ -35,9 +35,12 @@ cd event-mesh-deployment
 
 ```bash
 cd agent-mesh-deployment
-cp .env.example .env   # edit with your credentials
-./scripts/start.sh   # helm install with secrets via --set
-./scripts/stop.sh    # helm uninstall, delete PVCs and namespace
+cp .env.example .env                 # edit LLM_SERVICE_API_KEY
+./scripts/setup-keycloak-client.sh   # creates OIDC client
+# paste the printed client secret into .env
+./scripts/setup-keycloak-users.sh    # creates groups + demo users
+./scripts/start.sh                   # helm install with --set
+./scripts/stop.sh                    # full teardown incl. Keycloak
 ```
 
 ## Terraform Conventions
@@ -57,22 +60,25 @@ cp .env.example .env   # edit with your credentials
 
 ## Helm Conventions (agent-mesh-deployment)
 
-- Sensitive values (API keys, OIDC secrets, session secret)
-  are never stored in the Helm values file. They are defined
-  in `.env` and injected via `--set` flags in `start.sh`.
-- The `.env` file is gitignored. Only `.env.example` with
+- Deployment-specific secrets (Keycloak OIDC client secret,
+  LLM API key) live in `.env` (gitignored) and are injected
+  via `--set` flags in `start.sh`. Only `.env.example` with
   placeholder values is checked in.
-- `local-k8s-values.yaml` contains all non-sensitive
-  configuration and is safe to commit.
+- Non-sensitive config and demo-only values (session key,
+  broker default password, DNS name, pull secret name) live
+  in `local-k8s-values.yaml` and are safe to commit.
+- `start.sh` and `stop.sh` hardcode the release name
+  (`agent-mesh`) and namespace (`sam-solace-lab`).
 
 ## Secrets
 
 - Event Mesh: Credentials in `ema_config_keys.env` and
   `amartens_ema.yml` are hardcoded intentionally for local
   demo use. Do not externalize them.
-- Agent Mesh: Secrets live in `.env` (gitignored) and are
-  injected at deploy time. Never add real credentials to
-  `local-k8s-values.yaml`.
+- Agent Mesh: Deployment-specific secrets (Keycloak client
+  secret, LLM API key) live in `.env` (gitignored) and are
+  injected at deploy time. Never add real production
+  credentials to `local-k8s-values.yaml`.
 
 ## Writing Documentation
 

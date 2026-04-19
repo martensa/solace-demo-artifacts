@@ -11,8 +11,8 @@ sam:
   # Use localhost for local development
   dnsName: "sam.solace.lab"
 
-  # Session secret -- override via --set in start.sh
-  sessionSecretKey: ""
+  # Session secret for local demo use
+  sessionSecretKey: "s6iRVUVvTsAkXCcWyedhFE6d4wLCw0ZA"
 
   # OIDC configuration -- override via --set in start.sh
   oauthProvider:
@@ -24,30 +24,24 @@ sam:
       scope: "openid email profile"
 
   authenticationRbac:
-    # Define custom roles (optional)
+    # Custom roles (in addition to built-in sam_admin and sam_user).
+    # Scope style follows the SAM Helm Quickstart documentation.
     customRoles:
-      operator:
-        description: "System operator"
-        scopes:
-          - "tool:basic:*"
-          - "tool:advanced:read"
-          - "tool:artifact:load"
-          - "tool:artifact:create"
-          - "monitor/namespace/*:a2a_messages:subscribe"
-
       viewer:
-        description: "Read-only access"
+        description: "Read-only access to deployments and connectors"
         scopes:
-          - "tool:basic:read"
-          - "tool:artifact:load"
-          - "monitor/namespace/*:a2a_messages:subscribe"
+          - "artifact:read"
+          - "sam:deployments:read"
+          - "sam:connectors:read"
 
       data_engineer:
-        description: "Data engineering team with access to data tools"
+        description: "Data engineering with data tools and connectors"
         scopes:
-          - "artifact:*"
+          - "artifact:read"
+          - "artifact:write"
           - "tool:data:*"
           - "sam:connectors:read"
+          - "sam:connectors:create"
 
       power_user:
         description: "Advanced user with broader tool access"
@@ -66,11 +60,13 @@ sam:
       enabled: true
       oidcProvider: "keycloak"
       claimKey: "groups"
-      # Map IDP claim values to SAM roles (built-in or custom)
+      # Map Keycloak group names to SAM roles
       mappings:
-        "admin-group": ["sam_admin"]
-        "engineering-team": ["sam_user"]
-        "data-analysts": ["data_engineer"]
+        "admin": ["sam_admin"]
+        "user": ["sam_user"]
+        "viewer": ["viewer"]
+        "data_engineer": ["data_engineer"]
+        "power_user": ["power_user"]
 
     # Default roles for users whose claims do not match
     defaultRoles:
@@ -129,7 +125,7 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     nginx.ingress.kubernetes.io/limit-rps: "100"
-    cert-manager.io/cluster-issuer: "solace-ca-clusterissuer"
+    cert-manager.io/cluster-issuer: "solace-lab-ca-issuer"
   autoConfigurePaths: true
   host: "sam.solace.lab"
   tls:
@@ -145,6 +141,12 @@ global:
 
 # SAM Deployment Configuration
 samDeployment:
+  # Resource requests/limits use the chart defaults
+  # (sam: 1000m/2000m CPU, 1024Mi/2048Mi memory;
+  #  agentDeployer: smaller).
+  # Override samDeployment.resources.sam and
+  # samDeployment.resources.agentDeployer if needed.
+
   serviceAccount:
     name: solace-agent-mesh-sa
     annotations: {}
