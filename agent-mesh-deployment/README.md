@@ -337,6 +337,37 @@ agent-mesh-deployment/
   README.md                       This file
 ```
 
+## Demo-only Values -- not for production
+
+The following values in `local-k8s-values.yaml` and the setup
+scripts are tuned for a reproducible lab and should be reviewed
+or replaced before any non-demo usage:
+
+- `sam.sessionSecretKey` -- checked-in static value. Rotate to
+  a freshly generated secret per environment for production.
+- `broker.password: "default"` and `broker.clientUsername:
+  "default"` -- matches the demo broker from
+  `../event-mesh-deployment/`. Use dedicated credentials
+  against a real broker.
+- `global.persistence.enabled: true` -- bundled PostgreSQL and
+  SeaweedFS. The SAM Helm chart recommends external managed
+  persistence (PostgreSQL 17+, S3-compatible or Azure Blob)
+  for production.
+- Session TTL defaults (SAM access token 3600s, OAuth2 session
+  3600s) are chart/implementation defaults. Not overridable
+  via Helm values in the current chart; change at the source
+  if a different value is required.
+- `.env` Keycloak admin credentials (`admin/admin`) are used
+  by the setup/teardown scripts only. For any non-demo
+  Keycloak deployment, create a dedicated admin account and
+  put its credentials in `.env`.
+- Default LLM endpoint (`https://lite-llm.mymaas.net`) points
+  at an internal Solace LiteLLM proxy. Replace with your own
+  provider endpoint for production.
+- RBAC demo users (`viewer`, `data_engineer`, `power_user`,
+  `sam_admin`) all use password equal to username. Remove
+  them or change passwords in Keycloak before non-demo use.
+
 ## Accessing SAM
 
 Once deployed, SAM is available at:
@@ -353,3 +384,17 @@ your ingress controller IP.
   <https://solacelabs.github.io/solace-agent-mesh/docs/documentation/getting-started>
 - Solace Agent Mesh Helm chart documentation:
   <https://solaceproducts.github.io/solace-agent-mesh-helm-quickstart/docs/>
+- Single Sign-On guide (OIDC provider configuration):
+  <https://solacelabs.github.io/solace-agent-mesh/docs/documentation/enterprise/single-sign-on>
+- Platform Service Authentication:
+  <https://solacelabs.github.io/solace-agent-mesh/docs/documentation/enterprise/platform-service-auth>
+- RBAC setup guide:
+  <https://solacelabs.github.io/solace-agent-mesh/docs/documentation/enterprise/rbac-setup-guide>
+- Helm chart troubleshooting:
+  <https://solaceproducts.github.io/solace-agent-mesh-helm-quickstart/docs/troubleshooting>
+
+Our `local-k8s-values.yaml` is modeled on the
+`sam-tls-oidc-idp-claim-to-role-mappings.yaml` sample from
+the chart repository: TLS via cert-manager, OIDC via Keycloak,
+dynamic role assignment through group claims. Differences are
+demo-specific (bundled persistence, default broker password).

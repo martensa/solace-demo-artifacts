@@ -70,7 +70,12 @@ sam:
     # Static user assignments (leave empty when using idpClaims)
     users: []
 
-    # Dynamic role assignment from IDP claims
+    # Dynamic role assignment from IDP claims.
+    # Note: oidcProvider must match the key under
+    # sam.oauthProvider (above) -- NOT the IdP product name.
+    # The SAM chart exposes the generic "oidc" sub-block for
+    # any OIDC-compliant provider (Keycloak, Auth0, Okta, ...),
+    # so the value here is "oidc", not "keycloak".
     idpClaims:
       enabled: true
       oidcProvider: "oidc"
