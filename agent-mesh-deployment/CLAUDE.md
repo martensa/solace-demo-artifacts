@@ -28,6 +28,14 @@ by the companion repo
   (and an auth.solace.lab entry in CoreDNS NodeHosts so the SAM
   pods can reach it via the external hostname)
 
+In addition to the above, `start.sh` registers `sam.solace.lab`
+in CoreDNS NodeHosts during deployment (and `stop.sh` removes
+it again). SAM makes internal self-calls to its own external
+URL during the OAuth flow (WebUI -> Platform Service), so the
+hostname must resolve inside the cluster too. This follows the
+same decentralized convention as solace-lab-infrastructure:
+each component manages its own hostname entry.
+
 Do not re-create any of these resources from this repository.
 All Keycloak-side configuration this repo owns is scoped to
 `solace-agent-mesh` OIDC client plus `viewer`, `data_engineer`,

@@ -33,6 +33,12 @@ the companion repository
   - The setup script registers `auth.solace.lab` in CoreDNS
     NodeHosts so cluster-internal pods can resolve the hostname
 
+Additionally, the `start.sh` in this deployment registers
+`sam.solace.lab` in CoreDNS NodeHosts too -- SAM makes internal
+self-calls to its own external URL during the OAuth flow (WebUI
+→ Platform Service), which requires cluster-internal hostname
+resolution.
+
 ### Additional Services
 
 - **Solace Event Mesh** running locally
@@ -139,13 +145,17 @@ users are automatically assigned to their groups.
 
 The script performs the following steps:
 
-1. Validates that all required variables in `.env` are set
-2. Adds and updates the Solace Agent Mesh Helm repository
-3. Creates the Kubernetes namespace
-4. Runs `helm upgrade --install` with the values file and
+1. Checks that `kubectl`, `helm`, `jq` are available
+2. Validates that all required variables in `.env` are set
+3. Adds and updates the Solace Agent Mesh Helm repository
+4. Creates the Kubernetes namespace
+5. Registers `sam.solace.lab` in CoreDNS NodeHosts
+   (maps to the ingress ClusterIP so SAM can call itself
+   via its external URL during OAuth flows)
+6. Runs `helm upgrade --install` with the values file and
    injects secrets via `--set` flags
-5. Waits for pods to become ready
-6. Prints the Helm release status and pod list
+7. Waits for pods to become ready
+8. Prints the Helm release status and pod list
 
 ### 5. Teardown
 
@@ -154,7 +164,8 @@ The script performs the following steps:
 ```
 
 This uninstalls the Helm release, deletes PVCs, removes
-the namespace, removes the Keycloak users and groups, and
+the namespace, removes `sam.solace.lab` from CoreDNS
+NodeHosts, removes the Keycloak users and groups, and
 deletes the Keycloak OIDC client.
 
 ## Upgrade

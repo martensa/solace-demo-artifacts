@@ -7,6 +7,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # --- Deployment defaults ------------------------------------------
 SAM_NAMESPACE="sam-solace-lab"
 SAM_RELEASE="agent-mesh"
+SAM_DNS_NAME="sam.solace.lab"
 
 # --- CLI prerequisites --------------------------------------------
 command -v kubectl >/dev/null 2>&1 || {
@@ -14,6 +15,42 @@ command -v kubectl >/dev/null 2>&1 || {
 }
 command -v helm >/dev/null 2>&1 || {
   echo "ERROR: helm not found in PATH."; exit 1
+}
+command -v jq >/dev/null 2>&1 || {
+  echo "ERROR: jq not found in PATH (brew install jq)."; exit 1
+}
+
+# -------------------------------------------------------------
+# CoreDNS NodeHosts Helper
+#
+# Idempotentes Hinzufuegen eines Hostname-zu-IP Mappings in die
+# CoreDNS NodeHosts ConfigMap (k3s/Rancher Desktop Spezifikum).
+# Bestehende Eintraege fuer diesen Hostname werden ersetzt,
+# Leerzeilen werden normalisiert.
+# -------------------------------------------------------------
+upsert_coredns_nodehost() {
+  local hostname="$1"
+  local ip="$2"
+
+  local current new
+  current=$(kubectl -n kube-system get configmap coredns \
+    -o jsonpath='{.data.NodeHosts}' 2>/dev/null || echo "")
+
+  new=$(printf '%s\n%s %s\n' "$current" "$ip" "$hostname" \
+    | awk -v host="$hostname" '
+        NF == 0 { next }
+        ($2 == host) { next }
+        { print }
+      ')
+  new="${new}"$'\n'"${ip} ${hostname}"
+
+  kubectl -n kube-system patch configmap coredns \
+    --type merge \
+    -p "$(jq -n --arg nh "$new" '{data:{NodeHosts:$nh}}')" > /dev/null
+
+  kubectl -n kube-system rollout restart deployment coredns > /dev/null
+  kubectl -n kube-system rollout status deployment coredns \
+    --timeout=60s > /dev/null
 }
 
 # --- Load environment variables -----------------------------------
@@ -52,6 +89,20 @@ helm repo update solace-agent-mesh
 
 # --- Namespace and pull secret ------------------------------------
 kubectl create namespace "$SAM_NAMESPACE" 2>/dev/null || true
+
+# --- CoreDNS NodeHosts --------------------------------------------
+# SAM macht interne Self-Calls ueber die externe URL (OAuth2 flow,
+# Platform Service -> WebUI), daher muss sam.solace.lab auch
+# cluster-intern auf die Ingress ClusterIP aufloesen.
+INGRESS_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \
+  -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)
+
+if [ -z "$INGRESS_IP" ]; then
+  echo "WARNING: Ingress ClusterIP not resolvable - skipping CoreDNS NodeHosts"
+else
+  echo "Registering ${SAM_DNS_NAME} -> ${INGRESS_IP} in CoreDNS NodeHosts ..."
+  upsert_coredns_nodehost "$SAM_DNS_NAME" "$INGRESS_IP"
+fi
 
 # --- Install / Upgrade --------------------------------------------
 helm upgrade --install "$SAM_RELEASE" \
