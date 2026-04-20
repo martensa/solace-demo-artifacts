@@ -23,14 +23,16 @@ SAM_GROUPS="admin user viewer data_engineer power_user"
 
 # Demo users to create. Username equals group name by default
 # (see user_to_group below for exceptions).
-SAM_USERS="viewer data_engineer power_user sam_admin"
+SAM_USERS="viewer data_engineer power_user sam_admin sam_user"
 
 # Map a demo user to its Keycloak group.
-# Defaults to the username; sam_admin is assigned to the
-# 'admin' group (which maps to the sam_admin SAM role).
+# Defaults to the username; dedicated 'sam_admin' and 'sam_user'
+# demo accounts map to the 'admin' and 'user' groups, which in
+# turn bind to the built-in sam_admin and sam_user SAM roles.
 user_to_group() {
   case "$1" in
     sam_admin) echo "admin" ;;
+    sam_user)  echo "user" ;;
     *) echo "$1" ;;
   esac
 }
@@ -168,25 +170,10 @@ for USER in $SAM_USERS; do
     -H "Authorization: Bearer ${TOKEN}"
 done
 
-# --- Assign existing admin/user users to their groups -------------
-for NAME in admin user; do
-  USER_UUID=$(get_user_id "$NAME")
-  if [ -z "$USER_UUID" ]; then
-    echo "User '${NAME}' not found in realm, skipping."
-    continue
-  fi
-
-  GROUP_UUID=$(get_group_id "$NAME")
-  if [ -z "$GROUP_UUID" ]; then
-    echo "ERROR: Group '${NAME}' not found."
-    continue
-  fi
-
-  echo "Assigning existing user '${NAME}' to group '${NAME}' ..."
-  curl -sk -o /dev/null -X PUT \
-    "${BASE}/users/${USER_UUID}/groups/${GROUP_UUID}" \
-    -H "Authorization: Bearer ${TOKEN}"
-done
+# Note: Realm-import accounts ('admin', 'user') are deliberately
+# NOT auto-assigned to any SAM group. They stay as pure Keycloak
+# realm accounts for identity management. SAM roles are bound
+# exclusively to the demo users created above.
 
 echo ""
 echo "Keycloak users and groups setup complete."

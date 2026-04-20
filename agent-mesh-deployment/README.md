@@ -131,14 +131,15 @@ your `.env` file as `KEYCLOAK_CLIENT_SECRET`.
 ```
 
 This creates five groups (`admin`, `user`, `viewer`,
-`data_engineer`, `power_user`) and four demo users
-(`viewer`, `data_engineer`, `power_user`, `sam_admin`)
-with password equal to the username. Each user is
-assigned to the group that maps to their intended SAM
-role -- most users match their group by name; `sam_admin`
-is placed in the `admin` group (which maps to the
-`sam_admin` SAM role). Pre-existing realm users `admin`
-and `user` are also assigned to their respective groups.
+`data_engineer`, `power_user`) and five demo users
+(`viewer`, `data_engineer`, `power_user`, `sam_admin`,
+`sam_user`) with password equal to the username.
+
+Most users match their group by name; `sam_admin` is
+placed in the `admin` group and `sam_user` in the `user`
+group, so they cleanly map to the built-in `sam_admin`
+and `sam_user` SAM roles without touching the
+realm-import accounts.
 
 ### 4. Deploy
 
@@ -304,20 +305,24 @@ Demo users and their group memberships (password equals
 username):
 
 - `sam_admin` -> group `admin` -> role `sam_admin`
+- `sam_user` -> group `user` -> role `sam_user`
 - `viewer` -> group `viewer` -> role `viewer`
 - `data_engineer` -> group `data_engineer` -> role
   `data_engineer`
 - `power_user` -> group `power_user` -> role `power_user`
 
-The pre-existing realm users `admin` and `user` (from the
-Keycloak realm import) are also mapped to the `admin`
-and `user` groups. They get the same SAM roles as the
-demo users above, but the dedicated `sam_admin` account
-is preferred for SAM-side admin tasks so the Keycloak
-realm-admin stays focused on identity management.
+The pre-existing realm-import accounts (`admin`, `user`)
+are not part of any SAM group. They remain pure Keycloak
+realm accounts -- `admin` is reserved for Keycloak realm
+administration (creating clients, managing users). If
+either realm account does log in to SAM, the idpClaims
+mapping finds no match and the deployment's `defaultRoles`
+(`sam_user`) apply as a fallback.
 
-Users whose claims do not match any mapping receive the
-`sam_user` role by default.
+SAM role bindings live exclusively on the five demo users
+above. `sam_admin` is the sole SAM administrator and
+`sam_user` the dedicated standard user; the other three
+cover the custom roles.
 
 ## Directory Structure
 
@@ -365,8 +370,9 @@ or replaced before any non-demo usage:
   at an internal Solace LiteLLM proxy. Replace with your own
   provider endpoint for production.
 - RBAC demo users (`viewer`, `data_engineer`, `power_user`,
-  `sam_admin`) all use password equal to username. Remove
-  them or change passwords in Keycloak before non-demo use.
+  `sam_admin`, `sam_user`) all use password equal to
+  username. Remove them or change passwords in Keycloak
+  before non-demo use.
 
 ## Accessing SAM
 
