@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -49,6 +49,19 @@ fi
 
 BASE="${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}"
 
+# --- Helper: capitalize underscore-separated username -------------
+#   power_user    -> Power_User
+#   data_engineer -> Data_Engineer
+#   viewer        -> Viewer
+capitalize_username() {
+  echo "$1" | awk -F'_' '{
+    for (i = 1; i <= NF; i++) {
+      $i = toupper(substr($i, 1, 1)) tolower(substr($i, 2))
+    }
+    print
+  }' OFS='_'
+}
+
 # --- Helper: find group UUID by name ------------------------------
 get_group_id() {
   NAME="$1"
@@ -90,6 +103,9 @@ done
 
 # --- Create users and assign groups -------------------------------
 for USER in $SAM_USERS; do
+  FIRST_NAME=$(capitalize_username "$USER")
+  LAST_NAME="Solace Lab"
+
   EXISTING=$(get_user_id "$USER")
   if [ -n "$EXISTING" ]; then
     echo "User '${USER}' already exists (${EXISTING})."
@@ -103,6 +119,8 @@ for USER in $SAM_USERS; do
       -d "{
         \"username\": \"${USER}\",
         \"email\": \"${USER}@solace.lab\",
+        \"firstName\": \"${FIRST_NAME}\",
+        \"lastName\": \"${LAST_NAME}\",
         \"emailVerified\": true,
         \"enabled\": true,
         \"credentials\": [{

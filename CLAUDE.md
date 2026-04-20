@@ -7,6 +7,13 @@ Solace demo environment. It includes a two-broker Solace Event
 Mesh with distributed tracing and Event Portal integration, and a
 Solace Agent Mesh deployment on Kubernetes.
 
+The Agent Mesh deployment depends on cluster infrastructure from
+the companion repository
+[`solace-lab-infrastructure`](https://github.com/martensa/solace-lab-infrastructure)
+(NGINX Ingress, cert-manager/PKI, private registry, Keycloak,
+Kyverno policies). The Event Mesh deployment is standalone and
+has no infrastructure dependency.
+
 ## Tech Stack
 
 - Docker Compose for container orchestration (event-mesh)

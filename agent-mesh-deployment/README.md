@@ -7,16 +7,42 @@ and requires a running Solace Event Mesh as its messaging backbone.
 
 ## Prerequisites
 
-- Kubernetes cluster (local or remote)
-- Helm 3
-- kubectl configured for your cluster
-- curl and jq (used by the Keycloak setup scripts)
-- NGINX Ingress Controller with cert-manager
-- Solace Event Mesh running
-  (see `../event-mesh-deployment/start.sh`)
-- Keycloak instance with a `solace-lab` realm
-  (see `solace-lab-infrastructure/keycloak`)
-- LLM service endpoint (e.g. LiteLLM proxy)
+### Cluster Infrastructure (from `solace-lab-infrastructure`)
+
+All four components below must be installed on the target
+Kubernetes cluster before deploying SAM. They are provided by
+the companion repository
+[`solace-lab-infrastructure`](https://github.com/martensa/solace-lab-infrastructure):
+
+- **NGINX Ingress Controller** -- `ingress/`
+- **PKI** -- `pki/`
+  - cert-manager with ClusterIssuer `solace-lab-ca-issuer`
+  - trust-manager bundle `solace-lab-ca-trust-bundle`
+  - Kyverno policy `inject-solace-lab-ca-trust-bundle`
+    (mounts the CA bundle at
+    `/etc/ssl/certs/ca-certificates.crt` in every pod)
+  - Kyverno policy `inject-registry-pull-secret`
+- **Private Registry** -- `registry/`
+  - Available at `https://registry.solace.lab`
+  - Holds the SAM enterprise and agent-deployer images
+- **Keycloak** -- `keycloak/`
+  - OIDC provider at `https://auth.solace.lab` with the
+    `solace-lab` realm
+  - The setup script registers `auth.solace.lab` in CoreDNS
+    NodeHosts so cluster-internal pods can resolve the hostname
+
+### Additional Services
+
+- **Solace Event Mesh** running locally
+  (see [`../event-mesh-deployment/`](../event-mesh-deployment/))
+  with the `sam` VPN on `solace-1`
+- **LLM Service** endpoint (e.g. a LiteLLM proxy) with an API key
+
+### Local CLI Tools
+
+- `kubectl` configured for your cluster
+- `helm` 3
+- `bash`, `curl`, `jq`, `openssl`
 
 ## Architecture Overview
 
@@ -42,6 +68,12 @@ SAM connects to the `sam` Message VPN on `solace-1` via WebSocket.
 The broker provides the messaging backbone for agent-to-agent
 communication, task routing, and event distribution.
 
+Keycloak, the ingress controller, the private registry and the
+PKI chain visible above are deployed by
+[`solace-lab-infrastructure`](https://github.com/martensa/solace-lab-infrastructure).
+This deployment only provisions SAM itself and registers an
+OIDC client plus demo users in the existing `solace-lab` realm.
+
 ## Quick Start
 
 ### 1. Prepare credentials
@@ -62,7 +94,6 @@ The file contains:
   Keycloak admin credentials (for client setup script)
 - **KEYCLOAK_CLIENT_ID** -- OIDC client ID
 - **KEYCLOAK_CLIENT_SECRET** -- OIDC client secret
-- **KEYCLOAK_REDIRECT_URI** -- OIDC redirect URI
 - **KEYCLOAK_ISSUER** -- OIDC issuer URL
 - **LLM_SERVICE_API_KEY** -- API key for the LLM service
 
@@ -170,11 +201,10 @@ The following `.env` values are passed to Helm via `--set`
 at deploy time and overlay the empty placeholders in
 `local-k8s-values.yaml`:
 
-- `KEYCLOAK_ISSUER`
-- `KEYCLOAK_CLIENT_ID`
-- `KEYCLOAK_CLIENT_SECRET`
-- `KEYCLOAK_REDIRECT_URI`
-- `LLM_SERVICE_API_KEY`
+- `KEYCLOAK_ISSUER` -> `sam.oauthProvider.oidc.issuer`
+- `KEYCLOAK_CLIENT_ID` -> `sam.oauthProvider.oidc.clientId`
+- `KEYCLOAK_CLIENT_SECRET` -> `sam.oauthProvider.oidc.clientSecret`
+- `LLM_SERVICE_API_KEY` -> `llmService.llmServiceApiKey`
 
 Keycloak admin credentials (`KEYCLOAK_URL`, `KEYCLOAK_REALM`,
 `KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD`) are only

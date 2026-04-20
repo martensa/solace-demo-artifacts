@@ -1,14 +1,22 @@
-#!/bin/sh
-set -e
+#!/bin/bash
+set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # --- Deployment defaults ------------------------------------------
 SAM_NAMESPACE="sam-solace-lab"
 SAM_RELEASE="agent-mesh"
 
-# --- Load environment variables -----------------------------------
+# --- CLI prerequisites --------------------------------------------
+command -v kubectl >/dev/null 2>&1 || {
+  echo "ERROR: kubectl not found in PATH."; exit 1
+}
+command -v helm >/dev/null 2>&1 || {
+  echo "ERROR: helm not found in PATH."; exit 1
+}
+
+# --- Load environment variables (optional for teardown) -----------
 if [ -f "$PROJECT_DIR/.env" ]; then
   # shellcheck source=/dev/null
   . "$PROJECT_DIR/.env"

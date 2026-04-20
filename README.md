@@ -13,6 +13,31 @@ solace-demo-artifacts/
   agent-mesh-deployment/   Solace Agent Mesh on Kubernetes
 ```
 
+## Infrastructure Prerequisites
+
+The `agent-mesh-deployment` component depends on a Kubernetes cluster
+with a set of shared infrastructure services. These are not part of
+this repository -- they live in the companion repository
+[`solace-lab-infrastructure`](https://github.com/martensa/solace-lab-infrastructure)
+and must be installed first.
+
+Required components from `solace-lab-infrastructure`:
+
+- **`ingress/`** -- NGINX Ingress Controller
+- **`pki/`** -- cert-manager, CA hierarchy (`solace-lab-ca-issuer`),
+  trust-manager (CA trust bundle), Kyverno policies for
+  pull-secret and CA-trust injection
+- **`registry/`** -- Private Docker registry at
+  `registry.solace.lab` with automatic pull-secret distribution
+- **`keycloak/`** -- Keycloak Identity Provider at `auth.solace.lab`
+  with the `solace-lab` realm (provides `admin`, `user`,
+  `alexander.martens` realm users). The Keycloak setup also
+  registers `auth.solace.lab` in CoreDNS NodeHosts so in-cluster
+  pods can resolve the hostname for OIDC discovery.
+
+The `event-mesh-deployment` component is standalone and has no
+dependency on `solace-lab-infrastructure`.
+
 ## Components
 
 ### Event Mesh Deployment
@@ -30,8 +55,8 @@ for setup instructions and architecture details.
 
 Helm-based deployment of Solace Agent Mesh (SAM) on Kubernetes.
 Connects to the `sam` VPN on `solace-1` created by the Event Mesh
-Deployment. Includes OIDC authentication via Keycloak, RBAC,
-and LLM service integration.
+Deployment. Includes OIDC authentication via Keycloak, RBAC, and
+LLM service integration.
 
 See
 [agent-mesh-deployment/README.md](agent-mesh-deployment/README.md)
@@ -39,19 +64,24 @@ for setup instructions and architecture details.
 
 ## Prerequisites
 
-- Docker and Docker Compose
-- Terraform 1.5 or later
-- Helm 3 and kubectl
-- curl
+- Docker and Docker Compose (for Event Mesh)
+- Terraform 1.5 or later (for Event Mesh)
+- Helm 3 and kubectl (for Agent Mesh)
+- `bash`, `curl`, `jq`, `openssl`
+- Cluster infrastructure from
+  [`solace-lab-infrastructure`](https://github.com/martensa/solace-lab-infrastructure)
+  installed (only for Agent Mesh)
 
 ## Quick Start
 
 Start the Event Mesh first, then deploy Agent Mesh:
 
 ```bash
+# Event Mesh (standalone)
 cd event-mesh-deployment
 ./start.sh
 
+# Agent Mesh (requires solace-lab-infrastructure deployed first)
 cd ../agent-mesh-deployment
 cp .env.example .env                 # edit LLM_SERVICE_API_KEY
 ./scripts/setup-keycloak-client.sh   # creates OIDC client

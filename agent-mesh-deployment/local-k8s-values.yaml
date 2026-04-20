@@ -14,14 +14,16 @@ sam:
   # Session secret for local demo use
   sessionSecretKey: "s6iRVUVvTsAkXCcWyedhFE6d4wLCw0ZA"
 
-  # OIDC configuration -- override via --set in start.sh
+  # OIDC configuration -- issuer, clientId, clientSecret
+  # are injected via --set in start.sh.
+  # The redirect URI is computed automatically by SAM from the
+  # ingress/DNS configuration; Keycloak is configured to accept
+  # https://<dnsName>/* in setup-keycloak-client.sh.
   oauthProvider:
-    keycloak:
+    oidc:
       issuer: ""
-      client_id: ""
-      client_secret: ""
-      redirect_uri: ""
-      scope: "openid email profile"
+      clientId: ""
+      clientSecret: ""
 
   authenticationRbac:
     # Custom roles (in addition to built-in sam_admin and sam_user).
@@ -58,7 +60,7 @@ sam:
     # Dynamic role assignment from IDP claims
     idpClaims:
       enabled: true
-      oidcProvider: "keycloak"
+      oidcProvider: "oidc"
       claimKey: "groups"
       # Map Keycloak group names to SAM roles
       mappings:
@@ -108,7 +110,12 @@ llmService:
   llmServiceEndpoint: "https://lite-llm.mymaas.net"
   llmServiceApiKey: ""
 
-environmentVariables: {}
+environmentVariables:
+  # Trust the Solace Lab root CA injected via Kyverno policy
+  # (inject-solace-lab-ca-trust-bundle) so Python-based SAM can
+  # validate TLS when talking to internal services such as Keycloak.
+  REQUESTS_CA_BUNDLE: "/etc/ssl/certs/ca-certificates.crt"
+  SSL_CERT_FILE: "/etc/ssl/certs/ca-certificates.crt"
 
 # Kubernetes Service Configuration
 service:
@@ -125,6 +132,10 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
     nginx.ingress.kubernetes.io/limit-rps: "100"
+    # Increase buffer size for OIDC auth callback responses
+    # (JWT session cookie + Set-Cookie + state exceeds default 4k/8k)
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
     cert-manager.io/cluster-issuer: "solace-lab-ca-issuer"
   autoConfigurePaths: true
   host: "sam.solace.lab"

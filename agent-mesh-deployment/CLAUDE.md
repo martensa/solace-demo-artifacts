@@ -4,7 +4,31 @@
 
 Helm-based deployment of Solace Agent Mesh (SAM) on Kubernetes.
 Depends on the event-mesh-deployment for broker connectivity
-(sam VPN on solace-1).
+(sam VPN on solace-1) and on solace-lab-infrastructure for
+the surrounding cluster services.
+
+## Cluster Dependencies
+
+This deployment assumes the following cluster state, provisioned
+by the companion repo
+[`solace-lab-infrastructure`](https://github.com/martensa/solace-lab-infrastructure):
+
+- NGINX Ingress Controller (namespace `ingress-nginx`)
+- cert-manager + ClusterIssuer `solace-lab-ca-issuer`
+- trust-manager + ConfigMap `solace-lab-ca-trust-bundle`
+  distributed to all namespaces (used by the Kyverno policy
+  `inject-solace-lab-ca-trust-bundle` which mounts the CA
+  bundle at `/etc/ssl/certs/ca-certificates.crt` in every pod)
+- Private registry at `registry.solace.lab` with Kyverno policy
+  `inject-registry-pull-secret` auto-wiring `imagePullSecrets`
+- Keycloak at `auth.solace.lab` with the `solace-lab` realm
+  (and an auth.solace.lab entry in CoreDNS NodeHosts so the SAM
+  pods can reach it via the external hostname)
+
+Do not re-create any of these resources from this repository.
+All Keycloak-side configuration this repo owns is scoped to
+`solace-agent-mesh` OIDC client plus `viewer`, `data_engineer`,
+`power_user` groups and demo users within the `solace-lab` realm.
 
 ## Start and Stop
 

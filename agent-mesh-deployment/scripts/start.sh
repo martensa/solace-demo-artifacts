@@ -1,12 +1,20 @@
-#!/bin/sh
-set -e
+#!/bin/bash
+set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # --- Deployment defaults ------------------------------------------
 SAM_NAMESPACE="sam-solace-lab"
 SAM_RELEASE="agent-mesh"
+
+# --- CLI prerequisites --------------------------------------------
+command -v kubectl >/dev/null 2>&1 || {
+  echo "ERROR: kubectl not found in PATH."; exit 1
+}
+command -v helm >/dev/null 2>&1 || {
+  echo "ERROR: helm not found in PATH."; exit 1
+}
 
 # --- Load environment variables -----------------------------------
 if [ ! -f "$PROJECT_DIR/.env" ]; then
@@ -22,8 +30,8 @@ fi
 # --- Validate required variables ----------------------------------
 missing=""
 for var in KEYCLOAK_ISSUER KEYCLOAK_CLIENT_ID KEYCLOAK_CLIENT_SECRET \
-           KEYCLOAK_REDIRECT_URI LLM_SERVICE_API_KEY; do
-  eval val=\$$var
+           LLM_SERVICE_API_KEY; do
+  val="${!var:-}"
   if [ -z "$val" ] || [ "$val" = "changeme" ]; then
     missing="$missing $var"
   fi
@@ -50,10 +58,9 @@ helm upgrade --install "$SAM_RELEASE" \
   solace-agent-mesh/solace-agent-mesh \
   --namespace "$SAM_NAMESPACE" \
   --values "$PROJECT_DIR/local-k8s-values.yaml" \
-  --set sam.oauthProvider.keycloak.issuer="$KEYCLOAK_ISSUER" \
-  --set sam.oauthProvider.keycloak.client_id="$KEYCLOAK_CLIENT_ID" \
-  --set sam.oauthProvider.keycloak.client_secret="$KEYCLOAK_CLIENT_SECRET" \
-  --set sam.oauthProvider.keycloak.redirect_uri="$KEYCLOAK_REDIRECT_URI" \
+  --set sam.oauthProvider.oidc.issuer="$KEYCLOAK_ISSUER" \
+  --set sam.oauthProvider.oidc.clientId="$KEYCLOAK_CLIENT_ID" \
+  --set sam.oauthProvider.oidc.clientSecret="$KEYCLOAK_CLIENT_SECRET" \
   --set llmService.llmServiceApiKey="$LLM_SERVICE_API_KEY"
 
 echo ""

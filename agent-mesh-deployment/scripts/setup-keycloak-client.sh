@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -20,6 +20,11 @@ KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 SAM_CLIENT_ID="${KEYCLOAK_CLIENT_ID:-solace-agent-mesh}"
 SAM_DNS_NAME="sam.solace.lab"
+
+# Note: The SAM Helm chart computes the redirect URI automatically
+# (actual path: /api/v1/auth/callback). We register
+# https://<SAM_DNS_NAME>/* as redirect URI wildcard so any callback
+# path issued by SAM is accepted by Keycloak.
 
 # --- Check dependencies -------------------------------------------
 if ! command -v jq >/dev/null 2>&1; then
@@ -132,6 +137,21 @@ curl -sk -o /dev/null -X POST \
       \"claim.name\": \"groups\"
     }
   }"
+
+# --- Add offline_access as optional client scope -----------------
+# SAM requests offline_access to receive refresh tokens
+echo "Adding 'offline_access' as optional client scope ..."
+OFFLINE_ACCESS_ID=$(curl -sk "${BASE}/client-scopes" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  | jq -r '.[] | select(.name=="offline_access") | .id')
+
+if [ -n "$OFFLINE_ACCESS_ID" ]; then
+  curl -sk -o /dev/null -X PUT \
+    "${BASE}/clients/${CLIENT_UUID}/optional-client-scopes/${OFFLINE_ACCESS_ID}" \
+    -H "Authorization: Bearer ${TOKEN}"
+else
+  echo "WARNING: offline_access scope not found in realm."
+fi
 
 # --- Fetch client secret ------------------------------------------
 SECRET=$(curl -sk \
