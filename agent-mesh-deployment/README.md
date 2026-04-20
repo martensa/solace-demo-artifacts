@@ -131,11 +131,14 @@ your `.env` file as `KEYCLOAK_CLIENT_SECRET`.
 ```
 
 This creates five groups (`admin`, `user`, `viewer`,
-`data_engineer`, `power_user`) and three demo users
-(`viewer`, `data_engineer`, `power_user`) with password
-equal to the username. Each user is assigned to the group
-matching their name. Pre-existing `admin` and `user`
-users are automatically assigned to their groups.
+`data_engineer`, `power_user`) and four demo users
+(`viewer`, `data_engineer`, `power_user`, `sam_admin`)
+with password equal to the username. Each user is
+assigned to the group that maps to their intended SAM
+role -- most users match their group by name; `sam_admin`
+is placed in the `admin` group (which maps to the
+`sam_admin` SAM role). Pre-existing realm users `admin`
+and `user` are also assigned to their respective groups.
 
 ### 4. Deploy
 
@@ -297,8 +300,24 @@ group-to-role mapping:
 - Group `data_engineer` -- `data_engineer`
 - Group `power_user` -- `power_user`
 
+Demo users and their group memberships (password equals
+username):
+
+- `sam_admin` -> group `admin` -> role `sam_admin`
+- `viewer` -> group `viewer` -> role `viewer`
+- `data_engineer` -> group `data_engineer` -> role
+  `data_engineer`
+- `power_user` -> group `power_user` -> role `power_user`
+
+The pre-existing realm users `admin` and `user` (from the
+Keycloak realm import) are also mapped to the `admin`
+and `user` groups. They get the same SAM roles as the
+demo users above, but the dedicated `sam_admin` account
+is preferred for SAM-side admin tasks so the Keycloak
+realm-admin stays focused on identity management.
+
 Users whose claims do not match any mapping receive the
-`viewer` role by default.
+`sam_user` role by default.
 
 ## Directory Structure
 

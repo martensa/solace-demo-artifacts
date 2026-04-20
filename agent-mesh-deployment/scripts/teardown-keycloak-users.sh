@@ -17,7 +17,7 @@ KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 
 SAM_GROUPS="admin user viewer data_engineer power_user"
-SAM_USERS="viewer data_engineer power_user"
+SAM_USERS="viewer data_engineer power_user sam_admin"
 
 # --- Check dependencies -------------------------------------------
 if ! command -v jq >/dev/null 2>&1; then

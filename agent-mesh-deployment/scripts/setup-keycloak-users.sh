@@ -20,7 +20,20 @@ KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 
 SAM_GROUPS="admin user viewer data_engineer power_user"
-SAM_USERS="viewer data_engineer power_user"
+
+# Demo users to create. Username equals group name by default
+# (see user_to_group below for exceptions).
+SAM_USERS="viewer data_engineer power_user sam_admin"
+
+# Map a demo user to its Keycloak group.
+# Defaults to the username; sam_admin is assigned to the
+# 'admin' group (which maps to the sam_admin SAM role).
+user_to_group() {
+  case "$1" in
+    sam_admin) echo "admin" ;;
+    *) echo "$1" ;;
+  esac
+}
 
 # --- Check dependencies -------------------------------------------
 if ! command -v jq >/dev/null 2>&1; then
@@ -142,13 +155,14 @@ for USER in $SAM_USERS; do
     exit 1
   fi
 
-  GROUP_UUID=$(get_group_id "$USER")
+  GROUP_NAME=$(user_to_group "$USER")
+  GROUP_UUID=$(get_group_id "$GROUP_NAME")
   if [ -z "$GROUP_UUID" ]; then
-    echo "ERROR: Group '${USER}' not found."
+    echo "ERROR: Group '${GROUP_NAME}' not found."
     exit 1
   fi
 
-  echo "Assigning user '${USER}' to group '${USER}' ..."
+  echo "Assigning user '${USER}' to group '${GROUP_NAME}' ..."
   curl -sk -o /dev/null -X PUT \
     "${BASE}/users/${USER_UUID}/groups/${GROUP_UUID}" \
     -H "Authorization: Bearer ${TOKEN}"
