@@ -266,12 +266,17 @@ the built-in `sam_admin` (full access) and `sam_user`
 (basic access) roles. Scope syntax follows the SAM Helm
 Quickstart documentation:
 
-- **viewer** -- Read-only access to deployments, artifacts,
-  and connectors
-- **data_engineer** -- Data tools plus artifact and
-  connector read/write access
+- **viewer** -- Read access to deployments, artifacts,
+  and connectors, plus basic tool reads and the ability
+  to delegate to agents (chat)
+- **data_engineer** -- Data tools, artifact read/write,
+  connector read/create, and agent delegation
 - **power_user** -- Broad tool access with agent builder
-  read and full connector management
+  read, full connector management, and agent delegation
+
+All three roles grant `agent:*:delegate`, which is required
+to chat with agents. SAM does not treat that scope as
+implicit -- it must be declared explicitly in each role.
 
 Role assignment is driven by Keycloak group claims. The
 `setup-keycloak-users.sh` script creates the following

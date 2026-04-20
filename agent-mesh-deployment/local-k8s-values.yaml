@@ -28,10 +28,16 @@ sam:
   authenticationRbac:
     # Custom roles (in addition to built-in sam_admin and sam_user).
     # Scope style follows the SAM Helm Quickstart documentation.
+    #
+    # Note: agent:*:delegate is required to chat with agents. It is
+    # NOT granted implicitly -- every role that should interact with
+    # agents must include it explicitly. The built-in sam_user has it.
     customRoles:
       viewer:
-        description: "Read-only access to deployments and connectors"
+        description: "Read-only access to deployments, artifacts, agents"
         scopes:
+          - "agent:*:delegate"
+          - "tool:basic:read"
           - "artifact:read"
           - "sam:deployments:read"
           - "sam:connectors:read"
@@ -39,15 +45,18 @@ sam:
       data_engineer:
         description: "Data engineering with data tools and connectors"
         scopes:
+          - "agent:*:delegate"
+          - "tool:basic:*"
+          - "tool:data:*"
           - "artifact:read"
           - "artifact:write"
-          - "tool:data:*"
           - "sam:connectors:read"
           - "sam:connectors:create"
 
       power_user:
         description: "Advanced user with broader tool access"
         scopes:
+          - "agent:*:delegate"
           - "artifact:*"
           - "tool:*"
           - "sam:agent_builder:read"
