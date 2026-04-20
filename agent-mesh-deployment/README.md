@@ -263,20 +263,29 @@ event-mesh-deployment:
 
 The deployment defines three custom roles in addition to
 the built-in `sam_admin` (full access) and `sam_user`
-(basic access) roles. Scope syntax follows the SAM Helm
-Quickstart documentation:
+(basic interactive access). Scope syntax follows the SAM
+Helm Quickstart documentation:
 
-- **viewer** -- Read access to deployments, artifacts,
-  and connectors, plus basic tool reads and the ability
-  to delegate to agents (chat)
+- **viewer** -- Passive observer. Read-only access to
+  deployments, artifacts, and connectors. Cannot chat
+  with agents (no `agent:*:delegate`). For auditors or
+  read-only monitoring use cases.
 - **data_engineer** -- Data tools, artifact read/write,
   connector read/create, and agent delegation
 - **power_user** -- Broad tool access with agent builder
   read, full connector management, and agent delegation
 
-All three roles grant `agent:*:delegate`, which is required
-to chat with agents. SAM does not treat that scope as
-implicit -- it must be declared explicitly in each role.
+The `agent:*:delegate` scope is required to chat with
+agents. SAM does not grant it implicitly -- every
+interactive role must declare it explicitly. The built-in
+`sam_user` role has it; our custom `viewer` deliberately
+does not.
+
+`defaultRoles` is set to `["sam_user"]` so users that
+authenticate successfully but are not mapped to any group
+still get basic interactive access (chat plus basic tool
+read and artifact list/load) instead of being stuck as
+passive viewers.
 
 Role assignment is driven by Keycloak group claims. The
 `setup-keycloak-users.sh` script creates the following

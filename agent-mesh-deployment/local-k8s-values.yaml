@@ -29,15 +29,19 @@ sam:
     # Custom roles (in addition to built-in sam_admin and sam_user).
     # Scope style follows the SAM Helm Quickstart documentation.
     #
-    # Note: agent:*:delegate is required to chat with agents. It is
-    # NOT granted implicitly -- every role that should interact with
-    # agents must include it explicitly. The built-in sam_user has it.
+    # Note on agent:*:delegate: required to chat with agents. It is
+    # NOT granted implicitly -- every interactive role must include
+    # it explicitly. The built-in sam_user has it.
+    #
+    # The 'viewer' role here is intentionally passive (no delegate,
+    # no tools). Users who need to interact get sam_user or a
+    # custom role below. defaultRoles fall back to sam_user (not
+    # viewer) so users without explicit group mapping can still use
+    # the system.
     customRoles:
       viewer:
-        description: "Read-only access to deployments, artifacts, agents"
+        description: "Passive observer -- read-only deployments and connectors"
         scopes:
-          - "agent:*:delegate"
-          - "tool:basic:read"
           - "artifact:read"
           - "sam:deployments:read"
           - "sam:connectors:read"
@@ -79,9 +83,13 @@ sam:
         "data_engineer": ["data_engineer"]
         "power_user": ["power_user"]
 
-    # Default roles for users whose claims do not match
+    # Default roles for users whose claims do not match any mapping.
+    # sam_user (built-in) gives basic interactive access (chat + basic
+    # tools); preferred over 'viewer' as a default because demo users
+    # without explicit group assignment should still be able to use
+    # the system.
     defaultRoles:
-      - "viewer"
+      - "sam_user"
 
   # Optional URL overrides for local development
   frontendServerUrl: ""
