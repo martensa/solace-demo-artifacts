@@ -110,12 +110,12 @@ llmService:
   llmServiceEndpoint: "https://lite-llm.mymaas.net"
   llmServiceApiKey: ""
 
-environmentVariables:
-  # Trust the Solace Lab root CA injected via Kyverno policy
-  # (inject-solace-lab-ca-trust-bundle) so Python-based SAM can
-  # validate TLS when talking to internal services such as Keycloak.
-  REQUESTS_CA_BUNDLE: "/etc/ssl/certs/ca-certificates.crt"
-  SSL_CERT_FILE: "/etc/ssl/certs/ca-certificates.crt"
+environmentVariables: {}
+# Note: REQUESTS_CA_BUNDLE and SSL_CERT_FILE are injected
+# cluster-wide by the Kyverno policy
+# 'inject-solace-lab-ca-trust-bundle' from
+# solace-lab-infrastructure/pki. No per-deployment config
+# required for Solace Lab CA trust.
 
 # Kubernetes Service Configuration
 service:

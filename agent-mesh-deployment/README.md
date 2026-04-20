@@ -20,7 +20,9 @@ the companion repository
   - trust-manager bundle `solace-lab-ca-trust-bundle`
   - Kyverno policy `inject-solace-lab-ca-trust-bundle`
     (mounts the CA bundle at
-    `/etc/ssl/certs/ca-certificates.crt` in every pod)
+    `/etc/ssl/certs/ca-certificates.crt` AND sets
+    `SSL_CERT_FILE` + `REQUESTS_CA_BUNDLE` env vars so
+    Python apps like SAM trust it out of the box)
   - Kyverno policy `inject-registry-pull-secret`
 - **Private Registry** -- `registry/`
   - Available at `https://registry.solace.lab`
@@ -226,6 +228,15 @@ defined in `local-k8s-values.yaml`. Key sections:
   with TLS via cert-manager
 - **samDeployment** -- Image repositories, tags, deployer,
   and image pull secret name (`registry-pull-secret`)
+
+### CA Trust
+
+No explicit `REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE` values
+are set in `local-k8s-values.yaml`. The Kyverno policy
+`inject-solace-lab-ca-trust-bundle` in
+`solace-lab-infrastructure/pki` mounts the trust bundle and
+sets both environment variables in every SAM pod
+automatically.
 
 ### Broker Connection
 

@@ -18,7 +18,10 @@ by the companion repo
 - trust-manager + ConfigMap `solace-lab-ca-trust-bundle`
   distributed to all namespaces (used by the Kyverno policy
   `inject-solace-lab-ca-trust-bundle` which mounts the CA
-  bundle at `/etc/ssl/certs/ca-certificates.crt` in every pod)
+  bundle at `/etc/ssl/certs/ca-certificates.crt` in every
+  pod AND sets `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE` env
+  vars so Python apps automatically pick up the OS trust
+  store)
 - Private registry at `registry.solace.lab` with Kyverno policy
   `inject-registry-pull-secret` auto-wiring `imagePullSecrets`
 - Keycloak at `auth.solace.lab` with the `solace-lab` realm
