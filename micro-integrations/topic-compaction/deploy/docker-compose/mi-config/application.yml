@@ -1,0 +1,110 @@
+# =============================================================================
+# Topic Compaction MI - external operator configuration
+# Mounted into the container at /app/external/spring/config/
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Solace connection settings + workflow lifecycle (MI Framework)
+# -----------------------------------------------------------------------------
+solace:
+  java:
+    host: tcp://solace-broker:55555
+    msg-vpn: default
+    client-username: default
+    client-password: default
+    connect-retries: -1
+    reconnect-retries: -1
+
+  connector:
+    workflows:
+      0: {enabled: true}
+      1: {enabled: true}
+      2: {enabled: true}
+      3: {enabled: false}
+      4: {enabled: false}
+      5: {enabled: false}
+      6: {enabled: false}
+      7: {enabled: false}
+
+    security:
+      enabled: false   # docker-compose dev only; enable + set users in production
+
+# -----------------------------------------------------------------------------
+# Workflow wiring - which Solace queues feed which MI workflow
+# -----------------------------------------------------------------------------
+spring:
+  cloud:
+    stream:
+      bindings:
+        # Workflow 0: Compaction. Reads from compaction.data queue,
+        # interceptor stores message in KV, audit producer rewrites payload to
+        # an audit JSON event published on <original>/compacted-ack.
+        input-0:
+          destination: compaction.data
+          binder: solace
+        output-0:
+          destination: placeholder/compacted-ack       # overwritten dynamically by audit interceptor
+          binder: solace
+
+        # Workflow 1: Replay. Reads command JSON from compaction.commands,
+        # producer interceptor looks up KV and republishes on <key>/compacted.
+        input-1:
+          destination: compaction.commands
+          binder: solace
+        output-1:
+          destination: placeholder/compacted           # overwritten by replay interceptor
+          binder: solace
+
+        # Workflow 2: Solace Request/Reply Lookup. Reads from compaction.lookup
+        # queue (subscribed to compacted/lookup/>), producer responds on
+        # solace_replyTo.
+        input-2:
+          destination: compaction.lookup
+          binder: solace
+        output-2:
+          destination: placeholder/lookup-reply        # overwritten by lookup interceptor
+          binder: solace
+
+      solace:
+        default:
+          producer:
+            destination-type: topic                    # publish to topics, not queues
+
+# -----------------------------------------------------------------------------
+# Topic Compaction MI specifics (defaults are mostly fine; tune if needed)
+# -----------------------------------------------------------------------------
+topic-compaction:
+  kvstore:
+    backend: rocksdb
+    rocksdb:
+      path: /app/data/rocksdb
+  compaction:
+    binding-names: [input-0]
+    audit-suffix: /compacted-ack
+    loop-protection-header: x-compacted-replay
+    ordering:
+      header: ""                  # empty -> always-last-wins
+  replay:
+    binding-names: [input-1]
+    target-suffix: /compacted
+    loop-protection-header: x-compacted-replay
+  lookup:
+    binding-names: [input-2]
+    key-header: x-compaction-key
+    topic-key-prefix: "compacted/lookup/"
+
+# -----------------------------------------------------------------------------
+# Spring Boot Actuator - health, metrics, prometheus
+# -----------------------------------------------------------------------------
+management:
+  endpoint:
+    health:
+      show-components: always
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.solace.labs.mi.topiccompaction: DEBUG
+    com.solace.connector.core: INFO
+    com.solace.spring.cloud.stream.binder: INFO

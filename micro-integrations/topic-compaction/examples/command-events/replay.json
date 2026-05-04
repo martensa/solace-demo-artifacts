@@ -1,0 +1,9 @@
+{
+  "command": "REPLAY",
+  "key": "orders/created/12345",
+  "options": {
+    "destinationSuffix": "/compacted",
+    "correlationId": "demo-replay-1",
+    "includeOriginalHeaders": true
+  }
+}

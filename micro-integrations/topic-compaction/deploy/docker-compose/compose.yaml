@@ -1,0 +1,70 @@
+services:
+  solace-broker:
+    image: solace/solace-pubsub-standard:latest
+    volumes:
+      - "broker-storage:/var/lib/solace"
+    shm_size: 1g
+    ulimits:
+      core: -1
+      nofile:
+        soft: 2448
+        hard: 1048576
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 1
+    ports:
+      # Host-side ports are remapped to avoid conflicts with other local
+      # Solace brokers (e.g. the SAM platform broker on 8008/8080/9000/55555).
+      # Container-side stays canonical.
+      # Web Messaging (WebSocket)
+      - "18008:8008"
+      # SEMP / PubSub+ Manager
+      - "18080:8080"
+      # REST messaging
+      - "19000:9000"
+      # SMF (used by JCSMP)
+      - "15555:55555"
+    environment:
+      - username_admin_globalaccesslevel=admin
+      - username_admin_password=admin
+      - system_scaling_maxconnectioncount=100
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--user", "admin:admin", "http://localhost:8080/SEMP"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # One-shot container that creates the queues + subscriptions the MI expects.
+  # The init logic lives in init-queues.sh (mounted in) so we can keep it
+  # readable and test-runnable outside of compose.
+  queue-initializer:
+    image: curlimages/curl:latest
+    depends_on:
+      solace-broker:
+        condition: service_healthy
+    volumes:
+      - ./init-queues.sh:/init-queues.sh:ro
+    entrypoint: ["/bin/sh", "/init-queues.sh"]
+
+  topic-compaction-mi:
+    image: registry.solace.lab/sam-topic-compaction-mi:1.0.0-SNAPSHOT
+    volumes:
+      - type: bind
+        source: ./mi-config/
+        target: /app/external/spring/config/
+        read_only: true
+      - kvstore-data:/app/data
+    ports:
+      # Host port 18090 -> container port 8090 (MI's REST + actuator)
+      - "18090:8090"
+    depends_on:
+      solace-broker:
+        condition: service_healthy
+      queue-initializer:
+        condition: service_completed_successfully
+
+volumes:
+  broker-storage:
+  kvstore-data:

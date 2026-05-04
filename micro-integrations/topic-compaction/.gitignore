@@ -1,0 +1,26 @@
+# Build output
+target/
+*.class
+*.jar
+*.war
+*.tar
+.flattened-pom.xml
+
+# Local data
+data/
+logs/
+*.log
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+
+# Maven wrapper extracted
+.mvn/wrapper/maven-wrapper.jar
