@@ -76,6 +76,30 @@
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
+		<!-- Structured JSON logging - feeds Loki via Promtail/Grafana
+		     Agent picking up the pod stdout -->
+		<dependency>
+			<groupId>net.logstash.logback</groupId>
+			<artifactId>logstash-logback-encoder</artifactId>
+			<version>8.0</version>
+		</dependency>
+		<!-- Distributed tracing via Micrometer Tracing -> OTLP -> Tempo.
+		     Spans are tagged with trace/span IDs and propagated into
+		     the SLF4J MDC by the bridge. -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-tracing-bridge-otel</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.opentelemetry</groupId>
+			<artifactId>opentelemetry-exporter-otlp</artifactId>
+		</dependency>
+		<!-- Enables @Observed for declarative spans / metrics on
+		     individual workflow methods. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
+		</dependency>
 
 		<!-- ============================================================
 		     Developer Tooling (not packaged)

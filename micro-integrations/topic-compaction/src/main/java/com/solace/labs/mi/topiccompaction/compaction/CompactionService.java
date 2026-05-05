@@ -3,8 +3,10 @@ package com.solace.labs.mi.topiccompaction.compaction;
 import com.solace.labs.mi.topiccompaction.kvstore.CompactedRecord;
 import com.solace.labs.mi.topiccompaction.kvstore.KvStore;
 import com.solace.labs.mi.topiccompaction.metrics.CompactionMetrics;
+import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.stereotype.Service;
@@ -44,10 +46,26 @@ public class CompactionService {
     /**
      * Run the compaction step on a single inbound message.
      *
+     * <p>The {@link Observed} annotation creates a span named
+     * {@code compaction.process} via the Micrometer Tracing bridge,
+     * and an MDC entry named {@code service=compaction} is attached
+     * for the duration of the call so log lines emitted from inside
+     * carry the workflow context.
+     *
      * @return the outcome - the caller (interceptor) uses this to populate the
      *         audit event or skip emission entirely.
      */
+    @Observed(name = "compaction.process",
+            contextualName = "compact-message",
+            lowCardinalityKeyValues = {"workflow", "compaction"})
     public Result compact(Message<?> message) {
+        try (MDC.MDCCloseable ignored1 = MDC.putCloseable(
+                "service", "compaction")) {
+            return doCompact(message);
+        }
+    }
+
+    private Result doCompact(Message<?> message) {
         MessageHeaders headers = message.getHeaders();
 
         // 1) Loop protection - if this message itself was a replay, do not re-store.

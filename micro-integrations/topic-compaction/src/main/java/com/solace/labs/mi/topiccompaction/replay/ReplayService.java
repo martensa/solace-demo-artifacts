@@ -7,8 +7,10 @@ import com.solace.labs.mi.topiccompaction.command.CommandType;
 import com.solace.labs.mi.topiccompaction.kvstore.CompactedRecord;
 import com.solace.labs.mi.topiccompaction.kvstore.KvStore;
 import com.solace.labs.mi.topiccompaction.metrics.CompactionMetrics;
+import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -47,57 +49,98 @@ public class ReplayService {
 
     /**
      * Parse and act on a command JSON payload.
+     *
+     * <p>Wrapped in an {@link Observed} span so the JSON-parse cost
+     * is visible in traces and a span exists even when the command
+     * fails to parse.
      */
+    @Observed(name = "replay.parse-and-process",
+            contextualName = "replay-command",
+            lowCardinalityKeyValues = {"workflow", "replay"})
     public Decision process(byte[] commandJson) {
-        CommandEvent event;
-        try {
-            event = objectMapper.readValue(commandJson, CommandEvent.class);
-        } catch (Exception e) {
-            return Decision.fail("Invalid command JSON: " + e.getMessage());
+        try (MDC.MDCCloseable ignored = MDC.putCloseable(
+                "service", "replay")) {
+            CommandEvent event;
+            try {
+                event = objectMapper.readValue(
+                        commandJson, CommandEvent.class);
+            } catch (Exception e) {
+                return Decision.fail(
+                        "Invalid command JSON: " + e.getMessage());
+            }
+            return processInternal(event);
         }
-        return process(event);
     }
 
+    /**
+     * Test-friendly entry point that takes a parsed command. Tests
+     * call this directly to avoid round-tripping through Jackson.
+     */
     public Decision process(CommandEvent event) {
+        try (MDC.MDCCloseable ignored = MDC.putCloseable(
+                "service", "replay")) {
+            return processInternal(event);
+        }
+    }
+
+    private Decision processInternal(CommandEvent event) {
         if (event.command() == null) {
             return Decision.fail("Command type is required");
         }
         if (event.key() == null || event.key().isBlank()) {
             return Decision.fail("Command key is required");
         }
-        if (event.command() != CommandType.REPLAY) {
-            // V1 only handles REPLAY. DELETE / BULK_REPLAY are reserved for V2.
-            return Decision.fail("Command not supported in V1: " + event.command());
+        try (MDC.MDCCloseable ignoredKey = MDC.putCloseable(
+                "key", event.key());
+             MDC.MDCCloseable ignoredCmd = MDC.putCloseable(
+                "command", event.command().name())) {
+
+            if (event.command() != CommandType.REPLAY) {
+                // V1 only handles REPLAY here. DELETE / BULK_REPLAY
+                // are dispatched by their own services in later
+                // phases.
+                return Decision.fail(
+                        "Command not supported in V1: " + event.command());
+            }
+
+            Optional<CompactedRecord> record = kvStore.get(event.key());
+            if (record.isEmpty()) {
+                log.info("Replay: no record found for key={}",
+                        event.key());
+                return Decision.fail(
+                        "No record stored for key: " + event.key());
+            }
+
+            String suffix = event.stringOption(
+                    "destinationSuffix", properties.getTargetSuffix());
+            String destination = event.key() + suffix;
+            boolean includeHeaders = event.booleanOption(
+                    "includeOriginalHeaders", true);
+            String correlationId = event.stringOption(
+                    "correlationId", null);
+
+            Map<String, Object> headers = new LinkedHashMap<>();
+            if (includeHeaders) {
+                headers.putAll(record.get().headers());
+            }
+            // Always rewrite the destination headers and inject
+            // loop-protection.
+            headers.put("solace_destination", destination);
+            headers.put(properties.getLoopProtectionHeader(), true);
+            if (correlationId != null) {
+                headers.put("x-original-correlation-id", correlationId);
+            }
+            headers.put("x-compaction-replay-source-key", event.key());
+
+            metrics.recordReplay();
+            log.info("Replay: prepared message for key={} "
+                    + "-> destination={} ({} bytes)",
+                    event.key(), destination,
+                    record.get().payload().length);
+
+            return Decision.success(destination,
+                    record.get().payload(), headers);
         }
-
-        Optional<CompactedRecord> record = kvStore.get(event.key());
-        if (record.isEmpty()) {
-            log.info("Replay: no record found for key={}", event.key());
-            return Decision.fail("No record stored for key: " + event.key());
-        }
-
-        String suffix = event.stringOption("destinationSuffix", properties.getTargetSuffix());
-        String destination = event.key() + suffix;
-        boolean includeHeaders = event.booleanOption("includeOriginalHeaders", true);
-        String correlationId = event.stringOption("correlationId", null);
-
-        Map<String, Object> headers = new LinkedHashMap<>();
-        if (includeHeaders) {
-            headers.putAll(record.get().headers());
-        }
-        // Always rewrite the destination headers and inject loop-protection.
-        headers.put("solace_destination", destination);
-        headers.put(properties.getLoopProtectionHeader(), true);
-        if (correlationId != null) {
-            headers.put("x-original-correlation-id", correlationId);
-        }
-        headers.put("x-compaction-replay-source-key", event.key());
-
-        metrics.recordReplay();
-        log.info("Replay: prepared message for key={} -> destination={} ({} bytes)",
-                event.key(), destination, record.get().payload().length);
-
-        return Decision.success(destination, record.get().payload(), headers);
     }
 
     /**

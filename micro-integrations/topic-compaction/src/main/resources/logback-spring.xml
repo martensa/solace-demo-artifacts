@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for the Topic Compaction MI.
+
+  Two profiles:
+   - "dev"          (default for local docker-compose)
+                    pretty colored console output, easy to read
+   - "k8s" / "prod" structured JSON to stdout, ingested by
+                    Promtail/Grafana-Agent into Loki
+
+  MDC fields propagated by Micrometer Tracing's OpenTelemetry bridge:
+   - traceId, spanId : enable cross-pillar correlation with Tempo
+
+  Application MDC keys we attach in the workflow services:
+   - service     constant identifier of the workflow ("compaction",
+                 "replay", "lookup")
+   - workflow.id numeric id 0..7 (matches solace.connector.workflows)
+   - key         the KV key currently being processed
+   - command     the parsed command type (REPLAY, BULK_REPLAY, ...)
+
+  The JSON encoder always emits the timestamp and level; the rest
+  comes from the MDC and is opt-in per call.
+-->
+<configuration scan="false">
+
+    <springProperty scope="context" name="appName"
+                    source="spring.application.name"
+                    defaultValue="topic-compaction-mi"/>
+    <springProperty scope="context" name="appVersion"
+                    source="topic-compaction.version"
+                    defaultValue="dev"/>
+
+    <!-- =====================================================
+         Profile: dev (default) - pretty console
+         ===================================================== -->
+    <springProfile name="dev">
+        <appender name="STDOUT"
+                  class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="STDOUT"/>
+        </root>
+        <logger
+            name="com.solace.labs.mi.topiccompaction"
+            level="DEBUG"/>
+    </springProfile>
+
+    <!-- =====================================================
+         Profile: k8s | prod - structured JSON for Loki
+         ===================================================== -->
+    <springProfile name="k8s,prod">
+        <appender name="STDOUT_JSON"
+                  class="ch.qos.logback.core.ConsoleAppender">
+            <encoder
+                class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <fieldName>@timestamp</fieldName>
+                    </timestamp>
+                    <version/>
+                    <logLevel/>
+                    <loggerName>
+                        <fieldName>logger</fieldName>
+                    </loggerName>
+                    <threadName>
+                        <fieldName>thread</fieldName>
+                    </threadName>
+                    <message/>
+                    <stackTrace/>
+                    <mdc/>
+                    <pattern>
+                        <pattern>
+                            {
+                                "service": "${appName}",
+                                "version": "${appVersion}"
+                            }
+                        </pattern>
+                    </pattern>
+                </providers>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="STDOUT_JSON"/>
+        </root>
+        <logger
+            name="com.solace.labs.mi.topiccompaction"
+            level="INFO"/>
+    </springProfile>
+
+    <!-- =====================================================
+         Fallback (no Spring profile active) - plain console
+         ===================================================== -->
+    <springProfile name="default">
+        <appender name="STDOUT"
+                  class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="STDOUT"/>
+        </root>
+        <logger
+            name="com.solace.labs.mi.topiccompaction"
+            level="INFO"/>
+    </springProfile>
+
+</configuration>
