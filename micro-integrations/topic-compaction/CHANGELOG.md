@@ -9,7 +9,26 @@ to [Semantic Versioning][semver].
 [kac]: https://keepachangelog.com/en/1.1.0/
 [semver]: https://semver.org/spec/v2.0.0.html
 
-## [Unreleased]
+## [1.0.0] - 2026-05-05
+
+The first production-ready release. Single-replica deployment;
+HA is V2 (see ADR 0002). Highlights at a glance:
+
+- **Three workflows**: compaction, replay (single + bulk +
+  delete), lookup (request/reply).
+- **REST KV surface** with read + admin role separation.
+- **Per-prefix TTL retention** and streaming backup/restore.
+- **Hardened K8s deployment** (`mi-solace-lab` namespace,
+  read-only root FS, dropped capabilities, NetworkPolicy, PDB).
+- **LGTM-stack observability**: Prometheus ServiceMonitor,
+  SLO-based alerts, Grafana dashboard, OTLP traces, JSON logs.
+- **Idempotent `start.sh` / `stop.sh`** with monitoring
+  artifacts deployed alongside.
+- 111 unit + integration tests, JaCoCo coverage gate, fully
+  non-interactive smoke test, bash load harness.
+- 12 user-facing docs + 5 ADRs.
+
+### Phases (per Conventional Commits)
 
 ### Added
 
