@@ -1,19 +1,49 @@
 # Configuration
 
-All configuration is Spring Boot YAML. The MI ships an internal
-`application.yml` (packed in the JAR) with framework defaults; operators
-provide an external `application.yml` mounted at
-`/app/external/spring/config/`.
+All configuration is Spring Boot YAML + environment variables. Two layers:
 
-## Solace connection
+1. **Internal** (`src/main/resources/application.yml`, packed in the JAR) -
+   framework defaults. Don't edit unless you're rebuilding the image.
+2. **External** (`deploy/docker-compose/mi-config/application.yml`, mounted at
+   `/app/external/spring/config/` in the container) - operator overrides.
+   Uses `${VAR}` placeholders for secrets; real values come from `.env`.
+
+## Secrets management
+
+`.env` (gitignored) holds real credentials; `.env.example` (committed) has
+placeholder values. Both Docker Compose and the smoke test script read `.env`
+directly. The MI's `application.yml` references variables via Spring Boot's
+native `${VAR}` syntax and resolves them from the container's environment.
+
+```bash
+make env-init           # cp .env.example .env
+$EDITOR .env            # fill in real values
+make env-check          # validate before bringing the stack up
+```
+
+Required keys in `.env`:
+
+| Key | Used by | Example |
+|-----|---------|---------|
+| `SOLACE_HOST` | MI (SMF connection) | `tcp://mr-connection-XXX.messaging.solace.cloud:55555` |
+| `SOLACE_VPN` | MI | `mdm-eu` |
+| `SOLACE_USERNAME` | MI | `solace-cloud-client` |
+| `SOLACE_PASSWORD` | MI | (replace-me) |
+| `SOLACE_REST_HOST` | smoke test (curl) | `http://mr-connection-XXX.messaging.solace.cloud:9000` |
+| `SOLACE_REST_USER` | smoke test | usually same as `SOLACE_USERNAME` |
+| `SOLACE_REST_PASS` | smoke test | usually same as `SOLACE_PASSWORD` |
+| `MI_PORT` | docker-compose port mapping | `18090` |
+| `MI_IMAGE` | docker-compose image tag | `registry.solace.lab/sam-topic-compaction-mi:1.0.0-SNAPSHOT` |
+
+## Solace connection (referenced from `.env`)
 
 ```yaml
 solace:
   java:
-    host: tcp://solace-broker:55555
-    msg-vpn: default
-    client-username: default
-    client-password: default
+    host: ${SOLACE_HOST}
+    msg-vpn: ${SOLACE_VPN}
+    client-username: ${SOLACE_USERNAME}
+    client-password: ${SOLACE_PASSWORD}
     connect-retries: -1
     reconnect-retries: -1
 ```

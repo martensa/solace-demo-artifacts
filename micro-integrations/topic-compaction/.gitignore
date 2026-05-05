@@ -24,3 +24,9 @@ logs/
 
 # Maven wrapper extracted
 .mvn/wrapper/maven-wrapper.jar
+
+# Secrets - real values live ONLY in .env, never committed.
+# Only .env.example (committed) carries placeholders.
+.env
+.env.*
+!.env.example

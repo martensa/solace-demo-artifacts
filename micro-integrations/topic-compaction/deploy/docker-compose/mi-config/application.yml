@@ -1,6 +1,9 @@
 # =============================================================================
 # Topic Compaction MI - external operator configuration
 # Mounted into the container at /app/external/spring/config/
+#
+# All ${...} placeholders below are resolved by Spring Boot from environment
+# variables at runtime. Real values live in ../../.env (gitignored).
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -8,10 +11,10 @@
 # -----------------------------------------------------------------------------
 solace:
   java:
-    host: tcp://solace-broker:55555
-    msg-vpn: default
-    client-username: default
-    client-password: default
+    host: ${SOLACE_HOST}
+    msg-vpn: ${SOLACE_VPN}
+    client-username: ${SOLACE_USERNAME}
+    client-password: ${SOLACE_PASSWORD}
     connect-retries: -1
     reconnect-retries: -1
 
