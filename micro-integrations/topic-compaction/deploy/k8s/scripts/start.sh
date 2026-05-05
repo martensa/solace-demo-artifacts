@@ -133,6 +133,12 @@ if [ "$APPLY_MONITORING" = "true" ]; then
         >/dev/null 2>&1; then
     kubectl apply -f "$K8S_DIR/80-servicemonitor.yaml"
     kubectl apply -f "$K8S_DIR/81-prometheusrule.yaml"
+    kubectl apply -f "$K8S_DIR/82-grafana-dashboard.yaml"
+    echo
+    echo "Grafana dashboard:"
+    echo "  Title: 'Topic Compaction MI' (UID: topic-compaction-mi)"
+    echo "  The kube-prometheus-stack sidecar should pick it up"
+    echo "  within ~30 seconds via the grafana_dashboard=1 label."
   else
     echo "WARN: namespace '$MONITORING_NAMESPACE' not found; "
     echo "      skipping monitoring artifacts. Re-run with the"

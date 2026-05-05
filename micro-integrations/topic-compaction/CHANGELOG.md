@@ -236,6 +236,39 @@ to [Semantic Versioning][semver].
   visible in the `monitoring` namespace, security role matrix
   (10 checks) verified via port-forward.
 
+### Phase 6 - Grafana dashboard, SLO alerts, runbook
+
+#### Added
+
+- `81-prometheusrule.yaml` rewritten into four groups:
+  recording rules (`topic-compaction.recording` group), symptom
+  alerts (pod absence, NotReady, memory), SLO alerts (compaction
+  success rate, lookup p95, lookup miss ratio), capacity alerts
+  (KV growth, PVC fill).
+- Three recording rules computing SLIs once at scrape time:
+  `topic_compaction:compaction_success_rate:5m`,
+  `topic_compaction:lookup_p95_seconds:5m`,
+  `topic_compaction:lookup_miss_ratio:5m`. Dashboards and alerts
+  read the same series.
+- Every alert now carries a `runbook` label that maps to a
+  section in `docs/OPERATIONS.md`.
+- `82-grafana-dashboard.yaml` -- ConfigMap with the
+  `grafana_dashboard: "1"` label so the kube-prometheus-stack
+  Grafana sidecar auto-imports it. Dashboard "Topic Compaction
+  MI" with five rows: status stat-row, throughput (RED),
+  latency, resources, storage. Templated by namespace + pod.
+- `docs/OPERATIONS.md` -- runbook covering the SLO definitions,
+  per-alert response (verify + recovery), routine ops
+  (restart, credential rotation, retention), backup/restore
+  procedure, disaster-recovery scenarios, and capacity planning.
+- ADR 0005 -- SLO + alert strategy: SLI/SLO definitions, alert
+  taxonomy (symptom / SLO / capacity), severity policy,
+  recording-rule naming convention, and the rationale for
+  deferring multi-window burn-rate alerts to a future iteration.
+- `start.sh` and `stop.sh` updated to apply / remove the
+  Grafana dashboard ConfigMap alongside the other monitoring
+  artifacts.
+
 ## [0.x] (pre-release MVP, V1)
 
 The MVP shipped before this CHANGELOG was introduced. See git history

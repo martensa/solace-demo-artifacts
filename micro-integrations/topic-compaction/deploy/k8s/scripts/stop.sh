@@ -54,6 +54,8 @@ fi
 if [ "$APPLY_MONITORING" = "true" ]; then
   step "Monitoring artifacts"
   kubectl -n "$MONITORING_NAMESPACE" delete --ignore-not-found \
+      -f "$K8S_DIR/82-grafana-dashboard.yaml"
+  kubectl -n "$MONITORING_NAMESPACE" delete --ignore-not-found \
       -f "$K8S_DIR/81-prometheusrule.yaml"
   kubectl -n "$MONITORING_NAMESPACE" delete --ignore-not-found \
       -f "$K8S_DIR/80-servicemonitor.yaml"
