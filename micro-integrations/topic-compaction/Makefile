@@ -14,8 +14,8 @@ DOCKER_CONFIG ?= $(HOME)/.docker
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env-check env-init build test image up down restart logs status \
-        provision-queues smoke clean \
+.PHONY: help env-check env-init build test verify coverage image up down \
+        restart logs status provision-queues smoke load-test clean \
         k8s-deploy k8s-status k8s-logs k8s-port-forward k8s-restart \
         k8s-undeploy k8s-undeploy-purge
 
@@ -29,7 +29,9 @@ help:
 	@echo ""
 	@echo "  Build:"
 	@echo "    build              ./mvnw clean package"
-	@echo "    test               ./mvnw test"
+	@echo "    test               ./mvnw test (unit + integration)"
+	@echo "    verify             ./mvnw verify (test + coverage check)"
+	@echo "    coverage           Open the JaCoCo HTML report"
 	@echo "    image              Build container image into local Docker daemon"
 	@echo ""
 	@echo "  Run:"
@@ -41,6 +43,7 @@ help:
 	@echo ""
 	@echo "  Test:"
 	@echo "    smoke              Run the end-to-end smoke test"
+	@echo "    load-test          Drive synthetic load + sample metrics"
 	@echo ""
 	@echo "  Cleanup:"
 	@echo "    clean              Down + remove volumes + remove target/"
@@ -83,6 +86,13 @@ build:
 test:
 	./mvnw test
 
+verify:
+	./mvnw verify
+
+coverage: test
+	@open target/site/jacoco/index.html 2>/dev/null \
+		|| echo "Coverage report at target/site/jacoco/index.html"
+
 image:
 	DOCKER_CONFIG=$(DOCKER_CONFIG) ./mvnw package jib:dockerBuild -DskipTests
 
@@ -107,6 +117,9 @@ provision-queues: env-check
 
 smoke: env-check
 	./examples/smoke-test.sh
+
+load-test: env-check
+	./examples/load-test.sh
 
 clean:
 	$(COMPOSE) down -v

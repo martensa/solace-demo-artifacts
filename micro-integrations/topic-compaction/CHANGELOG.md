@@ -269,6 +269,62 @@ to [Semantic Versioning][semver].
   Grafana dashboard ConfigMap alongside the other monitoring
   artifacts.
 
+### Phase 7 - test strategy + load harness
+
+#### Added
+
+- JaCoCo coverage plugin in `pom.xml` with a `mvn verify`
+  threshold check (>= 75% line, >= 65% branch on the testable
+  bundle). Spring `@Configuration` wiring classes are excluded
+  because their behaviour is verified by integration tests, not
+  unit tests.
+- `EndToEndIntegrationTest` (6 cases) exercises the full service
+  stack against a real per-test RocksDB instance:
+  compaction-then-replay cycle, bulk-replay fanout, cascade
+  delete, retention eviction, backup/restore roundtrip, and
+  RocksDB persistence across a close+reopen.
+- `examples/load-test.sh` -- bash + curl harness driving
+  configurable producer load via the broker REST endpoint and
+  sampling Prometheus metrics. Suitable for sanity load up to
+  ~200 msg/s; production benchmarking should switch to sdkperf.
+- `docs/PERFORMANCE.md` -- V1.0 baseline numbers
+  (throughput, latency, resource use), bulk-replay benchmark
+  table, capacity-planning rules of thumb, known performance
+  limits, and explicit V1.1 future-work backlog.
+- `Makefile` targets `verify`, `coverage`, `load-test`.
+
+#### Changed
+
+- `examples/smoke-test.sh` rewritten as fully non-interactive,
+  exit-code-clean, with 10 assertions across health, compaction,
+  replay, bulk-replay, tombstone, and admin/backup. Optional
+  `--k8s` mode port-forwards the cluster service.
+- `RocksDbKvStore.close()` visibility raised from package-private
+  to public so integration tests outside the kvstore package can
+  drive the close/reopen cycle.
+
+#### Verified
+
+- 111 tests green (was 105; +6 integration tests).
+- Coverage check passes (`mvn verify` exits 0).
+- Smoke test exits 0 with 10/10 assertions passing against the
+  docker-compose deployment.
+- Load test runs to completion with the expected throughput
+  numbers logged in PERFORMANCE.md.
+
+#### Deferred to V1.1
+
+- Testcontainers-based integration tests with a real Solace
+  broker. The `@SpringBootTest` setup conflicts with the MI
+  Framework's auto-configuration; the existing
+  `EndToEndIntegrationTest` covers the service-layer
+  end-to-end, and `examples/smoke-test.sh` covers
+  broker-integrated end-to-end.
+- sdkperf-based load harness for sustained > 500 msg/s
+  benchmarking.
+- Per-workflow latency histograms (compaction, replay, lookup)
+  separate from the generic `http.server.requests` series.
+
 ## [0.x] (pre-release MVP, V1)
 
 The MVP shipped before this CHANGELOG was introduced. See git history
