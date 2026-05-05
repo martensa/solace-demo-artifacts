@@ -1,6 +1,7 @@
 package com.solace.labs.mi.topiccompaction.replay;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.solace.labs.mi.topiccompaction.command.CommandEventParser;
 import com.solace.labs.mi.topiccompaction.kvstore.CaffeineKvStore;
 import com.solace.labs.mi.topiccompaction.kvstore.CompactedRecord;
 import com.solace.labs.mi.topiccompaction.kvstore.KvStore;
@@ -9,7 +10,9 @@ import com.solace.labs.mi.topiccompaction.metrics.CompactionMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ClassPathResource;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
@@ -23,12 +26,18 @@ class ReplayServiceTest {
     private ObjectMapper objectMapper;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws IOException {
         kvStore = new CaffeineKvStore(new KvStoreProperties());
         props = new ReplayProperties();
         objectMapper = new ObjectMapper();
-        CompactionMetrics metrics = new CompactionMetrics(new SimpleMeterRegistry(), kvStore);
-        service = new ReplayService(kvStore, props, objectMapper, metrics);
+        CompactionMetrics metrics = new CompactionMetrics(
+                new SimpleMeterRegistry(), kvStore);
+        CommandEventParser parser = new CommandEventParser(
+                objectMapper,
+                new ClassPathResource("schemas/command-event-v1.json"));
+        parser.init();
+        service = new ReplayService(
+                kvStore, props, objectMapper, parser, metrics);
     }
 
     @Test
@@ -119,27 +128,62 @@ class ReplayServiceTest {
         byte[] cmd = "not json".getBytes(StandardCharsets.UTF_8);
         ReplayService.Decision decision = service.process(cmd);
         assertThat(decision.success()).isFalse();
-        assertThat(decision.failure()).contains("Invalid command JSON");
+        assertThat(decision.failure()).contains("Invalid JSON");
     }
 
     @Test
-    void failsOnUnsupportedCommand() {
+    void replayServiceRejectsBulkReplayCommand() {
+        // BULK_REPLAY is a valid schema, but ReplayService only
+        // handles REPLAY. Dispatching to BulkReplayService is wired
+        // by the interceptor, not the service-level entry point.
+        byte[] cmd = """
+                { "command": "BULK_REPLAY", "pattern": "orders/>" }
+                """.getBytes(StandardCharsets.UTF_8);
+        ReplayService.Decision decision = service.process(cmd);
+        assertThat(decision.success()).isFalse();
+        assertThat(decision.failure())
+                .contains("BULK_REPLAY");
+    }
+
+    @Test
+    void replayServiceRejectsDeleteCommand() {
+        // Same boundary as BULK_REPLAY: DELETE has its own service.
         byte[] cmd = """
                 { "command": "DELETE", "key": "x" }
                 """.getBytes(StandardCharsets.UTF_8);
         ReplayService.Decision decision = service.process(cmd);
         assertThat(decision.success()).isFalse();
-        assertThat(decision.failure()).contains("not supported in V1");
+        assertThat(decision.failure()).contains("DELETE");
     }
 
     @Test
-    void failsOnMissingKey() {
+    void schemaRejectsReplayWithoutKey() {
         byte[] cmd = """
                 { "command": "REPLAY" }
                 """.getBytes(StandardCharsets.UTF_8);
         ReplayService.Decision decision = service.process(cmd);
         assertThat(decision.success()).isFalse();
-        assertThat(decision.failure()).contains("key is required");
+        assertThat(decision.failure()).contains("Schema violation");
+    }
+
+    @Test
+    void schemaRejectsBulkReplayWithoutPattern() {
+        byte[] cmd = """
+                { "command": "BULK_REPLAY" }
+                """.getBytes(StandardCharsets.UTF_8);
+        ReplayService.Decision decision = service.process(cmd);
+        assertThat(decision.success()).isFalse();
+        assertThat(decision.failure()).contains("Schema violation");
+    }
+
+    @Test
+    void schemaRejectsUnknownCommand() {
+        byte[] cmd = """
+                { "command": "WIPE", "key": "x" }
+                """.getBytes(StandardCharsets.UTF_8);
+        ReplayService.Decision decision = service.process(cmd);
+        assertThat(decision.success()).isFalse();
+        assertThat(decision.failure()).contains("Schema violation");
     }
 
     @Test

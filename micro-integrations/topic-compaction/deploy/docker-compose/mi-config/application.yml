@@ -68,6 +68,20 @@ spring:
           destination: placeholder/lookup-reply        # overwritten by lookup interceptor
           binder: solace
 
+        # Bulk-Replay fanout (no MI workflow). BulkReplayService uses
+        # StreamBridge.send("output-3", msg) and the per-message
+        # destination is set via the solace_destination header.
+        # output-3 is a pre-registered binding (see internal
+        # application.yml), so the MI Framework knows about it.
+        # We override its destination here with a placeholder and
+        # explicitly auto-start the producer; workflow 3 stays
+        # disabled (we use the binding without the workflow).
+        output-3:
+          destination: placeholder/bulk-replay-fanout
+          binder: solace
+          producer:
+            auto-startup: true
+
       solace:
         default:
           producer:

@@ -2,6 +2,8 @@ package com.solace.labs.mi.topiccompaction.replay;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solace.connector.core.customizer.ProducerBindingMessageInterceptor;
+import com.solace.labs.mi.topiccompaction.command.CommandEventParser;
+import com.solace.labs.mi.topiccompaction.delete.DeleteCommandService;
 import com.solace.labs.mi.topiccompaction.kvstore.CaffeineKvStore;
 import com.solace.labs.mi.topiccompaction.kvstore.CompactedRecord;
 import com.solace.labs.mi.topiccompaction.kvstore.KvStore;
@@ -11,9 +13,11 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.stream.binder.ProducerProperties;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.GenericMessage;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
@@ -26,13 +30,29 @@ class ReplayProducerInterceptorTest {
     private ObjectMapper objectMapper;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws IOException {
         kvStore = new CaffeineKvStore(new KvStoreProperties());
         objectMapper = new ObjectMapper();
         ReplayProperties props = new ReplayProperties();
-        ReplayService service = new ReplayService(kvStore, props, objectMapper,
-                new CompactionMetrics(new SimpleMeterRegistry(), kvStore));
-        factory = new ReplayProducerInterceptorFactory(service, props);
+        CommandEventParser parser = new CommandEventParser(
+                objectMapper,
+                new ClassPathResource("schemas/command-event-v1.json"));
+        parser.init();
+        CompactionMetrics metrics = new CompactionMetrics(
+                new SimpleMeterRegistry(), kvStore);
+        ReplayService replayService = new ReplayService(
+                kvStore, props, objectMapper, parser, metrics);
+        BulkReplayService bulkReplayService = new BulkReplayService(
+                kvStore, props,
+                org.mockito.Mockito.mock(
+                        org.springframework.cloud.stream.function
+                                .StreamBridge.class),
+                metrics);
+        DeleteCommandService deleteService =
+                new DeleteCommandService(kvStore, metrics);
+        factory = new ReplayProducerInterceptorFactory(
+                replayService, bulkReplayService, deleteService,
+                parser, objectMapper, props);
     }
 
     @Test

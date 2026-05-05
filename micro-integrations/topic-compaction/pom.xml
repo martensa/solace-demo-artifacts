@@ -70,6 +70,20 @@
 		</dependency>
 
 		<!-- ============================================================
+		     Command Event Validation + Rate Limiting
+		     ============================================================ -->
+		<dependency>
+			<groupId>com.networknt</groupId>
+			<artifactId>json-schema-validator</artifactId>
+			<version>1.5.4</version>
+		</dependency>
+		<dependency>
+			<groupId>com.bucket4j</groupId>
+			<artifactId>bucket4j_jdk17-core</artifactId>
+			<version>8.14.0</version>
+		</dependency>
+
+		<!-- ============================================================
 		     Observability
 		     ============================================================ -->
 		<dependency>

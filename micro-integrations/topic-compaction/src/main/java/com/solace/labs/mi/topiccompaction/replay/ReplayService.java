@@ -3,6 +3,7 @@ package com.solace.labs.mi.topiccompaction.replay;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solace.labs.mi.topiccompaction.command.CommandEvent;
+import com.solace.labs.mi.topiccompaction.command.CommandEventParser;
 import com.solace.labs.mi.topiccompaction.command.CommandType;
 import com.solace.labs.mi.topiccompaction.kvstore.CompactedRecord;
 import com.solace.labs.mi.topiccompaction.kvstore.KvStore;
@@ -35,15 +36,18 @@ public class ReplayService {
     private final KvStore kvStore;
     private final ReplayProperties properties;
     private final ObjectMapper objectMapper;
+    private final CommandEventParser parser;
     private final CompactionMetrics metrics;
 
     public ReplayService(KvStore kvStore,
                          ReplayProperties properties,
                          ObjectMapper objectMapper,
+                         CommandEventParser parser,
                          CompactionMetrics metrics) {
         this.kvStore = kvStore;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.parser = parser;
         this.metrics = metrics;
     }
 
@@ -62,11 +66,9 @@ public class ReplayService {
                 "service", "replay")) {
             CommandEvent event;
             try {
-                event = objectMapper.readValue(
-                        commandJson, CommandEvent.class);
-            } catch (Exception e) {
-                return Decision.fail(
-                        "Invalid command JSON: " + e.getMessage());
+                event = parser.parse(commandJson);
+            } catch (CommandEventParser.ParseException e) {
+                return Decision.fail(e.getMessage());
             }
             return processInternal(event);
         }
@@ -87,6 +89,20 @@ public class ReplayService {
         if (event.command() == null) {
             return Decision.fail("Command type is required");
         }
+        // Command-type check first so BULK_REPLAY/DELETE produce
+        // their own error rather than a generic "key required" hit
+        // (BULK_REPLAY uses pattern, DELETE goes via a different
+        // service).
+        if (event.command() != CommandType.REPLAY) {
+            // BULK_REPLAY is handled by BulkReplayService and
+            // DELETE by DeleteCommandService. The interceptor
+            // routes by command type before reaching us; this
+            // branch only fires when something bypasses that
+            // dispatch (e.g. a unit test or a future caller).
+            return Decision.fail(
+                    "Command " + event.command()
+                            + " is not handled by ReplayService");
+        }
         if (event.key() == null || event.key().isBlank()) {
             return Decision.fail("Command key is required");
         }
@@ -94,14 +110,6 @@ public class ReplayService {
                 "key", event.key());
              MDC.MDCCloseable ignoredCmd = MDC.putCloseable(
                 "command", event.command().name())) {
-
-            if (event.command() != CommandType.REPLAY) {
-                // V1 only handles REPLAY here. DELETE / BULK_REPLAY
-                // are dispatched by their own services in later
-                // phases.
-                return Decision.fail(
-                        "Command not supported in V1: " + event.command());
-            }
 
             Optional<CompactedRecord> record = kvStore.get(event.key());
             if (record.isEmpty()) {

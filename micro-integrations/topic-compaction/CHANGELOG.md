@@ -90,6 +90,67 @@ to [Semantic Versioning][semver].
   old path must be updated. Both URL-encoded and unencoded slashes
   are supported in the new mapping.
 
+### Phase 3 - new commands and operations
+
+#### Added
+
+- Phase 3.1: JSON-Schema validation for command events. Schema lives
+  at `src/main/resources/schemas/command-event-v1.json`, version 1.
+  `CommandEventParser` validates inbound JSON before mapping it to
+  `CommandEvent`; schema violations result in a structured failure
+  document on `topic-compaction/replay/failed`.
+- Phase 3.1: `pattern` field on `CommandEvent` (used by
+  `BULK_REPLAY`); the legacy 3-argument constructor is preserved as
+  an overload for backward compatibility with existing tests.
+- Phase 3.2: `BULK_REPLAY` command. Iterates the KV store using a
+  `SolacePatternMatcher` (Solace topic-style wildcards `*` and `>`)
+  and republishes the latest record of every match via the
+  `output-3` fanout binding. Throughput is capped by an optional
+  client-supplied `rateLimit` (default 1000 msg/s; Bucket4j).
+  Results in a JSON summary on
+  `topic-compaction/replay/bulk-result`.
+- Phase 3.2: `SolacePatternMatcher` with RocksDB prefix-iterator
+  optimisation (longest non-wildcard prefix used as seek key).
+- Phase 3.3: `DELETE` command. Single-key tombstone plus optional
+  `options.cascade` Solace pattern for bulk delete. Result event on
+  `topic-compaction/delete/result`.
+- Phase 3.3: `topic_compaction_deletes_total` counter tracks all
+  records tombstoned via the command path or the REST DELETE.
+- Phase 3.4: TTL/Retention policy. Operator-tunable via
+  `topic-compaction.retention.*`. Disabled by default; when enabled,
+  a `RetentionService` background sweeper iterates the store on a
+  fixed delay and evicts records past their TTL. Per-prefix rules
+  override a default TTL with longest-prefix-first matching.
+- Phase 3.4: `topic_compaction_retention_evicted_total` counter.
+- Phase 3.5: Backup and restore tooling. Streaming line-delimited
+  JSON format (one record per line; first line is a header with
+  format version and timestamp). REST endpoints `POST
+  /api/v1/admin/backup` and `POST /api/v1/admin/restore`.
+- Phase 3: 30+ new unit tests across pattern matcher, bulk replay,
+  delete service, retention sweeper, and backup roundtrip
+  (105 tests total, was 67).
+
+#### Changed
+
+- Phase 3.1: `ReplayService.process(byte[])` delegates JSON parsing
+  to `CommandEventParser`; the prior direct ObjectMapper call is
+  gone.
+- Phase 3.2: `ReplayProducerInterceptorFactory` now dispatches by
+  command type:
+  `REPLAY` -> `ReplayService`,
+  `BULK_REPLAY` -> `BulkReplayService`,
+  `DELETE` -> `DeleteCommandService`.
+- Phase 3.2: `mi-config/application.yml` configures the `output-3`
+  binding with a placeholder destination and explicit
+  `producer.auto-startup: true` so `BulkReplayService` can publish
+  via `StreamBridge` without a separate workflow.
+
+#### Documentation
+
+- `docs/COMMAND-EVENTS.md` rewritten for V1.0 - covers the JSON
+  schema, all three command types, options reference, and
+  end-to-end REST examples for `REPLAY` and `BULK_REPLAY`.
+
 ## [0.x] (pre-release MVP, V1)
 
 The MVP shipped before this CHANGELOG was introduced. See git history

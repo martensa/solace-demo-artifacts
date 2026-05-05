@@ -21,6 +21,8 @@ public class CompactionMetrics {
     private final Counter replays;
     private final Counter lookups;
     private final Counter lookupMisses;
+    private final Counter deletes;
+    private final Counter retentionEvictions;
 
     public CompactionMetrics(MeterRegistry registry, KvStore kvStore) {
         this.upserts = Counter.builder("topic_compaction_upserts_total")
@@ -43,6 +45,13 @@ public class CompactionMetrics {
         this.lookupMisses = Counter.builder("topic_compaction_lookup_misses_total")
                 .description("Number of KV lookup requests that returned no record")
                 .register(registry);
+        this.deletes = Counter.builder("topic_compaction_deletes_total")
+                .description("Number of records tombstoned via DELETE command or REST")
+                .register(registry);
+        this.retentionEvictions = Counter.builder(
+                        "topic_compaction_retention_evicted_total")
+                .description("Number of records evicted by the retention scheduler")
+                .register(registry);
 
         registry.gauge("topic_compaction_kvstore_size", kvStore, KvStore::size);
     }
@@ -53,4 +62,6 @@ public class CompactionMetrics {
     public void recordReplay() { replays.increment(); }
     public void recordLookup() { lookups.increment(); }
     public void recordLookupMiss() { lookupMisses.increment(); }
+    public void recordDelete() { deletes.increment(); }
+    public void recordRetentionEviction() { retentionEvictions.increment(); }
 }

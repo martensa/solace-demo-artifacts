@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://solace.com/schemas/topic-compaction/command-event/v1",
+  "title": "Topic Compaction Command Event v1",
+  "description": "JSON envelope clients publish on the command queue to drive the MI's replay/delete flows.",
+  "type": "object",
+  "required": ["command"],
+  "properties": {
+    "command": {
+      "type": "string",
+      "enum": ["REPLAY", "BULK_REPLAY", "DELETE"],
+      "description": "Verb. Case-insensitive parsing happens at the boundary."
+    },
+    "key": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Required for REPLAY and DELETE. Ignored for BULK_REPLAY."
+    },
+    "pattern": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Required for BULK_REPLAY. Solace topic pattern with * (one level) or > (multi-level) wildcards."
+    },
+    "options": {
+      "type": "object",
+      "description": "Forward-compatible extension point. Unknown fields are tolerated.",
+      "properties": {
+        "destinationSuffix": {
+          "type": "string",
+          "description": "Override the per-replay target-suffix. Default: '/compacted'."
+        },
+        "correlationId": {
+          "type": "string",
+          "description": "Echoed onto the replay/result message as x-original-correlation-id."
+        },
+        "includeOriginalHeaders": {
+          "type": "boolean",
+          "description": "If true, replays carry the original message's headers. Default true."
+        },
+        "rateLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000,
+          "description": "BULK_REPLAY only: maximum messages per second. Default 1000."
+        },
+        "cascade": {
+          "type": "string",
+          "minLength": 1,
+          "description": "DELETE only: optional Solace pattern for bulk deletion (e.g. 'orders/created/test-*')."
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "command": { "const": "REPLAY" } } },
+      "then": { "required": ["command", "key"] }
+    },
+    {
+      "if": { "properties": { "command": { "const": "BULK_REPLAY" } } },
+      "then": { "required": ["command", "pattern"] }
+    },
+    {
+      "if": { "properties": { "command": { "const": "DELETE" } } },
+      "then": { "required": ["command", "key"] }
+    }
+  ],
+  "additionalProperties": true
+}
