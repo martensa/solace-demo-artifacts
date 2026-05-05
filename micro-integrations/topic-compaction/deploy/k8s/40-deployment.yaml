@@ -47,7 +47,7 @@ spec:
         - name: registry-solace-lab-pull
       containers:
         - name: topic-compaction-mi
-          image: registry.solace.lab/sam-topic-compaction-mi:1.0.0
+          image: registry.solace.lab/sam-topic-compaction-mi:1.0.1
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false

@@ -23,14 +23,25 @@ import java.util.Set;
  * <ul>
  *   <li>Destination: {@code <original-topic><audit-suffix>}</li>
  *   <li>Payload: small JSON document describing the compaction outcome</li>
- *   <li>Headers: framework headers + compaction metadata; original payload
- *       headers are dropped to keep the audit event lightweight</li>
+ *   <li>Headers: framework headers + compaction metadata + the
+ *       loop-protection header. The original payload headers are
+ *       dropped to keep the audit event lightweight.</li>
  * </ul>
  *
- * <p>If the compaction service skipped the message (loop / out-of-order /
- * missing topic), the audit event is still emitted - downstream observers can
- * count skips. To suppress audit events for skips entirely, configure the
- * operator-side workflow to filter via SpEL.
+ * <p><b>Loop protection.</b> The audit destination
+ * {@code <topic>/compacted-ack} typically matches the broad
+ * {@code orders/>} subscription on the compaction queue, so the
+ * audit event would be re-consumed and re-audited indefinitely.
+ * To break that cascade we set the same loop-protection header
+ * that replay messages carry; {@link CompactionService} skips
+ * inbound messages whose loop header is set. Bug surfaced in
+ * V1.0.0; fixed in V1.0.1.
+ *
+ * <p>If the compaction service skipped the message (loop / out-of-
+ * order / missing topic), the audit event is still emitted -
+ * downstream observers can count skips. To suppress audit events
+ * for skips entirely, configure the operator-side workflow to
+ * filter via SpEL.
  */
 @Component
 public class CompactionAuditProducerInterceptorFactory implements ProducerBindingMessageInterceptorFactory {
@@ -81,6 +92,20 @@ public class CompactionAuditProducerInterceptorFactory implements ProducerBindin
             String outcome = (String) message.getHeaders().getOrDefault(
                     CompactionConsumerInterceptorFactory.COMPACTION_RESULT_HEADER,
                     CompactionService.Outcome.UPSERTED.name());
+
+            // Cascade-break (V1.0.1): suppress audit emission for
+            // SKIPPED_LOOP outcomes. Loop-skipped messages are
+            // re-ingested copies of our own audits / replays;
+            // emitting a fresh audit just generates the next
+            // cascade hop (audit -> compacted-ack -> re-ingest ->
+            // SKIPPED_LOOP -> audit -> ...). Re-publishing to a
+            // topic that matches the data subscription pattern
+            // floods the publish window and starves real traffic.
+            if (CompactionService.Outcome.SKIPPED_LOOP.name()
+                    .equals(outcome)) {
+                return null;
+            }
+
             String topic = (String) message.getHeaders().getOrDefault(
                     CompactionConsumerInterceptorFactory.COMPACTION_TOPIC_HEADER, "");
             Object sizeObj = message.getHeaders().get(
@@ -109,6 +134,12 @@ public class CompactionAuditProducerInterceptorFactory implements ProducerBindin
             auditHeaders.put(BinderHeaders.TARGET_DESTINATION, auditDestination);
             auditHeaders.put("content-type", "application/json");
             auditHeaders.put(CompactionConsumerInterceptorFactory.COMPACTION_RESULT_HEADER, outcome);
+            // V1.0.1 cascade-break: tag the audit itself with the
+            // loop-protection header so that if the audit destination
+            // matches the compaction data subscription (e.g.
+            // `orders/X/compacted-ack` matching `orders/>`), the
+            // re-ingested audit is recognised as a loop and SKIPPED.
+            auditHeaders.put(properties.getLoopProtectionHeader(), true);
 
             return new GenericMessage<>(payloadBytes, auditHeaders);
         }

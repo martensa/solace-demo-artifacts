@@ -9,6 +9,44 @@ to [Semantic Versioning][semver].
 [kac]: https://keepachangelog.com/en/1.1.0/
 [semver]: https://semver.org/spec/v2.0.0.html
 
+## [1.0.1] - 2026-05-05
+
+Hotfix release. Resolves the audit cascade discovered after V1.0.0
+was deployed to Solace Cloud.
+
+### Fixed
+
+- **Audit cascade / redelivery storm.** When the operator's data
+  subscription pattern (e.g. `orders/>`) covers the audit-suffix
+  pattern (`orders/X/compacted-ack`), the audit message was
+  re-ingested by the compaction queue, treated as a fresh inbound
+  topic, and re-audited indefinitely. Each cascade hop generated
+  another audit publish; the JCSMP publish-ack window (255)
+  saturated, publish-acks timed out, the originating inbound
+  message got NACKed, and got redelivered. Observed in the lab:
+  43k+ redeliveries in 6 hours from a single stuck message.
+  ([CompactionAuditProducerInterceptorFactory])
+
+  Two complementary fixes:
+
+  - The audit interceptor now suppresses emission for
+    `SKIPPED_LOOP` outcomes. Loop-skipped messages are
+    re-ingested ricochets that carry no operator-visible signal,
+    and emitting an audit just generates the next cascade hop.
+  - When an audit IS emitted (UPSERTED, SKIPPED_OUT_OF_ORDER,
+    SKIPPED_NO_TOPIC), it now carries the same loop-protection
+    header that replays do. If the audit's destination matches the
+    data subscription pattern, the re-ingested copy is recognised
+    by `CompactionService.compact` as a loop and skipped without
+    a fresh audit.
+
+### Added
+
+- New unit test `suppressesAuditForSkippedLoopOutcome` documents
+  the suppression contract.
+- New unit test `emitsAuditForSkippedOutOfOrderWithLoopHeader`
+  documents that "real" skip outcomes still surface as audits.
+
 ## [1.0.0] - 2026-05-05
 
 The first production-ready release. Single-replica deployment;
