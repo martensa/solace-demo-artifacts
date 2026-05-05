@@ -11,7 +11,7 @@
 
 	<groupId>com.solace.labs.mi</groupId>
 	<artifactId>topic-compaction-mi</artifactId>
-	<version>1.0.0-SNAPSHOT</version>
+	<version>1.0.0</version>
 
 	<name>Topic Compaction Micro-Integration</name>
 	<description>A Solace Micro-Integration that maintains a key-value store of last-seen messages per topic and supports on-demand replay via command events. A Solace-native alternative to Kafka log compaction.</description>
@@ -70,11 +70,49 @@
 		</dependency>
 
 		<!-- ============================================================
+		     Command Event Validation + Rate Limiting
+		     ============================================================ -->
+		<dependency>
+			<groupId>com.networknt</groupId>
+			<artifactId>json-schema-validator</artifactId>
+			<version>1.5.4</version>
+		</dependency>
+		<dependency>
+			<groupId>com.bucket4j</groupId>
+			<artifactId>bucket4j_jdk17-core</artifactId>
+			<version>8.14.0</version>
+		</dependency>
+
+		<!-- ============================================================
 		     Observability
 		     ============================================================ -->
 		<dependency>
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
+		<!-- Structured JSON logging - feeds Loki via Promtail/Grafana
+		     Agent picking up the pod stdout -->
+		<dependency>
+			<groupId>net.logstash.logback</groupId>
+			<artifactId>logstash-logback-encoder</artifactId>
+			<version>8.0</version>
+		</dependency>
+		<!-- Distributed tracing via Micrometer Tracing -> OTLP -> Tempo.
+		     Spans are tagged with trace/span IDs and propagated into
+		     the SLF4J MDC by the bridge. -->
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-tracing-bridge-otel</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.opentelemetry</groupId>
+			<artifactId>opentelemetry-exporter-otlp</artifactId>
+		</dependency>
+		<!-- Enables @Observed for declarative spans / metrics on
+		     individual workflow methods. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
 		</dependency>
 
 		<!-- ============================================================
@@ -113,6 +151,11 @@
 		<dependency>
 			<groupId>org.awaitility</groupId>
 			<artifactId>awaitility</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -167,6 +210,93 @@
 						</goals>
 					</execution>
 				</executions>
+			</plugin>
+
+			<!-- Code-coverage tracking. Threshold enforced on `mvn verify`
+			     so plain `mvn test` stays fast for the dev loop. -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.12</version>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>check-coverage</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<excludes>
+										<!--
+										Exclude the application bootstrap class
+										(no business logic; just main()) and the
+										generated Spring configuration metadata.
+										-->
+										<exclude>com.solace.labs.mi.topiccompaction.TopicCompactionApplication</exclude>
+									</excludes>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.75</minimum>
+										</limit>
+										<limit>
+											<counter>BRANCH</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>0.65</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+				<configuration>
+					<excludes>
+						<!-- Pure POJOs / config carriers. -->
+						<exclude>**/properties/**</exclude>
+						<exclude>**/*Properties.class</exclude>
+						<exclude>**/*Properties$*.class</exclude>
+						<!-- Bootstrap class is just main(). -->
+						<exclude>**/TopicCompactionApplication.class</exclude>
+						<!-- Spring @Configuration classes that
+						     only wire beans; their behaviour is
+						     verified by integration tests
+						     (smoke + K8s deploy), not unit tests. -->
+						<exclude>**/api/HttpFirewallConfig.class</exclude>
+						<exclude>**/api/WebServerConfig.class</exclude>
+						<exclude>**/observability/MetricsConfig.class</exclude>
+						<exclude>**/observability/TracingConfig.class</exclude>
+						<exclude>**/observability/StartupBanner.class</exclude>
+						<exclude>**/security/WebSecurityConfig.class</exclude>
+						<exclude>**/security/WebSecurityConfig$*.class</exclude>
+						<exclude>**/admin/AdminController.class</exclude>
+						<!-- BrokerProvisioner makes outbound HTTP
+						     calls to a SEMP endpoint; covered by
+						     the Phase 7 integration-test stub
+						     once a Solace test container is wired
+						     in. Excluded from the unit-test
+						     coverage check until then. -->
+						<exclude>**/provisioning/BrokerProvisioner.class</exclude>
+						<exclude>**/provisioning/BrokerProvisioner$*.class</exclude>
+					</excludes>
+				</configuration>
 			</plugin>
 
 			<!-- Container image build via jib -->

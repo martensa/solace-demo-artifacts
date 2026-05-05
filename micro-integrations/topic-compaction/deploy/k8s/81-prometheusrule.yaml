@@ -1,0 +1,265 @@
+# =============================================================================
+# PrometheusRule: topic-compaction-mi-alerts
+# Lives in the monitoring namespace so the kube-prometheus operator
+# loads the rules. Mix of:
+#   - Recording rules: pre-compute SLIs (success rate, latency
+#     percentiles) so dashboards and alerts share the same source
+#     of truth.
+#   - Symptom alerts: pod absence, error spikes, resource pressure.
+#   - SLO alerts: tied to recording rules, fire when an SLI breaches
+#     its target for a sustained window.
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: topic-compaction-mi-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+    app.kubernetes.io/name: topic-compaction-mi
+spec:
+  groups:
+
+    # =========================================================================
+    # Recording rules - compute SLIs once, reuse in dashboards + alerts
+    # =========================================================================
+    - name: topic-compaction.recording
+      interval: 30s
+      rules:
+
+        - record: topic_compaction:compaction_success_rate:5m
+          expr: |
+            sum(rate(topic_compaction_upserts_total{
+              application="topic-compaction-mi"}[5m]))
+            /
+            clamp_min(
+              sum(rate(topic_compaction_upserts_total{
+                application="topic-compaction-mi"}[5m]))
+              + sum(rate(topic_compaction_skipped_total{
+                application="topic-compaction-mi",
+                reason!="loop"}[5m])),
+              1
+            )
+
+        - record: topic_compaction:lookup_p95_seconds:5m
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (
+                rate(http_server_requests_seconds_bucket{
+                  application="topic-compaction-mi",
+                  uri=~"/api/v1/kv.*"}[5m])
+              )
+            )
+
+        - record: topic_compaction:lookup_p99_seconds:5m
+          expr: |
+            histogram_quantile(0.99,
+              sum by (le) (
+                rate(http_server_requests_seconds_bucket{
+                  application="topic-compaction-mi",
+                  uri=~"/api/v1/kv.*"}[5m])
+              )
+            )
+
+        - record: topic_compaction:replay_rate:5m
+          expr: |
+            sum(rate(topic_compaction_replays_total{
+              application="topic-compaction-mi"}[5m]))
+
+        - record: topic_compaction:lookup_miss_ratio:5m
+          expr: |
+            sum(rate(topic_compaction_lookup_misses_total{
+              application="topic-compaction-mi"}[5m]))
+            /
+            clamp_min(sum(rate(topic_compaction_lookups_total{
+              application="topic-compaction-mi"}[5m])), 1)
+
+    # =========================================================================
+    # Symptom alerts - "the user is in pain right now"
+    # =========================================================================
+    - name: topic-compaction.symptom-alerts
+      interval: 30s
+      rules:
+
+        - alert: TopicCompactionMiAbsent
+          expr: |
+            absent(up{
+              job="topic-compaction-mi",
+              namespace="mi-solace-lab"} == 1)
+          for: 2m
+          labels:
+            severity: critical
+            service: topic-compaction-mi
+            runbook: TopicCompactionMiAbsent
+          annotations:
+            summary: "Topic Compaction MI pod is down or unscraped"
+            description: >-
+              Prometheus has not had a successful scrape for 2
+              minutes. The pod may be down, the readiness probe
+              may be failing (causing endpoints removal), or the
+              ServiceMonitor selector is broken.
+
+        - alert: TopicCompactionMiPodNotReady
+          expr: |
+            kube_pod_status_ready{
+              namespace="mi-solace-lab",
+              condition="true"} == 0
+            and on(pod) kube_pod_labels{
+              namespace="mi-solace-lab",
+              label_app_kubernetes_io_name="topic-compaction-mi"} == 1
+          for: 5m
+          labels:
+            severity: critical
+            service: topic-compaction-mi
+            runbook: TopicCompactionMiPodNotReady
+          annotations:
+            summary: "Topic Compaction MI pod is not Ready"
+            description: >-
+              The pod has been NotReady for 5 minutes. Likely
+              causes: Solace binder failed to start, RocksDB
+              corruption, or the readiness probe is timing out
+              under load.
+
+        - alert: TopicCompactionPodMemoryHigh
+          expr: |
+            container_memory_working_set_bytes{
+              namespace="mi-solace-lab",
+              container="topic-compaction-mi"}
+            /
+            container_spec_memory_limit_bytes{
+              namespace="mi-solace-lab",
+              container="topic-compaction-mi"} > 0.9
+          for: 10m
+          labels:
+            severity: warning
+            service: topic-compaction-mi
+            runbook: TopicCompactionPodMemoryHigh
+          annotations:
+            summary: "Pod memory > 90% of limit"
+            description: >-
+              The topic-compaction-mi pod is using more than 90%
+              of its memory limit for 10 minutes. Risk of OOMKill
+              on the next workload spike. Investigate RocksDB
+              cache settings or bump the memory limit.
+
+    # =========================================================================
+    # SLO alerts - "the service is degrading"
+    # =========================================================================
+    - name: topic-compaction.slo-alerts
+      interval: 30s
+      rules:
+
+        # SLO 1: Compaction success rate >= 99% over 5m. The
+        # numerator counts upserts; the denominator counts upserts
+        # + non-loop skips (loop skips are expected and don't
+        # signal degradation).
+        - alert: TopicCompactionSuccessRateBelowSlo
+          expr: |
+            topic_compaction:compaction_success_rate:5m < 0.99
+          for: 10m
+          labels:
+            severity: warning
+            service: topic-compaction-mi
+            slo: compaction-success-rate
+            runbook: TopicCompactionSuccessRateBelowSlo
+          annotations:
+            summary: "Compaction success rate < 99% over 10m"
+            description: >-
+              The 5-minute compaction success-rate has been below
+              the 99% SLO for 10 minutes. Check the breakdown by
+              `reason` label on `topic_compaction_skipped_total`:
+              `out_of_order` and `no_topic` skips both count as
+              SLO breaches.
+
+        # SLO 2: Lookup p95 latency < 50ms over 5m.
+        - alert: TopicCompactionLookupP95SloBreach
+          expr: |
+            topic_compaction:lookup_p95_seconds:5m > 0.050
+          for: 10m
+          labels:
+            severity: warning
+            service: topic-compaction-mi
+            slo: lookup-latency
+            runbook: TopicCompactionLookupP95SloBreach
+          annotations:
+            summary: "Lookup p95 latency > 50ms over 10m"
+            description: >-
+              The 95th-percentile latency for /api/v1/kv reads
+              has exceeded the 50ms SLO for 10 minutes. RocksDB
+              may be under IO pressure or compacting; check the
+              KV size + container_fs_writes metrics.
+
+        # SLO 3: Lookup miss ratio < 5% over 5m. High miss rates
+        # suggest producers are publishing on patterns the
+        # compaction subscription doesn't cover.
+        - alert: TopicCompactionLookupMissRateHigh
+          expr: |
+            topic_compaction:lookup_miss_ratio:5m > 0.05
+            and on()
+            sum(rate(topic_compaction_lookups_total{
+              application="topic-compaction-mi"}[5m])) > 0.1
+          for: 15m
+          labels:
+            severity: warning
+            service: topic-compaction-mi
+            slo: lookup-hit-rate
+            runbook: TopicCompactionLookupMissRateHigh
+          annotations:
+            summary: "Lookup miss ratio > 5% sustained"
+            description: >-
+              More than 5% of lookups are returning "not found"
+              over 15 minutes. The `and on()` guard avoids firing
+              when there is essentially no traffic. Investigate
+              whether the producers are publishing on topics the
+              compaction subscription covers.
+
+    # =========================================================================
+    # Capacity / hygiene alerts - "things are off but not yet broken"
+    # =========================================================================
+    - name: topic-compaction.capacity-alerts
+      interval: 30s
+      rules:
+
+        - alert: TopicCompactionKvStoreSizeGrowth
+          expr: |
+            (
+              topic_compaction_kvstore_size{
+                application="topic-compaction-mi"}
+              - topic_compaction_kvstore_size{
+                application="topic-compaction-mi"} offset 1h
+            ) > 100000
+          for: 30m
+          labels:
+            severity: warning
+            service: topic-compaction-mi
+            runbook: TopicCompactionKvStoreSizeGrowth
+          annotations:
+            summary: "KV store grew by >100k records in the last hour"
+            description: >-
+              Unusual KV-store growth - the topic cardinality may
+              have exploded, the retention sweeper may be off, or
+              a runaway producer is generating new keys. Check
+              `topic-compaction.retention.enabled` and the recent
+              compaction log.
+
+        - alert: TopicCompactionDiskUsageHigh
+          expr: |
+            kubelet_volume_stats_used_bytes{
+              namespace="mi-solace-lab",
+              persistentvolumeclaim="topic-compaction-mi-data"}
+            /
+            kubelet_volume_stats_capacity_bytes{
+              namespace="mi-solace-lab",
+              persistentvolumeclaim="topic-compaction-mi-data"} > 0.85
+          for: 30m
+          labels:
+            severity: warning
+            service: topic-compaction-mi
+            runbook: TopicCompactionDiskUsageHigh
+          annotations:
+            summary: "PVC > 85% full"
+            description: >-
+              The RocksDB PVC is more than 85% full. Either
+              increase the PVC size, enable / tighten the
+              retention sweeper, or run a tombstone pass.

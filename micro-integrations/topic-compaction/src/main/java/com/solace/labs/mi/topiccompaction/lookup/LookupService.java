@@ -3,8 +3,10 @@ package com.solace.labs.mi.topiccompaction.lookup;
 import com.solace.labs.mi.topiccompaction.kvstore.CompactedRecord;
 import com.solace.labs.mi.topiccompaction.kvstore.KvStore;
 import com.solace.labs.mi.topiccompaction.metrics.CompactionMetrics;
+import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.stereotype.Service;
@@ -46,28 +48,42 @@ public class LookupService {
         this.metrics = metrics;
     }
 
+    @Observed(name = "lookup.resolve",
+            contextualName = "lookup-request",
+            lowCardinalityKeyValues = {"workflow", "lookup"})
     public Result resolve(Message<?> request) {
-        metrics.recordLookup();
-        MessageHeaders headers = request.getHeaders();
-        String key = extractKey(headers);
-        if (key == null || key.isBlank()) {
-            return Result.notFound("Lookup request missing key: set header '"
-                    + properties.getKeyHeader() + "' or publish to '"
-                    + properties.getTopicKeyPrefix() + "<key>' topic");
-        }
+        try (MDC.MDCCloseable ignored = MDC.putCloseable(
+                "service", "lookup")) {
+            metrics.recordLookup();
+            MessageHeaders headers = request.getHeaders();
+            String key = extractKey(headers);
+            if (key == null || key.isBlank()) {
+                return Result.notFound(
+                        "Lookup request missing key: set header '"
+                        + properties.getKeyHeader() + "' or publish to '"
+                        + properties.getTopicKeyPrefix() + "<key>' topic");
+            }
 
-        Optional<CompactedRecord> record = kvStore.get(key);
-        if (record.isEmpty()) {
-            metrics.recordLookupMiss();
-            log.debug("Lookup miss: key={}", key);
-            return Result.notFound("No record stored for key: " + key);
-        }
+            try (MDC.MDCCloseable ignoredKey = MDC.putCloseable(
+                    "key", key)) {
+                Optional<CompactedRecord> record = kvStore.get(key);
+                if (record.isEmpty()) {
+                    metrics.recordLookupMiss();
+                    log.debug("Lookup miss: key={}", key);
+                    return Result.notFound(
+                            "No record stored for key: " + key);
+                }
 
-        log.debug("Lookup hit: key={} ({} bytes)", key, record.get().payload().length);
-        Map<String, Object> responseHeaders = new LinkedHashMap<>(record.get().headers());
-        responseHeaders.put("x-compaction-key", key);
-        responseHeaders.put("x-compaction-status", "found");
-        return Result.found(record.get().payload(), responseHeaders);
+                log.debug("Lookup hit: key={} ({} bytes)",
+                        key, record.get().payload().length);
+                Map<String, Object> responseHeaders =
+                        new LinkedHashMap<>(record.get().headers());
+                responseHeaders.put("x-compaction-key", key);
+                responseHeaders.put("x-compaction-status", "found");
+                return Result.found(
+                        record.get().payload(), responseHeaders);
+            }
+        }
     }
 
     String extractKey(MessageHeaders headers) {

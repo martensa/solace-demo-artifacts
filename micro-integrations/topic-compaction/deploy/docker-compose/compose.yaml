@@ -12,7 +12,7 @@
 
 services:
   topic-compaction-mi:
-    image: ${MI_IMAGE:-registry.solace.lab/sam-topic-compaction-mi:1.0.0-SNAPSHOT}
+    image: ${MI_IMAGE:-registry.solace.lab/sam-topic-compaction-mi:1.0.0}
     env_file:
       - ../../.env
     volumes:
@@ -23,6 +23,18 @@ services:
       - kvstore-data:/app/data
     ports:
       - "${MI_PORT:-18090}:8090"
+    # Graceful-shutdown contract:
+    #   server.shutdown=graceful + 25s drain in app.yml; the
+    #   container gets 30s before SIGKILL so the JVM has a 5s
+    #   safety margin to flush RocksDB WAL.
+    stop_grace_period: 30s
+    stop_signal: SIGTERM
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8090/actuator/health/liveness"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   kvstore-data:

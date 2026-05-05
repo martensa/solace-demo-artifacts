@@ -3,12 +3,15 @@ package com.solace.labs.mi.topiccompaction.replay;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solace.labs.mi.topiccompaction.command.CommandEvent;
+import com.solace.labs.mi.topiccompaction.command.CommandEventParser;
 import com.solace.labs.mi.topiccompaction.command.CommandType;
 import com.solace.labs.mi.topiccompaction.kvstore.CompactedRecord;
 import com.solace.labs.mi.topiccompaction.kvstore.KvStore;
 import com.solace.labs.mi.topiccompaction.metrics.CompactionMetrics;
+import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -33,71 +36,119 @@ public class ReplayService {
     private final KvStore kvStore;
     private final ReplayProperties properties;
     private final ObjectMapper objectMapper;
+    private final CommandEventParser parser;
     private final CompactionMetrics metrics;
 
     public ReplayService(KvStore kvStore,
                          ReplayProperties properties,
                          ObjectMapper objectMapper,
+                         CommandEventParser parser,
                          CompactionMetrics metrics) {
         this.kvStore = kvStore;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.parser = parser;
         this.metrics = metrics;
     }
 
     /**
      * Parse and act on a command JSON payload.
+     *
+     * <p>Wrapped in an {@link Observed} span so the JSON-parse cost
+     * is visible in traces and a span exists even when the command
+     * fails to parse.
      */
+    @Observed(name = "replay.parse-and-process",
+            contextualName = "replay-command",
+            lowCardinalityKeyValues = {"workflow", "replay"})
     public Decision process(byte[] commandJson) {
-        CommandEvent event;
-        try {
-            event = objectMapper.readValue(commandJson, CommandEvent.class);
-        } catch (Exception e) {
-            return Decision.fail("Invalid command JSON: " + e.getMessage());
+        try (MDC.MDCCloseable ignored = MDC.putCloseable(
+                "service", "replay")) {
+            CommandEvent event;
+            try {
+                event = parser.parse(commandJson);
+            } catch (CommandEventParser.ParseException e) {
+                return Decision.fail(e.getMessage());
+            }
+            return processInternal(event);
         }
-        return process(event);
     }
 
+    /**
+     * Test-friendly entry point that takes a parsed command. Tests
+     * call this directly to avoid round-tripping through Jackson.
+     */
     public Decision process(CommandEvent event) {
+        try (MDC.MDCCloseable ignored = MDC.putCloseable(
+                "service", "replay")) {
+            return processInternal(event);
+        }
+    }
+
+    private Decision processInternal(CommandEvent event) {
         if (event.command() == null) {
             return Decision.fail("Command type is required");
+        }
+        // Command-type check first so BULK_REPLAY/DELETE produce
+        // their own error rather than a generic "key required" hit
+        // (BULK_REPLAY uses pattern, DELETE goes via a different
+        // service).
+        if (event.command() != CommandType.REPLAY) {
+            // BULK_REPLAY is handled by BulkReplayService and
+            // DELETE by DeleteCommandService. The interceptor
+            // routes by command type before reaching us; this
+            // branch only fires when something bypasses that
+            // dispatch (e.g. a unit test or a future caller).
+            return Decision.fail(
+                    "Command " + event.command()
+                            + " is not handled by ReplayService");
         }
         if (event.key() == null || event.key().isBlank()) {
             return Decision.fail("Command key is required");
         }
-        if (event.command() != CommandType.REPLAY) {
-            // V1 only handles REPLAY. DELETE / BULK_REPLAY are reserved for V2.
-            return Decision.fail("Command not supported in V1: " + event.command());
+        try (MDC.MDCCloseable ignoredKey = MDC.putCloseable(
+                "key", event.key());
+             MDC.MDCCloseable ignoredCmd = MDC.putCloseable(
+                "command", event.command().name())) {
+
+            Optional<CompactedRecord> record = kvStore.get(event.key());
+            if (record.isEmpty()) {
+                log.info("Replay: no record found for key={}",
+                        event.key());
+                return Decision.fail(
+                        "No record stored for key: " + event.key());
+            }
+
+            String suffix = event.stringOption(
+                    "destinationSuffix", properties.getTargetSuffix());
+            String destination = event.key() + suffix;
+            boolean includeHeaders = event.booleanOption(
+                    "includeOriginalHeaders", true);
+            String correlationId = event.stringOption(
+                    "correlationId", null);
+
+            Map<String, Object> headers = new LinkedHashMap<>();
+            if (includeHeaders) {
+                headers.putAll(record.get().headers());
+            }
+            // Always rewrite the destination headers and inject
+            // loop-protection.
+            headers.put("solace_destination", destination);
+            headers.put(properties.getLoopProtectionHeader(), true);
+            if (correlationId != null) {
+                headers.put("x-original-correlation-id", correlationId);
+            }
+            headers.put("x-compaction-replay-source-key", event.key());
+
+            metrics.recordReplay();
+            log.info("Replay: prepared message for key={} "
+                    + "-> destination={} ({} bytes)",
+                    event.key(), destination,
+                    record.get().payload().length);
+
+            return Decision.success(destination,
+                    record.get().payload(), headers);
         }
-
-        Optional<CompactedRecord> record = kvStore.get(event.key());
-        if (record.isEmpty()) {
-            log.info("Replay: no record found for key={}", event.key());
-            return Decision.fail("No record stored for key: " + event.key());
-        }
-
-        String suffix = event.stringOption("destinationSuffix", properties.getTargetSuffix());
-        String destination = event.key() + suffix;
-        boolean includeHeaders = event.booleanOption("includeOriginalHeaders", true);
-        String correlationId = event.stringOption("correlationId", null);
-
-        Map<String, Object> headers = new LinkedHashMap<>();
-        if (includeHeaders) {
-            headers.putAll(record.get().headers());
-        }
-        // Always rewrite the destination headers and inject loop-protection.
-        headers.put("solace_destination", destination);
-        headers.put(properties.getLoopProtectionHeader(), true);
-        if (correlationId != null) {
-            headers.put("x-original-correlation-id", correlationId);
-        }
-        headers.put("x-compaction-replay-source-key", event.key());
-
-        metrics.recordReplay();
-        log.info("Replay: prepared message for key={} -> destination={} ({} bytes)",
-                event.key(), destination, record.get().payload().length);
-
-        return Decision.success(destination, record.get().payload(), headers);
     }
 
     /**

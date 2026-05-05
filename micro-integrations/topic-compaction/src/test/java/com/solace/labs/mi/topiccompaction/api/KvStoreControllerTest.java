@@ -31,9 +31,11 @@ class KvStoreControllerTest {
     @BeforeEach
     void setUp() {
         kvStore = new CaffeineKvStore(new KvStoreProperties());
-        CompactionMetrics metrics = new CompactionMetrics(new SimpleMeterRegistry(), kvStore);
+        CompactionMetrics metrics = new CompactionMetrics(
+                new SimpleMeterRegistry(), kvStore);
         KvStoreController controller = new KvStoreController(kvStore, metrics);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new RestExceptionHandler())
                 .setMessageConverters(
                         new MappingJackson2HttpMessageConverter(),
                         new ByteArrayHttpMessageConverter())
@@ -51,7 +53,33 @@ class KvStoreControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("text/plain"))
                 .andExpect(content().string("the-payload"))
-                .andExpect(header().string("x-compacted-topic", "orders/created/1"));
+                .andExpect(header().string(
+                        "x-compacted-topic", "orders/created/1"));
+    }
+
+    @Test
+    void getReturnsRawPayloadForKeyWithEmbeddedSlashes() throws Exception {
+        kvStore.put("orders/created/123", new CompactedRecord(
+                "abc".getBytes(StandardCharsets.UTF_8),
+                Map.of("content-type", "text/plain"),
+                "orders/created/123", 100L, null));
+
+        mockMvc.perform(get("/api/v1/kv/orders/created/123"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("abc"));
+    }
+
+    @Test
+    void getReturnsRawPayloadForUrlEncodedKey() throws Exception {
+        kvStore.put("orders/created/A", new CompactedRecord(
+                "abc".getBytes(StandardCharsets.UTF_8),
+                Map.of("content-type", "text/plain"),
+                "orders/created/A", 100L, null));
+
+        // URL-encoded slashes must work too (legacy clients).
+        mockMvc.perform(get("/api/v1/kv/orders%2Fcreated%2FA"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("abc"));
     }
 
     @Test
@@ -67,7 +95,7 @@ class KvStoreControllerTest {
                 Map.of("content-type", "text/plain"),
                 "k", 100L, 200L));
 
-        mockMvc.perform(get("/api/v1/kv/k/meta"))
+        mockMvc.perform(get("/api/v1/kv/k").param("format", "meta"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.key").value("k"))
                 .andExpect(jsonPath("$.topic").value("k"))
@@ -75,6 +103,32 @@ class KvStoreControllerTest {
                 .andExpect(jsonPath("$.senderTimestamp").value(200L))
                 .andExpect(jsonPath("$.sizeBytes").value(3))
                 .andExpect(jsonPath("$.payloadBase64").value("YWJj"));
+    }
+
+    @Test
+    void getMetaWorksForSlashedKey() throws Exception {
+        kvStore.put("orders/created/A", new CompactedRecord(
+                "abc".getBytes(StandardCharsets.UTF_8),
+                Map.of("content-type", "text/plain"),
+                "orders/created/A", 100L, null));
+
+        mockMvc.perform(get("/api/v1/kv/orders/created/A")
+                        .param("format", "meta"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.key").value("orders/created/A"))
+                .andExpect(jsonPath("$.payloadBase64").value("YWJj"));
+    }
+
+    @Test
+    void invalidFormatReturnsProblemDetail() throws Exception {
+        kvStore.put("k", record("k"));
+        mockMvc.perform(get("/api/v1/kv/k").param("format", "bogus"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(
+                        "application/problem+json"))
+                .andExpect(jsonPath("$.title").value("Invalid argument"))
+                .andExpect(jsonPath("$.detail")
+                        .value(org.hamcrest.Matchers.containsString("format")));
     }
 
     @Test
@@ -96,11 +150,28 @@ class KvStoreControllerTest {
     }
 
     @Test
+    void listKeysRejectsInvalidLimit() throws Exception {
+        mockMvc.perform(get("/api/v1/kv").param("limit", "0"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/kv").param("limit", "100000"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void deleteRemovesKey() throws Exception {
         kvStore.put("k", record("k"));
         mockMvc.perform(delete("/api/v1/kv/k"))
                 .andExpect(status().isNoContent());
         mockMvc.perform(get("/api/v1/kv/k"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deleteWorksForSlashedKey() throws Exception {
+        kvStore.put("orders/created/A", record("orders/created/A"));
+        mockMvc.perform(delete("/api/v1/kv/orders/created/A"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/v1/kv/orders/created/A"))
                 .andExpect(status().isNotFound());
     }
 

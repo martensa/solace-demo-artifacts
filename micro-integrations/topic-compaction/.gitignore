@@ -30,3 +30,7 @@ logs/
 .env
 .env.*
 !.env.example
+
+# Rendered K8s manifests with real secret values; only the template
+# is checked in.
+deploy/k8s/20-secret.yaml

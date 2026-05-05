@@ -14,8 +14,10 @@ DOCKER_CONFIG ?= $(HOME)/.docker
 
 .DEFAULT_GOAL := help
 
-.PHONY: help env-check env-init build test image up down restart logs status \
-        provision-queues smoke clean
+.PHONY: help env-check env-init build test verify coverage image up down \
+        restart logs status provision-queues smoke load-test clean \
+        k8s-deploy k8s-status k8s-logs k8s-port-forward k8s-restart \
+        k8s-undeploy k8s-undeploy-purge
 
 help:
 	@echo "Topic Compaction MI - available targets:"
@@ -27,7 +29,9 @@ help:
 	@echo ""
 	@echo "  Build:"
 	@echo "    build              ./mvnw clean package"
-	@echo "    test               ./mvnw test"
+	@echo "    test               ./mvnw test (unit + integration)"
+	@echo "    verify             ./mvnw verify (test + coverage check)"
+	@echo "    coverage           Open the JaCoCo HTML report"
 	@echo "    image              Build container image into local Docker daemon"
 	@echo ""
 	@echo "  Run:"
@@ -39,9 +43,19 @@ help:
 	@echo ""
 	@echo "  Test:"
 	@echo "    smoke              Run the end-to-end smoke test"
+	@echo "    load-test          Drive synthetic load + sample metrics"
 	@echo ""
 	@echo "  Cleanup:"
 	@echo "    clean              Down + remove volumes + remove target/"
+	@echo ""
+	@echo "  Kubernetes:"
+	@echo "    k8s-deploy           Idempotent deploy to mi-solace-lab"
+	@echo "    k8s-status           Show pod / svc / pvc / monitoring"
+	@echo "    k8s-logs             Tail MI logs"
+	@echo "    k8s-port-forward     Forward 18090 -> service:8090"
+	@echo "    k8s-restart          Rollout restart the deployment"
+	@echo "    k8s-undeploy         Remove workload + monitoring; keep PVC"
+	@echo "    k8s-undeploy-purge   Remove everything incl. PVC + namespace"
 
 env-init:
 	@if [ -f $(ENV_FILE) ]; then \
@@ -72,6 +86,13 @@ build:
 test:
 	./mvnw test
 
+verify:
+	./mvnw verify
+
+coverage: test
+	@open target/site/jacoco/index.html 2>/dev/null \
+		|| echo "Coverage report at target/site/jacoco/index.html"
+
 image:
 	DOCKER_CONFIG=$(DOCKER_CONFIG) ./mvnw package jib:dockerBuild -DskipTests
 
@@ -97,6 +118,52 @@ provision-queues: env-check
 smoke: env-check
 	./examples/smoke-test.sh
 
+load-test: env-check
+	./examples/load-test.sh
+
 clean:
 	$(COMPOSE) down -v
 	rm -rf target/
+
+# ---------------------------------------------------------------------------
+# Kubernetes deployment targets (V1.0 / Phase 5)
+# ---------------------------------------------------------------------------
+KUBECTL ?= kubectl
+K8S_NAMESPACE ?= mi-solace-lab
+
+k8s-deploy:
+	./deploy/k8s/scripts/start.sh
+
+k8s-status:
+	@echo "--- Workload ---"
+	$(KUBECTL) -n $(K8S_NAMESPACE) get deploy,svc,pvc,pdb,networkpolicy
+	@echo
+	@echo "--- Pods ---"
+	$(KUBECTL) -n $(K8S_NAMESPACE) get pods \
+		-l app.kubernetes.io/name=topic-compaction-mi
+	@echo
+	@echo "--- Monitoring artifacts ---"
+	$(KUBECTL) -n monitoring get servicemonitor,prometheusrule \
+		-l app.kubernetes.io/name=topic-compaction-mi 2>/dev/null \
+		|| echo "(monitoring namespace unreachable)"
+
+k8s-logs:
+	$(KUBECTL) -n $(K8S_NAMESPACE) logs -f \
+		-l app.kubernetes.io/name=topic-compaction-mi
+
+k8s-port-forward:
+	@echo "Port-forwarding 18090 -> service:8090. Ctrl-C to stop."
+	$(KUBECTL) -n $(K8S_NAMESPACE) port-forward \
+		svc/topic-compaction-mi 18090:8090
+
+k8s-restart:
+	$(KUBECTL) -n $(K8S_NAMESPACE) rollout restart \
+		deployment/topic-compaction-mi
+	$(KUBECTL) -n $(K8S_NAMESPACE) rollout status \
+		deployment/topic-compaction-mi --timeout=120s
+
+k8s-undeploy:
+	./deploy/k8s/scripts/stop.sh
+
+k8s-undeploy-purge:
+	./deploy/k8s/scripts/stop.sh --delete-namespace

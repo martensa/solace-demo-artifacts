@@ -1,0 +1,277 @@
+# =============================================================================
+# Grafana dashboard ConfigMap.
+# Picked up automatically by the kube-prometheus-stack Grafana
+# sidecar (LABEL=grafana_dashboard, LABEL_VALUE=1, RESOURCE=both).
+# Dashboard appears under "Topic Compaction MI" in the Grafana UI.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: topic-compaction-mi-grafana-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: topic-compaction-mi
+data:
+  topic-compaction-mi.json: |
+    {
+      "title": "Topic Compaction MI",
+      "uid": "topic-compaction-mi",
+      "tags": ["topic-compaction", "mi", "solace"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {"text": "Prometheus", "value": "Prometheus"}
+          },
+          {
+            "name": "namespace",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "${datasource}"},
+            "query": "label_values(topic_compaction_kvstore_size, namespace)",
+            "current": {"text": "mi-solace-lab", "value": "mi-solace-lab"},
+            "refresh": 1
+          },
+          {
+            "name": "pod",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "${datasource}"},
+            "query": "label_values(up{job=\"topic-compaction-mi\", namespace=\"$namespace\"}, pod)",
+            "includeAll": true,
+            "multi": true,
+            "refresh": 2
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "stat",
+          "title": "Pod Status",
+          "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [{"expr": "sum(up{job=\"topic-compaction-mi\", namespace=\"$namespace\"})"}],
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                {"options": {"0": {"text": "DOWN", "color": "red"}}, "type": "value"},
+                {"options": {"1": {"text": "UP", "color": "green"}}, "type": "value"}
+              ],
+              "color": {"mode": "thresholds"},
+              "thresholds": {"mode": "absolute", "steps": [
+                {"color": "red", "value": null},
+                {"color": "green", "value": 1}
+              ]}
+            }
+          }
+        },
+        {
+          "type": "stat",
+          "title": "KV Records",
+          "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [{"expr": "topic_compaction_kvstore_size{namespace=\"$namespace\"}"}],
+          "fieldConfig": {"defaults": {"unit": "short"}}
+        },
+        {
+          "type": "stat",
+          "title": "Compaction Success Rate (5m)",
+          "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [{"expr": "topic_compaction:compaction_success_rate:5m"}],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {"mode": "absolute", "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 0.95},
+                {"color": "green", "value": 0.99}
+              ]},
+              "color": {"mode": "thresholds"}
+            }
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Lookup p95 (5m)",
+          "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [{"expr": "topic_compaction:lookup_p95_seconds:5m"}],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {"mode": "absolute", "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.05},
+                {"color": "red", "value": 0.1}
+              ]},
+              "color": {"mode": "thresholds"}
+            }
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Lookup Miss Ratio (5m)",
+          "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [{"expr": "topic_compaction:lookup_miss_ratio:5m"}],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {"mode": "absolute", "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.05},
+                {"color": "red", "value": 0.10}
+              ]},
+              "color": {"mode": "thresholds"}
+            }
+          }
+        },
+        {
+          "type": "stat",
+          "title": "Replay Rate (5m)",
+          "gridPos": {"x": 20, "y": 0, "w": 4, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [{"expr": "topic_compaction:replay_rate:5m"}],
+          "fieldConfig": {"defaults": {"unit": "ops"}}
+        },
+        {
+          "type": "row",
+          "title": "Throughput (RED)",
+          "gridPos": {"x": 0, "y": 4, "w": 24, "h": 1},
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "Compaction Throughput",
+          "gridPos": {"x": 0, "y": 5, "w": 8, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {"expr": "sum(rate(topic_compaction_upserts_total{namespace=\"$namespace\"}[1m]))", "legendFormat": "upserts"},
+            {"expr": "sum by (reason) (rate(topic_compaction_skipped_total{namespace=\"$namespace\"}[1m]))", "legendFormat": "skipped {{reason}}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "ops"}}
+        },
+        {
+          "type": "timeseries",
+          "title": "Replay Throughput",
+          "gridPos": {"x": 8, "y": 5, "w": 8, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {"expr": "sum(rate(topic_compaction_replays_total{namespace=\"$namespace\"}[1m]))", "legendFormat": "replays"},
+            {"expr": "sum(rate(topic_compaction_deletes_total{namespace=\"$namespace\"}[1m]))", "legendFormat": "deletes"},
+            {"expr": "sum(rate(topic_compaction_retention_evicted_total{namespace=\"$namespace\"}[1m]))", "legendFormat": "retention-evicted"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "ops"}}
+        },
+        {
+          "type": "timeseries",
+          "title": "Lookup Throughput",
+          "gridPos": {"x": 16, "y": 5, "w": 8, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {"expr": "sum(rate(topic_compaction_lookups_total{namespace=\"$namespace\"}[1m]))", "legendFormat": "lookups"},
+            {"expr": "sum(rate(topic_compaction_lookup_misses_total{namespace=\"$namespace\"}[1m]))", "legendFormat": "misses"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "ops"}}
+        },
+        {
+          "type": "row",
+          "title": "Latency",
+          "gridPos": {"x": 0, "y": 13, "w": 24, "h": 1},
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "REST p50 / p95 / p99 by URI",
+          "gridPos": {"x": 0, "y": 14, "w": 12, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {"expr": "histogram_quantile(0.50, sum by (le, uri) (rate(http_server_requests_seconds_bucket{namespace=\"$namespace\"}[5m])))", "legendFormat": "p50 {{uri}}"},
+            {"expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{namespace=\"$namespace\"}[5m])))", "legendFormat": "p95 {{uri}}"},
+            {"expr": "histogram_quantile(0.99, sum by (le, uri) (rate(http_server_requests_seconds_bucket{namespace=\"$namespace\"}[5m])))", "legendFormat": "p99 {{uri}}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "s"}}
+        },
+        {
+          "type": "timeseries",
+          "title": "REST Status Codes",
+          "gridPos": {"x": 12, "y": 14, "w": 12, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {"expr": "sum by (status) (rate(http_server_requests_seconds_count{namespace=\"$namespace\"}[1m]))", "legendFormat": "{{status}}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "ops"}}
+        },
+        {
+          "type": "row",
+          "title": "Resources",
+          "gridPos": {"x": 0, "y": 22, "w": 24, "h": 1},
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "JVM Heap",
+          "gridPos": {"x": 0, "y": 23, "w": 8, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {"expr": "sum by (area) (jvm_memory_used_bytes{namespace=\"$namespace\", area=\"heap\"})", "legendFormat": "used"},
+            {"expr": "sum by (area) (jvm_memory_max_bytes{namespace=\"$namespace\", area=\"heap\"})", "legendFormat": "max"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "bytes"}}
+        },
+        {
+          "type": "timeseries",
+          "title": "Container CPU",
+          "gridPos": {"x": 8, "y": 23, "w": 8, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", container=\"topic-compaction-mi\"}[1m]))", "legendFormat": "cores"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "short"}}
+        },
+        {
+          "type": "timeseries",
+          "title": "Container Memory",
+          "gridPos": {"x": 16, "y": 23, "w": 8, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {"expr": "container_memory_working_set_bytes{namespace=\"$namespace\", container=\"topic-compaction-mi\"}", "legendFormat": "working set"},
+            {"expr": "container_spec_memory_limit_bytes{namespace=\"$namespace\", container=\"topic-compaction-mi\"}", "legendFormat": "limit"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "bytes"}}
+        },
+        {
+          "type": "row",
+          "title": "Storage",
+          "gridPos": {"x": 0, "y": 31, "w": 24, "h": 1},
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "PVC Usage",
+          "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {"expr": "kubelet_volume_stats_used_bytes{namespace=\"$namespace\", persistentvolumeclaim=\"topic-compaction-mi-data\"}", "legendFormat": "used"},
+            {"expr": "kubelet_volume_stats_capacity_bytes{namespace=\"$namespace\", persistentvolumeclaim=\"topic-compaction-mi-data\"}", "legendFormat": "capacity"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "bytes"}}
+        },
+        {
+          "type": "timeseries",
+          "title": "KV Records over Time",
+          "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {"expr": "topic_compaction_kvstore_size{namespace=\"$namespace\"}", "legendFormat": "{{pod}}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "short"}}
+        }
+      ]
+    }

@@ -1,65 +1,118 @@
 # End-to-End Smoke Test
 
-Reproducible E2E test for the Topic Compaction MI on docker-compose.
+Reproducible end-to-end test for the Topic Compaction MI. The
+`examples/smoke-test.sh` script is fully non-interactive,
+exit-code-clean, and the canonical CI-style integration check.
 
 ## Prerequisites
 
 - Docker (Rancher Desktop / Docker Desktop / Podman)
 - Java 17, Maven (or use the bundled `mvnw`)
-- `curl`, `jq` (optional)
-- A Solace PubSub+ broker (Solace Cloud, agent-mesh-deployment, etc.)
+- `curl`, `python3` (used for JSON parsing in the script)
+- A Solace PubSub+ broker (Solace Cloud, agent-mesh-deployment,
+  etc.) reachable from the host
+- Broker queues + subscriptions provisioned (see
+  `examples/init-queues.sh` or the SEMP-driven provisioning in
+  Phase 4.2)
 
-## Setup
+## Quick start
 
 ```bash
-# 1. Configure broker connection
-make env-init            # creates .env from .env.example
-$EDITOR .env             # fill in SOLACE_HOST, SOLACE_VPN, SOLACE_USERNAME, SOLACE_PASSWORD
-
-# 2. Provision queues + subscriptions on your broker
-#    (set SEMP_URL inside .env first - see .env.example for the URL format)
-make provision-queues
-
-# 3. Pull the base image (one-time, docker.io anonymous-pull quirk)
-docker pull eclipse-temurin:17-jre
-
-# 4. Build the container image into the local Docker daemon
-make image
-
-# 5. Start the MI
-make up
+make env-init                         # cp .env.example .env
+$EDITOR .env                          # broker creds
+make provision-queues                 # one-time SEMP provisioning
+make build                            # mvn package
+make image                            # build container image
+make up                               # docker compose up -d
+make smoke                            # the smoke test
 ```
 
-The MI takes ~40 seconds to fully connect to the broker and report all
-workflows ready.
+`make smoke` runs `examples/smoke-test.sh` and exits 0 if all
+ten assertions pass.
 
-All `curl` commands below assume `.env` is loaded:
+## Modes
+
+```bash
+./examples/smoke-test.sh         # default: docker-compose at localhost:18090
+./examples/smoke-test.sh --k8s   # port-forward the K8s service first
+```
+
+The `--k8s` mode starts a `kubectl port-forward` to
+`mi-solace-lab/topic-compaction-mi`, runs the same assertions
+against it, and tears the port-forward down at the end.
+
+## What it checks
+
+```text
+=== 1. Sanity ===
+  [PASS] health 200
+  [PASS] prometheus 200
+
+=== 2. Compaction round trip ===
+  [PASS] kv count after 3+1 publishes               (last-wins, count=3)
+  [PASS] last-wins on key A
+
+=== 3. Replay ===
+  [PASS] replay counter incremented
+
+=== 4. Bulk replay command accepted ===
+  [PASS] bulk-replay command published
+
+=== 5. Tombstone via REST ===
+  [PASS] delete C returns 204
+  [PASS] C is gone (404)
+
+=== 6. Backup admin endpoint ===           (only when admin auth set)
+  [PASS] backup returns 200
+  [PASS] backup header v1
+```
+
+Every assertion drives an exit-code increment; a single failure
+returns a non-zero exit so CI can gate on `make smoke`.
+
+## What it does NOT check
+
+- Broker queue + subscription topology -- assumed to be in place
+  via `make provision-queues` or external operator action.
+- The actual contents of replay messages on the wire -- the
+  smoke test asserts the counter increments, not that a
+  subscriber received the payload (would require a long-lived
+  consumer outside the script's scope).
+- Security role matrix -- run `examples/load-test.sh` or use the
+  curl matrix in `docs/SECURITY.md` for that.
+- Performance characteristics -- see `docs/PERFORMANCE.md` and
+  `examples/load-test.sh`.
+
+## Manual exploration
+
+If you want to drive the MI by hand instead of via the script,
+the building blocks below mirror what `smoke-test.sh` does
+internally. Loading `.env` for the curl examples:
 
 ```bash
 set -a; . ./.env; set +a
 ```
 
-## Wait for ready
+### Wait for readiness
 
 ```bash
-until curl -fsS http://localhost:${MI_PORT}/actuator/health > /dev/null 2>&1; do
+until curl -fsS http://localhost:${MI_PORT}/actuator/health \
+        > /dev/null 2>&1; do
   sleep 2
 done
 echo "MI is up"
 ```
 
-## Verify all 3 workflows are UP
+### Verify all three workflows are UP
 
 ```bash
-curl -fsS http://localhost:${MI_PORT}/actuator/health \
-  | jq '.components.binders.components.solace.components.bindings.components | keys'
-# Expected: ["input-0", "input-1", "input-2"]
+curl -fsS http://localhost:${MI_PORT}/actuator/health/readiness \
+  | jq '.components.binders.components.solace.components.bindings'
 ```
 
-## Test 1: Compaction
+### Compaction
 
 ```bash
-# Publish 3 messages on different topics matching orders/>
 for k in A B C; do
   curl -fsS -u "${SOLACE_REST_USER}:${SOLACE_REST_PASS}" \
     -X POST "${SOLACE_REST_HOST}/TOPIC/orders/created/${k}" \
@@ -67,33 +120,12 @@ for k in A B C; do
     -d "{\"orderId\":\"${k}\",\"amount\":${RANDOM}}"
 done
 
-# Verify all 3 keys are stored
-curl -fsS "http://localhost:${MI_PORT}/api/v1/kv?prefix=orders/" | jq
-# Expected: count=3, keys contains orders/created/A, /B, /C
+curl -fsS "http://localhost:${MI_PORT}/api/v1/kv?prefix=orders/" \
+  | jq
 ```
 
-## Test 2: Update + last-wins
+### Replay command
 
-```bash
-curl -fsS -u "${SOLACE_REST_USER}:${SOLACE_REST_PASS}" \
-  -X POST "${SOLACE_REST_HOST}/TOPIC/orders/created/A" \
-  -H 'Content-Type: application/json' \
-  -d '{"orderId":"A","amount":99,"updated":true}'
-
-sleep 1
-curl -fsS "http://localhost:${MI_PORT}/api/v1/kv?prefix=orders/" | jq '.count'
-# Expected: 3
-```
-
-## Test 3: Replay command
-
-In one terminal, subscribe to the replay-target topic:
-```bash
-curl -fsSN -u "${SOLACE_REST_USER}:${SOLACE_REST_PASS}" \
-  "${SOLACE_REST_HOST}/SUBSCRIBE/orders/created/A/compacted"
-```
-
-In another terminal, send a REPLAY command:
 ```bash
 curl -fsS -u "${SOLACE_REST_USER}:${SOLACE_REST_PASS}" \
   -X POST "${SOLACE_REST_HOST}/TOPIC/compacted/command/replay" \
@@ -101,41 +133,65 @@ curl -fsS -u "${SOLACE_REST_USER}:${SOLACE_REST_PASS}" \
   -d '{"command":"REPLAY","key":"orders/created/A"}'
 ```
 
-The first terminal should receive the latest stored payload for `orders/created/A`.
+To observe the replayed message: subscribe a Solace client (Try
+Me!, MQTT, sdkperf, ...) to `orders/created/A/compacted` before
+publishing the command. The HTTP `/SUBSCRIBE/...` endpoint of
+Solace Cloud's REST messaging API does NOT support streaming for
+ad-hoc topic subscription; use a real Solace client.
 
-## Test 4: Loop protection
-
-After test 3, check the MI logs:
-```bash
-make logs | grep -i "loop"
-# Expected:
-#   Skipping compaction: message has loop-protection header x-compacted-replay=true
-```
-
-## Test 5: Tombstone via REST
-
-```bash
-curl -fsS -X DELETE "http://localhost:${MI_PORT}/api/v1/kv/orders%2Fcreated%2FC"
-curl -fsS "http://localhost:${MI_PORT}/api/v1/kv?prefix=orders/" | jq '.count'
-# Expected: 2 (C is gone)
-```
-
-## Test 6: Failure path
+### Bulk replay
 
 ```bash
 curl -fsS -u "${SOLACE_REST_USER}:${SOLACE_REST_PASS}" \
-  -X POST "${SOLACE_REST_HOST}/TOPIC/compacted/command/replay" \
+  -X POST "${SOLACE_REST_HOST}/TOPIC/compacted/command/bulk-replay" \
   -H 'Content-Type: application/json' \
-  -d '{"command":"REPLAY","key":"this-was-never-stored"}'
-
-make logs | grep -i "replay"
-# Expected: Replay command failed: No record stored for key: this-was-never-stored
+  -d '{"command":"BULK_REPLAY","pattern":"orders/created/*"}'
 ```
 
-A failure document should also be published to `topic-compaction/replay/failed`.
+The summary event lands on `topic-compaction/replay/bulk-result`.
+
+### Delete (tombstone)
+
+Via REST:
+
+```bash
+curl -fsS -X DELETE \
+    -u "${MI_ADMIN_NAME}:${MI_ADMIN_PASSWORD}" \
+    "http://localhost:${MI_PORT}/api/v1/kv/orders/created/C"
+```
+
+Via command event:
+
+```bash
+curl -fsS -u "${SOLACE_REST_USER}:${SOLACE_REST_PASS}" \
+  -X POST "${SOLACE_REST_HOST}/TOPIC/compacted/command/delete" \
+  -H 'Content-Type: application/json' \
+  -d '{"command":"DELETE","key":"orders/created/C"}'
+```
+
+### Backup / restore (admin)
+
+```bash
+curl -fsS -u "${MI_ADMIN_NAME}:${MI_ADMIN_PASSWORD}" \
+    -X POST http://localhost:${MI_PORT}/api/v1/admin/backup \
+    -o backup.ndjson
+
+curl -fsS -u "${MI_ADMIN_NAME}:${MI_ADMIN_PASSWORD}" \
+    -X POST http://localhost:${MI_PORT}/api/v1/admin/restore \
+    -H 'Content-Type: application/x-ndjson' \
+    --data-binary @backup.ndjson
+```
 
 ## Teardown
 
 ```bash
 make clean       # docker compose down -v + rm target/
 ```
+
+## See also
+
+- `docs/COMMAND-EVENTS.md` -- full schema for replay / bulk /
+  delete commands
+- `docs/OPERATIONS.md` -- runbook
+- `docs/PERFORMANCE.md` -- load-test harness
+- `examples/smoke-test.sh` -- the script under test here

@@ -54,6 +54,12 @@ spring:
         input-1:
           destination: compaction.commands
           binder: solace
+          consumer:
+            # concurrency=1 keeps BULK_REPLAY iterations sequential.
+            # Concurrent consumers can spam the broker beyond the
+            # configured rate-limit, and the framework's per-consumer
+            # bookkeeping is simpler with a single thread.
+            concurrency: 1
         output-1:
           destination: placeholder/compacted           # overwritten by replay interceptor
           binder: solace
@@ -67,6 +73,20 @@ spring:
         output-2:
           destination: placeholder/lookup-reply        # overwritten by lookup interceptor
           binder: solace
+
+        # Bulk-Replay fanout (no MI workflow). BulkReplayService uses
+        # StreamBridge.send("output-3", msg) and the per-message
+        # destination is set via the solace_destination header.
+        # output-3 is a pre-registered binding (see internal
+        # application.yml), so the MI Framework knows about it.
+        # We override its destination here with a placeholder and
+        # explicitly auto-start the producer; workflow 3 stays
+        # disabled (we use the binding without the workflow).
+        output-3:
+          destination: placeholder/bulk-replay-fanout
+          binder: solace
+          producer:
+            auto-startup: true
 
       solace:
         default:
@@ -95,6 +115,19 @@ topic-compaction:
     binding-names: [input-2]
     key-header: x-compaction-key
     topic-key-prefix: "compacted/lookup/"
+  security:
+    # REST + Actuator authentication. Disabled by default in the
+    # docker-compose dev mode for convenience; flip to true (and set
+    # the MI_USER_PASSWORD / MI_ADMIN_PASSWORD env vars in .env) to
+    # exercise the role matrix locally. The K8s overlay enables it
+    # unconditionally.
+    enabled: ${MI_SECURITY_ENABLED:false}
+    user:
+      name: ${MI_USER_NAME:mi-user}
+      password: ${MI_USER_PASSWORD:change-me-user}
+    admin:
+      name: ${MI_ADMIN_NAME:mi-admin}
+      password: ${MI_ADMIN_PASSWORD:change-me-admin}
 
 # -----------------------------------------------------------------------------
 # Spring Boot Actuator - health, metrics, prometheus

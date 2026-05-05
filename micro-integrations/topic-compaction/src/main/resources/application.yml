@@ -115,10 +115,28 @@ logging:
     com.solace.labs.mi.topiccompaction: info
 
 management:
+  # Disable all metric registry exporters by default so we do not
+  # accidentally light up exporters we never configured. Prometheus
+  # is re-enabled explicitly below.
   defaults:
     metrics:
       export:
         enabled: false
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  # OTLP tracing pipeline. Endpoint defaults to localhost so a
+  # missing collector does not crash the app; cluster overrides set
+  # OTEL_EXPORTER_OTLP_ENDPOINT to the in-cluster Tempo service.
+  tracing:
+    sampling:
+      probability: 1.0
+    enabled: true
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+      transport: grpc
   endpoints:
     web:
       exposure:
@@ -127,8 +145,19 @@ management:
     env:
       show-values: WHEN_AUTHORIZED
     prometheus:
-      enabled: true
+      access: read_only
     health:
+      probes:
+        # Expose dedicated /health/liveness and /health/readiness for
+        # Kubernetes probes. The liveness group only checks the JVM,
+        # readiness includes the Solace binder so traffic is held off
+        # until bindings are UP.
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,binders
       status:
         order:
           - DOWN
@@ -136,6 +165,23 @@ management:
           - RECONNECTING
           - UP
           - UNKNOWN
+  metrics:
+    # Common tags are attached programmatically in MetricsConfig so the
+    # filter sees the resolved bean values rather than literal
+    # placeholders. Distribution stats here apply globally.
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
 
 server:
   port: 8090
+  # Graceful shutdown: stop accepting new HTTP connections
+  # immediately on SIGTERM, then drain in-flight requests for up to
+  # the configured timeout-per-shutdown-phase below. Combined with
+  # the @PreDestroy hooks on KvStore (RocksDB WAL sync + close),
+  # this gives an end-to-end clean shutdown contract.
+  shutdown: graceful
+
+spring.lifecycle.timeout-per-shutdown-phase: 25s

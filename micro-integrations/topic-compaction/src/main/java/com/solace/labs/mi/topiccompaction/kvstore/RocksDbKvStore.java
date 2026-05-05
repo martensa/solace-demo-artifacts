@@ -61,7 +61,7 @@ public class RocksDbKvStore implements KvStore {
     }
 
     @PreDestroy
-    void close() {
+    public void close() {
         if (db != null) {
             try {
                 db.syncWal();
