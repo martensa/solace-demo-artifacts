@@ -1,0 +1,22 @@
+# =============================================================================
+# Service: topic-compaction-mi
+# ClusterIP service exposing the actuator + REST surface. The
+# ServiceMonitor in 80-servicemonitor.yaml selects this service.
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: topic-compaction-mi
+  namespace: mi-solace-lab
+  labels:
+    app.kubernetes.io/name: topic-compaction-mi
+    app.kubernetes.io/component: service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: topic-compaction-mi
+  ports:
+    - name: actuator
+      port: 8090
+      targetPort: actuator
+      protocol: TCP

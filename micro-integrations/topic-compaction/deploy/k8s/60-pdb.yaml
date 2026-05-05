@@ -1,0 +1,21 @@
+# =============================================================================
+# PodDisruptionBudget: topic-compaction-mi
+# Single replica, no HA in V1.0 (see ADR 0002). The budget is set to
+# minAvailable: 0 so node drains can evict the pod cleanly; the
+# graceful shutdown contract (server.shutdown=graceful + RocksDB
+# WAL sync in @PreDestroy) ensures state is preserved across the
+# eviction.
+# =============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: topic-compaction-mi
+  namespace: mi-solace-lab
+  labels:
+    app.kubernetes.io/name: topic-compaction-mi
+    app.kubernetes.io/component: pdb
+spec:
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: topic-compaction-mi

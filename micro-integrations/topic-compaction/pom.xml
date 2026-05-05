@@ -11,7 +11,7 @@
 
 	<groupId>com.solace.labs.mi</groupId>
 	<artifactId>topic-compaction-mi</artifactId>
-	<version>1.0.0-SNAPSHOT</version>
+	<version>1.0.0</version>
 
 	<name>Topic Compaction Micro-Integration</name>
 	<description>A Solace Micro-Integration that maintains a key-value store of last-seen messages per topic and supports on-demand replay via command events. A Solace-native alternative to Kafka log compaction.</description>
@@ -151,6 +151,11 @@
 		<dependency>
 			<groupId>org.awaitility</groupId>
 			<artifactId>awaitility</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

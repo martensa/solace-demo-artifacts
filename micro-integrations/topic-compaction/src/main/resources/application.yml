@@ -177,3 +177,11 @@ management:
 
 server:
   port: 8090
+  # Graceful shutdown: stop accepting new HTTP connections
+  # immediately on SIGTERM, then drain in-flight requests for up to
+  # the configured timeout-per-shutdown-phase below. Combined with
+  # the @PreDestroy hooks on KvStore (RocksDB WAL sync + close),
+  # this gives an end-to-end clean shutdown contract.
+  shutdown: graceful
+
+spring.lifecycle.timeout-per-shutdown-phase: 25s

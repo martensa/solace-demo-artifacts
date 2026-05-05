@@ -1,0 +1,20 @@
+# =============================================================================
+# PersistentVolumeClaim: topic-compaction-mi-data
+# Backs the RocksDB KV store at /var/lib/topic-compaction. 10 Gi is
+# sized for the lab demo; tune in production based on the expected
+# unique key cardinality and average payload size.
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: topic-compaction-mi-data
+  namespace: mi-solace-lab
+  labels:
+    app.kubernetes.io/name: topic-compaction-mi
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

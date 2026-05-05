@@ -1,0 +1,80 @@
+# =============================================================================
+# NetworkPolicy: topic-compaction-mi
+# Ingress: allow Prometheus (monitoring namespace) to scrape, plus
+#          intra-namespace traffic for direct REST + admin calls.
+# Egress:  allow DNS, Solace Cloud broker, in-cluster Tempo, and
+#          general cluster-internal traffic.
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: topic-compaction-mi
+  namespace: mi-solace-lab
+  labels:
+    app.kubernetes.io/name: topic-compaction-mi
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: topic-compaction-mi
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Prometheus scrape from the monitoring namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8090
+          protocol: TCP
+    # Allow intra-namespace traffic (other MIs, port-forward via
+    # local proxy etc.)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mi-solace-lab
+      ports:
+        - port: 8090
+          protocol: TCP
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # In-cluster Tempo for OTLP gRPC traces
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 4317
+          protocol: TCP
+    # Solace Cloud broker SMF + REST (via cluster egress)
+    # Ports: 55555 SMF, 55443 SMF/TLS, 9000/9443 REST, 943 SEMP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - port: 55555
+          protocol: TCP
+        - port: 55443
+          protocol: TCP
+        - port: 9000
+          protocol: TCP
+        - port: 9443
+          protocol: TCP
+        - port: 943
+          protocol: TCP

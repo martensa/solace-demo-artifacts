@@ -1,5 +1,18 @@
-# Test-mode defaults: disable all MI workflows so unit tests don't try to start
-# Solace bindings. Each integration test re-enables only what it needs.
+# Test-mode defaults: disable all MI workflows so unit tests don't try
+# to start Solace bindings. Each integration test re-enables only what
+# it needs.
+spring:
+  application:
+    name: topic-compaction-mi-test
+  cloud:
+    config:
+      # Disable the bootstrap config-server lookup. With this off
+      # the ImportException about missing spring.config.import is
+      # suppressed - the MI does not use a config server in tests.
+      import-check:
+        enabled: false
+      enabled: false
+
 solace:
   connector:
     workflows:
@@ -11,6 +24,18 @@ solace:
       5: {enabled: false}
       6: {enabled: false}
       7: {enabled: false}
+
+# Default to security disabled in tests; integration tests that need
+# auth turn it on with @TestPropertySource.
+topic-compaction:
+  security:
+    enabled: false
+    user:
+      name: dev-user
+      password: dev-user-pw
+    admin:
+      name: dev-admin
+      password: dev-admin-pw
 
 logging:
   level:

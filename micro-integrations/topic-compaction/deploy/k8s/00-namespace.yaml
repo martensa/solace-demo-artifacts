@@ -1,0 +1,14 @@
+# =============================================================================
+# Namespace: mi-solace-lab
+# Hosts all Solace Micro-Integrations in the demo cluster. Topic Compaction
+# is the first tenant; future MIs land alongside.
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mi-solace-lab
+  labels:
+    app.kubernetes.io/part-of: solace-micro-integrations
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

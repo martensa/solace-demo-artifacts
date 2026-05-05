@@ -151,6 +151,91 @@ to [Semantic Versioning][semver].
   schema, all three command types, options reference, and
   end-to-end REST examples for `REPLAY` and `BULK_REPLAY`.
 
+### Phase 4 - security, robustness, ops hardening
+
+#### Added
+
+- Phase 4.1: `WebSecurityConfig` and `SecurityProperties`. Two
+  in-memory roles (`USER`, `ADMIN`) with HTTP Basic auth.
+  Whitelist for `/actuator/health` and `/actuator/prometheus`. The
+  framework's `SecurityAutoConfiguration` is excluded to avoid
+  bean conflicts. ADR 0004 records the rationale.
+- Phase 4.1: `MI_SECURITY_ENABLED`, `MI_USER_*`, `MI_ADMIN_*` env
+  vars added to `.env.example` and the docker-compose mi-config.
+  Disabled by default in dev mode; the K8s overlay enables it.
+- Phase 4.2: `BrokerProvisioner` (`ApplicationRunner`) idempotently
+  creates the workflow queues and topic subscriptions via SEMP
+  v2 on startup. Conditional on
+  `topic-compaction.provisioning.enabled`. 400 ("already exists")
+  is treated as success.
+- Phase 4.3: graceful shutdown wired - `server.shutdown=graceful`,
+  `spring.lifecycle.timeout-per-shutdown-phase=25s`. `compose.yaml`
+  sets `stop_grace_period=30s` and a healthcheck. The existing
+  `RocksDbKvStore.@PreDestroy` already syncs the WAL before close.
+- Phase 4.4: `StartupBanner` logs a one-shot summary of resolved
+  config on `ApplicationReadyEvent`. Sensitive values (usernames)
+  are masked. Gives operators sanity-check at boot.
+- Phase 4.5: `consumer.concurrency: 1` on the command queue
+  (input-1) so `BULK_REPLAY` cannot be parallelised across
+  consumers, keeping the rate limiter deterministic.
+
+### Phase 5 - Kubernetes deployment
+
+#### Added
+
+- `deploy/k8s/00-namespace.yaml` through `81-prometheusrule.yaml`
+  - Namespace `mi-solace-lab` with PodSecurity `restricted`.
+  - ConfigMap with the K8s overlay of `application.yml`.
+  - Secret template (rendered via envsubst at deploy time;
+    rendered file gitignored).
+  - 10 Gi `ReadWriteOnce` PVC for RocksDB at
+    `/var/lib/topic-compaction/rocksdb`.
+  - Single-replica Deployment with `Recreate` strategy, hardened
+    pod (non-root, read-only-rootFS, dropped capabilities,
+    seccomp), liveness/readiness/startup probes.
+  - ClusterIP Service exposing actuator port.
+  - PodDisruptionBudget `minAvailable: 0` for clean drains.
+  - NetworkPolicy: ingress from monitoring + same-namespace,
+    egress to DNS, in-cluster Tempo (4317), and Solace Cloud
+    SMF/REST/SEMP ports.
+  - `ServiceMonitor` and `PrometheusRule` in the `monitoring`
+    namespace with `prometheus: kube-prometheus` label so the
+    operator picks them up.
+  - Six initial alerts: pod absence, Solace binder down, skip
+    rate, KV growth, lookup latency, pod memory.
+- `deploy/k8s/scripts/start.sh` and `stop.sh` -- idempotent deploy
+  and teardown. `start.sh` validates the env, renders the secret
+  template, stamps a config-checksum annotation on the
+  Deployment, applies all manifests, and waits for rollout.
+  `stop.sh` removes monitoring artifacts then the workload, and
+  optionally the PVC and namespace via flags.
+- `Makefile` targets `k8s-deploy`, `k8s-status`, `k8s-logs`,
+  `k8s-port-forward`, `k8s-restart`, `k8s-undeploy`,
+  `k8s-undeploy-purge`.
+- ADR 0003 (K8s deployment topology) and ADR 0004 (REST auth and
+  role model).
+
+#### Changed
+
+- Image tag bumped from `1.0.0-SNAPSHOT` to `1.0.0` and pushed to
+  `registry.solace.lab/sam-topic-compaction-mi:1.0.0`.
+- `MetricsConfig.prometheusMeterRegistry` is now
+  `@ConditionalOnBean(PrometheusRegistry.class)` so test contexts
+  without the auto-config can still load.
+- `TopicCompactionApplication` excludes the framework's
+  `SecurityAutoConfiguration` (replaced by `WebSecurityConfig`).
+
+#### Verified
+
+- 105 unit tests green.
+- Local docker-compose smoke test green with security disabled
+  AND with security enabled (full role-matrix verified against
+  the running container).
+- K8s deployment in `mi-solace-lab` successfully rolled out in
+  Rancher Desktop. Pod READY, PVC bound, ServiceMonitor + PrometheusRule
+  visible in the `monitoring` namespace, security role matrix
+  (10 checks) verified via port-forward.
+
 ## [0.x] (pre-release MVP, V1)
 
 The MVP shipped before this CHANGELOG was introduced. See git history

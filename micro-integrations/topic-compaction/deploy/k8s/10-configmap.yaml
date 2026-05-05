@@ -1,0 +1,145 @@
+# =============================================================================
+# ConfigMap: topic-compaction-mi-config
+# Mounted into the pod at /app/external/spring/config/application.yml. The
+# settings here are non-sensitive operator config; secrets (broker creds,
+# REST passwords) come from the Secret in 20-secret.yaml.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: topic-compaction-mi-config
+  namespace: mi-solace-lab
+  labels:
+    app.kubernetes.io/name: topic-compaction-mi
+    app.kubernetes.io/component: config
+data:
+  application.yml: |
+    # =========================================================================
+    # K8s overlay - mounted at runtime over the in-image application.yml
+    # =========================================================================
+
+    spring:
+      application:
+        name: topic-compaction-mi
+      cloud:
+        stream:
+          bindings:
+            input-0:
+              destination: compaction.data
+              binder: solace
+            output-0:
+              destination: placeholder/compacted-ack
+              binder: solace
+            input-1:
+              destination: compaction.commands
+              binder: solace
+              consumer:
+                concurrency: 1
+            output-1:
+              destination: placeholder/compacted
+              binder: solace
+            input-2:
+              destination: compaction.lookup
+              binder: solace
+            output-2:
+              destination: placeholder/lookup-reply
+              binder: solace
+            output-3:
+              destination: placeholder/bulk-replay-fanout
+              binder: solace
+              producer:
+                auto-startup: true
+          solace:
+            default:
+              producer:
+                destination-type: topic
+
+    solace:
+      java:
+        host: ${SOLACE_HOST}
+        msg-vpn: ${SOLACE_VPN}
+        client-username: ${SOLACE_USERNAME}
+        client-password: ${SOLACE_PASSWORD}
+        connect-retries: -1
+        reconnect-retries: -1
+      connector:
+        workflows:
+          0: {enabled: true}
+          1: {enabled: true}
+          2: {enabled: true}
+          3: {enabled: false}
+        # Framework-level security is replaced by WebSecurityConfig in
+        # this MI; see topic-compaction.security below.
+        security:
+          enabled: false
+
+    topic-compaction:
+      version: "1.0.0"
+      kvstore:
+        backend: rocksdb
+        rocksdb:
+          # Mounted from the PVC in 30-pvc.yaml. Read-only-rootFS is
+          # enforced by the deployment securityContext, so this path
+          # MUST be the volume mount rather than a temp dir.
+          path: /var/lib/topic-compaction/rocksdb
+      compaction:
+        binding-names: [input-0]
+        audit-suffix: /compacted-ack
+        loop-protection-header: x-compacted-replay
+        ordering:
+          header: ""
+      replay:
+        binding-names: [input-1]
+        target-suffix: /compacted
+        loop-protection-header: x-compacted-replay
+      lookup:
+        binding-names: [input-2]
+        key-header: x-compaction-key
+        topic-key-prefix: "compacted/lookup/"
+      security:
+        # Always enabled in the cluster overlay; passwords come from
+        # the Secret.
+        enabled: true
+        user:
+          name: ${MI_USER_NAME}
+          password: ${MI_USER_PASSWORD}
+        admin:
+          name: ${MI_ADMIN_NAME}
+          password: ${MI_ADMIN_PASSWORD}
+      retention:
+        # Enable per-deployment as needed. Off by default.
+        enabled: false
+      provisioning:
+        # SEMP credentials would go here. Default off; the operator
+        # provisions queues via Solace Cloud UI for the lab demo.
+        enabled: false
+
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: "health,metrics,prometheus,info"
+      endpoint:
+        health:
+          probes:
+            enabled: true
+          group:
+            liveness:
+              include: livenessState
+            readiness:
+              include: readinessState,binders
+          show-components: when-authorized
+          show-details: when-authorized
+      tracing:
+        sampling:
+          probability: 1.0
+        enabled: true
+      otlp:
+        tracing:
+          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+          transport: grpc
+
+    logging:
+      level:
+        root: INFO
+        com.solace.labs.mi.topiccompaction: INFO

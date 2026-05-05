@@ -7,6 +7,7 @@ import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import io.prometheus.metrics.model.registry.PrometheusRegistry;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -50,6 +51,7 @@ public class MetricsConfig {
      */
     @Bean
     @Primary
+    @ConditionalOnBean(PrometheusRegistry.class)
     public PrometheusMeterRegistry prometheusMeterRegistry(
             PrometheusRegistry prometheusRegistry) {
         return new PrometheusMeterRegistry(

@@ -1,0 +1,139 @@
+# =============================================================================
+# PrometheusRule: topic-compaction-mi-alerts
+# Lives in the monitoring namespace so the kube-prometheus operator
+# loads the rules. Mix of symptom alerts (pod absence, error rate)
+# and SLO-style alerts (compaction success rate, replay latency).
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: topic-compaction-mi-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+    app.kubernetes.io/name: topic-compaction-mi
+spec:
+  groups:
+    - name: topic-compaction.alerts
+      interval: 30s
+      rules:
+
+        - alert: TopicCompactionMiAbsent
+          expr: |
+            absent(up{job="topic-compaction-mi"} == 1)
+          for: 2m
+          labels:
+            severity: critical
+            service: topic-compaction-mi
+          annotations:
+            summary: "Topic Compaction MI is not scraping"
+            description: >-
+              Prometheus has not had a successful scrape of the
+              topic-compaction-mi for 2 minutes. The pod may be
+              down, or the ServiceMonitor selector is broken.
+
+        - alert: TopicCompactionMiSolaceBindingDown
+          expr: |
+            health_status{component="binders", application="topic-compaction-mi"}
+              < 1
+          for: 30s
+          labels:
+            severity: critical
+            service: topic-compaction-mi
+          annotations:
+            summary: "Solace binder is DOWN"
+            description: >-
+              The MI's Solace binder reports an unhealthy state.
+              No new compactions are being processed. Investigate
+              the binder logs and broker connectivity.
+
+        - alert: TopicCompactionReplayErrorRate
+          expr: |
+            (
+              sum(rate(topic_compaction_skipped_total{
+                application="topic-compaction-mi"}[5m]))
+              /
+              clamp_min(
+                sum(rate(topic_compaction_upserts_total{
+                  application="topic-compaction-mi"}[5m]))
+                + sum(rate(topic_compaction_skipped_total{
+                  application="topic-compaction-mi"}[5m])),
+                1
+              )
+            ) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+            service: topic-compaction-mi
+          annotations:
+            summary: "Skip-rate above 5% over 10 minutes"
+            description: >-
+              The MI is skipping more than 5% of inbound messages.
+              Check `reason` label on
+              topic_compaction_skipped_total to differentiate
+              loop-protection (expected) from out-of-order or
+              missing-topic skips (investigate).
+
+        - alert: TopicCompactionKvStoreSizeGrowth
+          expr: |
+            (
+              topic_compaction_kvstore_size{
+                application="topic-compaction-mi"}
+              - topic_compaction_kvstore_size{
+                application="topic-compaction-mi"} offset 1h
+            ) > 100000
+          for: 30m
+          labels:
+            severity: warning
+            service: topic-compaction-mi
+          annotations:
+            summary: "KV store grew by >100k records in the last hour"
+            description: >-
+              Unusual KV-store growth - the topic cardinality may
+              have exploded, the retention sweeper may be off,
+              or a runaway producer is generating new keys. Check
+              `topic-compaction.retention.enabled` and the recent
+              compaction log.
+
+        - alert: TopicCompactionLookupP95Slow
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (
+                rate(http_server_requests_seconds_bucket{
+                  application="topic-compaction-mi",
+                  uri=~"/api/v1/kv/.*"}[5m])
+              )
+            ) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            service: topic-compaction-mi
+          annotations:
+            summary: "KV lookup P95 latency above 100ms"
+            description: >-
+              The 95th-percentile latency for /api/v1/kv reads has
+              been above 100ms for 10 minutes. RocksDB may be
+              compacting or paging from disk; investigate IO
+              pressure on the PVC.
+
+        - alert: TopicCompactionPodMemoryHigh
+          expr: |
+            container_memory_working_set_bytes{
+              namespace="mi-solace-lab",
+              container="topic-compaction-mi"}
+              /
+            container_spec_memory_limit_bytes{
+              namespace="mi-solace-lab",
+              container="topic-compaction-mi"} > 0.9
+          for: 10m
+          labels:
+            severity: warning
+            service: topic-compaction-mi
+          annotations:
+            summary: "Pod memory > 90% of limit"
+            description: >-
+              The topic-compaction-mi pod is using more than 90%
+              of its memory limit for 10 minutes. Risk of OOMKill
+              on the next workload spike. Investigate RocksDB
+              cache settings or bump the memory limit.
