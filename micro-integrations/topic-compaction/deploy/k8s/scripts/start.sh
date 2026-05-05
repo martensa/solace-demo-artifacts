@@ -77,6 +77,27 @@ for var in SOLACE_HOST SOLACE_VPN SOLACE_USERNAME SOLACE_PASSWORD \
   fi
 done
 
+# Default empty SEMP_* + provisioning toggle so envsubst still
+# produces a valid Secret. The MI's BrokerProvisioner is gated by
+# topic-compaction.provisioning.enabled (default false) so empty
+# values are harmless when the feature is off.
+: "${MI_PROVISIONING_ENABLED:=false}"
+: "${SEMP_URL:=}"
+: "${SEMP_USER:=}"
+: "${SEMP_PASS:=}"
+export MI_PROVISIONING_ENABLED SEMP_URL SEMP_USER SEMP_PASS
+
+if [ "$MI_PROVISIONING_ENABLED" = "true" ]; then
+  for var in SEMP_URL SEMP_USER SEMP_PASS; do
+    if [ -z "${!var:-}" ]; then
+      echo "ERROR: MI_PROVISIONING_ENABLED=true but $var is empty" \
+           "in $ENV_FILE." >&2
+      exit 1
+    fi
+  done
+  echo "OK: SEMP auto-provisioning will run on pod startup."
+fi
+
 echo "OK: kubectl context = $(kubectl config current-context)"
 echo "OK: target namespace = $NAMESPACE"
 

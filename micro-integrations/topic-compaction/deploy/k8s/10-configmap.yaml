@@ -110,9 +110,27 @@ data:
         # Enable per-deployment as needed. Off by default.
         enabled: false
       provisioning:
-        # SEMP credentials would go here. Default off; the operator
-        # provisions queues via Solace Cloud UI for the lab demo.
-        enabled: false
+        # Idempotent SEMP-driven queue + subscription provisioning
+        # at startup (Phase 4.2). Toggle via MI_PROVISIONING_ENABLED
+        # in .env. SEMP_USER must have admin rights (e.g.
+        # mission-control-manager on Solace Cloud).
+        enabled: ${MI_PROVISIONING_ENABLED:false}
+        fail-on-error: false
+        semp:
+          url: ${SEMP_URL:}
+          username: ${SEMP_USER:}
+          password: ${SEMP_PASS:}
+          msg-vpn: ${SOLACE_VPN}
+        queues:
+          - name: compaction.data
+            subscriptions:
+              - "orders/>"
+          - name: compaction.commands
+            subscriptions:
+              - "compacted/command/>"
+          - name: compaction.lookup
+            subscriptions:
+              - "compacted/lookup/>"
 
     management:
       endpoints:

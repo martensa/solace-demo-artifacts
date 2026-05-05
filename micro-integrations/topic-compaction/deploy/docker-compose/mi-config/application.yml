@@ -128,6 +128,28 @@ topic-compaction:
     admin:
       name: ${MI_ADMIN_NAME:mi-admin}
       password: ${MI_ADMIN_PASSWORD:change-me-admin}
+  provisioning:
+    # SEMP-driven idempotent queue + subscription creation at
+    # startup (Phase 4.2). Off by default; set
+    # MI_PROVISIONING_ENABLED=true in .env (plus SEMP_URL /
+    # SEMP_USER / SEMP_PASS) to enable.
+    enabled: ${MI_PROVISIONING_ENABLED:false}
+    fail-on-error: false
+    semp:
+      url: ${SEMP_URL:}
+      username: ${SEMP_USER:}
+      password: ${SEMP_PASS:}
+      msg-vpn: ${SEMP_VPN:${SOLACE_VPN}}
+    queues:
+      - name: compaction.data
+        subscriptions:
+          - "orders/>"
+      - name: compaction.commands
+        subscriptions:
+          - "compacted/command/>"
+      - name: compaction.lookup
+        subscriptions:
+          - "compacted/lookup/>"
 
 # -----------------------------------------------------------------------------
 # Spring Boot Actuator - health, metrics, prometheus
