@@ -3,6 +3,8 @@ package com.solace.labs.mi.topiccompaction.compaction;
 import com.solace.connector.core.customizer.ConsumerBindingMessageInterceptor;
 import com.solace.connector.core.customizer.ConsumerBindingMessageInterceptorFactory;
 import com.solace.labs.mi.topiccompaction.compaction.CompactionService.Result;
+import com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation;
+import com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation.InboundScope;
 import com.solace.labs.mi.topiccompaction.util.AckHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,13 +51,16 @@ public class CompactionConsumerInterceptorFactory implements ConsumerBindingMess
     private final CompactionService service;
     private final CompactionProperties properties;
     private final DirectAuditPublisher auditPublisher;
+    private final SolaceContextPropagation propagation;
 
     public CompactionConsumerInterceptorFactory(CompactionService service,
                                                  CompactionProperties properties,
-                                                 DirectAuditPublisher auditPublisher) {
+                                                 DirectAuditPublisher auditPublisher,
+                                                 SolaceContextPropagation propagation) {
         this.service = service;
         this.properties = properties;
         this.auditPublisher = auditPublisher;
+        this.propagation = propagation;
     }
 
     @Override
@@ -80,6 +85,20 @@ public class CompactionConsumerInterceptorFactory implements ConsumerBindingMess
     private final class Interceptor implements ConsumerBindingMessageInterceptor {
         @Override
         public Message<?> after(Message<?> message) {
+            // V1.2.0: extract upstream W3C trace context, start a
+            // CONSUMER-kind receive span via Micrometer's Tracer
+            // (which keeps both Micrometer's Observation thread-
+            // local AND OTel's Context in sync). @Observed spans
+            // inside the scope become children of the receive
+            // span; the audit publish injects the same trace
+            // context into outgoing user properties.
+            try (InboundScope ignored = propagation.extractAndStart(
+                    message, "compaction.inbound")) {
+                return doProcess(message);
+            }
+        }
+
+        private Message<?> doProcess(Message<?> message) {
             // 1) Synchronous KV upsert. If this throws, the inbound is
             //    NACKed by the framework -> redelivered -> max-redel
             //    -> DMQ. Durability contract honoured.

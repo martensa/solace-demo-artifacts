@@ -114,7 +114,10 @@ class DirectAuditPublisherIT {
         chanProps.setReconnectRetryWaitInMillis(2000);
 
         publisher = new DirectAuditPublisher(baseProps,
-                new ObjectMapper(), properties);
+                new ObjectMapper(), properties,
+                new com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation(
+                        io.micrometer.tracing.Tracer.NOOP,
+                        io.micrometer.tracing.propagation.Propagator.NOOP));
         // Invoke @PostConstruct manually (we're outside Spring DI).
         Method start = DirectAuditPublisher.class.getDeclaredMethod("start");
         start.setAccessible(true);

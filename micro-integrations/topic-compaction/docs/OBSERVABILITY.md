@@ -188,16 +188,18 @@ Tempo operation name (NOT the {name} attribute - that's the metric
 name). Wired through {observability.TracingConfig} which
 registers the {ObservedAspect} bean.
 
-| Operation name (Jaeger) | Metric name | Created in | Workflow tag |
-|---|---|---|---|
-| {compact-message} | {compaction.process} | {CompactionService.compact} | {workflow=compaction} |
-| {lookup-request} | {lookup.resolve} | {LookupService.resolve} | {workflow=lookup} |
-| {replay-command} | {replay.parse-and-process} | {ReplayService.process} | {workflow=replay} |
-| {bulk-replay} | {replay.bulk} | {BulkReplayService.execute} | {workflow=replay-bulk} |
-| {delete-command} | {delete.execute} | {DeleteCommandService.execute} | {workflow=delete} |
-| {retention-sweep} | {retention.sweep} | {RetentionService.sweep} | -- |
-| {backup-stream} | {admin.backup} | {BackupService.backup} | -- |
-| {restore-stream} | {admin.restore} | {BackupService.restore} | -- |
+| Operation name (Jaeger) | Source | Notes |
+|---|---|---|
+| {compaction.inbound} | {SolaceContextPropagation} (V1.2.0+) | CONSUMER-kind receive span, parent of {compact-message}. Created per inbound on {compaction.data}. |
+| {command.inbound} | {SolaceContextPropagation} (V1.2.0+) | Receive span on {compaction.commands}; parent of {replay-command} / {bulk-replay} / {delete-command}. |
+| {lookup.inbound} | {SolaceContextPropagation} (V1.2.0+) | Receive span on {compaction.lookup}; parent of {lookup-request}. |
+| {compact-message} | {@Observed} on {CompactionService.compact} | Metric: {compaction.process}. Tag: {workflow=compaction}. |
+| {lookup-request} | {@Observed} on {LookupService.resolve} | Metric: {lookup.resolve}. Tag: {workflow=lookup}. |
+| {replay-command} | {@Observed} on {ReplayService.process} | Metric: {replay.parse-and-process}. Tag: {workflow=replay}. |
+| {bulk-replay} | {@Observed} on {BulkReplayService.execute} | Metric: {replay.bulk}. Tag: {workflow=replay-bulk}. |
+| {delete-command} | {@Observed} on {DeleteCommandService.execute} | Metric: {delete.execute}. Tag: {workflow=delete}. |
+| {retention-sweep} | {@Observed} on {RetentionService.sweep} | Metric: {retention.sweep}. |
+| {backup-stream}, {restore-stream} | {@Observed} on {BackupService.{backup,restore}} | Metrics: {admin.backup}, {admin.restore}. |
 
 **Auto-instrumented spans** via Spring Boot's OTel auto-config:
 
@@ -376,6 +378,103 @@ run a LogQL query against Loki:
 
 Grafana's "Logs for this trace" panel does this automatically when
 both data sources are linked via the trace-to-logs derived field.
+
+### End-to-end context propagation (V1.2.0+)
+
+The MI implements W3C trace-context propagation across all four
+workflows so a single trace can span:
+{publisher application} -> {Solace broker hop} -> {MI consumer
++ KV upsert} -> {MI publish (audit / replay / lookup-reply)} ->
+{Solace broker hop} -> {downstream consumer}.
+
+**Inbound side.** Every consumer interceptor wraps its work in
+an {InboundScope} obtained from
+{SolaceContextPropagation.extractAndStart(message,
+"<workflow>.inbound")}. The helper reads {traceparent} /
+{tracestate} / {baggage} from the inbound's Spring Message
+headers (which the Solace binder surfaces from the SDT user
+properties), uses Micrometer's {Propagator.extract} to build a
+{Span.Builder} as a child of the upstream context, starts a
+CONSUMER-kind {compaction.inbound} / {command.inbound} /
+{lookup.inbound} receive span via Micrometer's
+{Tracer.withSpan}, and returns a closeable scope. Nested
+{@Observed} spans (e.g. {compact-message}) become children of the
+receive span; the receive span is itself a child of the upstream
+publisher's span. If the inbound has no trace headers
+(uninstrumented publisher), the receive span is a trace root.
+
+Why route through Micrometer rather than raw OpenTelemetry: the
+{@Observed} annotations resolve their parent span via Micrometer's
+{ObservationRegistry} thread-local. Activating an OTel
+{Context.makeCurrent()} alone does not update Micrometer's
+thread-local, so {@Observed} spans would become trace roots
+anyway. Going through {Tracer.withSpan} synchronizes both
+thread-locals via the OTel bridge.
+
+Resulting span tree per inbound message:
+
+```
+upstream publisher span (extracted from traceparent header)
+└─ <workflow>.inbound        (CONSUMER, started by SolaceContextPropagation)
+   └─ <@Observed>            (compact-message / lookup-request /
+                              replay-command / bulk-replay /
+                              delete-command)
+      └─ ... nested work spans
+```
+
+**Outbound side.** All publish call sites stamp the active context
+onto outbound user properties:
+
+| Path | How |
+|---|---|
+| {DirectAuditPublisher.publishAudit} (compaction audit) | {SolaceContextPropagation.injectInto(SDTMap)} writes {traceparent}/{tracestate} into JCSMP user properties before {producer.send}. |
+| {DirectAuditPublisher.publishJsonDirect} (BULK_REPLAY summary, DELETE summary, command-failure doc) | Same. |
+| {DirectAuditPublisher.publishDirectBytes} (lookup reply) | Same. |
+| {BulkReplayService.buildReplayMessage} (BULK_REPLAY fan-out via output-3) | {SolaceContextPropagation.currentContextAsHeaders().forEach(builder::setHeader)}; the Solace binder copies the headers into user properties on send. |
+| {CommandConsumerInterceptor.handleSingleReplay} (single REPLAY via output-3) | Same as bulk fan-out. |
+
+**Broker-side spans.** The MI's inject / extract is necessary but
+not sufficient for the full picture. To see broker-receive and
+broker-egress spans linked into the same trace, enable Solace
+PubSub+ Distributed Tracing on the broker:
+
+- **Solace Cloud:** Cluster Manager -> Service -> Distributed
+  Tracing tab -> create a Telemetry Profile with the same OTLP
+  collector endpoint the MI uses. Sampling and authentication are
+  configured per profile.
+- **Self-hosted PubSub+:** configure {tracing.span.batch} +
+  {tracing.span.endpoint} via SEMP v2 or the broker CLI per the
+  PubSub+ Distributed Tracing reference. The broker exports OTLP
+  spans for its receive + egress pipeline parented on the
+  {traceparent} carried in the user properties.
+
+**Upstream publisher requirements.** The MI propagates whatever
+arrives. To make traces actually start at the application, the
+upstream publisher must inject {traceparent} too:
+
+- **Spring Boot + PubSub+ Messaging API:** add
+  {com.solace:pubsubplus-opentelemetry-java-integration} and use
+  the {SolacePubSubPlusJavaTextMapSetter}.
+- **JCSMP directly:** equivalent inject manually using the same
+  W3C propagator and an {SDTMap} setter (see this MI's
+  {SolaceContextPropagation} for a reference implementation -
+  it's about 30 lines).
+- **REST publish:** set the header
+  {Solace-User-Property-traceparent: 00-<trace-id>-<span-id>-01}
+  on the HTTP request. The Solace REST gateway forwards
+  {Solace-User-Property-*} headers as Solace user properties.
+
+**No-op behaviour.** When the upstream is uninstrumented:
+
+- The MI's consumer interceptor sees no {traceparent} -> the
+  extracted context is {Context.current()} unchanged -> the MI's
+  {@Observed} spans are trace roots as before.
+- The MI's outbound publishes still inject the active span's
+  context, so downstream consumers can pick up the trace from
+  the MI side onwards.
+
+This degrades gracefully: every operator can adopt context
+propagation incrementally without breaking existing flows.
 
 ### Verifying the pipeline
 

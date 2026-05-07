@@ -13,7 +13,7 @@ metadata:
   labels:
     app.kubernetes.io/name: topic-compaction-mi
     app.kubernetes.io/component: workload
-    app.kubernetes.io/version: "1.1.4"
+    app.kubernetes.io/version: "1.2.0"
     app.kubernetes.io/part-of: solace-micro-integrations
 spec:
   replicas: 1
@@ -29,7 +29,7 @@ spec:
       labels:
         app.kubernetes.io/name: topic-compaction-mi
         app.kubernetes.io/component: workload
-        app.kubernetes.io/version: "1.1.4"
+        app.kubernetes.io/version: "1.2.0"
       annotations:
         # Trigger rollout when the ConfigMap content changes; populated
         # by start.sh.
@@ -47,7 +47,7 @@ spec:
         - name: registry-solace-lab-pull
       containers:
         - name: topic-compaction-mi
-          image: registry.solace.lab/sam-topic-compaction-mi:1.1.4
+          image: registry.solace.lab/sam-topic-compaction-mi:1.2.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -77,7 +77,7 @@ spec:
             - name: OTEL_SERVICE_NAME
               value: "topic-compaction-mi"
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.namespace=mi-solace-lab,service.version=1.1.4"
+              value: "service.namespace=mi-solace-lab,service.version=1.2.0"
           envFrom:
             - secretRef:
                 name: topic-compaction-mi-secret

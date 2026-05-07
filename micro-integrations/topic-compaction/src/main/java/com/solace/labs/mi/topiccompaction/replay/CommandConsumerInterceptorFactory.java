@@ -6,6 +6,8 @@ import com.solace.labs.mi.topiccompaction.command.CommandEvent;
 import com.solace.labs.mi.topiccompaction.command.CommandEventParser;
 import com.solace.labs.mi.topiccompaction.compaction.DirectAuditPublisher;
 import com.solace.labs.mi.topiccompaction.delete.DeleteCommandService;
+import com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation;
+import com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation.InboundScope;
 import com.solace.labs.mi.topiccompaction.util.AckHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,6 +81,7 @@ public class CommandConsumerInterceptorFactory
     private final DirectAuditPublisher publisher;
     private final StreamBridge streamBridge;
     private final ReplayProperties properties;
+    private final SolaceContextPropagation propagation;
 
     public CommandConsumerInterceptorFactory(
             CommandEventParser parser,
@@ -87,7 +90,8 @@ public class CommandConsumerInterceptorFactory
             DeleteCommandService deleteCommandService,
             DirectAuditPublisher publisher,
             StreamBridge streamBridge,
-            ReplayProperties properties) {
+            ReplayProperties properties,
+            SolaceContextPropagation propagation) {
         this.parser = parser;
         this.replayService = replayService;
         this.bulkReplayService = bulkReplayService;
@@ -95,6 +99,7 @@ public class CommandConsumerInterceptorFactory
         this.publisher = publisher;
         this.streamBridge = streamBridge;
         this.properties = properties;
+        this.propagation = propagation;
     }
 
     @Override
@@ -122,6 +127,17 @@ public class CommandConsumerInterceptorFactory
 
         @Override
         public Message<?> after(Message<?> message) {
+            // V1.2.0: extract upstream W3C trace context, start a
+            // CONSUMER receive span. Replay/summary publishes below
+            // inherit and inject the trace context into outbound
+            // user properties.
+            try (InboundScope ignored = propagation.extractAndStart(
+                    message, "command.inbound")) {
+                return doDispatch(message);
+            }
+        }
+
+        private Message<?> doDispatch(Message<?> message) {
             byte[] commandBytes = bytesFrom(message);
             CommandEvent event;
             try {
@@ -195,6 +211,9 @@ public class CommandConsumerInterceptorFactory
             if (correlationId != null) {
                 b.setHeader("x-original-correlation-id", correlationId);
             }
+            // V1.2.0: propagate active W3C trace context so the
+            // single-key replay subscriber continues the trace.
+            propagation.currentContextAsHeaders().forEach(b::setHeader);
             try {
                 streamBridge.send(BulkReplayService.FANOUT_BINDING,
                         b.build());

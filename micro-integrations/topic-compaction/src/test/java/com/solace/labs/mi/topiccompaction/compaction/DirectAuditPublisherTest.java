@@ -54,7 +54,10 @@ class DirectAuditPublisherTest {
         session = mock(JCSMPSession.class);
         producer = mock(XMLMessageProducer.class);
 
-        publisher = new DirectAuditPublisher(baseProperties, objectMapper, properties);
+        publisher = new DirectAuditPublisher(baseProperties, objectMapper, properties,
+                new com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation(
+                        io.micrometer.tracing.Tracer.NOOP,
+                        io.micrometer.tracing.propagation.Propagator.NOOP));
         // Bypass @PostConstruct - we inject the producer directly
         // because we don't want the test to talk to a real broker.
         injectField(publisher, "session", session);

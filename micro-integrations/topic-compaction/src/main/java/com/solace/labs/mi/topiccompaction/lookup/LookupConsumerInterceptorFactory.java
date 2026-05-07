@@ -3,6 +3,8 @@ package com.solace.labs.mi.topiccompaction.lookup;
 import com.solace.connector.core.customizer.ConsumerBindingMessageInterceptor;
 import com.solace.connector.core.customizer.ConsumerBindingMessageInterceptorFactory;
 import com.solace.labs.mi.topiccompaction.compaction.DirectAuditPublisher;
+import com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation;
+import com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation.InboundScope;
 import com.solace.labs.mi.topiccompaction.util.AckHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,13 +55,16 @@ public class LookupConsumerInterceptorFactory
     private final LookupService service;
     private final DirectAuditPublisher publisher;
     private final LookupProperties properties;
+    private final SolaceContextPropagation propagation;
 
     public LookupConsumerInterceptorFactory(LookupService service,
                                              DirectAuditPublisher publisher,
-                                             LookupProperties properties) {
+                                             LookupProperties properties,
+                                             SolaceContextPropagation propagation) {
         this.service = service;
         this.publisher = publisher;
         this.properties = properties;
+        this.propagation = propagation;
     }
 
     @Override
@@ -86,6 +91,16 @@ public class LookupConsumerInterceptorFactory
     private final class Interceptor implements ConsumerBindingMessageInterceptor {
         @Override
         public Message<?> after(Message<?> message) {
+            // V1.2.0: extract upstream W3C trace context from the
+            // request, start a CONSUMER receive span. The DIRECT
+            // reply inherits and injects the trace context.
+            try (InboundScope ignored = propagation.extractAndStart(
+                    message, "lookup.inbound")) {
+                return doResolve(message);
+            }
+        }
+
+        private Message<?> doResolve(Message<?> message) {
             try {
                 LookupService.Result result = service.resolve(message);
 

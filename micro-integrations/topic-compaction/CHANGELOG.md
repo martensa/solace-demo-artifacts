@@ -9,6 +9,143 @@ to [Semantic Versioning][semver].
 [kac]: https://keepachangelog.com/en/1.1.0/
 [semver]: https://semver.org/spec/v2.0.0.html
 
+## [1.2.0] - 2026-05-07
+
+End-to-end W3C trace context propagation across Solace messages.
+Closes the gap on V1.1.x's internal-only tracing: every span the
+MI emits now links to its upstream publisher's trace and stamps its
+trace ids onto its own outbound publishes so downstream subscribers
+continue the trace.
+
+### Added
+
+- {observability.SolaceContextPropagation}: Spring component that
+  wraps Micrometer Tracing's {Tracer} + {Propagator} so the MI's
+  consumer / publisher hot paths can speak the W3C trace-context
+  protocol against Solace user properties. Three carrier shapes
+  cover all MI traffic patterns:
+  - {Propagator.Getter<Message<?>>} reads trace headers from
+    inbound Spring Messages (Solace user properties surface as
+    headers via the Solace binder's
+    {SmfMessageHeaderWriteCompatibility}).
+  - {Propagator.Setter<SDTMap>} writes trace headers onto outbound
+    JCSMP user properties for the {DirectAuditPublisher}'s
+    DELIVERY-DIRECT path.
+  - {Propagator.Setter<Map<String,String>>} for snapshotting the
+    current context as a header bag suitable for Spring Message
+    builders, used by StreamBridge call sites where the binder
+    forwards Spring headers into Solace user properties.
+  Convenience methods:
+  - {extractAndStart(Message, workflowName)} returns an
+    {InboundScope} (try-with-resources) which extracts the
+    upstream context, starts a CONSUMER-kind receive span via
+    {Tracer.withSpan}, and ends both on close.
+  - {injectInto(SDTMap)} stamps the current trace context onto a
+    JCSMP user-property map.
+  - {currentContextAsHeaders()} returns a {Map} ready to forward
+    into a {MessageBuilder.setHeader} loop.
+
+  Why Micrometer rather than raw OpenTelemetry: the {@Observed}
+  annotations resolve their parent via Micrometer's
+  {ObservationRegistry} thread-local. Activating an OTel
+  {Context.makeCurrent()} alone does not update Micrometer's
+  thread-local, so {@Observed} spans become trace roots even when
+  an OTel context is active. The OTel-bridge keeps the two
+  thread-locals in sync only when entering via Micrometer's
+  {Tracer.withSpan}. Routing through Micrometer guarantees the
+  upstream context is the parent of every {@Observed} span.
+
+### Changed
+
+- All three consumer interceptors
+  ({CompactionConsumerInterceptor},
+  {CommandConsumerInterceptor},
+  {LookupConsumerInterceptor}) now wrap their work in a try-with-
+  resources block over {SolaceContextPropagation.extractAndStart}.
+  Resulting per-inbound span tree:
+
+  ```
+  upstream publisher span        (extracted from traceparent)
+  └─ <workflow>.inbound          (CONSUMER, started by helper)
+     └─ <@Observed work span>    (compact-message etc.)
+        └─ ... nested spans
+  ```
+
+  When the inbound has no {traceparent} header (uninstrumented
+  publisher), the receive span becomes a trace root and behaviour
+  is unchanged from V1.1.x.
+
+- {DirectAuditPublisher}'s three publish methods
+  ({publishAudit}, {publishJsonDirect},
+  {publishDirectBytes}) now always allocate the
+  {SDTMap} user-property carrier and call
+  {SolaceContextPropagation.injectInto} before
+  {producer.send}. Audits / summaries / lookup replies carry
+  W3C trace headers regardless of whether other user properties
+  are set.
+
+- {BulkReplayService.buildReplayMessage} and
+  {CommandConsumerInterceptor.handleSingleReplay} stamp
+  {currentContextAsHeaders()} onto the Spring Message before the
+  StreamBridge call. The Solace binder copies these headers into
+  Solace user properties on send.
+
+### Test infrastructure
+
+- New {SolaceContextPropagationTest} (6 cases) using
+  {Tracer.NOOP} + {Propagator.NOOP} to verify the helper's
+  defensive contract: never throws on null carriers, returns
+  empty when no span is active, hands back a usable
+  {InboundScope}, idempotent close. Realistic
+  inject/extract behaviour against a running broker is verified
+  end-to-end live.
+
+- Existing tests for {BulkReplayService},
+  {DirectAuditPublisher}, {ReplayProducerInterceptor} and
+  {EndToEndIntegrationTest} updated to pass {Tracer.NOOP} +
+  {Propagator.NOOP} as the new {SolaceContextPropagation}
+  constructor argument.
+
+Total test count: 122 (was 116) + 3 Testcontainers integration
+tests, JaCoCo coverage gate met.
+
+### Lab verification
+
+End-to-end propagation verified live: a REST publish to
+{POST $SOLACE_REST_HOST/<topic>} with header
+{Solace-User-Property-traceparent:
+00-0011223344556677889900112233aabb-ccddeeff00112233-01}
+produced a Jaeger trace under the synthesized
+upstream traceID with two parent-child levels:
+{compaction.inbound} -> {compact-message}, plus the audit
+cascade as a sibling pair of receive + skipped-loop spans.
+
+### Operator note: Solace PubSub+ Distributed Tracing
+
+The MI's inject / extract is necessary but not sufficient for the
+full end-to-end picture. To see broker-side hops
+({BROKER_RECEIVE} / {BROKER_EGRESS} spans) in the same trace,
+enable Solace PubSub+ Distributed Tracing on the broker:
+
+- Solace Cloud: Cluster Manager -> Service -> "Distributed Tracing"
+  tab -> create a Telemetry Profile pointing at the same OTLP
+  collector the MI uses.
+- Self-hosted broker: configure {tracing.span.batch}
+  + {tracing.span.endpoint} via SEMP or CLI per the Solace
+  PubSub+ Distributed Tracing reference.
+
+The broker emits its own spans, parented onto the
+{traceparent} the MI propagates, so the resulting trace tree in
+Jaeger / Tempo shows publisher -> broker-receive -> broker-egress
+-> MI consumer -> MI audit-publish -> broker-receive -> ...
+
+Operators using SMF / JCSMP publishers from the application side
+should ensure their publish path either uses the
+{pubsubplus-opentelemetry-java-integration} library (PubSub+
+Messaging API) or implements equivalent W3C header injection.
+REST publishers can set {Solace-User-Property-traceparent: 00-...}
+manually if their HTTP client has access to the active span.
+
 ## [1.1.4] - 2026-05-07
 
 Bug fix on top of V1.1.3. Same architectural pattern, applied to

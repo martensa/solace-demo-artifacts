@@ -107,7 +107,10 @@ class EndToEndIntegrationTest {
                     return true;
                 });
         bulkReplayService = new BulkReplayService(
-                kvStore, replayProps, streamBridge, metrics);
+                kvStore, replayProps, streamBridge, metrics,
+                new com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation(
+                        io.micrometer.tracing.Tracer.NOOP,
+                        io.micrometer.tracing.propagation.Propagator.NOOP));
 
         deleteService = new DeleteCommandService(kvStore, metrics);
         backupService = new BackupService(kvStore, objectMapper);

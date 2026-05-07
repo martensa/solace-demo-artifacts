@@ -46,7 +46,10 @@ class BulkReplayServiceTest {
         CompactionMetrics metrics = new CompactionMetrics(
                 new SimpleMeterRegistry(), kvStore);
         service = new BulkReplayService(
-                kvStore, props, streamBridge, metrics);
+                kvStore, props, streamBridge, metrics,
+                new com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation(
+                        io.micrometer.tracing.Tracer.NOOP,
+                        io.micrometer.tracing.propagation.Propagator.NOOP));
     }
 
     @Test

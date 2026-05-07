@@ -9,6 +9,7 @@ import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation;
 import com.solacesystems.jcsmp.SDTMap;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -64,16 +65,19 @@ public class DirectAuditPublisher {
     private final JCSMPProperties baseProperties;
     private final ObjectMapper objectMapper;
     private final CompactionProperties properties;
+    private final SolaceContextPropagation propagation;
 
     private volatile JCSMPSession session;
     private volatile XMLMessageProducer producer;
 
     public DirectAuditPublisher(JCSMPProperties baseProperties,
                                  ObjectMapper objectMapper,
-                                 CompactionProperties properties) {
+                                 CompactionProperties properties,
+                                 SolaceContextPropagation propagation) {
         this.baseProperties = baseProperties;
         this.objectMapper = objectMapper;
         this.properties = properties;
+        this.propagation = propagation;
     }
 
     @PostConstruct
@@ -184,12 +188,18 @@ public class DirectAuditPublisher {
             // defence-in-depth: any future operator subscribing
             // an audit-replay queue with the data subscription
             // pattern still gets the loop-skip behaviour for free.
+            //
+            // V1.2.0: also inject the active W3C trace context
+            // (traceparent / tracestate / baggage) so downstream
+            // audit subscribers see the audit span as a child of
+            // the inbound's trace.
+            SDTMap userProps = JCSMPFactory.onlyInstance().createMap();
             String loopHeader = properties.getLoopProtectionHeader();
             if (loopHeader != null && !loopHeader.isBlank()) {
-                SDTMap userProps = JCSMPFactory.onlyInstance().createMap();
                 userProps.putBoolean(loopHeader, true);
-                msg.setProperties(userProps);
             }
+            propagation.injectInto(userProps);
+            msg.setProperties(userProps);
 
             String auditTopic = topic + properties.getAuditSuffix();
             Topic dest = JCSMPFactory.onlyInstance().createTopic(auditTopic);
@@ -253,8 +263,11 @@ public class DirectAuditPublisher {
             if (correlationId != null && !correlationId.isBlank()) {
                 msg.setCorrelationId(correlationId);
             }
-            if (userProperties != null && !userProperties.isEmpty()) {
-                SDTMap sdt = JCSMPFactory.onlyInstance().createMap();
+            // V1.2.0: always allocate the SDT map so we can inject
+            // the trace context, even if the caller passed no
+            // explicit user properties.
+            SDTMap sdt = JCSMPFactory.onlyInstance().createMap();
+            if (userProperties != null) {
                 for (java.util.Map.Entry<String, Object> e :
                         userProperties.entrySet()) {
                     Object v = e.getValue();
@@ -269,8 +282,10 @@ public class DirectAuditPublisher {
                         sdt.putString(e.getKey(), v.toString());
                     }
                 }
-                msg.setProperties(sdt);
             }
+            propagation.injectInto(sdt);
+            msg.setProperties(sdt);
+
             Topic dest = JCSMPFactory.onlyInstance().createTopic(topic);
             producer.send(msg, dest);
         } catch (JCSMPException | RuntimeException e) {
@@ -313,12 +328,16 @@ public class DirectAuditPublisher {
             msg.setHTTPContentType("application/json");
             msg.setDeliveryMode(DeliveryMode.DIRECT);
 
+            // V1.2.0: always allocate the user-property map and
+            // inject the W3C trace context. Add the optional
+            // correlation-id only if provided.
+            SDTMap userProps = JCSMPFactory.onlyInstance().createMap();
             if (correlationId != null && !correlationId.isBlank()) {
-                SDTMap userProps = JCSMPFactory.onlyInstance().createMap();
                 userProps.putString("x-original-correlation-id",
                         correlationId);
-                msg.setProperties(userProps);
             }
+            propagation.injectInto(userProps);
+            msg.setProperties(userProps);
 
             Topic dest = JCSMPFactory.onlyInstance().createTopic(topic);
             producer.send(msg, dest);

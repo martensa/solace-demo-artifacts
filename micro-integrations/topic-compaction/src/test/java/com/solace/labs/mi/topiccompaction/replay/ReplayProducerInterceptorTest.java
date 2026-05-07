@@ -47,7 +47,10 @@ class ReplayProducerInterceptorTest {
                 org.mockito.Mockito.mock(
                         org.springframework.cloud.stream.function
                                 .StreamBridge.class),
-                metrics);
+                metrics,
+                new com.solace.labs.mi.topiccompaction.observability.SolaceContextPropagation(
+                        io.micrometer.tracing.Tracer.NOOP,
+                        io.micrometer.tracing.propagation.Propagator.NOOP));
         DeleteCommandService deleteService =
                 new DeleteCommandService(kvStore, metrics);
         factory = new ReplayProducerInterceptorFactory(

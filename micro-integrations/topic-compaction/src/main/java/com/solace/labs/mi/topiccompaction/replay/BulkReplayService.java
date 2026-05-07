@@ -65,15 +65,20 @@ public class BulkReplayService {
     private final ReplayProperties properties;
     private final StreamBridge streamBridge;
     private final CompactionMetrics metrics;
+    private final com.solace.labs.mi.topiccompaction.observability
+            .SolaceContextPropagation propagation;
 
     public BulkReplayService(KvStore kvStore,
                              ReplayProperties properties,
                              StreamBridge streamBridge,
-                             CompactionMetrics metrics) {
+                             CompactionMetrics metrics,
+                             com.solace.labs.mi.topiccompaction.observability
+                                     .SolaceContextPropagation propagation) {
         this.kvStore = kvStore;
         this.properties = properties;
         this.streamBridge = streamBridge;
         this.metrics = metrics;
+        this.propagation = propagation;
     }
 
     @Observed(name = "replay.bulk",
@@ -186,6 +191,12 @@ public class BulkReplayService {
         if (correlationId != null) {
             b.setHeader("x-original-correlation-id", correlationId);
         }
+        // V1.2.0: stamp the active W3C trace context onto the
+        // replay message. Spring Cloud Stream Solace binder copies
+        // these headers into Solace user properties on send, so the
+        // downstream subscriber sees traceparent / tracestate /
+        // baggage and can continue the trace.
+        propagation.currentContextAsHeaders().forEach(b::setHeader);
         return b.build();
     }
 
