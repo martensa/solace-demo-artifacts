@@ -15,7 +15,19 @@ import java.util.Set;
  *   loop-protection-header: x-compacted-replay
  *   ordering:
  *     header: ""                # empty = always-last-wins; e.g. "senderTimestamp"
+ *   audit:
+ *     enabled: true             # emit audit events on the audit-suffix topic
+ *     client-name-suffix: -audit
  * </pre>
+ *
+ * <p>V1.1.0 changes audit emission semantics: audits are now fired
+ * via {@code DirectAuditPublisher} on a separate JCSMP session with
+ * {@code DeliveryMode.DIRECT}. The legacy output-0 PERSISTENT path
+ * via the binder is suppressed because (a) the binder hardcodes
+ * PERSISTENT in {@code XMLMessageMapper.mapToSmf}, (b) the broker
+ * silently discards JCSMP-from-MI-client publishes that route back
+ * to the same queue, and (c) audit is fire-and-forget observability
+ * - it must not gate the consumer-ack on the inbound message.
  */
 @ConfigurationProperties(prefix = "topic-compaction.compaction")
 public class CompactionProperties {
@@ -40,6 +52,8 @@ public class CompactionProperties {
 
     private final Ordering ordering = new Ordering();
 
+    private final Audit audit = new Audit();
+
     public Set<String> getBindingNames() { return bindingNames; }
     public void setBindingNames(Set<String> bindingNames) { this.bindingNames = bindingNames; }
     public String getAuditSuffix() { return auditSuffix; }
@@ -47,6 +61,7 @@ public class CompactionProperties {
     public String getLoopProtectionHeader() { return loopProtectionHeader; }
     public void setLoopProtectionHeader(String h) { this.loopProtectionHeader = h; }
     public Ordering getOrdering() { return ordering; }
+    public Audit getAudit() { return audit; }
 
     /**
      * Optional sender-supplied ordering. When {@link #header} names a Solace user
@@ -63,5 +78,58 @@ public class CompactionProperties {
         public boolean enabled() {
             return header != null && !header.isBlank();
         }
+    }
+
+    /**
+     * Audit emission configuration (V1.1.0+).
+     *
+     * <p>When {@link #enabled} is true the {@code DirectAuditPublisher}
+     * fires a fire-and-forget audit event on
+     * {@code <topic><audit-suffix>} via a SEPARATE JCSMP session with
+     * {@code DeliveryMode.DIRECT}. The session is opened once at
+     * startup and reused for the lifetime of the application;
+     * failures are logged but never fail the consumer-ack on the
+     * inbound message.
+     *
+     * <p>When false: no audit emission, no separate session, no
+     * publisher attached. The compaction workflow becomes pure
+     * input-0 -> KV (no observable side effect on the broker
+     * besides the inbound consumer-ack itself).
+     */
+    public static class Audit {
+        /**
+         * Master switch. Default {@code true} for backward-compat.
+         * Operators who don't consume the audit topic should flip
+         * this to {@code false} to remove the publish overhead and
+         * the entire publish-failure-discovery surface.
+         */
+        private boolean enabled = true;
+
+        /**
+         * Suffix appended to the binder-managed JCSMP client name
+         * for the audit publisher's separate session. Decoupling
+         * the client name is required so that the broker treats
+         * the audit publish as coming from a DIFFERENT client than
+         * the one consuming {@code compaction.data} - this avoids
+         * the same-session publish-discard observed in V1.0.x with
+         * Solace Cloud 10.x brokers.
+         */
+        private String clientNameSuffix = "-audit";
+
+        /**
+         * Connect timeout for the audit session, in milliseconds.
+         * Conservative default; failures here are logged at WARN
+         * during startup but do not block the application.
+         */
+        private long connectTimeoutMillis = 10_000L;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean v) { this.enabled = v; }
+
+        public String getClientNameSuffix() { return clientNameSuffix; }
+        public void setClientNameSuffix(String v) { this.clientNameSuffix = v; }
+
+        public long getConnectTimeoutMillis() { return connectTimeoutMillis; }
+        public void setConnectTimeoutMillis(long v) { this.connectTimeoutMillis = v; }
     }
 }

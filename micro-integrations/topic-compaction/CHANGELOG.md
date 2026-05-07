@@ -9,6 +9,627 @@ to [Semantic Versioning][semver].
 [kac]: https://keepachangelog.com/en/1.1.0/
 [semver]: https://semver.org/spec/v2.0.0.html
 
+## [1.1.4] - 2026-05-07
+
+Bug fix on top of V1.1.3. Same architectural pattern, applied to
+the LOOKUP workflow - the last remaining workflow that still
+emitted via the binder publish path.
+
+### Fixed
+
+- **Lookup requests via Solace REST {@code /REQUESTS/...} timed
+  out 100% of the time.** The lookup workflow's output binding
+  (output-2) emits the response on the request's
+  {@code solace_replyTo} destination, which for Solace REST
+  request/reply is a temp queue with a DIRECT-only subscriber.
+  The binder publishes PERSISTENT, the broker silently discards
+  (no guaranteed endpoint), the publish-ack callback never fires,
+  and the inbound consumer-ack on the lookup request hangs for
+  the framework's {@code publish-timeout} window before the
+  broker redelivers up to {@code maxRedeliveryCount=5}. Lab
+  measurement: queue {@code ackedMsgCount=0}, every REST request
+  returned {@code 504 Reply Wait Timeout}.
+
+### Changed
+
+- New {@code LookupConsumerInterceptorFactory} attached to
+  {@code input-2}. Resolves the lookup synchronously, publishes
+  the response via the V1.1.0 {@code DirectAuditPublisher} - new
+  method {@code publishDirectBytes(topic, payload, contentType,
+  userProperties, correlationId)} - with
+  {@code DeliveryMode.DIRECT} matching the requestor's DIRECT
+  subscription. Manually flushes the consumer-ack via
+  {@code AckHelper}, returns null to suppress the workflow output.
+
+- {@code LookupProducerInterceptorFactory} reduced to a pure
+  suppressor. Returns {@code null} unconditionally so the binder
+  output-2 path no longer fires.
+
+- {@code DirectAuditPublisher.publishDirectBytes()}: new method.
+  Generic fire-and-forget DIRECT publish with arbitrary bytes,
+  optional content-type, optional user properties (Boolean /
+  Integer / Long / String type-aware), and optional JCSMP
+  correlation-id. Used by the lookup consumer interceptor to
+  echo the requestor's correlation-id back on the reply.
+
+### Operator note: OTEL Collector wiring
+
+The K8s deployment now points at {http://host.docker.internal:4317}
+by default to match the typical Rancher Desktop development setup
+where an OTEL Collector runs on the host via docker-compose. The
+{70-networkpolicy.yaml} grew an explicit egress rule for the Lima
+VM gateway range ({192.168.5.0/24} on ports {4317} / {4318}) -
+the previous Solace Cloud egress rule excluded all RFC1918 ranges,
+which had silently blocked the trace export.
+
+Switching to in-cluster Tempo or an external SaaS collector is a
+single {kubectl set env OTEL_EXPORTER_OTLP_ENDPOINT=...} away;
+{docs/OBSERVABILITY.md} has the full collector wiring matrix
+(in-cluster, host docker-compose, external SaaS, gRPC vs HTTP
+transport, sampling, vendor auth headers).
+
+A pre-existing inaccuracy in {docs/OBSERVABILITY.md} was
+corrected: span operation names in Jaeger / Tempo are the
+{@Observed} {contextualName} attribute, not the {name}. The doc
+now lists the correct mapping (e.g. {compact-message} for
+{CompactionService.compact}).
+
+### Operator note: Solace REST {@code /REQUESTS/...} is not reachable
+
+Lab verification surfaced an architectural detail not visible from
+the MI's source code: the Solace broker's REST gateway always
+publishes the request side of {@code /REQUESTS/...} as a Direct
+Message regardless of the {@code Solace-Delivery-Mode: persistent}
+header. The MI's lookup workflow consumes from a durable queue
+({@code compaction.lookup}), which only spools guaranteed traffic;
+Direct messages on the matching topic pattern flow past the queue
+without being captured. The lookup workflow is therefore the right
+implementation for SMF / JCSMP clients that publish PERSISTENT
+({@code DeliveryMode.PERSISTENT}) to
+{@code compacted/lookup/<key>}, but it is NOT reachable via the
+Solace REST {@code /REQUESTS/} endpoint.
+
+For curl-based smoke testing, the MI's own REST KV API at
+{@code GET /api/v1/kv/<key>} is the canonical entry point. It
+returns the stored payload as the response body with
+{@code x-compacted-topic} and {@code x-compacted-ingest-timestamp}
+headers, or {@code 404} for a miss. No Solace round-trip; sub-
+millisecond response. Documented in {@code README.md}'s
+"Quick smoke-test recipes" section.
+
+### Lab verification target
+
+For SMF / JCSMP PERSISTENT lookup callers (the workflow's intended
+client shape):
+
+- Lookup queue {@code redeliveredMsgCount} unchanged per request.
+- Lookup flow {@code ackedMsgCount} +1 per request.
+- Reply published DIRECT to the requestor's
+  {@code solace_replyTo}; visible on the
+  {@code topic-compaction-mi-audit} client's {@code dataRxMsgCount}
+  (the publisher session sends it).
+
+### Architecture summary after V1.1.4
+
+All four workflows now use the same consumer-side ack pattern:
+
+| Workflow | Inbound queue | Output | Ack mechanism |
+|---|---|---|---|
+| Compaction | compaction.data | DirectAuditPublisher (audit) | AckHelper.accept |
+| Replay - single REPLAY | compaction.commands | StreamBridge to output-3 (PERSISTENT) | AckHelper.accept |
+| Replay - BULK_REPLAY | compaction.commands | StreamBridge to output-3 + DirectAuditPublisher (summary) | AckHelper.accept |
+| Replay - DELETE | compaction.commands | DirectAuditPublisher (summary) | AckHelper.accept |
+| Lookup | compaction.lookup | DirectAuditPublisher (reply) | AckHelper.accept |
+
+The MI Framework's binder publish-ack chain is no longer in the
+critical path for any inbound message's consumer-ack. Workflows
+publish through routes that either:
+
+1. Have guaranteed subscribers provisioned (StreamBridge to
+   output-3 for replay messages where operators are expected to
+   subscribe a queue to {@code <key>/compacted}), OR
+2. Use DIRECT delivery to subscribers known to be online
+   (audit, command summaries, lookup replies).
+
+Failures in either path are logged but never block the inbound
+ack.
+
+## [1.1.3] - 2026-05-07
+
+Bug fix on top of V1.1.2. Same architectural pattern, applied to
+the SINGLE REPLAY path the V1.1.1 work missed.
+
+### Fixed
+
+- **SINGLE REPLAY commands triggered repeated republish to
+  {@code <key>/compacted}.** A user-reported observation: a single
+  {@code REPLAY} command produced the same replay payload arriving
+  repeatedly on {@code <key>/compacted}. Same root cause as
+  V1.1.1's BULK_REPLAY/DELETE bug: the workflow's output-1 binding
+  emits a PERSISTENT publish, the broker silently discards it when
+  no guaranteed subscriber is provisioned (typical for live debug
+  with TryMe DIRECT subscribers), the publish-ack callback never
+  fires, the inbound command-ack hangs, and the broker redelivers
+  the command up to {@code maxRedeliveryCount=5} - each redelivery
+  re-runs the replay.
+
+  V1.1.1 had deliberately left REPLAY on the workflow output-1
+  path under the assumption that operators would always provision
+  a guaranteed subscriber on the replay destination. In practice
+  the typical operator workflow uses TryMe (DIRECT-only) for live
+  validation, which leaves the publish-ack chain hanging.
+
+### Changed
+
+- {@code CommandConsumerInterceptorFactory.handleSingleReplay()}:
+  new method that runs {@link ReplayService#process(CommandEvent)}
+  on the consumer side, builds a {@code MessageBuilder}-backed
+  replay message with the destination + headers from the
+  {@code Decision}, and sends it via
+  {@link StreamBridge#send(String, Object)} to
+  {@code BulkReplayService.FANOUT_BINDING} (the existing
+  {@code output-3} fan-out binding). The command-ack is flushed
+  immediately via {@code AckHelper.accept()}; the replay publish
+  is fire-and-forget from the consumer's perspective.
+
+  This is the same pattern BULK_REPLAY uses for its fan-out (and
+  V1.1.0/V1.1.2 use for compaction): publish via
+  {@code StreamBridge}, ack via {@code AcknowledgmentCallback}.
+
+### Operator note: replay durability
+
+The V1.1.3 path still publishes PERSISTENT to
+{@code <key>/compacted}. If the operator's downstream subscriber
+isn't provisioned with a guaranteed endpoint (queue with
+matching subscription), the broker will discard the message - but
+the COMMAND will still be acked exactly once and the replay loop
+is broken. Operators who need replay-on-demand must subscribe a
+queue to {@code <key>/compacted} (or the configured
+{@code target-suffix}) BEFORE issuing the REPLAY command.
+
+### Lab verification target
+
+After this fix a single TryMe-published REPLAY command should
+produce **exactly one** message on {@code <key>/compacted} (or
+zero, if no subscriber is online), the command-queue's
+{@code redeliveredMsgCount} should be unchanged, and the
+command-flow's {@code ackedMsgCount} should increment by 1.
+
+## [1.1.2] - 2026-05-07
+
+Critical bug fix on top of V1.1.1. Same architectural principle,
+correct implementation.
+
+### Fixed
+
+- **Inbound messages were processed up to 6 times each.** A user-
+  reported observation: a single TryMe publish on
+  {@code orders/v110-final/test/A} produced 6 distinct audit
+  events with different {@code ingestTimestamp} values, all with
+  outcome {@code UPSERTED}. Lab confirmation: queue
+  {@code maxRedeliveryExceededDiscardedMsgCount} ticked up by 1
+  per inbound message, and the txFlow showed {@code ackedMsgCount=0}
+  - i.e. **the consumer never positively acknowledged a single
+  message**. Six = 1 initial delivery + {@code maxRedeliveryCount=5}
+  redeliveries before drop.
+
+  Root cause: V1.1.0 assumed that returning {@code null} from the
+  consumer-side {@code ConsumerBindingMessageInterceptor.after()}
+  implicitly ACKed the inbound message. It does not. The MI
+  Framework wraps the interceptor as a Spring Integration
+  {@code ChannelInterceptor#preSend}; per the Spring contract a
+  null return CANCELS the channel send, but the Solace binder's
+  {@code JCSMPInboundChannelAdapter} treats the cancelled send as
+  a delivery failure and the broker redelivers. The compaction
+  workflow's queue-drain symptom from the lab tests (txUnacked=0
+  within 470 ms) had been misread: the count dropped because the
+  broker stopped waiting for acks on NACKed messages, not because
+  the consumer had acked.
+
+  Fix: explicitly flush the inbound's
+  {@link org.springframework.integration.acks.AcknowledgmentCallback}
+  with {@code ACCEPT} BEFORE returning null from the consumer
+  interceptor. The Solace binder attaches a callback to every
+  inbound message header; calling {@code acknowledge(ACCEPT)}
+  positively acks the message at the broker (no redelivery), and
+  the subsequent null-return suppresses the workflow output as
+  before.
+
+### Added
+
+- New {@code com.solace.labs.mi.topiccompaction.util.AckHelper}
+  utility. Single static method {@code accept(message)} that:
+  - Looks up the {@code AcknowledgmentCallback} via the standard
+    Spring Integration header key
+    ({@code IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK
+    = "acknowledgmentCallback"});
+  - No-ops if the header is missing (defensive against
+    test/mock messages);
+  - No-ops if the callback is already in a final state
+    ({@code isAcknowledged()} guard);
+  - Catches any RuntimeException and logs at WARN so a flaky
+    callback never fails the consumer chain.
+
+### Changed
+
+- {@code CompactionConsumerInterceptorFactory.after()}: invokes
+  {@code AckHelper.accept(message)} after the KV upsert and the
+  {@code DirectAuditPublisher.publishAudit} call, before
+  returning null.
+
+- {@code CommandConsumerInterceptorFactory.after()}: invokes
+  {@code AckHelper.accept(message)} on the BULK_REPLAY, DELETE,
+  and parse-failure paths before returning null. The SINGLE
+  REPLAY path is unchanged - it returns the message so the
+  workflow's output binding fires the binder publish-ack chain,
+  which auto-flushes the inbound ack via the binder's normal
+  pattern.
+
+### Lab verification target
+
+After this fix a single TryMe publish on
+{@code orders/v110-final/test/A} should produce **exactly one**
+audit event on {@code orders/v110-final/test/A/compacted-ack},
+the queue's {@code redeliveredMsgCount} should be unchanged, and
+the txFlow's {@code ackedMsgCount} should increment by 1.
+
+### Operator note: DMQ routing
+
+Investigation deferred but documented: V1.1.1's lab data showed
+{@code maxRedeliveryExceededDiscardedMsgCount=635} and
+{@code maxRedeliveryExceededToDmqMsgCount=0}, and the
+{@code #DEAD_MSG_QUEUE} stayed at zero spool. The provisioner
+sets {@code deliveryCountEnabled=true} +
+{@code deadMsgQueue=#DEAD_MSG_QUEUE}, so the broker should route
+max-redel-exceeded messages to the DMQ. The published messages
+themselves may not be {@code dmqEligible} (the broker default
+when neither sender nor queue config sets it explicitly is
+non-DMQ-eligible). Tracking for V1.2.
+
+## [1.1.1] - 2026-05-06
+
+Bug fix on top of V1.1.0. Same architectural pattern, applied to
+the second binder publish path the V1.1.0 work missed.
+
+### Fixed
+
+- **`BULK_REPLAY` and `DELETE` command events were not being
+  acked.** The replay workflow's output binding (output-1) emits
+  three observability documents - the bulk-replay summary on
+  {@code topic-compaction/replay/bulk-result}, the delete summary
+  on {@code topic-compaction/delete/result}, and the failure doc on
+  {@code topic-compaction/replay/failed}. None of these typically
+  have a guaranteed subscriber provisioned (they are intended as
+  fire-and-forget operator observability). With nothing subscribed,
+  the broker silently discards the PERSISTENT publish (counter
+  {@code msgSpoolRxDiscardedMsgCount} on the MI client increments,
+  no NACK fires), the MI Framework's
+  {@code AsyncOutputSendingMessageHandler} waits the full
+  {@code publish-timeout} window, and the inbound consumer-ack on
+  the COMMAND event hangs. The command then redelivers up to
+  {@code maxRedeliveryCount=5}, re-running the bulk replay or
+  delete each time before the broker drops it. Lab measurement
+  confirmed this produced ~44 redeliveries per command on average.
+
+### Changed
+
+- New {@code CommandConsumerInterceptorFactory} attached to
+  {@code input-1}. Handles BULK_REPLAY, DELETE, and parse-failure
+  command events on the consumer side, fires the summary /
+  failure event fire-and-forget via the V1.1.0
+  {@code DirectAuditPublisher} (DIRECT delivery, separate JCSMP
+  session), and returns {@code null} from {@code after()} to
+  short-circuit the workflow's downstream channel send. The
+  inbound command-ack flushes within milliseconds. SINGLE REPLAY
+  still flows through to the producer interceptor unchanged
+  because {@code <key>/compacted} is durability-relevant.
+
+- {@code DirectAuditPublisher.publishJsonDirect(topic,
+  payloadObject, correlationId)}: new method for generic
+  fire-and-forget JSON observability events. The payload is
+  Jackson-serialised, sent with {@code DeliveryMode.DIRECT}, with
+  an optional {@code x-original-correlation-id} user property.
+  Used by the new command consumer interceptor for all three
+  summary topics.
+
+- {@code ReplayProducerInterceptorFactory}: still attached to
+  {@code output-1} but now only services the SINGLE REPLAY
+  command path. BULK_REPLAY, DELETE, and parse-failure branches
+  remain in the class as a defence-in-depth fallback in case the
+  consumer interceptor is bypassed (operator misconfig, direct
+  StreamBridge call), but in normal operation those branches no
+  longer fire because the consumer interceptor short-circuits.
+
+### Test infrastructure
+
+- Lab verification: BULK_REPLAY command, command-queue
+  {@code txUnackedMsgCount} drained from 1 to 0 within 470 ms (vs.
+  150 s + max-redel cycle in V1.1.0).
+- Unit suite unchanged - the existing
+  {@code ReplayProducerInterceptorTest} cases still pass because
+  the producer interceptor's behaviour is preserved on the
+  fall-through path.
+
+## [1.1.0] - 2026-05-06
+
+Architectural release. Decouples audit emission from the binder
+publish path, eliminating the V1.0.x stuck-spool symptom at the
+root rather than bounding it. Adds Testcontainers-based integration
+coverage and tightens the redelivery -> DMQ contract.
+
+### Architectural change: audit emission moved off the binder
+
+V1.0.x emitted audits via the Spring Cloud Stream Solace binder's
+output-0 path. The binder hardcodes outbound `DeliveryMode.PERSISTENT`
+in `XMLMessageMapper.mapToSmf` (binder 5.11.0), and the MI Framework's
+`AsyncOutputSendingMessageHandler` chains the consumer-ack on the
+inbound message to the publish-ack on the audit. With Solace Cloud
+10.x silently discarding JCSMP-from-MI-client publishes that route
+back to the same compaction queue, the consumer-ack stayed pinned
+in `txUnackedMsgCount` for the framework's full `publish-timeout`
+window - up to 10 minutes per inbound burst at the V1.0.0 default,
+30 s at V1.0.2's tightened default, and finally drained via the
+`maxRedeliveryCount` cycle (5 retries x 30 s = ~150 s).
+
+V1.1.0 moves audit emission to a SEPARATE JCSMP session with
+`DeliveryMode.DIRECT`. The consumer-ack on the inbound message is
+flushed as soon as the KV upsert completes - it has no dependency on
+the audit publish-ack. The audit itself is fire-and-forget
+observability: any publish failure is logged but never blocks the
+durability path.
+
+### Added
+
+- **`DirectAuditPublisher`** (new component). Manages a separate
+  JCSMP session with a distinct `clientName` (default suffix
+  `-audit`), opens an `XMLMessageProducer`, and publishes audit JSON
+  with `DeliveryMode.DIRECT`. Lifecycle hooks (`@PostConstruct`,
+  `@PreDestroy`) tie the session to the application lifecycle; a
+  failed startup logs WARN and leaves the publisher inert (audits
+  are dropped) rather than blocking application startup.
+  ([`compaction/DirectAuditPublisher.java`])
+
+- **`topic-compaction.compaction.audit` config block.** New
+  `enabled` flag (default `true`, backward-compat) lets operators
+  flip audit emission off entirely. New `client-name-suffix` and
+  `connect-timeout-millis` knobs tune the separate-session setup.
+  ([`compaction/CompactionProperties.java`])
+
+- **DMQ correctness in the broker provisioner.** Per-queue
+  `maxRedeliveryCount` (default 5), `deliveryCountEnabled` (default
+  `true` - critical, the V1.0.x default `false` caused max-redel
+  messages to be DROPPED instead of routed to the DMQ), and
+  `deadMsgQueue` (default `#DEAD_MSG_QUEUE`). The provisioner now
+  pre-creates each referenced DMQ and PATCHes existing queues to
+  apply the durability config on restart.
+  ([`provisioning/BrokerProvisioner.java`,
+  `provisioning/ProvisioningProperties.java`])
+
+- **Testcontainers integration test.** `DirectAuditPublisherIT`
+  spins up `solace/solace-pubsub-standard` via
+  `org.testcontainers:junit-jupiter`, opens both a publisher and a
+  subscriber session, and verifies that an audit message published
+  via `DirectAuditPublisher` arrives on the subscribed audit topic
+  within a sub-second budget. Runs in the failsafe
+  `integration-test` phase (`mvn verify`).
+
+### Changed
+
+- **`CompactionConsumerInterceptorFactory`**: `after()` now performs
+  the synchronous KV upsert, fires the audit via
+  `DirectAuditPublisher`, and **returns `null`** to short-circuit
+  the workflow's downstream channel send. The MI Framework wraps
+  the consumer interceptor as a Spring Integration
+  {@code ChannelInterceptor#preSend}; per the Spring contract, a
+  null return from {@code preSend} suppresses the send-to-channel,
+  which means the binder's
+  {@code AsyncOutputSendingMessageHandler} is never invoked and
+  the consumer-ack flushes as soon as
+  {@code JCSMPInboundChannelAdapter} sees this method return.
+  Result: end-to-end inbound-to-ack latency drops from
+  ~30 s (V1.0.2) / ~150 s (V1.0.x with max-redel cycle) to a
+  single-digit-millisecond KV write plus the JCSMP ack round-trip.
+  ([`compaction/CompactionConsumerInterceptorFactory.java`])
+
+- **`CompactionAuditProducerInterceptorFactory`**: rewritten as a
+  pure SUPPRESSOR. `before()` returns `null` for every message,
+  causing the binder to skip the publish on output-0 and complete
+  the consumer-ack chain successfully. Audit JSON construction is
+  no longer in this class.
+  ([`compaction/CompactionAuditProducerInterceptorFactory.java`])
+
+- **V1.0.2 binder tunings retained as defence-in-depth.**
+  `pub_ack_time=30000`, `pub_ack_window_size=50`, and
+  `publish-timeout=30000` are no longer on the critical path for
+  the compaction workflow (audits are off the binder), but they
+  remain the right defaults for the replay (output-1) and lookup
+  (output-2) workflows that DO publish via the binder.
+
+### Fixed
+
+- **DMQ now actually catches poison messages.** V1.0.x set
+  `maxRedeliveryCount=5` + `deadMsgQueue=#DEAD_MSG_QUEUE` on the
+  queue, but the broker default `deliveryCountEnabled=false` meant
+  max-redel-exceeded messages were silently DROPPED rather than
+  routed to the DMQ. The provisioner now sets
+  `deliveryCountEnabled=true` and PATCHes existing queues on every
+  startup so the upgrade is automatic.
+
+- **Consumer-ack drain time on inbound bursts.** Verified empirically
+  in the lab: 5-message inbound burst now drains
+  {@code txUnackedMsgCount} from 5 to 0 within ~470 ms, vs. ~30 s
+  in V1.0.2 and ~150 s in V1.0.x. KV consistency unchanged: every
+  inbound message is upserted exactly once before the consumer-ack
+  flushes; if the upsert throws, the ack is suppressed and the
+  message redelivers up to {@code maxRedeliveryCount=5} before the
+  broker routes it to {@code #DEAD_MSG_QUEUE}.
+
+### Operator note: audit-topic cascade is bounded but not eliminated
+
+The audit topic ({@code <topic>/compacted-ack}) still matches a
+broad data subscription pattern like {@code orders/>}, so the
+broker spool routes every audit publish back into
+{@code compaction.data}. With V1.1.0 the impact is bounded:
+
+- Each cascading audit is recognised as a loop by
+  {@code CompactionService.compact()} (the loop-protection header
+  is set by {@code DirectAuditPublisher}) and SKIPPED;
+- The consumer-ack on each cascading audit flushes immediately
+  (same null-return path as inbound);
+- The audit's audit suppression (V1.0.1 cascade-break,
+  preserved in {@code DirectAuditPublisher}) means no further
+  audit hops are generated.
+
+Operators who want to eliminate the audit cascade entirely have two
+options without touching the MI:
+
+1. Subscribe their compaction queue to a pattern that does NOT
+   cover the audit suffix - e.g. {@code orders/*/*} instead of
+   {@code orders/>}, or scope by message type.
+2. Set {@code topic-compaction.compaction.audit.enabled=false} if
+   they don't need the audit feed at all. This stops the publisher
+   entirely and removes the cascade source.
+
+### Test infrastructure
+
+- New unit test class `DirectAuditPublisherTest` with mocked
+  `XMLMessageProducer`. Covers: payload shape, DIRECT delivery
+  mode, loop-protection user property, `SKIPPED_LOOP` suppression,
+  fire-and-forget exception swallowing, blank-topic dropping,
+  audit-disabled short-circuit. 7 cases.
+- `CompactionAuditProducerInterceptorTest` rewritten for the
+  V1.1.0 suppressor contract: every outcome -> `null` from
+  `before()`. 3 cases.
+- New JaCoCo coverage exclusion for `DirectAuditPublisher`'s
+  `start()` / `stop()` methods (pure JCSMP wiring covered by the
+  Testcontainers integration test, not the unit suite).
+
+## [1.0.2] - 2026-05-05
+
+Tuning hotfix on top of V1.0.1. Resolves the `txUnackedMsgCount > 0`
+stuck-spool symptom observed after the V1.0.1 cascade fix landed:
+inbound messages were processed correctly (KV state up-to-date) but
+the consumer-ack on `compaction.data` lingered for several seconds
+before flushing. Root cause was the JCSMP publish-side timeout being
+hit on the audit publish, holding the binder's ack chain.
+
+### Changed
+
+- **`pub_ack_time`**: now `30000` ms (was JCSMP default `2000`).
+  The 2 s default is hostile under burst load: a 5-message ingress
+  burst regularly saw the trailing audit publishes time out before
+  the broker acked, even though the broker would have acked within
+  tens of milliseconds had it been polled. The publish-timeout fired
+  on the producer event handler, the binder routed the failure to
+  the error channel, and only then did the consumer-ack flush. Net
+  effect: `txUnackedMsgCount` and `msgSpoolUsage` lingered for
+  seconds even though every KV write had already succeeded. 30 s is
+  the operational "this is genuinely broken" threshold; under that,
+  transient broker slowness is absorbed cleanly.
+  ([`src/main/resources/application.yml`])
+
+- **`pub_ack_window_size`**: tightened from `255` to `50`. The
+  default window is sized for high-throughput streaming workloads;
+  the compaction MI is bounded by ingestion, not publish. A smaller
+  in-flight window lets the binder apply backpressure earlier on a
+  slow broker, instead of saturating the publisher buffer and
+  burning all of `pub_ack_time` to recover.
+  ([`src/main/resources/application.yml`])
+
+- **MI Framework `acknowledgment.publish-timeout`**: lowered from
+  the framework default `600000` ms (10 minutes) to `30000` ms
+  (30 s). This is the upper-bound timeout that
+  `AsyncOutputSendingMessageHandler` enforces before resolving the
+  consumer-ack with failure if no publish-ack callback fires.
+  Surfaced during V1.0.2 verification: with the V1.0.0/V1.0.1
+  audit-cascade still cleared but the audit topic
+  (`<topic>/compacted-ack`) routed back to the same `compaction.data`
+  queue, the broker silently discards the audit publish (counter
+  `msgSpoolRxDiscardedMsgCount` increments, but no JCSMP NACK fires).
+  Without an explicit failure callback, the MI Framework waited the
+  full 10-minute default before flushing the consumer-ack via the
+  error-channel - so `txUnackedMsgCount` stayed > 0 for 10 minutes
+  per inbound burst. 30 s aligns the framework timeout with
+  `pub_ack_time` and bounds the worst-case stuck-spool window. The
+  underlying broker-discard root cause is logged below for V1.1
+  follow-up.
+  ([`src/main/resources/application.yml`])
+
+### Investigation note: silent broker discard of audit publishes
+
+Verified empirically against Solace Cloud broker 10.x in the lab:
+when the audit topic pattern (`<topic>/compacted-ack`) matches the
+data subscription on the same compaction queue, every audit publish
+the MI emits via JCSMP is counted under the broker client's
+`msgSpoolRxDiscardedMsgCount` and never reaches the queue's
+`spooledMsgCount`. The broker neither completes the publish-ack nor
+fires a NACK, so JCSMP's `pub_ack_time` does not trigger - only the
+MI Framework's wall-clock `publish-timeout` eventually resolves the
+chain. With the binder NACKing the inbound on publish-failure, the
+message goes through the `maxRedeliveryCount=5` cycle (5 retries x
+30 s = ~150 s) before the broker drops it. The discards persist
+regardless of:
+
+- `consumerAckPropagationEnabled` (toggling to `false` did not
+  unblock).
+- `noLocal` flow flag (already `false`).
+- Queue ack-window state (well below `maxDeliveredUnackedMsgsPerFlow`).
+- ACL profile (default-allow on publish + subscribe).
+- VPN spool quota (335 B / 50 GB used).
+
+**Counter-test isolating the JCSMP-from-MI-client path.** A REST
+publish from the SOLACE_REST_HOST endpoint to a structurally
+identical topic
+(`orders/diag-audit/<ts>/X/compacted-ack`, marked
+`Solace-Delivery-Mode: persistent`) is **accepted**: queue
+`lastSpooledMsgId` advances, `spooledMsgCount` increments, the
+message is delivered to the MI consumer flow. Same broker, same
+VPN, same ACL profile, same matching subscription. The discard is
+specific to the publish coming from the MI's own JCSMP session
+(which is also the session subscribed to the queue). This narrows
+the V1.1 fix to a **separate** JCSMP session for audit publishes -
+sharing the consumer session would inherit the same discard
+behavior.
+
+The root cause at the broker layer is still unidentified. Working
+hypothesis: a per-client publisher-side rule kicks in when a
+PERSISTENT message published by client X would route back to a
+queue X is currently consuming with unacked messages. The 30 s
+`publish-timeout` plus 5x redelivery cap bounds the worst case to
+~150 s of stuck-spool per inbound burst, and V1.1's separate-session
+direct-audit publisher avoids the discard path entirely.
+
+### Deferred to V1.1
+
+- **Audit-publish via DIRECT delivery mode.** The Spring Cloud
+  Stream Solace binder hardcodes outbound `DeliveryMode.PERSISTENT`
+  in `XMLMessageMapper.mapToSmf()` (binder 5.11.0); there is no
+  per-binding producer property and no Spring header that overrides
+  this. A clean switch to DIRECT for the audit topic
+  (`<topic>/compacted-ack`) would require a parallel
+  `DirectAuditPublisher` bean that manages its own JCSMPSession and
+  XMLMessageProducer, bypassing the binder for this single path.
+  That is V1.1 work because (a) it owns its session lifecycle,
+  reconnect, and error handling rather than reusing the binder's
+  battle-tested plumbing, (b) it warrants Testcontainers-based
+  integration coverage before shipping, and (c) it removes the
+  dependency on the broker accepting the audit publish - DIRECT
+  bypasses the spool entirely. The PERSISTENT path is acceptable
+  in V1.0.x once the framework `publish-timeout` is realistic.
+
+- **JCSMP keep-alive interval tuning.** The
+  `ClientChannelProperties_KeepAliveIntervalInMillis` /
+  `..._KeepAliveLimit` pair lives on the
+  `JCSMPChannelProperties` sub-object, which is not reachable via
+  the `api-properties` text-marshaling path
+  (`JCSMPPropertiesTextMarshaling` logs "Skipping property key ...
+  unknown" for those keys). The right hook is a
+  `BeanPostProcessor<SpringJCSMPFactory>` that mutates the
+  underlying `JCSMPProperties.CLIENT_CHANNEL_PROPERTIES` object
+  before the session is created. The default 3 s / 3 = 9 s outage
+  detection is acceptable for V1.0.x; tightening it is a V1.1
+  hardening item.
+
 ## [1.0.1] - 2026-05-05
 
 Hotfix release. Resolves the audit cascade discovered after V1.0.0

@@ -1,64 +1,70 @@
 package com.solace.labs.mi.topiccompaction.compaction;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solace.connector.core.customizer.ProducerBindingMessageInterceptor;
 import com.solace.connector.core.customizer.ProducerBindingMessageInterceptorFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.ProducerProperties;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
-import org.springframework.messaging.support.GenericMessage;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Set;
 
 /**
- * Rewrites compaction-workflow output into an audit event:
+ * V1.1.0: pure suppressor on the binder's compaction output binding.
+ *
+ * <p>Earlier versions of this class built an audit JSON document
+ * and published it via the binder's PERSISTENT path on
+ * {@code output-N}. That coupled the consumer-ack on the inbound
+ * message to the audit publish-ack chain, and exposed the MI to a
+ * silent broker discard when the audit topic
+ * ({@code <topic>/compacted-ack}) routed back to the same
+ * compaction queue ({@code msgSpoolRxDiscardedMsgCount} counter
+ * incremented, no NACK fired, JCSMP {@code pub_ack_time} never
+ * triggered). Net effect: consumer-ack pinned in
+ * {@code txUnackedMsgCount} for the framework's full
+ * {@code publish-timeout} window.
+ *
+ * <p>V1.1.0 moves audit emission to the consumer-side interceptor
+ * via {@link DirectAuditPublisher} on a SEPARATE JCSMP session with
+ * {@code DeliveryMode.DIRECT}. The binder's output-0 path is now
+ * unused for compaction. This class still attaches as a producer
+ * interceptor, but it returns {@code null} from {@code before()}
+ * unconditionally so the binder skips the publish, the
+ * {@code AsyncOutputSendingMessageHandler} short-circuits its
+ * publish-ack-bound completable future, and the consumer-ack on
+ * the inbound message flushes as soon as the consumer-side
+ * interceptor returns.
+ *
+ * <p>The class is kept (rather than removed) for two reasons:
+ *
  * <ul>
- *   <li>Destination: {@code <original-topic><audit-suffix>}</li>
- *   <li>Payload: small JSON document describing the compaction outcome</li>
- *   <li>Headers: framework headers + compaction metadata + the
- *       loop-protection header. The original payload headers are
- *       dropped to keep the audit event lightweight.</li>
+ *   <li>The MI Framework workflow definition for compaction wires
+ *       {@code input-0 -> output-0}; without an interceptor
+ *       returning null, the binder would attempt to publish the
+ *       consumer-interceptor's enriched message on a placeholder
+ *       topic.</li>
+ *   <li>The hook is the right place to add a future telemetry
+ *       counter for "compaction publishes suppressed", in case
+ *       operators want to observe the binder-bypass count.</li>
  * </ul>
- *
- * <p><b>Loop protection.</b> The audit destination
- * {@code <topic>/compacted-ack} typically matches the broad
- * {@code orders/>} subscription on the compaction queue, so the
- * audit event would be re-consumed and re-audited indefinitely.
- * To break that cascade we set the same loop-protection header
- * that replay messages carry; {@link CompactionService} skips
- * inbound messages whose loop header is set. Bug surfaced in
- * V1.0.0; fixed in V1.0.1.
- *
- * <p>If the compaction service skipped the message (loop / out-of-
- * order / missing topic), the audit event is still emitted -
- * downstream observers can count skips. To suppress audit events
- * for skips entirely, configure the operator-side workflow to
- * filter via SpEL.
  */
 @Component
 public class CompactionAuditProducerInterceptorFactory implements ProducerBindingMessageInterceptorFactory {
 
     private static final Logger log = LoggerFactory.getLogger(CompactionAuditProducerInterceptorFactory.class);
-    private static final String SOLACE_DESTINATION_HEADER = "solace_destination";
 
     private final CompactionProperties properties;
-    private final ObjectMapper objectMapper;
     private final Set<String> outputBindingNames;
 
-    public CompactionAuditProducerInterceptorFactory(CompactionProperties properties, ObjectMapper objectMapper) {
+    public CompactionAuditProducerInterceptorFactory(CompactionProperties properties) {
         this.properties = properties;
-        this.objectMapper = objectMapper;
-        // Symmetrically derive the audit producer binding(s): for every input-N
-        // configured for compaction, attach to the matching output-N. This keeps
-        // operator config minimal: only declare the input bindings.
+        // Symmetrically derive the suppression target binding(s):
+        // for every input-N configured for compaction, suppress the
+        // matching output-N. This keeps operator config minimal:
+        // only declare the input bindings.
         this.outputBindingNames = new HashSet<>();
         for (String input : properties.getBindingNames()) {
             if (input.startsWith("input-")) {
@@ -77,8 +83,9 @@ public class CompactionAuditProducerInterceptorFactory implements ProducerBindin
         if (!outputBindingNames.contains(bindingName)) {
             return null;
         }
-        log.info("Attaching CompactionAuditInterceptor to Solace producer binding: {}", bindingName);
-        return new Interceptor();
+        log.info("Attaching CompactionPublishSuppressor to Solace producer binding: {} "
+                + "(audit emission moved to DirectAuditPublisher in V1.1.0)", bindingName);
+        return new Suppressor();
     }
 
     @Override
@@ -86,62 +93,18 @@ public class CompactionAuditProducerInterceptorFactory implements ProducerBindin
         return 0;
     }
 
-    private final class Interceptor implements ProducerBindingMessageInterceptor {
+    /**
+     * Returns {@code null} for every message. The framework treats a
+     * null return from {@code before()} as "no publish needed" and
+     * completes the consumer-ack chain successfully. No bytes leave
+     * the MI on the binder publish path; audits go via
+     * {@link DirectAuditPublisher} from the consumer-side
+     * interceptor.
+     */
+    private final class Suppressor implements ProducerBindingMessageInterceptor {
         @Override
         public Message<?> before(Message<?> message) {
-            String outcome = (String) message.getHeaders().getOrDefault(
-                    CompactionConsumerInterceptorFactory.COMPACTION_RESULT_HEADER,
-                    CompactionService.Outcome.UPSERTED.name());
-
-            // Cascade-break (V1.0.1): suppress audit emission for
-            // SKIPPED_LOOP outcomes. Loop-skipped messages are
-            // re-ingested copies of our own audits / replays;
-            // emitting a fresh audit just generates the next
-            // cascade hop (audit -> compacted-ack -> re-ingest ->
-            // SKIPPED_LOOP -> audit -> ...). Re-publishing to a
-            // topic that matches the data subscription pattern
-            // floods the publish window and starves real traffic.
-            if (CompactionService.Outcome.SKIPPED_LOOP.name()
-                    .equals(outcome)) {
-                return null;
-            }
-
-            String topic = (String) message.getHeaders().getOrDefault(
-                    CompactionConsumerInterceptorFactory.COMPACTION_TOPIC_HEADER, "");
-            Object sizeObj = message.getHeaders().get(
-                    CompactionConsumerInterceptorFactory.COMPACTION_SIZE_HEADER);
-            int sizeBytes = sizeObj instanceof Number n ? n.intValue() : 0;
-
-            Map<String, Object> auditPayload = new LinkedHashMap<>();
-            auditPayload.put("topic", topic);
-            auditPayload.put("outcome", outcome);
-            auditPayload.put("sizeBytes", sizeBytes);
-            auditPayload.put("ingestTimestamp", System.currentTimeMillis());
-
-            byte[] payloadBytes;
-            try {
-                payloadBytes = objectMapper.writeValueAsBytes(auditPayload);
-            } catch (JsonProcessingException e) {
-                throw new IllegalStateException("Failed to serialize audit payload", e);
-            }
-
-            String auditDestination = topic.isBlank()
-                    ? "topic-compaction/audit/no-topic"
-                    : topic + properties.getAuditSuffix();
-
-            Map<String, Object> auditHeaders = new LinkedHashMap<>();
-            auditHeaders.put(SOLACE_DESTINATION_HEADER, auditDestination);
-            auditHeaders.put(BinderHeaders.TARGET_DESTINATION, auditDestination);
-            auditHeaders.put("content-type", "application/json");
-            auditHeaders.put(CompactionConsumerInterceptorFactory.COMPACTION_RESULT_HEADER, outcome);
-            // V1.0.1 cascade-break: tag the audit itself with the
-            // loop-protection header so that if the audit destination
-            // matches the compaction data subscription (e.g.
-            // `orders/X/compacted-ack` matching `orders/>`), the
-            // re-ingested audit is recognised as a loop and SKIPPED.
-            auditHeaders.put(properties.getLoopProtectionHeader(), true);
-
-            return new GenericMessage<>(payloadBytes, auditHeaders);
+            return null;
         }
     }
 }

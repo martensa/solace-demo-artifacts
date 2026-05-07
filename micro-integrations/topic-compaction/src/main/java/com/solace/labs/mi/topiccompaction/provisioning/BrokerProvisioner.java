@@ -20,8 +20,10 @@ import org.springframework.web.client.RestClient;
 
 import java.net.URI;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Idempotent SEMPv2-driven queue and subscription provisioner.
@@ -32,9 +34,17 @@ import java.util.Map;
  * each queue:
  *
  * <ol>
- *   <li>{@code POST /SEMP/v2/config/msgVpns/{vpn}/queues} -
- *       {@code 200} = created, {@code 400} = already exists. Both
- *       are treated as success.</li>
+ *   <li>Ensures the configured {@code deadMsgQueue} exists (default
+ *       {@code #DEAD_MSG_QUEUE}). DMQs are deduplicated across all
+ *       configured queues so we don't issue redundant SEMP calls.</li>
+ *   <li>Creates the queue via
+ *       {@code POST /SEMP/v2/config/msgVpns/{vpn}/queues} (200 = ok,
+ *       400 = already exists, treated as success).</li>
+ *   <li>{@code PATCH}es the queue config to apply the V1.1.0
+ *       durability defaults: {@code deliveryCountEnabled=true},
+ *       {@code maxRedeliveryCount}, {@code deadMsgQueue}. PATCH is
+ *       idempotent and updates an existing queue without
+ *       re-creating subscriptions.</li>
  *   <li>For each subscription:
  *       {@code POST /SEMP/v2/config/msgVpns/{vpn}/queues/{q}/
  *       subscriptions} - same idempotency rule.</li>
@@ -88,9 +98,32 @@ public class BrokerProvisioner implements ApplicationRunner {
                 properties.getSemp().getUrl(),
                 properties.getQueues().size());
         boolean anyError = false;
+
+        // 1) Pre-create every distinct DMQ referenced by any queue.
+        //    DMQs are plain queues with no subscriptions; the broker
+        //    routes max-redel-exceeded messages to them.
+        Set<String> dmqs = new HashSet<>();
+        for (ProvisioningProperties.Queue q : properties.getQueues()) {
+            String dmq = q.getDeadMsgQueue();
+            if (dmq != null && !dmq.isBlank()) {
+                dmqs.add(dmq);
+            }
+        }
+        for (String dmq : dmqs) {
+            try {
+                createDmq(dmq);
+            } catch (Exception e) {
+                anyError = true;
+                log.error("BrokerProvisioner: dmq {} - {}",
+                        dmq, e.getMessage());
+            }
+        }
+
+        // 2) Create / update each operator-defined queue.
         for (ProvisioningProperties.Queue q : properties.getQueues()) {
             try {
                 createQueue(q);
+                applyQueueDurabilityConfig(q);
                 for (String sub : q.getSubscriptions()) {
                     addSubscription(q.getName(), sub);
                 }
@@ -117,6 +150,48 @@ public class BrokerProvisioner implements ApplicationRunner {
         body.put("accessType", q.getAccessType());
         callIdempotent(uri("/SEMP/v2/config/msgVpns/{vpn}/queues"),
                 body, "create queue " + q.getName());
+    }
+
+    /**
+     * V1.1.0: ensure each provisioned queue has the durability
+     * settings that make the redelivery -> DMQ path work end-to-end.
+     * Issued as a PATCH so an existing queue (e.g. left over from
+     * V1.0.x) gets its {@code deliveryCountEnabled} flipped to
+     * {@code true}.
+     */
+    private void applyQueueDurabilityConfig(ProvisioningProperties.Queue q) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("maxRedeliveryCount", q.getMaxRedeliveryCount());
+        body.put("deliveryCountEnabled", q.isDeliveryCountEnabled());
+        if (q.getDeadMsgQueue() != null
+                && !q.getDeadMsgQueue().isBlank()) {
+            body.put("deadMsgQueue", q.getDeadMsgQueue());
+        }
+        patchIdempotent(uri(
+                "/SEMP/v2/config/msgVpns/{vpn}/queues/" + q.getName()),
+                body, "configure durability " + q.getName());
+    }
+
+    /**
+     * Provision the broker's standard {@code #DEAD_MSG_QUEUE}.
+     * Created without subscriptions; the broker routes messages to
+     * it when a regular queue's {@code maxRedeliveryCount} is
+     * exceeded. {@code 400 already exists} is the happy path on
+     * restart.
+     */
+    private void createDmq(String name) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("queueName", name);
+        body.put("egressEnabled", true);
+        body.put("ingressEnabled", true);
+        body.put("accessType", "exclusive");
+        body.put("permission", "consume");
+        // DMQ stores the original (poison) message; turning delivery
+        // count tracking on is harmless and keeps the redelivery
+        // count visible if an operator drains the DMQ via a tool.
+        body.put("deliveryCountEnabled", true);
+        callIdempotent(uri("/SEMP/v2/config/msgVpns/{vpn}/queues"),
+                body, "create dmq " + name);
     }
 
     private void addSubscription(String queue, String topic) {
@@ -156,6 +231,41 @@ public class BrokerProvisioner implements ApplicationRunner {
                 log.debug("BrokerProvisioner: {} -> 400 "
                         + "(already exists, ignored)",
                         description);
+                return;
+            }
+            throw new IllegalStateException(description
+                    + ": HTTP " + e.getStatusCode() + " - "
+                    + e.getResponseBodyAsString(), e);
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    description + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * PATCHes an existing object on SEMP. Used to update config on
+     * a queue that already exists (idempotent reapply). Any 4xx
+     * other than 404 is treated as a hard failure.
+     */
+    private void patchIdempotent(URI uri, Map<String, Object> body,
+                                  String description) {
+        try {
+            String json = objectMapper.writeValueAsString(body);
+            HttpStatusCode status = restClient.patch()
+                    .uri(uri)
+                    .header(HttpHeaders.AUTHORIZATION,
+                            basicAuthHeader())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(json)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .getStatusCode();
+            log.info("BrokerProvisioner: {} -> HTTP {}",
+                    description, status.value());
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().value() == 404) {
+                log.debug("BrokerProvisioner: {} -> 404 "
+                        + "(not found, skipped)", description);
                 return;
             }
             throw new IllegalStateException(description

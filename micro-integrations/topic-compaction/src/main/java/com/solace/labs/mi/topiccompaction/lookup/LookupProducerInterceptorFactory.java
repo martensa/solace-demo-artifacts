@@ -4,43 +4,59 @@ import com.solace.connector.core.customizer.ProducerBindingMessageInterceptor;
 import com.solace.connector.core.customizer.ProducerBindingMessageInterceptorFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.ProducerProperties;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
-import org.springframework.messaging.support.GenericMessage;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Set;
 
 /**
- * Producer interceptor for the lookup workflow.
+ * V1.1.4: pure suppressor on the lookup output binding.
  *
- * <p>For each lookup request flowing through the workflow:
- * <ol>
- *   <li>Resolves the key via {@link LookupService#resolve}.</li>
- *   <li>Replaces the producer message's payload with the looked-up record (or a
- *       not-found document).</li>
- *   <li>Sets the destination to the original request's {@code solace_replyTo}.
- *       This implements Solace Request/Reply semantics through the MI's
- *       workflow model.</li>
- * </ol>
+ * <p>Earlier versions of this class performed the lookup
+ * synchronously and built the reply message for the binder to
+ * publish PERSISTENT on the requestor's {@code solace_replyTo}.
+ * That coupled the inbound consumer-ack on the request to the
+ * publish-ack on the reply, and Solace REST's
+ * {@code /REQUESTS/...} endpoint listens DIRECT on a temp reply
+ * queue - PERSISTENT publishes to a DIRECT-only subscriber are
+ * silently discarded by the broker
+ * ({@code msgSpoolRxDiscardedMsgCount} ticks, no NACK), the
+ * publish-ack callback never fires, and the lookup request hangs
+ * for the framework's {@code publish-timeout} window before the
+ * broker redelivers up to {@code maxRedeliveryCount=5}. Lab
+ * measurement: 100% of REST lookup requests timed out at the
+ * {@code 504} layer, with {@code ackedMsgCount=0} on the lookup
+ * flow.
+ *
+ * <p>V1.1.4 moves the lookup work to {@code
+ * LookupConsumerInterceptorFactory} on the consumer side and
+ * publishes the reply via the separate-session
+ * {@code DirectAuditPublisher.publishDirectBytes} (DIRECT
+ * delivery, matches the requestor's DIRECT subscription). The
+ * binder's output-2 path is now suppressed: this class returns
+ * {@code null} from {@code before()} so the binder skips the
+ * publish, the consumer-ack on the inbound request is flushed
+ * via {@link com.solace.labs.mi.topiccompaction.util.AckHelper}
+ * by the consumer interceptor, and the reply arrives at the
+ * requestor in milliseconds.
+ *
+ * <p>The class is kept (rather than removed) for the same reasons
+ * documented on the other suppressors in this codebase: the
+ * workflow definition still wires {@code input-2 -> output-2}, and
+ * a {@code null} return suppresses the publish cleanly without
+ * the framework attempting a placeholder publish.
  */
 @Component
 public class LookupProducerInterceptorFactory implements ProducerBindingMessageInterceptorFactory {
 
     private static final Logger log = LoggerFactory.getLogger(LookupProducerInterceptorFactory.class);
-    private static final String SOLACE_DESTINATION_HEADER = "solace_destination";
-    private static final String SOLACE_REPLY_TO_HEADER = "solace_replyTo";
 
-    private final LookupService service;
     private final Set<String> outputBindingNames;
 
-    public LookupProducerInterceptorFactory(LookupService service, LookupProperties properties) {
-        this.service = service;
+    public LookupProducerInterceptorFactory(LookupProperties properties) {
         this.outputBindingNames = new HashSet<>();
         for (String input : properties.getBindingNames()) {
             if (input.startsWith("input-")) {
@@ -59,8 +75,10 @@ public class LookupProducerInterceptorFactory implements ProducerBindingMessageI
         if (!outputBindingNames.contains(bindingName)) {
             return null;
         }
-        log.info("Attaching LookupInterceptor to Solace producer binding: {}", bindingName);
-        return new Interceptor();
+        log.info("Attaching LookupPublishSuppressor to Solace producer binding: {} "
+                + "(reply emission moved to LookupConsumerInterceptor in V1.1.4)",
+                bindingName);
+        return new Suppressor();
     }
 
     @Override
@@ -68,31 +86,10 @@ public class LookupProducerInterceptorFactory implements ProducerBindingMessageI
         return 0;
     }
 
-    private final class Interceptor implements ProducerBindingMessageInterceptor {
+    private final class Suppressor implements ProducerBindingMessageInterceptor {
         @Override
         public Message<?> before(Message<?> message) {
-            LookupService.Result result = service.resolve(message);
-
-            // Reply destination: take from request's solace_replyTo. If absent we
-            // fall back to a fixed not-found topic - clients without reply-to
-            // headers won't see the response, but the MI stays alive.
-            Object replyTo = message.getHeaders().get(SOLACE_REPLY_TO_HEADER);
-            String destination = replyTo == null
-                    ? "topic-compaction/lookup/no-reply-to"
-                    : replyTo.toString();
-
-            Map<String, Object> headers = new LinkedHashMap<>(result.headers());
-            headers.put(SOLACE_DESTINATION_HEADER, destination);
-            headers.put(BinderHeaders.TARGET_DESTINATION, destination);
-
-            // Echo the correlation id if present so request/reply correlation
-            // works on the client side.
-            Object correlationId = message.getHeaders().get("solace_correlationId");
-            if (correlationId != null) {
-                headers.put("solace_correlationId", correlationId);
-            }
-
-            return new GenericMessage<>(result.payload(), headers);
+            return null;
         }
     }
 }

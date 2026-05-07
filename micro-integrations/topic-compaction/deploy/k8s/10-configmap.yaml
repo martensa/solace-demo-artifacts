@@ -74,7 +74,7 @@ data:
           enabled: false
 
     topic-compaction:
-      version: "1.0.0"
+      version: "1.1.4"
       kvstore:
         backend: rocksdb
         rocksdb:
@@ -88,6 +88,13 @@ data:
         loop-protection-header: x-compacted-replay
         ordering:
           header: ""
+        # V1.1.0: audit emission via separate JCSMP session +
+        # DeliveryMode.DIRECT. enabled=false skips the audit
+        # publisher entirely (no separate session, no audit topic
+        # traffic) when operators do not consume the audit feed.
+        audit:
+          enabled: true
+          client-name-suffix: "-audit"
       replay:
         binding-names: [input-1]
         target-suffix: /compacted

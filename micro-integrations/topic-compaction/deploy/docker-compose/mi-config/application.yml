@@ -107,6 +107,12 @@ topic-compaction:
     loop-protection-header: x-compacted-replay
     ordering:
       header: ""                  # empty -> always-last-wins
+    audit:
+      # V1.1.0: emit audits via separate JCSMP session + DIRECT.
+      # Flip to false to disable audit emission entirely; the
+      # consumer-ack flow is unchanged either way.
+      enabled: true
+      client-name-suffix: "-audit"
   replay:
     binding-names: [input-1]
     target-suffix: /compacted

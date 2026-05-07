@@ -63,7 +63,27 @@ spring:
 solace:
   java:
     api-properties:
-      pub_ack_window_size: 255
+      # JCSMP publish-window. Smaller window than the default (255)
+      # gives the binder backpressure earlier on slow brokers, so a
+      # publish burst cannot saturate the in-flight buffer and starve
+      # consumer-acks. 50 is enough headroom for a single workflow's
+      # bursty audit traffic without inflating tail-latency.
+      pub_ack_window_size: 50
+      # JCSMP publish-ack timeout in milliseconds. The default (2000)
+      # is hostile under any non-trivial broker load: a 5-message
+      # burst routinely sees the trailing publishes time out before
+      # the broker acks, which keeps the inbound consumer-ack pinned
+      # in the pub-ack-pending state and surfaces as txUnackedMsgCount
+      # > 0 even though the KV write already succeeded. 30s is the
+      # operating-system-level "this is genuinely broken" threshold;
+      # under that, transient slowness is absorbed cleanly.
+      pub_ack_time: 30000
+      # NOTE: KeepAlive tuning lives on JCSMPChannelProperties (a
+      # sub-object), which is not reachable via the api-properties
+      # text-marshaling path - JCSMPPropertiesTextMarshaling logs
+      # "Skipping property key ... unknown" for those keys. A
+      # BeanPostProcessor on SpringJCSMPFactory is the right hook;
+      # deferred to V1.1 alongside the direct-audit publisher.
   connector:
     management:
       session:
@@ -74,6 +94,18 @@ solace:
       workflow:
         transform:
           enabled: true
+        # MI Framework's AsyncOutputSendingMessageHandler waits this
+        # long for a publish-ack callback before resolving the
+        # consumer-ack with failure. Default is 10 minutes - hostile
+        # in production: if a single audit publish is silently
+        # discarded by the broker (no ack, no nack), the inbound
+        # message stays pinned in txUnackedMsgCount for 10 minutes
+        # before the framework gives up and lets the consumer-ack
+        # flush via the error-channel. 30 s aligns with our JCSMP
+        # pub_ack_time and keeps the worst-case stuck-spool window
+        # to 30 s instead of 600 s.
+        acknowledgment:
+          publish-timeout: 30000
 
     # [INTERNAL] Pre-wire workflows. Operators enable individual workflows
     # via external config (workflows.<idx>.enabled = true).

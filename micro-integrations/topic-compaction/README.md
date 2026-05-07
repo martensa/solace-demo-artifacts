@@ -135,7 +135,7 @@ Kubernetes
 | `docs/ARCHITECTURE.md` | Components, workflows, data flow, lifecycle (Mermaid) |
 | `docs/CONFIGURATION.md` | Full property reference, all phases |
 | `docs/COMMAND-EVENTS.md` | Replay / Bulk / Delete command JSON schema + examples |
-| `docs/OBSERVABILITY.md` | Metrics, logs, traces; LGTM stack integration |
+| `docs/OBSERVABILITY.md` | Metrics, logs, traces; OTLP collector wiring (in-cluster Tempo, host docker-compose, vendor SaaS); LGTM stack integration |
 | `docs/OPERATIONS.md` | On-call runbook, SLO definitions, alert response |
 | `docs/SECURITY.md` | Threat model, controls, secrets handling |
 | `docs/PERFORMANCE.md` | Baseline numbers, bulk-replay benchmark, capacity planning |
@@ -196,6 +196,109 @@ make load-test            # bash + curl harness
 ```
 
 End-to-end testing is documented in `docs/SMOKE-TEST.md`.
+
+## Quick smoke-test recipes (curl)
+
+All recipes assume the project's `.env` is sourced and a port-
+forward to the MI's REST endpoint is running:
+
+```bash
+. .env
+kubectl -n mi-solace-lab port-forward svc/topic-compaction-mi 18090:8090 &
+```
+
+### 1. Compaction (publish + KV verification)
+
+Publish via Solace REST (PERSISTENT, lands in `compaction.data`
+queue, MI upserts to KV, fires DIRECT audit on
+`<topic>/compacted-ack`):
+
+```bash
+curl -i -X POST -u "$SOLACE_REST_USER:$SOLACE_REST_PASS" \
+  "$SOLACE_REST_HOST/orders/v110-final/test/A" \
+  -H "Content-Type: application/json" \
+  --data '{"orderId":"A","amount":100}'
+```
+
+Verify the upsert via the MI's REST KV API (no Solace round-trip):
+
+```bash
+curl -i -u "$MI_ADMIN_NAME:$MI_ADMIN_PASSWORD" \
+  "http://localhost:18090/api/v1/kv/orders/v110-final/test/A"
+# → 200 with payload + x-compacted-topic + x-compacted-ingest-timestamp
+```
+
+### 2. Lookup (KV read)
+
+The MI's REST KV API is the canonical curl-friendly lookup path.
+The Solace Request/Reply lookup workflow exists for SMF/JCSMP
+clients that publish PERSISTENT to `compacted/lookup/<key>`; it
+is **not** reachable via Solace REST `/REQUESTS/...` because the
+REST gateway publishes Direct Messages and durable queues only
+spool guaranteed traffic (see V1.1.4 changelog note).
+
+```bash
+# HIT (returns the stored payload as the body)
+curl -i -u "$MI_ADMIN_NAME:$MI_ADMIN_PASSWORD" \
+  "http://localhost:18090/api/v1/kv/orders/v110-final/test/A"
+
+# MISS
+curl -i -u "$MI_ADMIN_NAME:$MI_ADMIN_PASSWORD" \
+  "http://localhost:18090/api/v1/kv/orders/does/not/exist"
+# → 404
+
+# List with prefix filter (mi-user role is sufficient)
+curl -i -u "$MI_USER_NAME:$MI_USER_PASSWORD" \
+  "http://localhost:18090/api/v1/kv?prefix=orders/v110-final/"
+
+# DELETE a key directly (admin only, no Solace round-trip)
+curl -i -X DELETE -u "$MI_ADMIN_NAME:$MI_ADMIN_PASSWORD" \
+  "http://localhost:18090/api/v1/kv/orders/v110-final/test/A"
+```
+
+### 3. REPLAY commands via Solace REST
+
+Single-key replay:
+
+```bash
+curl -X POST -u "$SOLACE_REST_USER:$SOLACE_REST_PASS" \
+  "$SOLACE_REST_HOST/TOPIC/compacted/command/replay" \
+  -H "Content-Type: application/json" \
+  -H "Solace-Delivery-Mode: persistent" \
+  --data '{"command":"REPLAY","key":"orders/v110-final/test/A"}'
+```
+
+Pattern-based bulk replay:
+
+```bash
+curl -X POST -u "$SOLACE_REST_USER:$SOLACE_REST_PASS" \
+  "$SOLACE_REST_HOST/TOPIC/compacted/command/bulk-replay" \
+  -H "Content-Type: application/json" \
+  -H "Solace-Delivery-Mode: persistent" \
+  --data '{"command":"BULK_REPLAY","pattern":"orders/v110-final/*/*","options":{"correlationId":"smoke-001"}}'
+```
+
+DELETE command (with optional cascade):
+
+```bash
+curl -X POST -u "$SOLACE_REST_USER:$SOLACE_REST_PASS" \
+  "$SOLACE_REST_HOST/TOPIC/compacted/command/delete" \
+  -H "Content-Type: application/json" \
+  -H "Solace-Delivery-Mode: persistent" \
+  --data '{"command":"DELETE","key":"orders/v110-final/test/A"}'
+```
+
+The replay messages and command summaries are observed by
+subscribing to the relevant topics in TryMe (or any DIRECT
+subscriber):
+
+```
+orders/*/*/*/compacted              # the replayed payloads
+topic-compaction/replay/bulk-result # BULK_REPLAY summaries
+topic-compaction/replay/failed      # parse / validation failures
+topic-compaction/delete/result      # DELETE summaries
+orders/*/*/*/compacted-ack          # per-message audit events
+```
 
 ## V1.x backlog
 

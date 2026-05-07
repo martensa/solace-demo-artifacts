@@ -12,7 +12,7 @@
 
 services:
   topic-compaction-mi:
-    image: ${MI_IMAGE:-registry.solace.lab/sam-topic-compaction-mi:1.0.1}
+    image: ${MI_IMAGE:-registry.solace.lab/sam-topic-compaction-mi:1.1.4}
     env_file:
       - ../../.env
     volumes:

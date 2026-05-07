@@ -24,26 +24,25 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Translates the replay workflow's pass-through message (originally a
- * command JSON) into the actual replay event.
+ * V1.1.1: builds the actual REPLAY message for the binder to publish
+ * on {@code <key>/compacted}. Other command types (BULK_REPLAY,
+ * DELETE, parse-failure) no longer reach this interceptor - they
+ * are intercepted on the consumer side by
+ * {@link CommandConsumerInterceptorFactory} and short-circuit the
+ * workflow output via a {@code null} return on the consumer
+ * channel. This is the same architectural pattern V1.1.0 applied
+ * to compaction: any command whose summary publish would gate the
+ * inbound consumer-ack on a fire-and-forget observability publish
+ * needs to short-circuit the binder publish path entirely.
  *
- * <p>Dispatch by command type:
- * <ul>
- *   <li>{@code REPLAY} - rewrite payload + destination from the
- *       single matching record. The original command message is
- *       replaced with the rewritten replay message.</li>
- *   <li>{@code BULK_REPLAY} - delegate to {@link BulkReplayService},
- *       which fans out the matching records via a separate output
- *       binding. This interceptor's return message is the bulk-result
- *       summary published to
- *       {@code topic-compaction/replay/bulk-result}.</li>
- *   <li>{@code DELETE} - deferred to Phase 3.3; reaches us as a
- *       failure document for now.</li>
- * </ul>
- *
- * <p>If the command JSON is malformed or violates the schema, a small
- * JSON failure document is published on
- * {@code topic-compaction/replay/failed}.
+ * <p>For SINGLE REPLAY the binder publish path is preserved because
+ * the replay event is durability-relevant: operators are expected
+ * to have a queue subscribed to {@code <key>/compacted} (or its
+ * configured suffix). A genuinely missing subscriber will still
+ * cause the broker to discard the publish silently and the command
+ * will redeliver up to {@code maxRedeliveryCount=5} before being
+ * routed to {@code #DEAD_MSG_QUEUE}; that's the right operator
+ * signal.
  */
 @Component
 public class ReplayProducerInterceptorFactory
@@ -122,6 +121,12 @@ public class ReplayProducerInterceptorFactory
             try {
                 event = parser.parse(commandBytes);
             } catch (CommandEventParser.ParseException e) {
+                // V1.1.1: parse failures are normally caught by the
+                // CommandConsumerInterceptor and short-circuited
+                // before reaching this point. Reaching here means
+                // either operator config has disabled the consumer
+                // interceptor or someone bypassed the workflow with
+                // StreamBridge - either way emit the failure doc.
                 return failure(e.getMessage());
             }
             return switch (event.command()) {

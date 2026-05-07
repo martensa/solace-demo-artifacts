@@ -88,6 +88,33 @@ public class ProvisioningProperties {
         private String accessType = "non-exclusive";
         private String permission = "consume";
 
+        /**
+         * Max redeliveries before a message is considered a poison
+         * pill. {@code 0} keeps the broker default (unlimited).
+         * V1.1.0 default is {@code 5}: enough to absorb transient
+         * RocksDB / network blips, low enough that a genuinely
+         * broken poison message is DMQ'd within seconds.
+         */
+        private int maxRedeliveryCount = 5;
+
+        /**
+         * Persist per-message delivery count so the broker can
+         * enforce {@link #maxRedeliveryCount} reliably. With this
+         * disabled (the broker default), the redelivery count is
+         * tracked only in memory and messages exceeding the cap are
+         * DROPPED instead of routed to the DMQ.
+         */
+        private boolean deliveryCountEnabled = true;
+
+        /**
+         * Where messages go when {@link #maxRedeliveryCount} is
+         * exceeded. Default {@code #DEAD_MSG_QUEUE} is the broker's
+         * standard DMQ name, which the provisioner ensures exists
+         * (created with no subscriptions). Set to empty to drop
+         * the message instead.
+         */
+        private String deadMsgQueue = "#DEAD_MSG_QUEUE";
+
         public String getName() { return name; }
         public void setName(String v) { this.name = v; }
 
@@ -99,5 +126,14 @@ public class ProvisioningProperties {
 
         public String getPermission() { return permission; }
         public void setPermission(String v) { this.permission = v; }
+
+        public int getMaxRedeliveryCount() { return maxRedeliveryCount; }
+        public void setMaxRedeliveryCount(int v) { this.maxRedeliveryCount = v; }
+
+        public boolean isDeliveryCountEnabled() { return deliveryCountEnabled; }
+        public void setDeliveryCountEnabled(boolean v) { this.deliveryCountEnabled = v; }
+
+        public String getDeadMsgQueue() { return deadMsgQueue; }
+        public void setDeadMsgQueue(String v) { this.deadMsgQueue = v; }
     }
 }

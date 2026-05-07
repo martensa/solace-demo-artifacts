@@ -57,6 +57,21 @@ spec:
       ports:
         - port: 4317
           protocol: TCP
+    # Host-side OTEL collector via Rancher Desktop's
+    # host.docker.internal (resolves to 192.168.5.2, the Lima VM
+    # gateway). Falls outside the in-cluster monitoring namespace
+    # selector and inside the 192.168.0.0/16 RFC1918 block that's
+    # explicitly excluded from the Solace Cloud egress rule below,
+    # so it needs an explicit allow. Covers gRPC (4317) and HTTP
+    # (4318) OTLP transports.
+    - to:
+        - ipBlock:
+            cidr: 192.168.5.0/24
+      ports:
+        - port: 4317
+          protocol: TCP
+        - port: 4318
+          protocol: TCP
     # Solace Cloud broker SMF + REST (via cluster egress)
     # Ports: 55555 SMF, 55443 SMF/TLS, 9000/9443 REST, 943 SEMP
     - to:
