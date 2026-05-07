@@ -120,6 +120,45 @@ upstream traceID with two parent-child levels:
 {compaction.inbound} -> {compact-message}, plus the audit
 cascade as a sibling pair of receive + skipped-loop spans.
 
+### Compatibility with Solace's official OTel stack
+
+Solace publishes an OpenTelemetry Java Agent extension
+({com.solace.spring.cloud:spring-cloud-stream-binder-solace-instrumentation}
++ {com.solace:solace-opentelemetry-jcsmp-integration}) that
+instruments the Spring Cloud Stream Solace binder via byte-code
+weaving when the OTel javaagent is attached at JVM startup. We
+intentionally did **not** wire that path because:
+
+1. Spring Boot 3.x with Micrometer Tracing already provides
+   Spring-side auto-instrumentation; combining it with the OTel
+   agent risks duplicate spans unless one is explicitly disabled.
+2. The agent only instruments two pointcuts
+   ({InboundXMLMessageListener.processMessage} and
+   {MessageProducerSupport.sendMessage}), both already covered
+   here: our {<workflow>.inbound} spans match the first; Spring
+   Boot's auto-instrumentation of {StreamBridge} produces
+   {stream-bridge process} spans matching the second.
+3. The agent does not cover the two paths we genuinely need:
+   {DirectAuditPublisher}'s direct JCSMP publishes outside the
+   binder send path, and {StreamBridge} calls across thread
+   boundaries.
+4. The wire format is identical: the official Solace setter
+   ({SolacePubSubPlusJavaTextMapSetter}) writes exactly the W3C
+   standard header names ({traceparent}, {tracestate},
+   {baggage}) to JCSMP user properties - the same names that
+   {SolaceContextPropagation.injectInto(SDTMap)} writes via the
+   Spring Boot-configured W3C propagator. Solace Cloud
+   Distributed Tracing on the broker side accepts both
+   identically.
+
+For operators who prefer the agent-based "officially supported"
+combination: disable Micrometer Tracing
+({management.tracing.enabled: false}), package the agent JAR +
+Solace extension JARs into the container image, set
+{JAVA_OPTS=-javaagent:... -Dotel.javaagent.extensions=...}.
+The MI's {SolaceContextPropagation} bean still works alongside
+the agent (it's a pure no-op when no Micrometer span is active).
+
 ### Operator note: Solace PubSub+ Distributed Tracing
 
 The MI's inject / extract is necessary but not sufficient for the

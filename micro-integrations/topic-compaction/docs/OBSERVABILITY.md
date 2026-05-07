@@ -448,6 +448,58 @@ PubSub+ Distributed Tracing on the broker:
   spans for its receive + egress pipeline parented on the
   {traceparent} carried in the user properties.
 
+**Wire format compatibility with Solace's official OTel stack.**
+The MI emits W3C trace-context user properties using the standard
+header names {traceparent}, {tracestate}, {baggage}. These are
+bit-identical to what Solace's official OTel agent extension
+writes via {SolacePubSubPlusJavaTextMapSetter}: the same constants
+({TRACE_PARENT}, {TRACE_STATE}, {BAGGAGE}) bound to the same
+W3C-standard string values. A Solace Cloud broker with Distributed
+Tracing enabled will accept and link our spans correctly.
+
+**Why we did NOT use Solace's official binder OTel module.** The
+{com.solace.spring.cloud:spring-cloud-stream-binder-solace-instrumentation}
+artifact is an OpenTelemetry **Java Agent extension JAR** (per its
+README, "above dependencies should NOT be included in your
+application's classpath"). Activation:
+
+```
+-javaagent:/path/to/opentelemetry-javaagent.jar
+-Dotel.javaagent.extensions=solace-opentelemetry-jcsmp-integration.jar,
+                            spring-cloud-stream-binder-solace-instrumentation.jar
+-Dotel.propagators=solace_jcsmp_tracecontext
+```
+
+The extension instruments two binder pointcuts:
+{InboundXMLMessageListener.processMessage} (CONSUMER span on
+inbound) and {MessageProducerSupport.sendMessage} (INTERNAL span
+on Spring Cloud Stream channel send). Both are already covered by
+this MI without an agent: our consumer-side
+{compaction.inbound}/{command.inbound}/{lookup.inbound} spans
+match the first, Spring Boot auto-instrumentation of StreamBridge
+({stream-bridge process} span) matches the second. The two cases
+the official extension does NOT cover -
+{DirectAuditPublisher}'s direct JCSMP publishes outside the binder
+send path, and StreamBridge calls across thread boundaries - we
+handle in code via {SolaceContextPropagation}.
+
+Trade-offs of the Micrometer-direct path we took:
+
+- **Pros:** Spring Boot 3.x idiomatic; one moving part (the
+  application JAR) instead of two (app + agent + extension JARs);
+  no risk of duplicate spans when Micrometer Tracing and the OTel
+  agent both create instrumentation; agent-free container image.
+- **Cons:** We re-implemented two pointcuts that the agent
+  provides for free (consumer-side context extraction + the
+  StreamBridge / direct-publish injection). Operators wanting the
+  exact "officially supported" combination would need to switch
+  to agent-mode and turn off Micrometer Tracing.
+
+For self-hosted Solace PubSub+ brokers that emit broker-receive /
+broker-egress spans via Distributed Tracing, our W3C
+{traceparent} headers are the right input format. The MI is fully
+agent-free **and** wire-compatible.
+
 **Upstream publisher requirements.** The MI propagates whatever
 arrives. To make traces actually start at the application, the
 upstream publisher must inject {traceparent} too:
