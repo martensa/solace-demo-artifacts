@@ -1,0 +1,161 @@
+# Helm values for the openmetadata server chart.
+#
+# Assumes the openmetadata-dependencies release (see
+# local-k8s-deps-values.yaml) is already running in the same namespace.
+
+image:
+  repository: docker.getcollate.io/openmetadata/server
+  tag: 1.6.5
+  pullPolicy: IfNotPresent
+
+# Persistent admin auth uses RSA keys mounted from a Secret created by
+# scripts/setup-rsa-keys.sh. Without them OM would auto-generate keys on
+# every restart -- fine for a throwaway pod, fatal for any token that
+# outlives a single startup.
+extraVolumes:
+  - name: openmetadata-jwt-keys
+    secret:
+      secretName: openmetadata-jwt-keys
+      defaultMode: 0400
+
+extraVolumeMounts:
+  - name: openmetadata-jwt-keys
+    mountPath: /etc/openmetadata/jwtkeys
+    readOnly: true
+
+# Probes inherited from the chart defaults. Boot is dog-slow on first
+# install because of database migrations; the longer startup period
+# avoids spurious restart loops.
+startupProbe:
+  failureThreshold: 60
+  periodSeconds: 10
+livenessProbe:
+  initialDelaySeconds: 60
+readinessProbe:
+  initialDelaySeconds: 30
+
+# ---------------------------------------------------------------- core config
+openmetadata:
+  config:
+    # Cluster-internal URL pattern. The Ingress provides the external one.
+    clusterName: "openmetadata"
+
+    # ----- Authentication ------------------------------------------------
+    authorizer:
+      className: "org.openmetadata.service.security.DefaultAuthorizer"
+      containerRequestFilter: "org.openmetadata.service.security.JwtFilter"
+      # Email matching `<initialAdmins>@<principalDomain>` becomes admin.
+      # i.e. sign up with admin@open-metadata.org on first launch.
+      initialAdmins:
+        - admin
+      principalDomain: "open-metadata.org"
+      enforcePrincipalDomain: false
+      enableSecureSocketConnection: false
+
+    authentication:
+      clientType: public
+      provider: basic
+      enableSelfSignup: true
+      publicKeys:
+        - "http://openmetadata:8585/api/v1/system/config/jwks"
+      # Authority is unused by basic auth but the chart requires the key.
+      authority: "https://accounts.google.com"
+      jwtPrincipalClaims:
+        - email
+        - preferred_username
+        - sub
+
+    # ----- JWT signing keys ---------------------------------------------
+    jwtTokenConfiguration:
+      enabled: true
+      rsapublicKeyFilePath: "/etc/openmetadata/jwtkeys/public_key.der"
+      rsaprivateKeyFilePath: "/etc/openmetadata/jwtkeys/private_key.der"
+      jwtissuer: "open-metadata.org"
+      keyId: "Gb389a-9f76-gdjs-a92j-0242bk94356"
+
+    # ----- Database ------------------------------------------------------
+    database:
+      driverClass: "org.postgresql.Driver"
+      dbScheme: "postgresql"
+      dbUseSSL: false
+      host: "openmetadata-postgresql"
+      port: 5432
+      databaseName: "openmetadata_db"
+      auth:
+        username: openmetadata_user
+        password:
+          secretRef: openmetadata-postgres-credentials
+          secretKey: postgres-password
+
+    # ----- Search (OpenSearch) ------------------------------------------
+    elasticsearch:
+      enabled: true
+      host: "opensearch"
+      searchType: "opensearch"
+      port: 9200
+      scheme: "http"
+      clusterAlias: ""
+      connectionTimeoutSecs: 5
+      socketTimeoutSecs: 60
+      keepAliveTimeoutSecs: 600
+      batchSize: 10
+      auth:
+        username: ""
+        password:
+          secretRef: ""
+          secretKey: ""
+
+    # ----- Airflow (pipeline service) -----------------------------------
+    pipelineServiceClientConfig:
+      enabled: true
+      className: "org.openmetadata.service.clients.pipeline.airflow.AirflowRESTClient"
+      apiEndpoint: "http://openmetadata-dependencies-web:8080"
+      metadataApiEndpoint: "http://openmetadata:8585/api"
+      hostIp: "0.0.0.0"
+      verifySSL: "no-ssl"
+      auth:
+        username: admin
+        password:
+          secretRef: airflow-secrets
+          secretKey: openmetadata-airflow-password
+
+    # ----- Misc ----------------------------------------------------------
+    upgradeMigrationConfigs:
+      debug: false
+
+# ---------------------------------------------------------------- Service
+service:
+  type: ClusterIP
+  port: 8585
+
+# ---------------------------------------------------------------- Ingress
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "solace-lab-ca-issuer"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+  hosts:
+    - host: openmetadata.solace.lab
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: openmetadata-tls
+      hosts:
+        - openmetadata.solace.lab
+
+# ---------------------------------------------------------------- Resources
+resources:
+  requests:
+    cpu: 500m
+    memory: 1.5Gi
+  limits:
+    cpu: 2000m
+    memory: 3Gi
+
+# REQUESTS_CA_BUNDLE / SSL_CERT_FILE are injected cluster-wide by the
+# Kyverno policy `inject-solace-lab-ca-trust-bundle` from
+# solace-lab-infrastructure/pki. No per-deployment config needed.

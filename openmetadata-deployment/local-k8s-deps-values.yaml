@@ -1,0 +1,135 @@
+# Helm values for the openmetadata-dependencies chart.
+#
+# Deploys the three things the OM server needs but doesn't ship itself:
+#   * relational database (PostgreSQL)
+#   * search backend     (OpenSearch, single-node)
+#   * pipeline runner    (Apache Airflow, with the OM ingestion image)
+#
+# All passwords are demo-only and are also referenced by
+# local-k8s-values.yaml so the server can connect. Change BOTH if you
+# rotate them.
+
+# ---------------------------------------------------------------- MySQL off
+mysql:
+  enabled: false
+
+# --------------------------------------------------------------- PostgreSQL
+postgresql:
+  enabled: true
+  # Bitnami chart 12.x is what the deps chart pins. Auth block matches
+  # the keys OM server values expect (openmetadata-postgres-credentials).
+  auth:
+    username: openmetadata_user
+    password: openmetadata_password
+    postgresPassword: openmetadata_password
+    database: openmetadata_db
+    existingSecret: ""
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+
+# --------------------------------------------------------------- Elasticsearch
+elasticsearch:
+  enabled: false
+
+# ---------------------------------------------------------------- OpenSearch
+opensearch:
+  enabled: true
+  # Single node is fine for a demo / lab. Bump to >=3 replicas for prod.
+  singleNode: true
+  replicas: 1
+  # OpenSearch refuses to start as root; chart sets fsGroup but some
+  # storage classes ignore it -- set explicitly.
+  securityContext:
+    runAsUser: 1000
+    fsGroup: 1000
+  config:
+    opensearch.yml: |
+      cluster.name: openmetadata-cluster
+      network.host: 0.0.0.0
+      discovery.type: single-node
+      plugins.security.disabled: true
+  extraEnvs:
+    - name: discovery.type
+      value: single-node
+    - name: DISABLE_SECURITY_PLUGIN
+      value: "true"
+    - name: OPENSEARCH_JAVA_OPTS
+      value: "-Xms1g -Xmx1g"
+  persistence:
+    enabled: true
+    size: 30Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1.5Gi
+    limits:
+      cpu: 2000m
+      memory: 3Gi
+
+# -------------------------------------------------------------------- Airflow
+# Runs the OM ingestion image as the Airflow worker. The OM server reaches
+# this via the in-cluster service name (see pipelineServiceClientConfig
+# in local-k8s-values.yaml).
+airflow:
+  enabled: true
+  airflow:
+    image:
+      repository: docker.getcollate.io/openmetadata/ingestion
+      tag: 1.6.5
+      pullPolicy: IfNotPresent
+    executor: "KubernetesExecutor"
+    # Default Airflow admin -- demo only. Used by OM server to call
+    # Airflow's REST API.
+    users:
+      - username: admin
+        password: admin
+        role: Admin
+        email: admin@open-metadata.org
+        firstName: admin
+        lastName: admin
+    extraEnv:
+      - name: AIRFLOW__OPENMETADATA_AIRFLOW_APIS__DAG_RUNNER_TIMEOUT
+        value: "300"
+      - name: AIRFLOW__CORE__LOAD_EXAMPLES
+        value: "false"
+      # OM server URL used by the Airflow side of the connection when
+      # registering pipelines.
+      - name: AIRFLOW__OPENMETADATA__SERVER_HOST_API_URL
+        value: "http://openmetadata:8585/api"
+    config:
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "60"
+  # Use the same Postgres as OM server (separate logical database).
+  postgresql:
+    enabled: false
+  externalDatabase:
+    type: postgres
+    host: openmetadata-postgresql
+    port: 5432
+    user: openmetadata_user
+    password: openmetadata_password
+    database: airflow_db
+  # Airflow PVC sizing -- DAG files are tiny, logs grow with activity.
+  dags:
+    persistence:
+      enabled: true
+      size: 5Gi
+  logs:
+    persistence:
+      enabled: true
+      size: 5Gi
+  workers:
+    replicas: 1
+    persistence:
+      enabled: false
+  redis:
+    enabled: false
