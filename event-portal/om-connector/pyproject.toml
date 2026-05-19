@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openmetadata-solace-eventportal-connector"
+version = "0.3.0"
+description = "OpenMetadata custom Messaging connector + webhook bridge for Solace Event Portal"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Solace", email = "noreply@example.org" }
+]
+dependencies = [
+    # The OM ingestion image already pins openmetadata-ingestion; we only
+    # add runtime deps that aren't part of the base image.
+    "requests>=2.31",
+    "urllib3>=2.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-mock>=3.12",
+    "responses>=0.24",
+    "ruff>=0.1",
+]
+# Webhook bridge — HTTP receiver
+bridge = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic-settings>=2.0",
+]
+# Webhook bridge — Solace consumer transport (optional)
+bridge-solace = [
+    "solace-pubsubplus>=1.5",
+]
+# Live sample-data ingest via Solace broker subscribe (optional)
+sample-data = [
+    "solace-pubsubplus>=1.5",
+]
+
+[project.scripts]
+om-eventportal-bridge = "bridge.main:main"
+om-eventportal-bootstrap = "connector.bootstrap:main"
+
+[tool.setuptools.packages.find]
+include = ["connector*", "bridge*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

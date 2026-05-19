@@ -1,0 +1,32 @@
+# Standalone container for the Event Portal -> OpenMetadata webhook bridge.
+#
+# Build:
+#   docker build -f Dockerfile.bridge -t my-org/om-eventportal-bridge:0.1.0 .
+#
+# Run (HTTP mode):
+#   docker run --rm -p 8080:8080 \
+#     -e EP_API_TOKEN=... -e EP_WEBHOOK_SECRET=... \
+#     -e OM_JWT_TOKEN=... -e OM_HOST_PORT=http://openmetadata-server:8585/api \
+#     my-org/om-eventportal-bridge:0.1.0
+#
+# Run (Solace mode):
+#   docker run --rm \
+#     -e BRIDGE_MODE=solace \
+#     -e BRIDGE_SOLACE_HOST=tcp://solace_1:55555 \
+#     -e BRIDGE_SOLACE_PASSWORD=... \
+#     -e EP_API_TOKEN=... -e OM_JWT_TOKEN=... \
+#     my-org/om-eventportal-bridge:0.1.0
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY connector ./connector
+COPY bridge ./bridge
+
+RUN pip install --no-cache-dir ".[bridge,bridge-solace]"
+
+EXPOSE 8080
+
+ENTRYPOINT ["python", "-m", "bridge.main"]

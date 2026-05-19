@@ -1,0 +1,72 @@
+# Example OpenMetadata ingestion workflow for the Solace Event Portal
+# connector (Phase 1 feature set: filter patterns, owner sync, sample
+# data, pipeline entities for EP applications).
+#
+# Run with:
+#   metadata ingest -c config/example-workflow.yaml
+#
+# Before the first run, make sure the EP classification, tags, and custom
+# properties exist in OM:
+#   om-eventportal-bootstrap --host-port $OM_HOST_PORT --jwt-token $OM_INGESTION_BOT_TOKEN
+
+source:
+  type: customMessaging
+  serviceName: solace-event-portal
+  serviceConnection:
+    config:
+      type: CustomMessaging
+      sourcePythonClass: connector.event_portal_connector.SolaceEventPortalSource
+      connectionOptions:
+        # --- Event Portal API ----------------------------------------
+        apiUrl: https://api.solace.cloud/api/v2
+        apiToken: "${SOLACE_EVENTPORTAL_TOKEN}"
+        mode: rest_api                # rest_api | asyncapi
+
+        # --- Filter patterns (allow-list-only!) ----------------------
+        # Without includes, NOTHING is ingested. Set explicit regex lists
+        # for each scope you want to govern.
+        domainFilterPattern: |
+          {"includes": ["^orders$", "^billing$"], "excludes": []}
+        eventFilterPattern: |
+          {"includes": [".*"], "excludes": [".*\\.deprecated$"]}
+        schemaFilterPattern: |
+          {"includes": [".*"], "excludes": []}
+        applicationFilterPattern: |
+          {"includes": [".*"], "excludes": []}
+
+        # --- Versioning + lineage ------------------------------------
+        ingestAllVersions: "false"   # if true, every event AND app version
+        includeLineage: "true"        # app->topic / topic->app edges
+        emitDomains: "true"           # OM Domain per EP application domain
+        emitDataProducts: "true"      # OM DataProduct per modeled mesh
+
+        # --- Owner sync ----------------------------------------------
+        # Resolves EP owner e-mails to OM users via Keycloak identity.
+        # Set to "false" to skip the lookup entirely.
+        resolveOwners: "true"
+
+        # --- Incremental run -----------------------------------------
+        since: ""                     # ISO8601, e.g. 2026-05-18T00:00:00Z
+
+        # --- Sample data (opt-in, broker subscribe) ------------------
+        sampleDataEnabled: "false"
+        brokerHost: "tcp://solace_1:55555"
+        brokerVpn: "default"
+        brokerUsername: "om-sampler"
+        brokerPassword: "${SOLACE_BROKER_PASSWORD}"
+  sourceConfig:
+    config:
+      type: MessagingMetadata
+      generateSampleData: false
+
+sink:
+  type: metadata-rest
+  config: {}
+
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: http://openmetadata-server:8585/api
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: "${OM_INGESTION_BOT_TOKEN}"
