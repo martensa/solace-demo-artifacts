@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: solace-eventportal-bridge
+  namespace: openmetadata-solace-lab
+data:
+  # ----- Event Portal API ---------------------------------------------
+  EP_API_URL: "https://api.solace.cloud/api/v2"
+
+  # ----- OpenMetadata target ------------------------------------------
+  OM_HOST_PORT: "http://openmetadata.openmetadata-solace-lab.svc.cluster.local:8585/api"
+  OM_SERVICE_NAME: "solace-event-portal"
+
+  # ----- Bridge transport ---------------------------------------------
+  # http   -> apply EP webhooks directly to OM
+  # solace -> consume off a Solace queue (used with the forwarder)
+  # forwarder -> verify + republish onto Solace; needs a 2nd bridge in
+  #              solace mode to actually update OM
+  BRIDGE_MODE: "http"
+
+  BRIDGE_BIND_HOST: "0.0.0.0"
+  BRIDGE_BIND_PORT: "8080"
+
+  # ----- Dedupe (in-memory, lab-grade) --------------------------------
+  BRIDGE_DEDUPE_TTL_SECONDS: "600"
+  BRIDGE_DEDUPE_MAX_ENTRIES: "10000"

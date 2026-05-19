@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: solace-eventportal-bridge
+  namespace: openmetadata-solace-lab
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+    # EP webhooks can have bursts; modest rate limit keeps the bridge sane.
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    cert-manager.io/cluster-issuer: "solace-lab-ca-issuer"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - bridge.solace.lab
+      secretName: solace-eventportal-bridge-tls
+  rules:
+    - host: bridge.solace.lab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: solace-eventportal-bridge
+                port:
+                  number: 8080

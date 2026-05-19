@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: solace-eventportal-bridge
+  namespace: openmetadata-solace-lab
+  labels:
+    app: solace-eventportal-bridge
+spec:
+  type: ClusterIP
+  selector:
+    app: solace-eventportal-bridge
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

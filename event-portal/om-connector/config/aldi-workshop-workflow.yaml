@@ -1,0 +1,72 @@
+# Workflow for the ALDI workshop demo.
+# Matches the seed data in docs/demo-seed-data.md and the script in
+# docs/workshop-demo-script.md.
+#
+# How to use:
+#   1. Paste the connectionOptions block into the OM UI when adding the
+#      Custom Messaging service `solace-event-portal`, OR
+#   2. Save this file to the Airflow worker and run
+#        metadata ingest -c /opt/airflow/dags/aldi-workshop-workflow.yaml
+#
+# Environment variables expected at runtime:
+#   SOLACE_EVENTPORTAL_TOKEN  -- EP API token (read scope on aldi-orders-demo)
+#   OM_INGESTION_BOT_TOKEN    -- OM ingestion-bot JWT
+#   SOLACE_BROKER_PASSWORD    -- only needed if sampleDataEnabled=true
+
+source:
+  type: customMessaging
+  serviceName: solace-event-portal
+  serviceConnection:
+    config:
+      type: CustomMessaging
+      sourcePythonClass: connector.event_portal_connector.SolaceEventPortalSource
+      connectionOptions:
+        # --- Event Portal API -------------------------------------------
+        apiUrl: https://api.solace.cloud/api/v2
+        apiToken: "${SOLACE_EVENTPORTAL_TOKEN}"
+        mode: rest_api
+
+        # --- Filter (allow-list-only) -----------------------------------
+        # Demo Act 2 ingests aldi-orders-demo.
+        # Demo Act 4 demonstrates the exclude rejecting aldi-internal-test.
+        domainFilterPattern: |
+          {"includes": ["^aldi-orders-demo$"], "excludes": [".*-internal.*", ".*-test$"]}
+        eventFilterPattern: |
+          {"includes": [".*"]}
+        schemaFilterPattern: |
+          {"includes": [".*"]}
+        applicationFilterPattern: |
+          {"includes": [".*"]}
+
+        # --- What to emit -----------------------------------------------
+        includeLineage: "true"        # Pipeline <-> Topic edges
+        ingestAllVersions: "false"    # latest only for the workshop
+        emitDomains: "true"           # OM Domain per EP application domain
+        emitDataProducts: "true"      # OM DataProduct per modeled mesh
+        resolveOwners: "true"         # match EP owner e-mail to OM users
+
+        # --- Sample-data (optional Act 6) -------------------------------
+        # Flip sampleDataEnabled to "true" only after Acts 1-5 finish on
+        # time. Broker creds reach the lab Solace deployment from
+        # event-mesh-deployment.
+        sampleDataEnabled: "false"
+        brokerHost: "tcp://solace-1.solace-lab.svc.cluster.local:55555"
+        brokerVpn: "default"
+        brokerUsername: "om-sampler"
+        brokerPassword: "${SOLACE_BROKER_PASSWORD}"
+  sourceConfig:
+    config:
+      type: MessagingMetadata
+      generateSampleData: false
+
+sink:
+  type: metadata-rest
+  config: {}
+
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: http://openmetadata.openmetadata-solace-lab.svc.cluster.local:8585/api
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: "${OM_INGESTION_BOT_TOKEN}"

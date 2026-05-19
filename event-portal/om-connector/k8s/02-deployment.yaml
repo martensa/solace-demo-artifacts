@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solace-eventportal-bridge
+  namespace: openmetadata-solace-lab
+  labels:
+    app: solace-eventportal-bridge
+    app.kubernetes.io/name: solace-eventportal-bridge
+    app.kubernetes.io/part-of: openmetadata
+spec:
+  # Single replica for the workshop demo. Multi-replica needs Redis
+  # dedupe (Phase 2).
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: solace-eventportal-bridge
+  template:
+    metadata:
+      labels:
+        app: solace-eventportal-bridge
+        app.kubernetes.io/name: solace-eventportal-bridge
+        app.kubernetes.io/part-of: openmetadata
+    spec:
+      # imagePullSecrets are auto-attached by the Kyverno policy
+      # `inject-registry-pull-secret` from solace-lab-infrastructure.
+      containers:
+        - name: bridge
+          image: registry.solace.lab/om-eventportal-bridge:0.3.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: solace-eventportal-bridge
+            - secretRef:
+                name: solace-eventportal-bridge
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
