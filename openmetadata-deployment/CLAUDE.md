@@ -32,12 +32,16 @@ Do not re-create the cluster-level resources from this repo.
 ## Start and Stop
 
 ```bash
-cp .env.example .env                # set Keycloak admin creds if non-default
-./scripts/setup-keycloak-client.sh  # creates OIDC client in solace-lab realm
-# paste KEYCLOAK_CLIENT_SECRET into .env
-./scripts/start.sh                  # helm install both charts
-./scripts/stop.sh                   # teardown incl. PVCs + Keycloak client
+cp .env.example .env  # set Keycloak admin creds if non-default
+./scripts/start.sh    # bootstraps OIDC client, then helm install
+./scripts/stop.sh     # teardown incl. PVCs + Keycloak client
 ```
+
+`start.sh` invokes `setup-keycloak-client.sh` itself (idempotent),
+captures the printed client secret and persists it back into `.env`,
+so the full lifecycle is a one-shot. `setup-keycloak-client.sh` is
+still useful to run manually for client rotation or to read out an
+existing secret.
 
 ## Helm Conventions
 

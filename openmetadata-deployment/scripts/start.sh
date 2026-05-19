@@ -21,35 +21,59 @@ command -v openssl >/dev/null 2>&1 || { echo "ERROR: openssl not found."; exit 1
 if [ ! -f "$PROJECT_DIR/.env" ]; then
   echo "No .env file found. Copying .env.example to .env ..."
   cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
-  echo ""
-  echo "Now run:"
-  echo "  scripts/setup-keycloak-client.sh"
-  echo "and paste the printed KEYCLOAK_CLIENT_SECRET into .env, then"
-  echo "re-run this script."
-  exit 1
 fi
 
 # shellcheck source=/dev/null
 . "$PROJECT_DIR/.env"
 
-# --- Validate required variables ----------------------------------
-missing=""
-for var in KEYCLOAK_ISSUER KEYCLOAK_CLIENT_ID KEYCLOAK_CLIENT_SECRET; do
+# --- Validate Keycloak admin creds (needed for client setup) ------
+# The client itself is bootstrapped automatically below, but the
+# realm admin creds are non-default per deployment so they have to
+# come from .env.
+for var in KEYCLOAK_URL KEYCLOAK_REALM KEYCLOAK_ADMIN_USER KEYCLOAK_ADMIN_PASSWORD KEYCLOAK_CLIENT_ID KEYCLOAK_ISSUER; do
   val="${!var:-}"
   if [ -z "$val" ] || [ "$val" = "changeme" ]; then
-    missing="$missing $var"
+    echo "ERROR: $var is missing or still 'changeme' in .env. Set it before re-running."
+    exit 1
   fi
 done
 
-if [ -n "$missing" ]; then
-  echo "ERROR: The following variables in .env are missing or still set"
-  echo "to the placeholder value:"
-  echo " $missing"
-  echo ""
-  echo "Run scripts/setup-keycloak-client.sh first to create the OIDC"
-  echo "client in Keycloak, then paste the printed secret into .env."
+# --- Ensure the Keycloak OIDC client exists (idempotent) ----------
+# setup-keycloak-client.sh is idempotent: if the client is already
+# there it just fetches the secret; if not, it creates one. Capture
+# the printed `KEYCLOAK_CLIENT_SECRET=...` line and persist the value
+# back into .env so a stop.sh -> start.sh round-trip recovers without
+# manual intervention (stop.sh deletes the client; start.sh re-creates
+# it and the new server-side secret replaces the stale .env entry).
+echo ""
+echo "Ensuring Keycloak OIDC client exists ..."
+SETUP_OUTPUT=$("$SCRIPT_DIR/setup-keycloak-client.sh")
+echo "$SETUP_OUTPUT" | grep -vE '^Set this|^  KEYCLOAK_CLIENT_SECRET='
+NEW_CLIENT_SECRET=$(printf '%s\n' "$SETUP_OUTPUT" \
+  | grep -oE 'KEYCLOAK_CLIENT_SECRET=[A-Za-z0-9._-]+' \
+  | tail -1 \
+  | cut -d= -f2-)
+
+if [ -z "$NEW_CLIENT_SECRET" ]; then
+  echo "ERROR: Could not extract client secret from setup-keycloak-client.sh output."
   exit 1
 fi
+
+if [ "$NEW_CLIENT_SECRET" != "${KEYCLOAK_CLIENT_SECRET:-}" ]; then
+  echo "Persisting refreshed KEYCLOAK_CLIENT_SECRET to .env ..."
+  if grep -q '^KEYCLOAK_CLIENT_SECRET=' "$PROJECT_DIR/.env"; then
+    if [ "$(uname)" = "Darwin" ]; then
+      sed -i '' "s|^KEYCLOAK_CLIENT_SECRET=.*$|KEYCLOAK_CLIENT_SECRET=${NEW_CLIENT_SECRET}|" \
+        "$PROJECT_DIR/.env"
+    else
+      sed -i "s|^KEYCLOAK_CLIENT_SECRET=.*$|KEYCLOAK_CLIENT_SECRET=${NEW_CLIENT_SECRET}|" \
+        "$PROJECT_DIR/.env"
+    fi
+  else
+    echo "KEYCLOAK_CLIENT_SECRET=${NEW_CLIENT_SECRET}" >> "$PROJECT_DIR/.env"
+  fi
+fi
+KEYCLOAK_CLIENT_SECRET="$NEW_CLIENT_SECRET"
 
 # --- CoreDNS NodeHost Helper --------------------------------------
 # Idempotently add a hostname -> IP mapping to the k3s CoreDNS

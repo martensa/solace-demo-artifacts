@@ -54,16 +54,21 @@ the hostname resolves both externally and inside the cluster.
 ## Start and Stop
 
 ```bash
-cp .env.example .env                # set Keycloak admin creds if non-default
-./scripts/setup-keycloak-client.sh  # creates OIDC client in solace-lab realm
-# paste the printed KEYCLOAK_CLIENT_SECRET into .env
-./scripts/start.sh                  # JWT keys + oidc-secrets + helm install
-./scripts/stop.sh                   # full teardown incl. PVCs + Keycloak client
+cp .env.example .env  # set Keycloak admin creds if non-default
+./scripts/start.sh    # bootstraps Keycloak client, then helm install
+./scripts/stop.sh     # full teardown incl. PVCs + Keycloak client
 ```
 
-Re-running `start.sh` is safe: it does a `helm upgrade --install`,
-leaves the JWT secret alone if it already exists, and re-applies the
-`oidc-secrets` Secret so a rotated client secret in `.env` propagates.
+`start.sh` calls `setup-keycloak-client.sh` for you (idempotent --
+creates the OIDC client if missing, otherwise just fetches the
+existing secret), then writes the resulting `KEYCLOAK_CLIENT_SECRET`
+back into `.env` so a `stop.sh` -> `start.sh` round-trip recovers
+without any manual paste step.
+
+Re-running `start.sh` is safe end-to-end: `helm upgrade --install`,
+JWT secret left alone if it already exists, OIDC client adopted in
+place, and the `oidc-secrets` Kubernetes Secret re-applied so a
+rotated client secret propagates on the next pod restart.
 
 ## First-time login
 
