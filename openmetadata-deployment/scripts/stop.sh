@@ -49,6 +49,7 @@ kubectl delete pvc --all --namespace "$OM_NAMESPACE" 2>/dev/null || true
 # --- Secrets we created manually ---------------------------------
 kubectl delete secret openmetadata-jwt-keys -n "$OM_NAMESPACE" 2>/dev/null || true
 kubectl delete secret openmetadata-postgres-credentials -n "$OM_NAMESPACE" 2>/dev/null || true
+kubectl delete secret oidc-secrets -n "$OM_NAMESPACE" 2>/dev/null || true
 
 # --- Namespace ----------------------------------------------------
 echo "Deleting namespace $OM_NAMESPACE ..."
@@ -57,6 +58,10 @@ kubectl delete namespace "$OM_NAMESPACE" 2>/dev/null || true
 # --- CoreDNS NodeHosts -------------------------------------------
 echo "Removing ${OM_DNS_NAME} from CoreDNS NodeHosts ..."
 remove_coredns_nodehost "$OM_DNS_NAME"
+
+# --- Keycloak OIDC client ----------------------------------------
+echo ""
+"$SCRIPT_DIR/teardown-keycloak-client.sh" || true
 
 echo ""
 echo "OpenMetadata teardown complete."

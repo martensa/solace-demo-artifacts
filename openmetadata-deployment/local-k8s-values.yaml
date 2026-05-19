@@ -41,29 +41,71 @@ openmetadata:
     clusterName: "openmetadata"
 
     # ----- Authentication ------------------------------------------------
+    # OIDC against the solace-lab Keycloak realm at auth.solace.lab.
+    # Realm admin (username `admin`, email `admin@solace.lab`) becomes
+    # OM admin because <initialAdmins>@<principalDomain> = admin@solace.lab.
     authorizer:
       className: "org.openmetadata.service.security.DefaultAuthorizer"
       containerRequestFilter: "org.openmetadata.service.security.JwtFilter"
-      # Email matching `<initialAdmins>@<principalDomain>` becomes admin.
-      # i.e. sign up with admin@open-metadata.org on first launch.
       initialAdmins:
         - admin
-      principalDomain: "open-metadata.org"
+      principalDomain: "solace.lab"
       enforcePrincipalDomain: false
       enableSecureSocketConnection: false
+      # Group/role mapping from Keycloak is left off for now; the
+      # group-membership mapper is registered on the client so this can
+      # be flipped to `true` later without re-running setup.
+      useRolesFromProvider: false
 
     authentication:
-      clientType: public
-      provider: basic
-      enableSelfSignup: true
+      clientType: confidential
+      provider: custom-oidc
+      # Keycloak is the IdP. Self-signup must be off so users go
+      # through the OIDC flow rather than the basic-auth signup form.
+      enableSelfSignup: false
+      # Top-level clientId is the plain audience identifier used by the
+      # JWT filter. Injected via --set from .env in start.sh.
+      clientId: ""
+      callbackUrl: "https://openmetadata.solace.lab/callback"
+      # JWKS endpoints used to validate inbound tokens:
+      #   - OM's own (for ingestion-bot JWTs signed by the RSA keys
+      #     mounted from the openmetadata-jwt-keys Secret)
+      #   - Keycloak's (for end-user OIDC tokens)
       publicKeys:
         - "http://openmetadata:8585/api/v1/system/config/jwks"
-      # Authority is unused by basic auth but the chart requires the key.
-      authority: "https://accounts.google.com"
+        - "https://auth.solace.lab/realms/solace-lab/protocol/openid-connect/certs"
+      authority: "https://auth.solace.lab/realms/solace-lab"
       jwtPrincipalClaims:
         - email
         - preferred_username
         - sub
+      # OIDC code flow config. clientId / clientSecret are loaded from
+      # the `oidc-secrets` Secret created by start.sh; the chart wires
+      # them in via the secretRef pattern.
+      oidcConfiguration:
+        enabled: true
+        oidcType: "Keycloak"
+        clientId:
+          secretRef: oidc-secrets
+          secretKey: openmetadata-oidc-client-id
+        clientSecret:
+          secretRef: oidc-secrets
+          secretKey: openmetadata-oidc-client-secret
+        scope: "openid email profile"
+        discoveryUri: "https://auth.solace.lab/realms/solace-lab/.well-known/openid-configuration"
+        useNonce: true
+        preferredJwsAlgorithm: RS256
+        responseType: code
+        # PKCE off because the client is confidential (client secret is
+        # the second factor). Keycloak still accepts the request.
+        disablePkce: true
+        callbackUrl: "https://openmetadata.solace.lab/callback"
+        serverUrl: "https://openmetadata.solace.lab"
+        clientAuthenticationMethod: client_secret_post
+        tenant: ""
+        maxClockSkew: ""
+        tokenValidity: "3600"
+        customParams: "{}"
 
     # ----- JWT signing keys ---------------------------------------------
     jwtTokenConfiguration:

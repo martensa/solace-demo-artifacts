@@ -13,7 +13,9 @@ plugged in once OM is up.
 - **OpenSearch** (Apache 2.0, single node) as search backend
 - **Airflow** running the `openmetadata/ingestion` image for pipeline
   execution
-- **OpenMetadata server** with Basic + JWT authentication
+- **OpenMetadata server** authenticated via the
+  `solace-lab` Keycloak realm at `auth.solace.lab`
+  (OIDC code flow, confidential client)
 
 ```text
 Ingress (openmetadata.solace.lab)
@@ -38,6 +40,9 @@ Assumes the following from
 - trust-manager bundle `solace-lab-ca-trust-bundle` plus Kyverno policy
   `inject-solace-lab-ca-trust-bundle` (so pods see the lab CA out of
   the box -- no per-deployment cert config required)
+- Keycloak at `auth.solace.lab` with the `solace-lab` realm
+  (and an `auth.solace.lab` entry in CoreDNS NodeHosts so the OM
+  pod can reach Keycloak for OIDC discovery)
 
 `start.sh` registers `openmetadata.solace.lab` in CoreDNS NodeHosts so
 the hostname resolves both externally and inside the cluster.
@@ -45,28 +50,34 @@ the hostname resolves both externally and inside the cluster.
 ## Start and Stop
 
 ```bash
-./scripts/start.sh   # adds helm repo, generates JWT keys, installs both charts
-./scripts/stop.sh    # full teardown incl. PVCs
+cp .env.example .env                # set Keycloak admin creds if non-default
+./scripts/setup-keycloak-client.sh  # creates OIDC client in solace-lab realm
+# paste the printed KEYCLOAK_CLIENT_SECRET into .env
+./scripts/start.sh                  # JWT keys + oidc-secrets + helm install
+./scripts/stop.sh                   # full teardown incl. PVCs + Keycloak client
 ```
 
-Re-running `start.sh` is safe: it does a `helm upgrade --install` and
-leaves the JWT secret alone if it already exists.
+Re-running `start.sh` is safe: it does a `helm upgrade --install`,
+leaves the JWT secret alone if it already exists, and re-applies the
+`oidc-secrets` Secret so a rotated client secret in `.env` propagates.
 
 ## First-time login
 
-OpenMetadata starts with **basic auth + self-signup** enabled. The user
-whose email matches `<initialAdmin>@<principalDomain>` becomes admin on
-sign-up.
+OpenMetadata is wired to the `solace-lab` Keycloak realm at
+`auth.solace.lab`. The first user whose token principal matches
+`<initialAdmins>@<principalDomain>` (i.e. `admin@solace.lab`) becomes
+OM admin on first login.
 
-1. Open https://openmetadata.solace.lab/signin
-2. Click "Create Account" and sign up with
-   - email: `admin@open-metadata.org`
-   - password: your choice (>=8 chars, 1 digit, 1 upper, 1 special)
-3. You are logged in as admin.
+1. Open `https://openmetadata.solace.lab/signin`
+2. You are redirected to Keycloak. Log in as
+   - username: `admin`
+   - password: (the `solace-lab` realm admin password)
+3. After the callback you land in OM as admin.
 
-To restrict signup later, set
-`openmetadata.config.authentication.enableSelfSignup: false` in
-`local-k8s-values.yaml` and `helm upgrade`.
+Any other user from the `solace-lab` realm can also sign in and gets
+a regular (non-admin) OM account auto-provisioned. To promote them,
+log in as `admin` and grant the admin role under
+**Settings -> Users**.
 
 ## Getting the ingestion-bot JWT
 
@@ -84,27 +95,39 @@ with the ingestion-bot JWT:
 | Want to change       | Where                                                                |
 | -------------------- | -------------------------------------------------------------------- |
 | Hostname             | `local-k8s-values.yaml` -> `ingress.hosts[0].host` + `start.sh` DNS  |
-| Admin email          | `local-k8s-values.yaml` -> `authorizer.principalDomain`              |
+| Admin user           | `local-k8s-values.yaml` -> `authorizer.principalDomain`              |
+| Keycloak realm       | `.env` -> `KEYCLOAK_REALM` + `KEYCLOAK_ISSUER` + values discoveryUri |
+| OIDC client name     | `.env` -> `KEYCLOAK_CLIENT_ID` (default `openmetadata`)              |
 | DB password          | `local-k8s-deps-values.yaml` AND `local-k8s-values.yaml`             |
 | OpenSearch resources | `local-k8s-deps-values.yaml` -> `opensearch.resources`               |
-| Disable self-signup  | `local-k8s-values.yaml` -> `authentication.enableSelfSignup: false`  |
+
+To map Keycloak group membership onto OM roles, flip
+`authorizer.useRolesFromProvider: true`. The `groups` claim is already
+emitted by the client (set up by `scripts/setup-keycloak-client.sh`),
+so no Keycloak-side changes are needed.
 
 ## Files
 
 - `local-k8s-deps-values.yaml` -- PostgreSQL + OpenSearch + Airflow
-- `local-k8s-values.yaml` -- OM server (auth, ingress, JWT keys, DB
-  connection, Airflow client)
+- `local-k8s-values.yaml` -- OM server (OIDC auth, ingress, JWT keys,
+  DB connection, Airflow client)
 - `scripts/setup-rsa-keys.sh` -- idempotent RSA-2048 keypair + Secret
+- `scripts/setup-keycloak-client.sh` -- creates the `openmetadata` OIDC
+  client in the `solace-lab` realm via Keycloak Admin REST API
+- `scripts/teardown-keycloak-client.sh` -- removes the client (also
+  called from `stop.sh`)
 - `scripts/start.sh` -- end-to-end install
 - `scripts/stop.sh` -- end-to-end teardown
-- `.env.example` -- placeholder for future per-deployment secrets
+- `.env.example` -- template for Keycloak admin creds and the OIDC
+  client secret
 
 ## What's intentionally NOT done in this MVP
 
-- **Keycloak OIDC**: basic auth keeps the first deploy minimal. To
-  switch later: add `setup-keycloak-client.sh` script (analog to the
-  agent-mesh one), set `authentication.provider: oidc` in the server
-  values, drop in client id/secret via `--set`.
+- **Keycloak role -> OM role mapping**:
+  `authorizer.useRolesFromProvider` is left `false`. Admin is granted
+  via the `<initialAdmins>@<principalDomain>` match alone. Flip to
+  `true` (and add role mappers in Keycloak) once OM-side group/role
+  semantics are pinned down.
 - **Custom ingestion image with the Solace EP connector**: planned as
   Step 2. The vanilla `docker.getcollate.io/openmetadata/ingestion` is
   used today; the connector will be either baked into a custom image
@@ -116,6 +139,7 @@ with the ingestion-bot JWT:
 ## References
 
 - OpenMetadata docs: <https://docs.open-metadata.org/>
-- OM Helm charts: <https://github.com/open-metadata/openmetadata-helm-charts>
-- OM basic auth flow:
-  <https://docs.open-metadata.org/v1.6.x/deployment/security/basic-auth>
+- OM Helm charts:
+  <https://github.com/open-metadata/openmetadata-helm-charts>
+- OM Keycloak SSO (Kubernetes):
+  <https://docs.open-metadata.org/latest/deployment/security/keycloak/kubernetes>

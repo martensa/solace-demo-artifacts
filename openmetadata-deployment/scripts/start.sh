@@ -17,6 +17,40 @@ command -v helm    >/dev/null 2>&1 || { echo "ERROR: helm not found.";    exit 1
 command -v jq      >/dev/null 2>&1 || { echo "ERROR: jq not found (brew install jq)."; exit 1; }
 command -v openssl >/dev/null 2>&1 || { echo "ERROR: openssl not found."; exit 1; }
 
+# --- Load environment variables -----------------------------------
+if [ ! -f "$PROJECT_DIR/.env" ]; then
+  echo "No .env file found. Copying .env.example to .env ..."
+  cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
+  echo ""
+  echo "Now run:"
+  echo "  scripts/setup-keycloak-client.sh"
+  echo "and paste the printed KEYCLOAK_CLIENT_SECRET into .env, then"
+  echo "re-run this script."
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+. "$PROJECT_DIR/.env"
+
+# --- Validate required variables ----------------------------------
+missing=""
+for var in KEYCLOAK_ISSUER KEYCLOAK_CLIENT_ID KEYCLOAK_CLIENT_SECRET; do
+  val="${!var:-}"
+  if [ -z "$val" ] || [ "$val" = "changeme" ]; then
+    missing="$missing $var"
+  fi
+done
+
+if [ -n "$missing" ]; then
+  echo "ERROR: The following variables in .env are missing or still set"
+  echo "to the placeholder value:"
+  echo " $missing"
+  echo ""
+  echo "Run scripts/setup-keycloak-client.sh first to create the OIDC"
+  echo "client in Keycloak, then paste the printed secret into .env."
+  exit 1
+fi
+
 # --- CoreDNS NodeHost Helper --------------------------------------
 # Idempotentes Hinzufuegen eines Hostname-zu-IP Mappings in die
 # CoreDNS NodeHosts ConfigMap (k3s/Rancher Desktop Spezifikum). OM
@@ -100,6 +134,18 @@ if kubectl get secret openmetadata-postgresql -n "$OM_NAMESPACE" >/dev/null 2>&1
     --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 fi
 
+# --- OIDC credentials Secret --------------------------------------
+# Server values reference `oidc-secrets` via secretRef for the OIDC
+# client id and secret. Re-applied on every run so a rotated client
+# secret in .env propagates without a stale-secret error.
+echo ""
+echo "Creating/updating Secret oidc-secrets ..."
+kubectl create secret generic oidc-secrets \
+  --namespace "$OM_NAMESPACE" \
+  --from-literal=openmetadata-oidc-client-id="$KEYCLOAK_CLIENT_ID" \
+  --from-literal=openmetadata-oidc-client-secret="$KEYCLOAK_CLIENT_SECRET" \
+  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
 # --- Server -------------------------------------------------------
 echo ""
 echo "Installing/upgrading $OM_RELEASE_SERVER ..."
@@ -107,7 +153,8 @@ helm upgrade --install "$OM_RELEASE_SERVER" \
   open-metadata/openmetadata \
   --version "$OM_CHART_VERSION" \
   --namespace "$OM_NAMESPACE" \
-  --values "$PROJECT_DIR/local-k8s-values.yaml"
+  --values "$PROJECT_DIR/local-k8s-values.yaml" \
+  --set openmetadata.config.authentication.clientId="$KEYCLOAK_CLIENT_ID"
 
 # --- CoreDNS NodeHosts --------------------------------------------
 INGRESS_IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \
@@ -136,11 +183,10 @@ echo ""
 echo "----------------------------------------------------------------"
 echo "OpenMetadata deployment complete."
 echo ""
-echo "Open https://${OM_DNS_NAME}/signin in a browser. Self-signup with"
-echo "    email:    admin@open-metadata.org"
-echo "    password: (your choice; >=8 chars, 1 digit, 1 upper, 1 special)"
-echo "is granted admin (initialAdmins) because the email principal"
-echo "matches admin@open-metadata.org."
+echo "Open https://${OM_DNS_NAME}/signin in a browser. Login is now"
+echo "handled by Keycloak at ${KEYCLOAK_URL} (realm: ${KEYCLOAK_REALM:-solace-lab})."
+echo "Sign in with the realm admin (admin / admin@solace.lab) for the"
+echo "initial OM admin -- the email principal matches initialAdmins."
 echo ""
 echo "Ingestion bot JWT:"
 echo "  Settings -> Bots -> ingestion-bot -> Token"

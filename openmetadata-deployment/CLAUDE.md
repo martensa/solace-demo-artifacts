@@ -19,6 +19,9 @@ in this repo, provisioned by
   lab CA + `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE` into every pod
 - Kyverno policy `inject-registry-pull-secret` (only relevant once
   images are pulled from `registry.solace.lab`)
+- Keycloak at `auth.solace.lab` with the `solace-lab` realm (and an
+  `auth.solace.lab` entry in CoreDNS NodeHosts so the OM pod can hit
+  the OIDC discovery endpoint via the external hostname)
 
 `start.sh` adds `openmetadata.solace.lab` to CoreDNS NodeHosts during
 deployment; `stop.sh` removes it. Same decentralized hostname pattern as
@@ -29,8 +32,11 @@ Do not re-create the cluster-level resources from this repo.
 ## Start and Stop
 
 ```bash
-./scripts/start.sh   # helm install both charts
-./scripts/stop.sh    # full teardown incl. PVCs
+cp .env.example .env                # set Keycloak admin creds if non-default
+./scripts/setup-keycloak-client.sh  # creates OIDC client in solace-lab realm
+# paste KEYCLOAK_CLIENT_SECRET into .env
+./scripts/start.sh                  # helm install both charts
+./scripts/stop.sh                   # teardown incl. PVCs + Keycloak client
 ```
 
 ## Helm Conventions
@@ -48,11 +54,26 @@ Do not re-create the cluster-level resources from this repo.
 
 ## Auth
 
-Initial deployment uses **basic auth + JWT** with self-signup enabled.
-The first user signing up with email `admin@open-metadata.org` becomes
-admin. To swap to Keycloak OIDC later, add a Keycloak client setup
-script (analog to `agent-mesh-deployment/scripts/setup-keycloak-client.sh`)
-and flip `openmetadata.config.authentication.provider` to `oidc`.
+OIDC code flow against the `solace-lab` Keycloak realm at
+`auth.solace.lab`. The OM server is a confidential client
+(`clientType: confidential`, `provider: custom-oidc`). Self-signup is
+off -- all identities come from Keycloak.
+
+Admin matching: OM extracts the principal from the ID token using the
+`jwtPrincipalClaims` order (`email`, `preferred_username`, `sub`),
+strips the `@domain` part, and grants admin if the result matches
+anything in `authorizer.initialAdmins`. With `initialAdmins: [admin]`
+and `principalDomain: solace.lab`, the realm admin user
+(`admin@solace.lab`) becomes OM admin on first login.
+
+The Keycloak side (client registration and group mapper) is owned by
+`scripts/setup-keycloak-client.sh`. Group mapping into OM is OFF
+(`useRolesFromProvider: false`); the `groups` claim is emitted anyway
+so flipping the flag later is a one-liner.
+
+JWT signing keys (RSA-2048, mounted from the `openmetadata-jwt-keys`
+Secret) are still used by OM to sign bot tokens like `ingestion-bot`.
+That has nothing to do with the user-facing OIDC flow.
 
 ## JWT Keys
 
@@ -63,30 +84,40 @@ without invalidating every previously issued ingestion-bot JWT.**
 
 ## Secrets Handling
 
-This MVP has no real secrets in `.env` -- `.env.example` is checked in as
-a placeholder for future values (`SOLACE_EVENTPORTAL_TOKEN`,
-`OM_INGESTION_BOT_TOKEN`) used by the connector / bridge, not by the
-deployment scripts themselves.
-
-The Postgres credentials live inside `local-k8s-deps-values.yaml` and
-are mirrored in `local-k8s-values.yaml` so the server can connect. They
-are demo-only. Rotate by changing BOTH files.
+- `.env` (gitignored) holds the Keycloak realm admin creds (used only
+  by the setup script) and the OIDC client secret. `start.sh` refuses
+  to deploy while `KEYCLOAK_CLIENT_SECRET` is the `changeme`
+  placeholder.
+- `start.sh` materialises the OIDC creds as the `oidc-secrets`
+  Kubernetes Secret (`openmetadata-oidc-client-id` /
+  `openmetadata-oidc-client-secret`); the chart references it via
+  `secretRef`. The Secret is re-applied on every run, so rotating
+  `KEYCLOAK_CLIENT_SECRET` in `.env` only needs a `start.sh` re-run.
+- The Postgres credentials live inside `local-k8s-deps-values.yaml`
+  and are mirrored in `local-k8s-values.yaml` so the server can
+  connect. They are demo-only. Rotate by changing BOTH files.
 
 ## Key Files
 
 - `local-k8s-deps-values.yaml` -- Dependencies chart values
-- `local-k8s-values.yaml` -- Server chart values
+- `local-k8s-values.yaml` -- Server chart values (OIDC wired here)
 - `scripts/setup-rsa-keys.sh` -- Generates the JWT keypair Secret
-- `scripts/start.sh` -- helm repo add + JWT keys + install both charts
-  + CoreDNS NodeHosts
+- `scripts/setup-keycloak-client.sh` -- Creates the `openmetadata`
+  OIDC client in the `solace-lab` realm via Keycloak Admin REST API
+- `scripts/teardown-keycloak-client.sh` -- Deletes the OIDC client
+  (called automatically by `stop.sh`)
+- `scripts/start.sh` -- helm repo add + JWT keys + oidc-secrets +
+  install both charts + CoreDNS NodeHosts
 - `scripts/stop.sh` -- Uninstall + PVC cleanup + namespace delete +
-  CoreDNS cleanup
-- `.env.example` -- Future per-deployment secrets (not yet wired)
+  CoreDNS cleanup + Keycloak client teardown
+- `.env.example` -- Template for Keycloak admin creds and the
+  OIDC client secret
 
 ## References
 
-- OM Helm charts: <https://github.com/open-metadata/openmetadata-helm-charts>
-- OM basic-auth setup:
-  <https://docs.open-metadata.org/v1.6.x/deployment/security/basic-auth>
+- OM Helm charts:
+  <https://github.com/open-metadata/openmetadata-helm-charts>
+- OM Keycloak SSO (Kubernetes):
+  <https://docs.open-metadata.org/latest/deployment/security/keycloak/kubernetes>
 - OM JWT token concept:
   <https://docs.open-metadata.org/v1.6.x/deployment/security/enable-jwt-tokens>
