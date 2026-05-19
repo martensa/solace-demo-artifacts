@@ -1,32 +1,36 @@
 # Helm values for the openmetadata-dependencies chart.
 #
 # Deploys the three things the OM server needs but doesn't ship itself:
-#   * relational database (PostgreSQL)
+#   * relational database (MySQL, bitnami)
 #   * search backend     (OpenSearch, single-node)
 #   * pipeline runner    (Apache Airflow, with the OM ingestion image)
 #
-# All passwords are demo-only and are also referenced by
-# local-k8s-values.yaml so the server can connect. Change BOTH if you
-# rotate them.
+# Chart-default MySQL initdbScripts seed two databases on first boot:
+#   * openmetadata_db  -- user openmetadata_user / openmetadata_password
+#   * airflow_db       -- user airflow_user      / airflow_pass
+# These passwords are demo-only. start.sh materialises them into three
+# Secrets that OM server and Airflow read via secretRef:
+#   * mysql-secrets.openmetadata-mysql-password
+#   * airflow-mysql-secrets.airflow-mysql-password
+#   * airflow-secrets.openmetadata-airflow-password
+# Rotating means changing the literals in start.sh AND reseeding MySQL
+# by hand (initdbScripts only runs on a fresh PVC).
 
-# ---------------------------------------------------------------- MySQL off
+# -------------------------------------------------------------------- MySQL
+# Bitnami moved older free images to the `bitnamilegacy/` namespace in
+# August 2025; the chart-pinned tag `8.0.33-debian-11-r0` is no longer
+# present under `bitnami/mysql`. Repoint at the legacy registry path so
+# image pulls succeed. Tag stays identical so initdbScripts behaviour
+# is unchanged.
 mysql:
-  enabled: false
-
-# --------------------------------------------------------------- PostgreSQL
-postgresql:
   enabled: true
-  # Bitnami chart 12.x is what the deps chart pins. Auth block matches
-  # the keys OM server values expect (openmetadata-postgres-credentials).
-  auth:
-    username: openmetadata_user
-    password: openmetadata_password
-    postgresPassword: openmetadata_password
-    database: openmetadata_db
-    existingSecret: ""
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/mysql
+    tag: 8.0.33-debian-11-r0
+    pullPolicy: IfNotPresent
   primary:
     persistence:
-      enabled: true
       size: 20Gi
     resources:
       requests:
@@ -41,31 +45,17 @@ elasticsearch:
   enabled: false
 
 # ---------------------------------------------------------------- OpenSearch
+# Subchart already sets sensible defaults for a single-node demo:
+#   singleNode=true (which seeds discovery.type=single-node env),
+#   opensearchJavaOpts="-Xmx1g -Xms1g",
+#   pod securityContext fsGroup/runAsUser=1000,
+#   config.opensearch.yml -> plugins.security.disabled: true.
+# Only override what differs: persistence size + resource ceiling.
 opensearch:
   enabled: true
-  # Single node is fine for a demo / lab. Bump to >=3 replicas for prod.
   singleNode: true
   replicas: 1
-  # OpenSearch refuses to start as root; chart sets fsGroup but some
-  # storage classes ignore it -- set explicitly.
-  securityContext:
-    runAsUser: 1000
-    fsGroup: 1000
-  config:
-    opensearch.yml: |
-      cluster.name: openmetadata-cluster
-      network.host: 0.0.0.0
-      discovery.type: single-node
-      plugins.security.disabled: true
-  extraEnvs:
-    - name: discovery.type
-      value: single-node
-    - name: DISABLE_SECURITY_PLUGIN
-      value: "true"
-    - name: OPENSEARCH_JAVA_OPTS
-      value: "-Xms1g -Xmx1g"
   persistence:
-    enabled: true
     size: 30Gi
   resources:
     requests:
@@ -108,24 +98,33 @@ airflow:
     config:
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
       AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "60"
-  # Use the same Postgres as OM server (separate logical database).
+  # Reuse the chart-default MySQL service (separate logical database).
+  # The chart already wires externalDatabase to:
+  #   host=mysql, port=3306, db=airflow_db, user=airflow_user,
+  #   passwordSecret=airflow-mysql-secrets (key airflow-mysql-password)
+  # so no override is needed here.
   postgresql:
     enabled: false
-  externalDatabase:
-    type: postgres
-    host: openmetadata-postgresql
-    port: 5432
-    user: openmetadata_user
-    password: openmetadata_password
-    database: airflow_db
-  # Airflow PVC sizing -- DAG files are tiny, logs grow with activity.
+  # Airflow webserver, scheduler, triggerer, db-migrations and worker
+  # pods all need shared access to the dags/ and logs/ directories. The
+  # chart hard-requires ReadWriteMany on logs (and effectively on dags
+  # for the multi-pod KubernetesExecutor flow). Rancher Desktop's
+  # local-path provisioner refuses to provision RWX, so start.sh
+  # pre-creates two static hostPath PVs (RWX, on the lima VM filesystem)
+  # and matching PVCs that this chart picks up via existingClaim.
+  # accessMode stays ReadWriteMany only to satisfy the chart's
+  # validate-values gate.
   dags:
     persistence:
       enabled: true
+      existingClaim: openmetadata-dependencies-dags
+      accessMode: ReadWriteMany
       size: 5Gi
   logs:
     persistence:
       enabled: true
+      existingClaim: openmetadata-dependencies-logs
+      accessMode: ReadWriteMany
       size: 5Gi
   workers:
     replicas: 1

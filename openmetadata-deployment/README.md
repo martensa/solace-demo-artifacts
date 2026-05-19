@@ -9,10 +9,12 @@ plugged in once OM is up.
 
 ## What gets deployed
 
-- **PostgreSQL** (Bitnami chart) for OM and Airflow databases
+- **MySQL** (Bitnami chart) for OM and Airflow databases. Pinned to
+  `bitnamilegacy/mysql:8.0.33-debian-11-r0` because Bitnami moved
+  older free images out of `bitnami/` in August 2025.
 - **OpenSearch** (Apache 2.0, single node) as search backend
-- **Airflow** running the `openmetadata/ingestion` image for pipeline
-  execution
+- **Airflow** (KubernetesExecutor) running the
+  `openmetadata/ingestion` image for pipeline execution
 - **OpenMetadata server** authenticated via the
   `solace-lab` Keycloak realm at `auth.solace.lab`
   (OIDC code flow, confidential client)
@@ -21,7 +23,7 @@ plugged in once OM is up.
 Ingress (openmetadata.solace.lab)
    |
    v
-openmetadata (server)  --->  openmetadata-postgresql
+openmetadata (server)  --->  mysql
    |
    |--->  opensearch
    |
@@ -32,14 +34,16 @@ openmetadata (server)  --->  openmetadata-postgresql
 
 ## Cluster Dependencies
 
-Assumes the following from
-[`solace-lab-infrastructure`](https://github.com/martensa/solace-lab-infrastructure):
+Assumes the following from `solace-lab-infrastructure`
+(<https://github.com/martensa/solace-lab-infrastructure>):
 
 - NGINX Ingress Controller (`ingress-nginx`)
 - cert-manager + ClusterIssuer `solace-lab-ca-issuer`
 - trust-manager bundle `solace-lab-ca-trust-bundle` plus Kyverno policy
   `inject-solace-lab-ca-trust-bundle` (so pods see the lab CA out of
-  the box -- no per-deployment cert config required)
+  the box -- no per-deployment cert config required for python/curl;
+  the OM server adds an init container on top to import the bundle
+  into a JVM truststore, see CLAUDE.md)
 - Keycloak at `auth.solace.lab` with the `solace-lab` realm
   (and an `auth.solace.lab` entry in CoreDNS NodeHosts so the OM
   pod can reach Keycloak for OIDC discovery)
@@ -92,14 +96,25 @@ with the ingestion-bot JWT:
 
 ## Customizing
 
-| Want to change       | Where                                                                |
-| -------------------- | -------------------------------------------------------------------- |
-| Hostname             | `local-k8s-values.yaml` -> `ingress.hosts[0].host` + `start.sh` DNS  |
-| Admin user           | `local-k8s-values.yaml` -> `authorizer.principalDomain`              |
-| Keycloak realm       | `.env` -> `KEYCLOAK_REALM` + `KEYCLOAK_ISSUER` + values discoveryUri |
-| OIDC client name     | `.env` -> `KEYCLOAK_CLIENT_ID` (default `openmetadata`)              |
-| DB password          | `local-k8s-deps-values.yaml` AND `local-k8s-values.yaml`             |
-| OpenSearch resources | `local-k8s-deps-values.yaml` -> `opensearch.resources`               |
+- **Hostname** -- `local-k8s-values.yaml` (`ingress.hosts[0].host`)
+  plus `OM_DNS_NAME` in `scripts/start.sh`
+- **OM admin principal** -- `local-k8s-values.yaml`
+  (`authorizer.initialAdmins`, `principalDomain`)
+- **Keycloak realm / issuer** -- `.env` (`KEYCLOAK_REALM`,
+  `KEYCLOAK_ISSUER`) plus `discoveryUri`, `authority`, `publicKeys[1]`
+  in `local-k8s-values.yaml`
+- **OIDC client name** -- `.env` (`KEYCLOAK_CLIENT_ID`, default
+  `openmetadata`); the client is provisioned by
+  `scripts/setup-keycloak-client.sh`
+- **DB password** -- demo creds are hardcoded in the chart's MySQL
+  `initdbScripts` and mirrored into the `mysql-secrets` /
+  `airflow-mysql-secrets` Kubernetes Secrets by `scripts/start.sh`.
+  Changing the password means editing both `start.sh` and reseeding
+  MySQL by hand (initdbScripts only run on a fresh data PVC).
+- **OpenSearch resources** -- `local-k8s-deps-values.yaml`
+  (`opensearch.resources`)
+- **JVM heap / OM server resources** -- `local-k8s-values.yaml`
+  (`resources`)
 
 To map Keycloak group membership onto OM roles, flip
 `authorizer.useRolesFromProvider: true`. The `groups` claim is already
@@ -108,9 +123,9 @@ so no Keycloak-side changes are needed.
 
 ## Files
 
-- `local-k8s-deps-values.yaml` -- PostgreSQL + OpenSearch + Airflow
+- `local-k8s-deps-values.yaml` -- MySQL + OpenSearch + Airflow values
 - `local-k8s-values.yaml` -- OM server (OIDC auth, ingress, JWT keys,
-  DB connection, Airflow client)
+  DB connection, Airflow client, JVM truststore init container)
 - `scripts/setup-rsa-keys.sh` -- idempotent RSA-2048 keypair + Secret
 - `scripts/setup-keycloak-client.sh` -- creates the `openmetadata` OIDC
   client in the `solace-lab` realm via Keycloak Admin REST API
@@ -139,7 +154,7 @@ so no Keycloak-side changes are needed.
 ## References
 
 - OpenMetadata docs: <https://docs.open-metadata.org/>
-- OM Helm charts:
-  <https://github.com/open-metadata/openmetadata-helm-charts>
-- OM Keycloak SSO (Kubernetes):
-  <https://docs.open-metadata.org/latest/deployment/security/keycloak/kubernetes>
+- OM Helm charts repository
+  (<https://github.com/open-metadata/openmetadata-helm-charts>)
+- OM Keycloak SSO on Kubernetes (one-liner search at
+  <https://docs.open-metadata.org/>)

@@ -12,16 +12,82 @@ image:
 # scripts/setup-rsa-keys.sh. Without them OM would auto-generate keys on
 # every restart -- fine for a throwaway pod, fatal for any token that
 # outlives a single startup.
+#
+# The custom-cacerts emptyDir gets populated by the import-lab-ca init
+# container with a JVM truststore that contains the JDK Mozilla roots
+# plus every cert in the solace-lab CA trust bundle. JAVA_TOOL_OPTIONS
+# below points Java at this file so OIDC discovery against
+# auth.solace.lab passes PKIX validation. Kyverno's existing trust
+# bundle ConfigMap mount (under /etc/ssl/certs) is python/curl-style
+# only -- Java doesn't read it.
 extraVolumes:
   - name: openmetadata-jwt-keys
     secret:
       secretName: openmetadata-jwt-keys
-      defaultMode: 0400
+      # 0400 root-owned blocks the openmetadata UID 1000 from reading
+      # its own signing keys; without them OM silently falls back to
+      # an ephemeral EC keypair and JwtFilter crashes casting EC ->
+      # RSAPublicKey on every authenticated request. 0444 is fine --
+      # secrecy of the private key is enforced by the Secret's RBAC,
+      # not by file mode inside a single-user container.
+      defaultMode: 0444
+  - name: lab-ca-bundle
+    configMap:
+      name: solace-lab-ca-trust-bundle
+  - name: custom-cacerts
+    emptyDir: {}
 
 extraVolumeMounts:
   - name: openmetadata-jwt-keys
     mountPath: /etc/openmetadata/jwtkeys
     readOnly: true
+  - name: custom-cacerts
+    mountPath: /opt/custom-cacerts
+    readOnly: true
+
+# preMigrateInitContainers run BEFORE the chart's own run-db-migrations
+# init container, which is itself a JVM that gets extraEnvs (including
+# JAVA_TOOL_OPTIONS pointing at /opt/custom-cacerts/cacerts). The
+# import-lab-ca step must finish first or that JVM fails to start with
+# a missing-truststore error.
+preMigrateInitContainers:
+  - name: import-lab-ca
+    # Multi-arch (linux/amd64 + linux/arm64); the -alpine tag is amd64
+    # only and breaks Rancher Desktop on Apple Silicon.
+    image: eclipse-temurin:17-jre
+    securityContext:
+      runAsUser: 0
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        set -e
+        cp -L "$JAVA_HOME/lib/security/cacerts" /custom-cacerts/cacerts
+        chmod u+w /custom-cacerts/cacerts
+        mkdir -p /tmp/certs && cd /tmp/certs
+        csplit -z -f cert- -b "%02d.pem" \
+          /lab-ca/ca-certificates.crt \
+          '/-----BEGIN CERTIFICATE-----/' '{*}' >/dev/null
+        i=0
+        for pem in cert-*.pem; do
+          [ -s "$pem" ] || continue
+          keytool -importcert -noprompt -trustcacerts \
+            -alias "lab-ca-$i" \
+            -file "$pem" \
+            -keystore /custom-cacerts/cacerts \
+            -storepass changeit
+          i=$((i+1))
+        done
+        echo "Imported $i lab CA cert(s) into /custom-cacerts/cacerts"
+    volumeMounts:
+      - name: lab-ca-bundle
+        mountPath: /lab-ca
+        readOnly: true
+      - name: custom-cacerts
+        mountPath: /custom-cacerts
+
+extraEnvs:
+  - name: JAVA_TOOL_OPTIONS
+    value: "-Djavax.net.ssl.trustStore=/opt/custom-cacerts/cacerts -Djavax.net.ssl.trustStorePassword=changeit"
 
 # Probes inherited from the chart defaults. Boot is dog-slow on first
 # install because of database migrations; the longer startup period
@@ -116,18 +182,22 @@ openmetadata:
       keyId: "Gb389a-9f76-gdjs-a92j-0242bk94356"
 
     # ----- Database ------------------------------------------------------
+    # MySQL is the chart-default for openmetadata-dependencies. The
+    # initdbScripts seed openmetadata_db with user openmetadata_user /
+    # openmetadata_password. start.sh materialises that into the Secret
+    # mysql-secrets.openmetadata-mysql-password (name/key per upstream
+    # local-Kubernetes quickstart).
     database:
-      driverClass: "org.postgresql.Driver"
-      dbScheme: "postgresql"
-      dbUseSSL: false
-      host: "openmetadata-postgresql"
-      port: 5432
+      driverClass: "com.mysql.cj.jdbc.Driver"
+      dbScheme: "mysql"
+      host: "mysql"
+      port: 3306
       databaseName: "openmetadata_db"
       auth:
         username: openmetadata_user
         password:
-          secretRef: openmetadata-postgres-credentials
-          secretKey: postgres-password
+          secretRef: mysql-secrets
+          secretKey: openmetadata-mysql-password
 
     # ----- Search (OpenSearch) ------------------------------------------
     elasticsearch:
@@ -154,7 +224,6 @@ openmetadata:
       apiEndpoint: "http://openmetadata-dependencies-web:8080"
       metadataApiEndpoint: "http://openmetadata:8585/api"
       hostIp: "0.0.0.0"
-      verifySSL: "no-ssl"
       auth:
         username: admin
         password:

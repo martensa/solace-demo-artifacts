@@ -52,12 +52,10 @@ if [ -n "$missing" ]; then
 fi
 
 # --- CoreDNS NodeHost Helper --------------------------------------
-# Idempotentes Hinzufuegen eines Hostname-zu-IP Mappings in die
-# CoreDNS NodeHosts ConfigMap (k3s/Rancher Desktop Spezifikum). OM
-# selbst macht keine externen Self-Calls, aber die ingestion Workflows
-# nutzen `OPENMETADATA_HOST_PORT` und das soll auch von Airflow-Pods
-# aus erreichbar bleiben, falls Nutzer den externen Hostname dort
-# eintragen.
+# Idempotently add a hostname -> IP mapping to the k3s CoreDNS
+# NodeHosts ConfigMap so the external hostname also resolves
+# in-cluster (relevant for any Airflow workflow that reaches OM via
+# OPENMETADATA_HOST_PORT using the external name).
 upsert_coredns_nodehost() {
   local hostname="$1"
   local ip="$2"
@@ -94,7 +92,143 @@ kubectl create namespace "$OM_NAMESPACE" 2>/dev/null || true
 # --- JWT keypair (idempotent) -------------------------------------
 "$SCRIPT_DIR/setup-rsa-keys.sh"
 
-# --- Dependencies (PostgreSQL + OpenSearch + Airflow) -------------
+# --- DB / pipeline credential Secrets -----------------------------
+# Names and keys follow the upstream OM local-Kubernetes quickstart so
+# the chart-default password lookups also resolve. The deps chart's
+# MySQL initdbScripts seed two databases with these hardcoded demo
+# creds; rotating means re-seeding MySQL by hand because initdbScripts
+# only run on a fresh data PVC.
+#   mysql-secrets.openmetadata-mysql-password    -> openmetadata_db
+#   airflow-mysql-secrets.airflow-mysql-password -> airflow_db
+#   airflow-secrets.openmetadata-airflow-password -> Airflow admin user
+echo ""
+echo "Creating/updating MySQL + Airflow credential Secrets ..."
+kubectl create secret generic mysql-secrets \
+  --namespace "$OM_NAMESPACE" \
+  --from-literal=openmetadata-mysql-password="openmetadata_password" \
+  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+kubectl create secret generic airflow-mysql-secrets \
+  --namespace "$OM_NAMESPACE" \
+  --from-literal=airflow-mysql-password="airflow_pass" \
+  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+kubectl create secret generic airflow-secrets \
+  --namespace "$OM_NAMESPACE" \
+  --from-literal=openmetadata-airflow-password="admin" \
+  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
+# --- Airflow shared volumes ---------------------------------------
+# Rancher Desktop's local-path provisioner refuses to provision RWX
+# PVCs, but the Airflow subchart insists on RWX for its dags/ and
+# logs/ directories. Workaround: pre-bind two static hostPath PVs
+# (RWX, DirectoryOrCreate so the path materialises on first mount)
+# to PVCs in this namespace, then let the chart pick them up via
+# existingClaim. Single-node only -- the host path lives on the
+# lima VM filesystem.
+echo ""
+echo "Pre-binding hostPath PVs/PVCs for Airflow dags + logs ..."
+kubectl apply -f - <<EOF >/dev/null
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: openmetadata-dependencies-dags
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes: ["ReadWriteMany"]
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: ""
+  hostPath:
+    path: /var/openmetadata-dependencies/dags
+    type: DirectoryOrCreate
+  claimRef:
+    namespace: ${OM_NAMESPACE}
+    name: openmetadata-dependencies-dags
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: openmetadata-dependencies-logs
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes: ["ReadWriteMany"]
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: ""
+  hostPath:
+    path: /var/openmetadata-dependencies/logs
+    type: DirectoryOrCreate
+  claimRef:
+    namespace: ${OM_NAMESPACE}
+    name: openmetadata-dependencies-logs
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openmetadata-dependencies-dags
+  namespace: ${OM_NAMESPACE}
+spec:
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ""
+  volumeName: openmetadata-dependencies-dags
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openmetadata-dependencies-logs
+  namespace: ${OM_NAMESPACE}
+spec:
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: ""
+  volumeName: openmetadata-dependencies-logs
+EOF
+
+# The kubelet creates DirectoryOrCreate hostPath dirs as 0755 root:root
+# and only chgrp's them via fsGroup (no chmod). The Airflow containers
+# run as UID 50000 with supplementary group 0 and need WRITE -- so
+# chmod the volumes 0777 once via a privileged pod that mounts both
+# PVCs. Idempotent: re-creates the pod on every run.
+echo "Setting permissive mode on Airflow hostPath volumes ..."
+kubectl delete pod chmod-airflow-volumes -n "$OM_NAMESPACE" \
+  --ignore-not-found=true >/dev/null
+kubectl apply -f - <<EOF >/dev/null
+apiVersion: v1
+kind: Pod
+metadata:
+  name: chmod-airflow-volumes
+  namespace: ${OM_NAMESPACE}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: chmod
+      image: busybox:1.36
+      command: ["sh", "-c", "chmod -R 0777 /dags /logs && echo done"]
+      volumeMounts:
+        - name: dags
+          mountPath: /dags
+        - name: logs
+          mountPath: /logs
+  volumes:
+    - name: dags
+      persistentVolumeClaim:
+        claimName: openmetadata-dependencies-dags
+    - name: logs
+      persistentVolumeClaim:
+        claimName: openmetadata-dependencies-logs
+EOF
+kubectl wait --for=condition=Ready=false pod/chmod-airflow-volumes \
+  -n "$OM_NAMESPACE" --timeout=60s 2>/dev/null || true
+kubectl wait --for=jsonpath='{.status.phase}'=Succeeded \
+  pod/chmod-airflow-volumes -n "$OM_NAMESPACE" --timeout=60s >/dev/null
+kubectl delete pod chmod-airflow-volumes -n "$OM_NAMESPACE" >/dev/null
+
+# --- Dependencies (MySQL + OpenSearch + Airflow) ------------------
 echo ""
 echo "Installing/upgrading $OM_RELEASE_DEPS ..."
 helm upgrade --install "$OM_RELEASE_DEPS" \
@@ -103,36 +237,38 @@ helm upgrade --install "$OM_RELEASE_DEPS" \
   --namespace "$OM_NAMESPACE" \
   --values "$PROJECT_DIR/local-k8s-deps-values.yaml"
 
+# StatefulSets are created asynchronously by helm install -- wait
+# for the resource itself to exist before calling rollout status,
+# otherwise it errors with "no matching resources found".
 echo ""
-echo "Waiting for PostgreSQL to be ready ..."
-kubectl wait --for=condition=ready pod \
-  -l app.kubernetes.io/name=postgresql \
-  --namespace "$OM_NAMESPACE" \
-  --timeout=300s
+echo "Waiting for MySQL StatefulSet to be created ..."
+until kubectl get statefulset mysql -n "$OM_NAMESPACE" >/dev/null 2>&1; do
+  sleep 2
+done
+echo "Waiting for MySQL to be ready ..."
+kubectl rollout status statefulset/mysql \
+  --namespace "$OM_NAMESPACE" --timeout=300s
 
+echo "Waiting for OpenSearch StatefulSet to be created ..."
+until kubectl get statefulset opensearch -n "$OM_NAMESPACE" >/dev/null 2>&1; do
+  sleep 2
+done
 echo "Waiting for OpenSearch to be ready ..."
-kubectl wait --for=condition=ready pod \
-  -l app.kubernetes.io/name=opensearch \
-  --namespace "$OM_NAMESPACE" \
-  --timeout=300s 2>/dev/null || \
-  kubectl wait --for=condition=ready pod \
-    -l app=opensearch \
-    --namespace "$OM_NAMESPACE" \
-    --timeout=300s 2>/dev/null || true
+kubectl rollout status statefulset/opensearch \
+  --namespace "$OM_NAMESPACE" --timeout=300s || true
 
-# --- Postgres credentials Secret for OM server --------------------
-# The deps Postgres chart creates `openmetadata-postgresql` Secret
-# with `postgres-password` and `password`. Server values expect
-# `openmetadata-postgres-credentials.postgres-password`. Replicate
-# under the expected name (idempotent).
-if kubectl get secret openmetadata-postgresql -n "$OM_NAMESPACE" >/dev/null 2>&1; then
-  PG_PASSWORD=$(kubectl get secret openmetadata-postgresql -n "$OM_NAMESPACE" \
-    -o jsonpath='{.data.password}' | base64 -d)
-  kubectl create secret generic openmetadata-postgres-credentials \
-    --namespace "$OM_NAMESPACE" \
-    --from-literal=postgres-password="$PG_PASSWORD" \
-    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-fi
+# Airflow web is what the OM server will hit for pipeline registration.
+# Wait for the deployment to settle so the server's first contact
+# attempt succeeds; the others (scheduler, triggerer, sync-users) come
+# up on the same critical path so this gates them all.
+echo "Waiting for Airflow web deployment to be ready ..."
+until kubectl get deployment openmetadata-dependencies-web \
+  -n "$OM_NAMESPACE" >/dev/null 2>&1; do
+  sleep 2
+done
+kubectl rollout status deployment/openmetadata-dependencies-web \
+  --namespace "$OM_NAMESPACE" --timeout=600s || \
+  echo "WARNING: Airflow web did not reach ready within 10 minutes (memory pressure?). Continuing -- OM server can still start."
 
 # --- OIDC credentials Secret --------------------------------------
 # Server values reference `oidc-secrets` via secretRef for the OIDC
@@ -170,18 +306,27 @@ fi
 # --- Wait for OM to be ready --------------------------------------
 echo ""
 echo "Waiting for OpenMetadata server to become ready (boot is slow on first install) ..."
-kubectl wait --for=condition=ready pod \
+if kubectl wait --for=condition=ready pod \
   -l app.kubernetes.io/instance="$OM_RELEASE_SERVER" \
   --namespace "$OM_NAMESPACE" \
-  --timeout=600s 2>/dev/null || true
+  --timeout=600s 2>/dev/null; then
+  OM_READY=1
+else
+  OM_READY=0
+fi
 
-echo ""
-helm status "$OM_RELEASE_SERVER" --namespace "$OM_NAMESPACE"
 echo ""
 kubectl get pods --namespace "$OM_NAMESPACE"
 echo ""
 echo "----------------------------------------------------------------"
-echo "OpenMetadata deployment complete."
+if [ "$OM_READY" = "1" ]; then
+  echo "OpenMetadata deployment complete -- all critical pods Ready."
+else
+  echo "OpenMetadata deployment finished, but the server pod did not"
+  echo "reach Ready within 10 minutes. Check:"
+  echo "  kubectl get pods -n $OM_NAMESPACE"
+  echo "  kubectl logs -n $OM_NAMESPACE -l app.kubernetes.io/name=openmetadata --tail=50"
+fi
 echo ""
 echo "Open https://${OM_DNS_NAME}/signin in a browser. Login is now"
 echo "handled by Keycloak at ${KEYCLOAK_URL} (realm: ${KEYCLOAK_REALM:-solace-lab})."

@@ -42,7 +42,7 @@ cp .env.example .env                # set Keycloak admin creds if non-default
 ## Helm Conventions
 
 - Two charts from the `open-metadata` Helm repo:
-  - `openmetadata-dependencies` (PostgreSQL + OpenSearch + Airflow)
+  - `openmetadata-dependencies` (MySQL + OpenSearch + Airflow)
   - `openmetadata` (server)
 - Release names hardcoded in `start.sh`:
   - `openmetadata-dependencies`
@@ -93,9 +93,64 @@ without invalidating every previously issued ingestion-bot JWT.**
   `openmetadata-oidc-client-secret`); the chart references it via
   `secretRef`. The Secret is re-applied on every run, so rotating
   `KEYCLOAK_CLIENT_SECRET` in `.env` only needs a `start.sh` re-run.
-- The Postgres credentials live inside `local-k8s-deps-values.yaml`
-  and are mirrored in `local-k8s-values.yaml` so the server can
-  connect. They are demo-only. Rotate by changing BOTH files.
+- MySQL credentials are demo-only and hardcoded in the chart's
+  `initdbScripts` (`openmetadata_user` / `openmetadata_password` for
+  the OM database, `airflow_user` / `airflow_pass` for the Airflow
+  database). `start.sh` materialises them into three Kubernetes
+  Secrets (names + keys per the upstream OM local-Kubernetes
+  quickstart so chart defaults also resolve):
+  - `mysql-secrets.openmetadata-mysql-password` -- OM server DB user
+  - `airflow-mysql-secrets.airflow-mysql-password` -- Airflow DB user
+  - `airflow-secrets.openmetadata-airflow-password` -- Airflow web
+    admin account that OM calls for pipeline registration
+  Rotate by changing the literals in `start.sh` AND reseeding MySQL
+  by hand -- `initdbScripts` only runs on a fresh data PVC.
+
+## Lab-specific workarounds baked into the deployment
+
+These are not generic OpenMetadata config -- they exist because the
+Solace Lab cluster has specific constraints. Searching the codebase
+for the keywords will land on the relevant block.
+
+- **JVM truststore init container** (`local-k8s-values.yaml`:
+  `preMigrateInitContainers.import-lab-ca`) -- Kyverno injects the
+  lab CA into `/etc/ssl/certs/ca-certificates.crt` and sets
+  `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE`. The JVM ignores both.
+  `import-lab-ca` builds a JKS truststore from JDK roots plus every
+  cert in the bundle, and `JAVA_TOOL_OPTIONS` points the main JVM at
+  it. Without this, OIDC discovery against `auth.solace.lab` dies
+  with `PKIX path building failed`.
+- **JWT key file mode 0444** (`local-k8s-values.yaml`,
+  `extraVolumes.openmetadata-jwt-keys.secret.defaultMode`) -- the
+  Secret mounts as `root:root` and the chart runs the server as UID
+  1000. With the chart default of `0400` the server silently falls
+  back to an ephemeral EC keypair and every authenticated request
+  later trips `ClassCastException: ECPublicKeyImpl -> RSAPublicKey`.
+- **Realm `defaultSignatureAlgorithm: RS256`**
+  (`scripts/setup-keycloak-client.sh`) -- the `solace-lab` realm
+  ships with `ES256` as the default. OM 1.6.5's JwtFilter casts
+  every JWKS entry to `RSAPublicKey` unconditionally; ES256-signed
+  tokens crash the OIDC callback. The setup script PUTs `RS256` on
+  the realm before creating the client.
+- **Static hostPath PVs for Airflow `dags` / `logs`** (`start.sh`,
+  `local-k8s-deps-values.yaml`) -- the Airflow subchart hard-requires
+  `ReadWriteMany`. Rancher Desktop's `local-path` provisioner only
+  does `ReadWriteOnce`. `start.sh` pre-binds two static
+  `hostPath` PVs (RWX, `DirectoryOrCreate`) backed by
+  `/var/openmetadata-dependencies/{dags,logs}` on the lima VM
+  filesystem, and the chart picks them up via `existingClaim`.
+- **`chmod 0777` on the Airflow hostPath dirs** (`start.sh`,
+  `chmod-airflow-volumes` pod) -- the kubelet creates
+  `DirectoryOrCreate` paths as `0755 root:root` and `fsGroup` only
+  chgrps, never chmods. The Airflow containers run as UID 50000 and
+  cannot write otherwise. A one-shot pod fixes the mode before the
+  chart's pods come up.
+- **MySQL image override** (`local-k8s-deps-values.yaml`,
+  `mysql.image.repository: bitnamilegacy/mysql`) -- Bitnami removed
+  the chart-pinned tag `8.0.33-debian-11-r0` from `bitnami/mysql`
+  in August 2025; the legacy registry still serves it.
+- **`eclipse-temurin:17-jre` (Debian, not Alpine)** -- the Alpine
+  tag is amd64-only and breaks on Apple Silicon Rancher Desktop.
 
 ## Key Files
 
@@ -106,10 +161,16 @@ without invalidating every previously issued ingestion-bot JWT.**
   OIDC client in the `solace-lab` realm via Keycloak Admin REST API
 - `scripts/teardown-keycloak-client.sh` -- Deletes the OIDC client
   (called automatically by `stop.sh`)
-- `scripts/start.sh` -- helm repo add + JWT keys + oidc-secrets +
-  install both charts + CoreDNS NodeHosts
-- `scripts/stop.sh` -- Uninstall + PVC cleanup + namespace delete +
-  CoreDNS cleanup + Keycloak client teardown
+- `scripts/start.sh` -- end-to-end install: helm repo, JWT keys,
+  MySQL / Airflow / OIDC secrets, static hostPath PVs + PVCs +
+  chmod fix for Airflow, both Helm charts, CoreDNS NodeHosts entry,
+  and a final ready-wait on the OM server pod
+- `scripts/stop.sh` -- end-to-end teardown: helm uninstall both
+  releases, delete PVCs + the static hostPath PVs, delete the
+  Secrets `start.sh` created, delete the namespace (waits for it
+  to actually disappear so a follow-up `start.sh` does not race),
+  remove the CoreDNS NodeHosts entry, and tear down the Keycloak
+  OIDC client
 - `.env.example` -- Template for Keycloak admin creds and the
   OIDC client secret
 

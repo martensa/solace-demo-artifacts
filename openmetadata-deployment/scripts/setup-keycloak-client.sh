@@ -51,6 +51,29 @@ fi
 
 BASE="${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}"
 
+# --- Force realm defaultSignatureAlgorithm to RS256 ---------------
+# OM 1.6.5's JwtFilter unconditionally casts the JWKS-resolved
+# public key to RSAPublicKey (JwtFilter.java:231). If the realm's
+# default signature algorithm is ES256 (Keycloak's out-of-the-box
+# choice on some realms), every issued ID token is EC-signed and
+# OM throws ClassCastException on the OIDC callback. Setting the
+# realm default to RS256 makes Keycloak sign with the RSA key
+# instead. The realm still auto-recreates an `ecdsa-generated`
+# fallback provider whenever we delete it, so we leave the
+# provider alone -- it just stops being used for signing.
+REALM_CURRENT_ALG=$(curl -sk "${BASE}" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  | jq -r '.defaultSignatureAlgorithm // empty')
+if [ "${REALM_CURRENT_ALG}" != "RS256" ]; then
+  echo "Setting realm defaultSignatureAlgorithm to RS256 (was: ${REALM_CURRENT_ALG:-unset}) ..."
+  curl -sk -X PUT \
+    "${BASE}" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"defaultSignatureAlgorithm":"RS256"}' \
+    -o /dev/null
+fi
+
 # --- Helper: find client UUID by clientId -------------------------
 get_client_uuid() {
   curl -sk "${BASE}/clients?clientId=${OM_CLIENT_ID}" \
