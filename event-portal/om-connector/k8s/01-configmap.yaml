@@ -12,14 +12,24 @@ data:
   OM_SERVICE_NAME: "solace-event-portal"
 
   # ----- Bridge transport ---------------------------------------------
-  # http   -> apply EP webhooks directly to OM
-  # solace -> consume off a Solace queue (used with the forwarder)
-  # forwarder -> verify + republish onto Solace; needs a 2nd bridge in
-  #              solace mode to actually update OM
-  BRIDGE_MODE: "http"
+  # polling  -> poll EP every N seconds (default; Solace Cloud EP v2
+  #             has no webhook API)
+  # http     -> apply EP webhooks directly to OM (requires a webhook-
+  #             capable EP edition)
+  # solace   -> consume off a Solace queue (used with the forwarder)
+  # forwarder-> verify + republish onto Solace; needs a 2nd bridge in
+  #             solace mode to actually update OM
+  BRIDGE_MODE: "polling"
 
   BRIDGE_BIND_HOST: "0.0.0.0"
   BRIDGE_BIND_PORT: "8080"
+
+  # ----- Polling-mode tuning ------------------------------------------
+  # Tick interval. 10s is the workshop default (visible-but-not-spammy).
+  BRIDGE_POLLING_INTERVAL_SECONDS: "10"
+  # Restrict polling to specific EP domain ids. Empty = all domains the
+  # token can see. Set this to one or more domain ids to limit traffic.
+  # BRIDGE_POLLING_DOMAIN_IDS: ""
 
   # ----- Dedupe (in-memory, lab-grade) --------------------------------
   BRIDGE_DEDUPE_TTL_SECONDS: "600"

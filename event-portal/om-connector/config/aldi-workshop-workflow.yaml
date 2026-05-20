@@ -42,8 +42,14 @@ source:
         includeLineage: "true"        # Pipeline <-> Topic edges
         ingestAllVersions: "false"    # latest only for the workshop
         emitDomains: "true"           # OM Domain per EP application domain
-        emitDataProducts: "true"      # OM DataProduct per modeled mesh
-        resolveOwners: "true"         # match EP owner e-mail to OM users
+        # Solace Cloud EP v2 has no /architecture/modeledEventMeshes
+        # endpoint (verified via scripts/smoke_ep_api.py). Keep OFF; the
+        # client tolerates a 404 anyway.
+        emitDataProducts: "false"
+        # EP v2 returns user-ids (not e-mails) on createdBy/changedBy and
+        # has no public /users/{id} lookup. Owner sync needs a static
+        # mapping; keep OFF for the workshop.
+        resolveOwners: "false"
 
         # --- Sample-data (optional Act 6) -------------------------------
         # Flip sampleDataEnabled to "true" only after Acts 1-5 finish on

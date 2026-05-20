@@ -44,9 +44,13 @@ curl -fsSL -H "Authorization: Bearer $OM_INGESTION_BOT_TOKEN" \
 curl -fsSL https://bridge.solace.lab/healthz
 #   -> {"status":"ok"}
 
-# 5. Bridge has its EP webhook subscription registered
-om-eventportal-bridge --register-webhook https://bridge.solace.lab/webhook/event-portal
-#   idempotent — re-run is safe
+# 5. Bridge is running in polling mode (BRIDGE_MODE=polling, default).
+#    Solace Cloud EP v2 has no public webhook-subscription API
+#    (verified by scripts/smoke_ep_api.py 2026-05), so the bridge polls
+#    every 10s instead of receiving pushes. Same handlers, same effect.
+kubectl -n openmetadata-solace-lab logs deploy/solace-eventportal-bridge \
+  | grep "Polling loop started"
+#   -> "Polling loop started interval=10s domain_ids=<all>"
 
 # 6. EP demo domain `aldi-orders-demo` exists with 3 events + 2 apps
 #    (see docs/demo-seed-data.md for the exact content to stage)
@@ -130,32 +134,37 @@ swipe to it if the live run hangs.
 
 ---
 
-## Act 3 — Live Webhook (4 min) — wow moment
+## Act 3 — Near-realtime sync via polling bridge (4 min) — wow moment
+
+**Honest framing for the audience**: Solace Cloud EP v2 does not expose
+a webhook-subscription API today (we verified). Native pushes will come
+when EP ships them. Until then the bridge runs a polling loop with a
+configurable interval — **10 seconds by default**, plenty fast for a
+governance workflow. Same handler set, same OM result; only the trigger
+is a periodic GET instead of an EP-initiated POST.
 
 Step-by-step:
 
-1. **Side-by-side layout**: EP UI on the left, OM UI on the right, terminal
-   tailing `kubectl logs -f deploy/solace-eventportal-bridge` at the
-   bottom.
+1. **Side-by-side layout**: EP UI on the left, OM UI on the right,
+   terminal tailing
+   `kubectl logs -f deploy/solace-eventportal-bridge` at the bottom.
 2. In **EP UI**, open `OrderShipped` event, change the description to:
    `Updated live during ALDI workshop at HH:MM` (use the current time
    so the audience knows it's fresh).
 3. Click **Save** in EP.
-4. **Look at the terminal**: bridge logs print
-   `Webhook id=... type=eventVersion.updated handlers=1`. The audience
-   sees the event come in.
+4. Within ~10 seconds (interval), the **terminal** shows the bridge
+   detecting the change:
+   `Poll tick: seen=1 dispatched=1` followed by a handler log line.
 5. **Refresh the OM topic page**: description is updated.
-   The clock-on-screen shows it took ~2 seconds.
 
-**Closing line**: "No polling, no waiting for the next workflow run.
-EP signs the webhook, the bridge verifies the HMAC, dedupes, applies."
+**Closing line**: "Today: 10-second polling, dedupe via
+`(eventId, updatedTime)` so the same change isn't applied twice.
+Tomorrow: the moment Solace exposes a stable webhook API, we flip
+`BRIDGE_MODE` from `polling` to `http`, register the subscription, and
+the latency drops from seconds to milliseconds — same code path."
 
-**Backup plan**: if the EP webhook isn't reaching the bridge,
-fall back to `om-eventportal-bridge --reconcile` and show the same
-update arriving through the audit replay path
-(takes ~5 s but still the same outcome). Frame it as a feature:
-> "Even if the webhook missed delivery, we have a cheap catch-up
-> mechanism."
+**Backup plan**: if the polling tick is delayed (network blip), trigger
+a manual full-pull catch-up instead, see Act 5. Same outcome.
 
 ---
 
@@ -188,7 +197,7 @@ through the YAML and explain the policy. No live demo needed.
 
 ---
 
-## Act 5 — Resilience: reconcile after outage (4 min)
+## Act 5 — Resilience: full-pull reconcile after outage (4 min)
 
 Step-by-step:
 
@@ -204,27 +213,32 @@ Step-by-step:
 5. **Restart the bridge**:
    ```bash
    kubectl scale deploy solace-eventportal-bridge --replicas=1
-   kubectl wait --for=condition=ready pod -l app=solace-eventportal-bridge
+   kubectl wait --for=condition=ready pod \
+     -l app=solace-eventportal-bridge --timeout=60s
    ```
-6. **Run reconciliation**:
+6. **Run the catch-up reconcile** (full-pull since the persisted
+   watermark, NOT an audit replay — EP v2 doesn't expose architecture
+   audits, see docs/EP-edition-compatibility.md):
    ```bash
    kubectl exec deploy/solace-eventportal-bridge -- \
      om-eventportal-bridge --reconcile
-   #   reconcile: audit_events_seen=N dispatched=N watermark_now=...
+   #   reconcile: events_seen=N dispatched=N watermark_now=...
    ```
 7. **Refresh OM**: description is updated, watermark is persisted on
    the MessagingService extension.
 
 **Talking points**:
-- "Webhooks are best-effort. The audit replay is the fallback."
-- "Watermark is persisted on the MessagingService — survives bridge
-  restarts and even bridge re-deploys."
-- "In production we'd schedule the full pull workflow as a nightly
-  reconciliation on top — defense in depth."
+- "Reconcile pulls everything that EP claims has changed since our
+  watermark — `updatedTime >= watermark`. No need for an audit feed."
+- "Watermark lives on the OM MessagingService extension — survives
+  bridge restarts and even bridge re-deploys."
+- "Belt-and-braces: schedule the **full ingestion workflow** as a
+  nightly reconciliation on top of the bridge. Catches deletes that
+  the watermark-based pull cannot see."
 
-**Backup plan**: if `--reconcile` fails (EP audit endpoint quirks,
-empty audit list), trigger a normal workflow re-run instead. Same
-outcome from the audience's perspective.
+**Backup plan**: if `--reconcile` reports `events_seen=0`, trigger a
+normal workflow re-run from the OM UI. Same outcome — the workflow IS
+the full reconcile path.
 
 ---
 

@@ -29,6 +29,16 @@ class EventPortalAuthError(Exception):
     """API token missing, expired, or unauthorized for the target resource."""
 
 
+class EventPortalNotSupported(Exception):
+    """Endpoint exists in the connector but not in this EP edition.
+
+    Raised by webhook-CRUD methods on Solace Cloud Event Portal v2 (the
+    /architecture/eventPortalWebhooks endpoint family is not part of the
+    public v2 API as of mid-2026). Callers should catch this and fall
+    back to UI-side configuration or the polling bridge mode.
+    """
+
+
 class EventPortalClient:
     """Thin wrapper around the Solace Event Portal REST API."""
 
@@ -230,37 +240,41 @@ class EventPortalClient:
     def list_modeled_event_meshes(
         self, since: Optional[str] = None
     ) -> List[Dict[str, Any]]:
+        """List Modeled Event Meshes if the EP edition exposes them.
+
+        Solace Cloud Event Portal v2 does NOT ship this endpoint (verified
+        via smoke test). Returns `[]` on 404 so callers can keep going.
+        """
         params: Dict[str, Any] = {}
         if since:
             params["updatedTime"] = f"gte:{since}"
-        return list(
-            self._paginate(
-                "/architecture/modeledEventMeshes", params=params or None
+        try:
+            return list(
+                self._paginate(
+                    "/architecture/modeledEventMeshes", params=params or None
+                )
             )
-        )
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                logger.info(
+                    "modeledEventMeshes endpoint not present in this EP edition; "
+                    "DataProduct emission will be skipped."
+                )
+                return []
+            raise
 
     def get_modeled_event_mesh(self, mesh_id: str) -> Optional[Dict[str, Any]]:
         return self._get_single(f"/architecture/modeledEventMeshes/{mesh_id}")
 
-    # -------------------------------------------------------- audit / changes
-
-    def list_audit_events(
-        self, since: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Event Portal change feed used for reconciliation.
-
-        The exact path may differ per EP edition; surface it as a method so
-        callers (the daily reconciliation job) only have one place to swap.
-        """
-        params: Dict[str, Any] = {}
-        if since:
-            params["createdTime"] = f"gte:{since}"
-        return list(self._paginate("/architecture/auditEvents", params=params or None))
-
     # ----------------------------------------------------------- webhooks
 
     def list_webhook_subscriptions(self) -> List[Dict[str, Any]]:
-        return list(self._paginate("/architecture/eventPortalWebhooks"))
+        """Not supported in Solace Cloud Event Portal v2."""
+        raise EventPortalNotSupported(
+            "Webhook subscriptions are not exposed by the EP v2 REST API. "
+            "Configure notifications via the Solace Cloud UI (if available "
+            "in your edition), or run the bridge in BRIDGE_MODE=polling."
+        )
 
     def create_webhook_subscription(
         self,
@@ -271,40 +285,18 @@ class EventPortalClient:
         event_types: Optional[List[str]] = None,
         application_domain_ids: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Register a webhook subscription with Event Portal.
-
-        Body shape mirrors the public REST schema; fields the EP edition
-        doesn't understand are dropped server-side.
-        """
-        body: Dict[str, Any] = {
-            "name": name,
-            "url": target_url,
-            "enabled": True,
-        }
-        if secret:
-            body["secret"] = secret
-        if event_types:
-            body["eventTypes"] = event_types
-        if application_domain_ids:
-            body["applicationDomainIds"] = application_domain_ids
-        resp = self.session.post(
-            f"{self.base_url}/architecture/eventPortalWebhooks",
-            json=body,
-            timeout=self.timeout,
+        """Not supported in Solace Cloud Event Portal v2."""
+        raise EventPortalNotSupported(
+            "Webhook subscriptions are not exposed by the EP v2 REST API. "
+            "Configure notifications via the Solace Cloud UI (if available "
+            "in your edition), or run the bridge in BRIDGE_MODE=polling."
         )
-        if resp.status_code == 401:
-            raise EventPortalAuthError("Event Portal rejected webhook create")
-        resp.raise_for_status()
-        return resp.json().get("data") or {}
 
     def delete_webhook_subscription(self, subscription_id: str) -> None:
-        resp = self.session.delete(
-            f"{self.base_url}/architecture/eventPortalWebhooks/{subscription_id}",
-            timeout=self.timeout,
+        """Not supported in Solace Cloud Event Portal v2."""
+        raise EventPortalNotSupported(
+            "Webhook subscriptions are not exposed by the EP v2 REST API."
         )
-        if resp.status_code in (404, 204):
-            return
-        resp.raise_for_status()
 
     # --------------------------------------------------------------- helpers
 

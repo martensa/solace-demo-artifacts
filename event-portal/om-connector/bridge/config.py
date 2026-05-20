@@ -35,8 +35,13 @@ class OpenMetadataSettings(BaseSettings):
 class TransportSettings(BaseSettings):
     """Selects how the bridge receives notifications.
 
+    * `polling`   - bridge polls EP every N seconds for changed events
+                    since the watermark. Default for Solace Cloud EP v2
+                    (which does not expose a webhook subscription API).
     * `http`      - FastAPI endpoint at /webhook/event-portal that applies
-                    deltas directly to OpenMetadata.
+                    deltas directly to OpenMetadata. Use this when your EP
+                    edition supports webhooks and you have configured one
+                    pointing at the bridge URL (Solace Cloud v2: no).
     * `solace`    - subscribes to a Solace queue (durable) that an upstream
                     forwarder publishes EP webhook payloads onto.
     * `forwarder` - HTTP receiver only; does not call OpenMetadata. Verifies
@@ -44,7 +49,7 @@ class TransportSettings(BaseSettings):
                     Solace topic for a `solace`-mode bridge to consume.
     """
 
-    mode: Literal["http", "solace", "forwarder"] = "http"
+    mode: Literal["polling", "http", "solace", "forwarder"] = "polling"
 
     # forwarder
     forwarder_topic_prefix: str = "om/sync/eventportal"
@@ -59,6 +64,13 @@ class TransportSettings(BaseSettings):
     solace_username: str = "om-bridge"
     solace_password: str = ""
     solace_queue: str = "om/sync/eventportal"
+
+    # polling
+    polling_interval_seconds: int = 10
+    # restrict polling to specific domain ids; empty = every domain the
+    # token can see (intentionally NOT the connector's filter pattern —
+    # the bridge does not parse OM filters; pre-restrict here.)
+    polling_domain_ids: List[str] = []
 
     # dedupe
     dedupe_ttl_seconds: int = 600

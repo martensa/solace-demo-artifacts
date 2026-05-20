@@ -1,85 +1,46 @@
-"""Audit-based reconciliation for missed webhook events.
+"""Reconciliation: re-pull EP since the last sync watermark.
 
-While the daily pull connector is the strongest reconciliation pass (it
-walks the full graph and overwrites OM unconditionally), the audit-based
-replay is the *cheap* one: it asks Event Portal "what changed since
-timestamp T?" and feeds each change through the same dispatcher the
-bridge uses for live webhooks.
+Solace Cloud Event Portal v2 does not expose an architecture-level audit
+feed (verified by `scripts/smoke_ep_api.py`). The reconcile path here
+therefore does NOT replay a change feed — it pulls each filtered domain's
+events that have moved since the watermark, builds a synthetic
+`eventVersion.updated` payload, and dispatches through the same handler
+set the live polling/HTTP transports use.
 
-This is what you run after a bridge outage to catch up without doing a
-full re-ingest.
+Trade-off vs. an audit-replay:
+  * cost: more API calls (we fetch full event lists, then per-event
+    versions). EP's `updatedTime` filter keeps the result set small.
+  * fidelity: deletes are NOT picked up by this path (an event that
+    disappears from EP never appears in a list response). For tombstoning
+    we still recommend a nightly full ingestion workflow on top.
 
 Flow:
-  1. Read the watermark (last successfully replayed audit timestamp) from
-     a custom property on the OpenMetadata MessagingService entity. If
-     missing, default to `now - 24h`.
-  2. List EP audit events since the watermark.
-  3. Translate each audit event to a synthetic webhook payload
-     (`eventType` matches `bridge.handlers.DEFAULT_HANDLERS`).
-  4. Dispatch through the same Dispatcher (`register_defaults()`).
-  5. On success, write the highest-seen audit timestamp back as the new
+  1. Read the watermark (last successful re-pull timestamp) from a
+     custom property on the OpenMetadata MessagingService entity.
+     Default: now - 24h.
+  2. List application domains updated since the watermark, OR every
+     domain the token can see (if `domain_ids` is provided).
+  3. For each domain, list events updated since the watermark.
+  4. For each event, dispatch `eventVersion.updated` so handlers refetch
+     the latest event-version object and upsert the corresponding Topic.
+  5. On success, persist the highest seen `updatedTime` as the new
      watermark.
 
-Failures during step 4 do NOT advance the watermark, so the next run
-picks them up again. Idempotent handlers (`create_or_update`) make this
-safe.
+Handlers swallow their own exceptions; a partial failure does not block
+the watermark advance (the affected entity gets a second chance on the
+next reconcile run).
 """
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from connector.property_keys import AUDIT_WATERMARK_KEY
 
 from .dispatcher import BridgeContext, Dispatcher
 
 logger = logging.getLogger(__name__)
-
-
-# Map an EP audit `resourceType` to the bridge eventType. The verb portion
-# is filled in from the audit event's `action` field.
-_RESOURCE_TO_BASE: Dict[str, str] = {
-    "Event": "event",
-    "EventVersion": "eventVersion",
-    "Schema": "schema",
-    "SchemaVersion": "schemaVersion",
-    "Application": "application",
-    "ApplicationVersion": "applicationVersion",
-    "ApplicationDomain": "applicationDomain",
-}
-
-_ACTION_TO_VERB: Dict[str, str] = {
-    "CREATE": "created",
-    "CREATED": "created",
-    "UPDATE": "updated",
-    "UPDATED": "updated",
-    "DELETE": "deleted",
-    "DELETED": "deleted",
-}
-
-
-def audit_event_to_payload(audit: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Translate a single audit event into a bridge-dispatchable payload."""
-    resource_type = audit.get("resourceType") or audit.get("entityType")
-    action = (audit.get("action") or audit.get("operation") or "").upper()
-    base = _RESOURCE_TO_BASE.get(resource_type or "")
-    verb = _ACTION_TO_VERB.get(action)
-    if not base or not verb:
-        return None
-    payload: Dict[str, Any] = {
-        "eventType": f"{base}.{verb}",
-        "eventId": audit.get("id") or audit.get("auditId"),
-        "resourceId": audit.get("resourceId") or audit.get("entityId"),
-        # Echo through original fields so handlers can pick them up.
-        "data": audit.get("data") or audit,
-    }
-    # Some EP editions surface convenient sub-ids on the audit row directly.
-    for k in ("eventId", "eventVersionId", "applicationId", "applicationDomainId",
-              "schemaId", "schemaVersionId"):
-        if audit.get(k):
-            payload[k] = audit[k]
-    return payload
 
 
 # ---------------------------------------------------------------- watermark
@@ -92,7 +53,9 @@ def _get_messaging_service(om, service_name: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def read_watermark(om, service_name: str, default_lookback: timedelta = timedelta(hours=24)) -> str:
+def read_watermark(
+    om, service_name: str, default_lookback: timedelta = timedelta(hours=24)
+) -> str:
     svc = _get_messaging_service(om, service_name) or {}
     extension = svc.get("extension") or {}
     wm = extension.get(AUDIT_WATERMARK_KEY)
@@ -104,14 +67,15 @@ def read_watermark(om, service_name: str, default_lookback: timedelta = timedelt
 def write_watermark(om, service_name: str, watermark: str) -> None:
     svc = _get_messaging_service(om, service_name)
     if not svc:
-        logger.warning("MessagingService %s not found; cannot persist watermark", service_name)
+        logger.warning(
+            "MessagingService %s not found; cannot persist watermark", service_name
+        )
         return
     svc_id = svc.get("id")
-    extension = dict(svc.get("extension") or {})
-    extension[AUDIT_WATERMARK_KEY] = watermark
+    op = "add" if AUDIT_WATERMARK_KEY not in (svc.get("extension") or {}) else "replace"
     patch = [
         {
-            "op": "add" if AUDIT_WATERMARK_KEY not in (svc.get("extension") or {}) else "replace",
+            "op": op,
             "path": f"/extension/{AUDIT_WATERMARK_KEY}",
             "value": watermark,
         }
@@ -132,13 +96,24 @@ def replay_audit_since(
     service_name: str,
     since: Optional[str] = None,
     dispatcher: Optional[Dispatcher] = None,
+    domain_ids: Optional[List[str]] = None,
 ) -> Tuple[int, int, Optional[str]]:
-    """Replay EP audit events into the bridge dispatcher.
+    """Re-pull EP since the watermark and dispatch through bridge handlers.
 
-    Returns `(seen, dispatched, new_watermark)`. The new watermark is only
-    advanced if every dispatched event succeeded (handlers swallow their
-    own exceptions, so "success" here means "every event mapped to a known
-    type and reached its handler").
+    The function name is retained for backwards compatibility with the CLI
+    surface (`om-eventportal-bridge --reconcile`). Despite the name, the
+    implementation does NOT consume an audit feed — see module docstring.
+
+    Args:
+        ep_client: EventPortalClient
+        om: OpenMetadata SDK
+        service_name: OM MessagingService name (carries the watermark)
+        since: ISO timestamp; defaults to the watermark on the service
+        dispatcher: optional pre-built dispatcher (testing)
+        domain_ids: optional restriction to specific EP domain ids
+
+    Returns:
+        (events_seen, events_dispatched, new_watermark)
     """
     if dispatcher is None:
         from .handlers import register_defaults
@@ -147,37 +122,52 @@ def replay_audit_since(
     watermark = since or read_watermark(om, service_name)
     logger.info("Reconciliation starting from %s", watermark)
 
-    audits = list(ep_client.list_audit_events(since=watermark))
-    if not audits:
-        logger.info("No audit events since %s; nothing to do", watermark)
-        return 0, 0, watermark
+    # 1. domains to walk: explicit list, or every domain visible to the token
+    if domain_ids is not None:
+        domains: Iterable[Dict[str, Any]] = [
+            {"id": did} for did in domain_ids
+        ]
+    else:
+        try:
+            domains = ep_client.list_application_domains(since=watermark)
+        except Exception:
+            logger.exception("list_application_domains failed during reconcile")
+            return 0, 0, watermark
 
-    seen = len(audits)
+    seen = 0
     dispatched = 0
     high_watermark = watermark
-    for audit in _ordered_by_time(audits):
-        payload = audit_event_to_payload(audit)
-        if not payload:
-            logger.debug(
-                "Skipping audit %s (resource=%s action=%s)",
-                audit.get("id"), audit.get("resourceType"), audit.get("action"),
-            )
+    for domain in domains:
+        domain_id = domain.get("id")
+        if not domain_id:
             continue
-        count = dispatcher.dispatch(ctx, payload)
-        if count:
-            dispatched += 1
-        ts = audit.get("createdTime") or audit.get("timestamp")
-        if ts and ts > high_watermark:
-            high_watermark = ts
+        try:
+            events = ep_client.list_events(domain_id, since=watermark)
+        except Exception:
+            logger.exception("list_events(%s) failed", domain_id)
+            continue
+        for event in events:
+            seen += 1
+            event_id = event.get("id")
+            if not event_id:
+                continue
+            payload = {
+                "eventType": "eventVersion.updated",
+                "eventId": event_id,
+                # Tell handlers to refetch the latest version
+                "data": {"eventId": event_id},
+            }
+            count = dispatcher.dispatch(ctx, payload)
+            if count:
+                dispatched += 1
+            ts = event.get("updatedTime")
+            if ts and ts > high_watermark:
+                high_watermark = ts
 
     if high_watermark != watermark:
         write_watermark(om, service_name, high_watermark)
-    return seen, dispatched, high_watermark
-
-
-def _ordered_by_time(audits: Iterable[Dict[str, Any]]) -> Iterable[Dict[str, Any]]:
-    """Audit events must be applied in time order so deletes follow creates."""
-    return sorted(
-        audits,
-        key=lambda a: a.get("createdTime") or a.get("timestamp") or "",
+    logger.info(
+        "Reconciliation done: seen=%d dispatched=%d watermark=%s",
+        seen, dispatched, high_watermark,
     )
+    return seen, dispatched, high_watermark

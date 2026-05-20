@@ -238,8 +238,12 @@ applicationFilterPattern: |
 includeLineage: "true"
 ingestAllVersions: "false"
 emitDomains: "true"
-emitDataProducts: "true"
-resolveOwners: "true"
+# OFF — Solace Cloud EP v2 has no /architecture/modeledEventMeshes
+# endpoint (see docs/EP-edition-compatibility.md).
+emitDataProducts: "false"
+# OFF — EP v2 returns user-ids on createdBy/changedBy, not e-mails,
+# and exposes no /users/{id} lookup. Static mapping support is planned.
+resolveOwners: "false"
 
 sampleDataEnabled: "false"   # flip to true for optional Act 6
 ```
@@ -248,7 +252,9 @@ sampleDataEnabled: "false"   # flip to true for optional Act 6
 
 Use this as the visual "passes the demo" checklist:
 
-- **Domain** `aldi-orders-demo` exists; owner set to your user.
+- **Domain** `aldi-orders-demo` exists. (Owner stays unset for the
+  workshop — EP v2 returns user-ids, not e-mails; the connector cannot
+  resolve them against OM users without a static mapping.)
 - **MessagingService** `solace-event-portal` contains 3 topics:
   - `OrderCreated_v1.0.0` with tag `EventPortal.Released`
   - `OrderShipped_v1.0.0` with tag `EventPortal.Released`

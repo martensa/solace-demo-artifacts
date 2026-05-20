@@ -1,76 +1,35 @@
-"""Reconciliation tests.
+"""Reconciliation tests (full-pull mode).
 
-Cover the pure-Python parts (audit -> payload mapping, ordering) without
-needing an OM/EP backend.
+Since EP v2 does not expose an audit feed, reconcile now does a
+since-watermark scan of domains and events and dispatches
+`eventVersion.updated` per event. Tests verify watermark advance,
+empty-result no-op, and respecting an explicit `domain_ids` restriction.
 """
 from unittest.mock import MagicMock
 
-from bridge.dispatcher import BridgeContext, Dispatcher
-from bridge.reconcile import audit_event_to_payload, replay_audit_since
+from bridge.dispatcher import Dispatcher
+from bridge.reconcile import replay_audit_since
 
 
-def test_audit_event_create_event():
-    audit = {
-        "id": "a-1",
-        "resourceType": "Event",
-        "action": "CREATED",
-        "resourceId": "e-1",
-        "createdTime": "2026-05-01T10:00:00Z",
-    }
-    p = audit_event_to_payload(audit)
-    assert p["eventType"] == "event.created"
-    assert p["eventId"] == "a-1"
-    assert p["resourceId"] == "e-1"
-
-
-def test_audit_event_update_event_version():
-    audit = {
-        "id": "a-2",
-        "resourceType": "EventVersion",
-        "action": "UPDATE",
-        "resourceId": "ev-2",
-        "eventId": "e-2",
-        "eventVersionId": "ev-2",
-        "createdTime": "2026-05-01T10:05:00Z",
-    }
-    p = audit_event_to_payload(audit)
-    assert p["eventType"] == "eventVersion.updated"
-    assert p["eventVersionId"] == "ev-2"
-    assert p["eventId"] == "e-2"
-
-
-def test_audit_event_unknown_resource_returns_none():
-    assert audit_event_to_payload({"resourceType": "Foo", "action": "UPDATE"}) is None
-
-
-def test_audit_event_unknown_action_returns_none():
-    assert audit_event_to_payload({"resourceType": "Event", "action": "FOO"}) is None
-
-
-def test_replay_advances_watermark_and_dispatches_in_order():
+def test_replay_dispatches_event_updated_per_event_and_advances_watermark():
     ep = MagicMock()
-    # Returned out of order to verify replay sorts by createdTime.
-    ep.list_audit_events.return_value = [
-        {
-            "id": "a-2", "resourceType": "Event", "action": "UPDATED",
-            "resourceId": "e-2", "createdTime": "2026-05-01T10:05:00Z",
-        },
-        {
-            "id": "a-1", "resourceType": "Event", "action": "CREATED",
-            "resourceId": "e-1", "createdTime": "2026-05-01T10:00:00Z",
-        },
+    ep.list_application_domains.return_value = [
+        {"id": "d-1", "name": "orders", "updatedTime": "2026-05-01T09:00:00Z"},
+    ]
+    ep.list_events.return_value = [
+        {"id": "e-1", "name": "OrderCreated", "updatedTime": "2026-05-01T10:00:00Z"},
+        {"id": "e-2", "name": "OrderShipped", "updatedTime": "2026-05-01T10:05:00Z"},
     ]
     om = MagicMock()
     om.client.get.return_value = {"id": "svc-id", "extension": {}}
 
     dispatcher = Dispatcher()
-    seen_ids = []
+    seen_payloads = []
 
     def handler(ctx, payload):
-        seen_ids.append(payload["resourceId"])
+        seen_payloads.append(payload)
 
-    dispatcher.register("event.created", handler)
-    dispatcher.register("event.updated", handler)
+    dispatcher.register("eventVersion.updated", handler)
 
     seen, dispatched, watermark = replay_audit_since(
         ep_client=ep, om=om, service_name="solace-ep",
@@ -79,23 +38,70 @@ def test_replay_advances_watermark_and_dispatches_in_order():
 
     assert seen == 2
     assert dispatched == 2
-    assert seen_ids == ["e-1", "e-2"]
+    assert {p["eventId"] for p in seen_payloads} == {"e-1", "e-2"}
     assert watermark == "2026-05-01T10:05:00Z"
-    # Watermark patched onto MessagingService extension.
     om.client.patch.assert_called_once()
+
+
+def test_replay_respects_explicit_domain_ids_and_skips_list_domains():
+    ep = MagicMock()
+    ep.list_events.return_value = [
+        {"id": "e-1", "updatedTime": "2026-05-01T10:00:00Z"},
+    ]
+    om = MagicMock()
+    om.client.get.return_value = {"id": "svc-id", "extension": {}}
+
+    dispatcher = Dispatcher()
+    dispatcher.register("eventVersion.updated", lambda ctx, p: None)
+
+    seen, dispatched, _ = replay_audit_since(
+        ep_client=ep, om=om, service_name="solace-ep",
+        since="2026-05-01T09:00:00Z", dispatcher=dispatcher,
+        domain_ids=["d-1", "d-2"],
+    )
+
+    # list_application_domains should NOT have been called.
+    ep.list_application_domains.assert_not_called()
+    # list_events called once per supplied domain id.
+    assert ep.list_events.call_count == 2
+    assert seen == 2  # one event per domain
+    assert dispatched == 2
 
 
 def test_replay_no_events_returns_unchanged_watermark():
     ep = MagicMock()
-    ep.list_audit_events.return_value = []
+    ep.list_application_domains.return_value = []
     om = MagicMock()
     om.client.get.return_value = {"id": "svc-id", "extension": {}}
 
-    # Pass an explicit empty dispatcher so the test doesn't import
-    # bridge.handlers (which requires openmetadata-ingestion).
     seen, dispatched, watermark = replay_audit_since(
         ep_client=ep, om=om, service_name="solace-ep",
         since="2026-05-01T09:00:00Z", dispatcher=Dispatcher(),
     )
     assert (seen, dispatched, watermark) == (0, 0, "2026-05-01T09:00:00Z")
     om.client.patch.assert_not_called()
+
+
+def test_replay_swallows_list_events_failure_per_domain():
+    """One failing domain shouldn't abort the whole reconciliation."""
+    ep = MagicMock()
+    ep.list_events.side_effect = [
+        RuntimeError("boom"),
+        [{"id": "e-2", "updatedTime": "2026-05-01T10:00:00Z"}],
+    ]
+    om = MagicMock()
+    om.client.get.return_value = {"id": "svc-id", "extension": {}}
+
+    dispatcher = Dispatcher()
+    dispatcher.register("eventVersion.updated", lambda ctx, p: None)
+
+    seen, dispatched, watermark = replay_audit_since(
+        ep_client=ep, om=om, service_name="solace-ep",
+        since="2026-05-01T09:00:00Z", dispatcher=dispatcher,
+        domain_ids=["d-bad", "d-good"],
+    )
+
+    # The good domain still produced an event.
+    assert seen == 1
+    assert dispatched == 1
+    assert watermark == "2026-05-01T10:00:00Z"

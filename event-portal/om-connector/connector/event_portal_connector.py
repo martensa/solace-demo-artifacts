@@ -64,7 +64,12 @@ class SolaceEventPortalSource(Source):
         self.include_lineage: bool = _as_bool(opts.get("includeLineage", "true"))
         self.ingest_all_versions: bool = _as_bool(opts.get("ingestAllVersions", "false"))
         self.emit_domains: bool = _as_bool(opts.get("emitDomains", "true"))
-        self.emit_data_products: bool = _as_bool(opts.get("emitDataProducts", "true"))
+        # Default OFF: Solace Cloud EP v2 does not expose
+        # /architecture/modeledEventMeshes (verified by smoke test in
+        # 2026-05). DataProduct mapping needs a higher-tier edition.
+        # Enable explicitly with emitDataProducts=true if your edition
+        # supports it; the EP client tolerates a 404 gracefully either way.
+        self.emit_data_products: bool = _as_bool(opts.get("emitDataProducts", "false"))
         self.since: Optional[str] = opts.get("since") or None
 
         # Allow-list-first filter patterns. Empty `includes` => default-deny:
@@ -88,7 +93,14 @@ class SolaceEventPortalSource(Source):
         # Negative results are cached too so we don't keep re-querying for
         # owners that are not Keycloak users (yet).
         self.owner_resolver = OwnerResolver(self.metadata)
-        self.resolve_owners: bool = _as_bool(opts.get("resolveOwners", "true"))
+        # Default OFF: EP v2 returns user-ids (e.g. "udz8x00uz2o") on
+        # `createdBy`/`changedBy`, NOT e-mails, and there is no public
+        # `/users/{id}` lookup. Resolving against OM users via e-mail
+        # therefore needs an explicit static mapping (planned: option
+        # `userIdToEmailMap`). Enable resolveOwners=true only once your
+        # EP edition either ships e-mails on owner fields or you wire
+        # up the static map.
+        self.resolve_owners: bool = _as_bool(opts.get("resolveOwners", "false"))
 
         # Sample-data via live broker subscribe (opt-in).
         self.sample_data_enabled: bool = _as_bool(

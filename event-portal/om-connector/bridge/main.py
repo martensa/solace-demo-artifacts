@@ -1,10 +1,13 @@
 """Bridge entry point.
 
 Usage:
-  # Bridge - HTTP transport (default): apply EP webhooks to OM
+  # Default: polling mode (works against Solace Cloud EP v2)
   python -m bridge.main
 
-  # Bridge - Solace transport: consume off a Solace queue
+  # HTTP webhook receiver (only if your EP edition supports webhooks)
+  BRIDGE_MODE=http python -m bridge.main
+
+  # Solace consumer (when a forwarder publishes EP payloads onto a queue)
   BRIDGE_MODE=solace python -m bridge.main
 
   # Forwarder: receive EP webhooks, publish raw payload onto Solace
@@ -13,7 +16,7 @@ Usage:
   # Register the bridge URL with Event Portal (one-shot)
   python -m bridge.main --register-webhook https://bridge.example.com/webhook/event-portal
 
-  # Audit-based reconciliation (catch up after an outage)
+  # Full-pull reconciliation (catch up after an outage)
   python -m bridge.main --reconcile
   python -m bridge.main --reconcile --since 2026-05-17T00:00:00Z
 
@@ -62,17 +65,36 @@ def _build_om(settings: BridgeSettings):
     )
 
 
-def _register_webhook(settings: BridgeSettings, target_url: str) -> None:
+def _register_webhook(settings: BridgeSettings, target_url: str) -> int:
+    """Register a webhook with EP if the edition supports it.
+
+    Solace Cloud Event Portal v2 has no public webhook-subscription API,
+    so this exits non-zero with an explanatory message and a pointer
+    to the polling mode (which solves the same use case).
+    """
+    from connector.event_portal_client import EventPortalNotSupported
     from .handlers import DEFAULT_HANDLERS
 
     ep = _build_ep_client(settings)
-    sub = ep.create_webhook_subscription(
-        name="openmetadata-bridge",
-        target_url=target_url,
-        secret=settings.ep.webhook_secret,
-        event_types=[t for t, _ in DEFAULT_HANDLERS],
-    )
+    try:
+        sub = ep.create_webhook_subscription(
+            name="openmetadata-bridge",
+            target_url=target_url,
+            secret=settings.ep.webhook_secret,
+            event_types=[t for t, _ in DEFAULT_HANDLERS],
+        )
+    except EventPortalNotSupported as exc:
+        print(f"Cannot register webhook: {exc}", file=sys.stderr)
+        print(
+            "\nWorkaround for Solace Cloud EP v2: run the bridge in "
+            "polling mode (BRIDGE_MODE=polling). The same handler set "
+            "applies, only the trigger is a periodic poll instead of "
+            "an EP push.",
+            file=sys.stderr,
+        )
+        return 2
     print(f"Created webhook subscription: id={sub.get('id')} url={target_url}")
+    return 0
 
 
 def _reconcile(settings: BridgeSettings, since: str = None) -> int:
@@ -87,7 +109,7 @@ def _reconcile(settings: BridgeSettings, since: str = None) -> int:
         since=since,
     )
     print(
-        f"reconcile: audit_events_seen={seen} dispatched={dispatched} "
+        f"reconcile: events_seen={seen} dispatched={dispatched} "
         f"watermark_now={watermark}"
     )
     return 0
@@ -107,7 +129,7 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--reconcile",
         action="store_true",
-        help="Run audit-based reconciliation once and exit",
+        help="Run full-pull reconciliation once and exit",
     )
     parser.add_argument(
         "--since",
@@ -119,14 +141,15 @@ def main(argv=None) -> int:
     settings = BridgeSettings()
 
     if args.register_webhook:
-        _register_webhook(settings, args.register_webhook)
-        return 0
+        return _register_webhook(settings, args.register_webhook)
 
     if args.reconcile:
         return _reconcile(settings, since=args.since)
 
     mode = settings.transport.mode
 
+    if mode == "polling":
+        return _serve_polling(settings)
     if mode == "http":
         return _serve_http(settings)
     if mode == "forwarder":
@@ -136,6 +159,23 @@ def main(argv=None) -> int:
 
     logger.error("Unknown BRIDGE_MODE: %s", mode)
     return 1
+
+
+def _serve_polling(settings: BridgeSettings) -> int:
+    from .transport.polling import run_polling_loop
+
+    dispatcher = register_defaults(Dispatcher())
+    stop = threading.Event()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: stop.set())
+    run_polling_loop(
+        settings=settings,
+        dispatcher=dispatcher,
+        ep_client=_build_ep_client(settings),
+        om=_build_om(settings),
+        stop_event=stop,
+    )
+    return 0
 
 
 def _serve_http(settings: BridgeSettings) -> int:
