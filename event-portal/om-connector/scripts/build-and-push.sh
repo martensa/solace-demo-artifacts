@@ -24,11 +24,10 @@ IMAGE_NAME="${IMAGE_NAME:-openmetadata-ingestion-solace}"
 PUSH="${PUSH:-true}"
 
 # --- Derive version from pyproject.toml ------------------------------------
-# Use a one-liner; avoids a Python dep just to read TOML.
+# Portable across GNU sed and BSD sed (macOS): match `^version` and pull
+# out the first double-quoted substring with `cut`.
 CONNECTOR_VERSION=$(
-  grep -E '^version\s*=' "$PROJECT_DIR/pyproject.toml" \
-    | head -n1 \
-    | sed -E 's/^version\s*=\s*"([^"]+)".*/\1/'
+  awk -F'"' '/^version[[:space:]]*=/{print $2; exit}' "$PROJECT_DIR/pyproject.toml"
 )
 if [ -z "$CONNECTOR_VERSION" ]; then
   echo "ERROR: could not read version from pyproject.toml" >&2

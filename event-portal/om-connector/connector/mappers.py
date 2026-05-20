@@ -21,12 +21,26 @@ import re
 from typing import Any, Dict, List, Optional
 
 from metadata.generated.schema.api.data.createTopic import CreateTopicRequest
-from metadata.generated.schema.entity.data.topic import SchemaType
-from metadata.generated.schema.type.schema import (
-    FieldName,
-    MessageSchema,
-    SchemaField,
-)
+
+# OM 1.6+ renamings inside metadata.generated.schema.type.schema:
+#   SchemaType: moved here from entity.data.topic
+#   MessageSchema -> Topic    (we re-alias for readability)
+#   SchemaField   -> FieldModel
+#   FieldName: unchanged, but pydantic v2 uses .root instead of .__root__
+try:
+    from metadata.generated.schema.type.schema import (
+        FieldName,
+        FieldModel as SchemaField,
+        SchemaType,
+        Topic as MessageSchema,
+    )
+except ImportError:  # pragma: no cover - legacy fallback
+    from metadata.generated.schema.entity.data.topic import SchemaType  # OM <= 1.5
+    from metadata.generated.schema.type.schema import (
+        FieldName,
+        MessageSchema,
+        SchemaField,
+    )
 from metadata.generated.schema.type.tagLabel import (
     LabelType,
     State,
@@ -49,7 +63,9 @@ _STATE_TAG: Dict[str, str] = {
 _SCHEMA_TYPE_MAP: Dict[str, SchemaType] = {
     "JSON": SchemaType.JSON,
     "AVRO": SchemaType.Avro,
-    "XSD": SchemaType.XML,
+    # OM 1.6+ collapsed XML/XSD into the generic `Other` bucket.
+    "XSD": SchemaType.Other,
+    "XML": SchemaType.Other,
     "PROTOBUF": SchemaType.Protobuf,
 }
 
@@ -86,6 +102,24 @@ def build_topic_name(event_name: str, version: str) -> str:
 
 def topic_fqn(service_name: str, event_name: str, version: str) -> str:
     return f"{service_name}.{build_topic_name(event_name, version)}"
+
+
+def _as_extension(data: Dict[str, Any]):
+    """Wrap a dict in the OM `EntityExtension` RootModel if available.
+
+    OM 1.6+ uses pydantic v2; setting a raw dict on `Topic.extension`
+    breaks `model_dump_json()` with "'dict' object has no attribute 'root'".
+    Try the EntityExtension wrapper, fall back to the raw dict for older
+    OM versions / slim test envs.
+    """
+    if not data:
+        return None
+    try:
+        from metadata.generated.schema.type.basic import EntityExtension
+
+        return EntityExtension(root=data)
+    except Exception:
+        return data
 
 
 def domain_fqn(domain_name: str) -> str:
@@ -230,7 +264,7 @@ def event_to_topic_request(
     # extension is set post-construction so we can drop it cleanly when the
     # target OM version doesn't define the custom-property type yet.
     if extension and hasattr(request, "extension"):
-        request.extension = extension
+        request.extension = _as_extension(extension)
     if owner is not None and hasattr(request, "owner"):
         request.owner = owner
     return request
@@ -371,7 +405,7 @@ def app_to_pipeline_request(
         tags=tags,
     )
     if extension and hasattr(request, "extension"):
-        request.extension = extension
+        request.extension = _as_extension(extension)
     if owner is not None and hasattr(request, "owner"):
         request.owner = owner
     return request

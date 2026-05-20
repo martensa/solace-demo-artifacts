@@ -15,6 +15,7 @@ new custom property. Every step is read-then-create — safe to re-execute.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from typing import Any, Dict, List, Optional, Tuple
@@ -114,7 +115,7 @@ def ensure_classification(om, name: str = CLASSIFICATION_NAME,
         return
     _client(om).post(
         "/classifications",
-        data={"name": name, "description": description},
+        json={"name": name, "description": description},
     )
     logger.info("Created classification %s", name)
 
@@ -127,7 +128,7 @@ def ensure_tag(om, classification: str, name: str, description: str) -> None:
         return
     _client(om).post(
         "/tags",
-        data={
+        json={
             "classification": classification,
             "name": name,
             "description": description,
@@ -165,7 +166,7 @@ def ensure_pipeline_service(
         },
     }
     try:
-        _client(om).post("/services/pipelineServices", data=body)
+        _client(om).post("/services/pipelineServices", json=body)
         logger.info("Created PipelineService %s", name)
     except Exception:
         # Older OM versions reject CustomPipeline service type; fall back
@@ -175,7 +176,7 @@ def ensure_pipeline_service(
             "POST /services/pipelineServices failed; retrying via PUT without connection",
         )
         body.pop("connection", None)
-        _client(om).put("/services/pipelineServices", data=body)
+        _client(om).put("/services/pipelineServices", data=json.dumps(body))
 
 
 def ensure_custom_property(
@@ -222,7 +223,7 @@ def ensure_custom_property(
         "description": description,
         "propertyType": {"id": prop_type["id"], "type": "type"},
     }
-    _client(om).put(f"/metadata/types/{type_id}", data=body)
+    _client(om).put(f"/metadata/types/{type_id}", data=json.dumps(body))
     logger.info("Added custom property %s.%s (%s)", entity_type, key, property_type_name)
 
 

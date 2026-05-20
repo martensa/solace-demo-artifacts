@@ -18,12 +18,23 @@ from typing import Any, Dict, Iterable, List, Optional
 import yaml
 
 from metadata.generated.schema.api.data.createTopic import CreateTopicRequest
-from metadata.generated.schema.entity.data.topic import SchemaType
-from metadata.generated.schema.type.schema import (
-    FieldName,
-    MessageSchema,
-    SchemaField,
-)
+
+# OM 1.6+ renamed MessageSchema -> Topic and SchemaField -> FieldModel.
+# Alias on import so call sites stay readable.
+try:
+    from metadata.generated.schema.type.schema import (
+        FieldName,
+        FieldModel as SchemaField,
+        SchemaType,
+        Topic as MessageSchema,
+    )
+except ImportError:  # pragma: no cover - legacy fallback
+    from metadata.generated.schema.entity.data.topic import SchemaType  # OM <= 1.5
+    from metadata.generated.schema.type.schema import (
+        FieldName,
+        MessageSchema,
+        SchemaField,
+    )
 
 from .mappers import parse_schema_fields, sanitize
 

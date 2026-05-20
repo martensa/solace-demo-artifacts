@@ -17,18 +17,24 @@
 ARG OM_INGESTION_VERSION=1.6.5
 FROM docker.getcollate.io/openmetadata/ingestion:${OM_INGESTION_VERSION}
 
-USER root
-WORKDIR /opt/connectors/solace-eventportal
+# The Collate base image guards against root-side pip installs and
+# expects the `airflow` user. Switch first, set a writable workdir
+# under that user's home, copy with chown.
+USER airflow
+WORKDIR /home/airflow/connector-build
 
 # Copy only what the connector needs at runtime. Tests and the bridge
 # code stay out of the ingestion image -- the bridge ships as its own
 # container (Dockerfile.bridge).
-COPY pyproject.toml ./
-COPY connector ./connector
+COPY --chown=airflow:airflow pyproject.toml ./
+COPY --chown=airflow:airflow connector ./connector
 
 # `.[sample-data]` pulls solace-pubsubplus so sampleDataEnabled=true
 # works inside Airflow workers. Without the extra the connector still
 # works in metadata-only mode.
+# The OM image ships a venv that the `airflow` user can write to, so a
+# normal install lands the package in the same site-packages used by
+# the Airflow workers at runtime.
 RUN pip install --no-cache-dir ".[sample-data]"
 
 # Smoke test: import succeeds inside the image (catches missing deps
@@ -37,5 +43,3 @@ RUN python -c "from connector.event_portal_connector import SolaceEventPortalSou
                from connector.filters import FilterPattern; \
                from connector.schema_parsers import parse_fields; \
                print('connector import OK')"
-
-USER airflow

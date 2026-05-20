@@ -132,11 +132,17 @@ class SolaceEventPortalSource(Source):
 
     @staticmethod
     def _read_options(config: WorkflowSource) -> Dict[str, Any]:
-        cfg = config.serviceConnection.__root__.config
+        # Pydantic v2 (OM 1.6+) exposes RootModel content via `.root`;
+        # pydantic v1 (OM <= 1.5) used `.__root__`. Support both so the
+        # connector works against either OM line.
+        sc = config.serviceConnection
+        cfg = getattr(sc, "root", None) or getattr(sc, "__root__", None) or sc
+        cfg = cfg.config
         raw = getattr(cfg, "connectionOptions", None)
         if not raw:
             return {}
-        return dict(raw.__root__ or {})
+        inner = getattr(raw, "root", None) or getattr(raw, "__root__", None) or raw
+        return dict(inner or {})
 
     # -------------------------------------------------------- workflow hooks
 
