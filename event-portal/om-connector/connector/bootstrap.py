@@ -30,6 +30,11 @@ from .property_keys import (
     CP_CONSUMED_BY,
     CP_DOMAIN_ID,
     CP_DOMAIN_NAME,
+    CP_EP_APP_DOMAIN,
+    CP_EP_APPLICATION,
+    CP_EP_DOMAIN,
+    CP_EP_EVENT,
+    CP_EP_SCHEMA,
     CP_EVENT_ID,
     CP_EVENT_VERSION_ID,
     CP_MODELED_MESH_IDS,
@@ -57,18 +62,31 @@ TAGS: List[Tuple[str, str]] = [
 ]
 
 # All custom-property keys used by the connector + bridge.
+# `markdown` types render as clickable links in the OM UI -- preferred for
+# the user-facing back-links to the Solace Cloud EP designer. The remaining
+# `string` props (state, topicAddress, ...) carry textual / lookup info.
+# Raw-id properties (CP_DOMAIN_ID etc.) stay registered for backward
+# compatibility with existing data; the connector does not set them on new
+# ingests anymore.
 TOPIC_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [  # (key, type, description)
-    (CP_DOMAIN_ID, "string", "Event Portal application domain id"),
-    (CP_DOMAIN_NAME, "string", "Event Portal application domain name"),
-    (CP_EVENT_ID, "string", "Event Portal event id"),
-    (CP_EVENT_VERSION_ID, "string", "Event Portal event version id"),
-    (CP_SCHEMA_VERSION_ID, "string", "Event Portal schema version id"),
+    # New: user-facing markdown links back to the EP designer.
+    (CP_EP_DOMAIN, "markdown", "Link to the originating EP application domain"),
+    (CP_EP_EVENT, "markdown", "Link to the EP event + version"),
+    (CP_EP_SCHEMA, "markdown", "Link to the EP schema + version (if present)"),
+    # User-visible textual props.
     (CP_TOPIC_ADDRESS, "string", "Reconstructed Solace topic address with vars"),
-    (CP_STATE, "string", "Event Portal lifecycle state"),
+    (CP_STATE, "string", "Event Portal lifecycle state (Draft, Released, ...)"),
     (CP_STATE_CHANGED_AT, "string", "ISO timestamp of last state change"),
+    # Legacy raw-id props -- kept registered so existing topics keep their
+    # values; new ingests no longer populate these.
+    (CP_DOMAIN_ID, "string", "(legacy) Event Portal application domain id"),
+    (CP_DOMAIN_NAME, "string", "(legacy) Event Portal application domain name"),
+    (CP_EVENT_ID, "string", "(legacy) Event Portal event id"),
+    (CP_EVENT_VERSION_ID, "string", "(legacy) Event Portal event version id"),
+    (CP_SCHEMA_VERSION_ID, "string", "(legacy) Event Portal schema version id"),
     (CP_MODELED_MESH_IDS, "string", "Comma-separated modeled event mesh ids"),
-    (CP_PUBLISHED_BY, "string", "Application(s) publishing this topic (fallback)"),
-    (CP_CONSUMED_BY, "string", "Application(s) consuming this topic (fallback)"),
+    (CP_PUBLISHED_BY, "string", "(legacy) Application(s) publishing this topic"),
+    (CP_CONSUMED_BY, "string", "(legacy) Application(s) consuming this topic"),
 ]
 
 # Watermark for the audit-based reconciliation job is defined in
@@ -83,10 +101,14 @@ MESSAGING_SERVICE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
 
 # Pipeline custom properties for EP applications mapped to Pipeline entities.
 PIPELINE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
-    (CP_APP_ID, "string", "Event Portal application id"),
-    (CP_APP_VERSION_ID, "string", "Event Portal application version id"),
-    (CP_APP_DOMAIN_ID, "string", "Event Portal application domain id"),
-    (CP_APP_DOMAIN_NAME, "string", "Event Portal application domain name"),
+    # New markdown back-links.
+    (CP_EP_APPLICATION, "markdown", "Link to the EP application + version"),
+    (CP_EP_APP_DOMAIN, "markdown", "Link to the EP application domain"),
+    # Legacy raw-id props (no longer populated on new ingests).
+    (CP_APP_ID, "string", "(legacy) Event Portal application id"),
+    (CP_APP_VERSION_ID, "string", "(legacy) Event Portal application version id"),
+    (CP_APP_DOMAIN_ID, "string", "(legacy) Event Portal application domain id"),
+    (CP_APP_DOMAIN_NAME, "string", "(legacy) Event Portal application domain name"),
 ]
 
 

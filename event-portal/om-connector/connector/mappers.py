@@ -85,6 +85,11 @@ from .property_keys import (  # noqa: E402,F401  (re-export)
     CP_CONSUMED_BY,
     CP_DOMAIN_ID,
     CP_DOMAIN_NAME,
+    CP_EP_APP_DOMAIN,
+    CP_EP_APPLICATION,
+    CP_EP_DOMAIN,
+    CP_EP_EVENT,
+    CP_EP_SCHEMA,
     CP_EVENT_ID,
     CP_EVENT_VERSION_ID,
     CP_MODELED_MESH_IDS,
@@ -120,6 +125,66 @@ def _quote_if_dotted(part: str) -> str:
 
 def topic_fqn(service_name: str, event_name: str, version: str) -> str:
     return f"{service_name}.{_quote_if_dotted(build_topic_name(event_name, version))}"
+
+
+# --------------------------------------------------- EP UI deep-links
+
+from .property_keys import DEFAULT_EP_CONSOLE_URL
+
+
+def _ep_domain_url(base: str, domain_id: str) -> str:
+    return f"{base.rstrip('/')}/ep/designer/applicationDomains/{domain_id}"
+
+
+def _ep_event_url(base: str, domain_id: str, event_id: str) -> str:
+    return f"{_ep_domain_url(base, domain_id)}/events/{event_id}"
+
+
+def _ep_event_version_url(base: str, domain_id: str, event_id: str, ev_version_id: str) -> str:
+    return f"{_ep_event_url(base, domain_id, event_id)}/eventVersions/{ev_version_id}"
+
+
+def _ep_schema_url(base: str, domain_id: str, schema_id: str) -> str:
+    return f"{_ep_domain_url(base, domain_id)}/schemas/{schema_id}"
+
+
+def _ep_schema_version_url(base: str, domain_id: str, schema_id: str, sv_id: str) -> str:
+    return f"{_ep_schema_url(base, domain_id, schema_id)}/schemaVersions/{sv_id}"
+
+
+def _ep_application_url(base: str, domain_id: str, app_id: str) -> str:
+    return f"{_ep_domain_url(base, domain_id)}/applications/{app_id}"
+
+
+def _ep_application_version_url(base: str, domain_id: str, app_id: str, av_id: str) -> str:
+    return f"{_ep_application_url(base, domain_id, app_id)}/applicationVersions/{av_id}"
+
+
+def _md_link(label: Optional[str], url: Optional[str]) -> Optional[str]:
+    """Build a `[label](url)` markdown link; return None if either is empty.
+
+    Labels with literal ']' or '[' are escaped so OM's renderer doesn't
+    truncate them.
+    """
+    if not label or not url:
+        return None
+    safe = str(label).replace("[", "\\[").replace("]", "\\]")
+    return f"[{safe}]({url})"
+
+
+def _domain_ref(domain_name: Optional[str]):
+    """Build the FullyQualifiedEntityName OM expects on `Topic.domain` /
+    `Pipeline.domain`. Must be a RootModel instance (passing a plain
+    string makes the metadata-rest sink crash with
+    "'str' object has no attribute 'root'")."""
+    if not domain_name:
+        return None
+    fqn = _quote_if_dotted(sanitize(domain_name))
+    try:
+        from metadata.generated.schema.type.basic import FullyQualifiedEntityName
+        return FullyQualifiedEntityName(root=fqn)
+    except Exception:  # pragma: no cover - slim envs
+        return fqn
 
 
 def _as_extension(data: Dict[str, Any]):
@@ -198,6 +263,8 @@ def event_to_topic_request(
     schema_payload: Optional[Dict[str, Any]],
     modeled_mesh_ids: Optional[List[str]] = None,
     owner: Any = None,
+    ep_console_url: str = DEFAULT_EP_CONSOLE_URL,
+    attach_to_domain: bool = True,
 ) -> CreateTopicRequest:
     """Build a CreateTopicRequest from an Event Portal event version.
 
@@ -263,15 +330,36 @@ def event_to_topic_request(
             )
         )
 
+    # User-facing markdown links back to the EP designer. Labels carry
+    # the human-readable name (+ version), URL embeds the id.
+    domain_id = domain.get("id")
+    event_id = event.get("id")
+    event_version_id = event_version.get("id")
+    sv = (schema_payload or {}).get("version") or {}
+    schema = (schema_payload or {}).get("schema") or {}
+    schema_id = schema.get("id")
+    schema_name = schema.get("name")
+    sv_id = sv.get("id")
+    sv_version = sv.get("version")
+
     extension = {
-        CP_DOMAIN_ID: domain.get("id"),
-        CP_DOMAIN_NAME: domain.get("name"),
-        CP_EVENT_ID: event.get("id"),
-        CP_EVENT_VERSION_ID: event_version.get("id"),
+        CP_EP_DOMAIN: _md_link(
+            domain.get("name"),
+            _ep_domain_url(ep_console_url, domain_id) if domain_id else None,
+        ),
+        CP_EP_EVENT: _md_link(
+            f"{event_name} v{version_str}",
+            _ep_event_version_url(ep_console_url, domain_id, event_id, event_version_id)
+            if domain_id and event_id and event_version_id else None,
+        ),
+        CP_EP_SCHEMA: _md_link(
+            f"{schema_name} v{sv_version}" if schema_name and sv_version else schema_name,
+            _ep_schema_version_url(ep_console_url, domain_id, schema_id, sv_id)
+            if domain_id and schema_id and sv_id else None,
+        ),
         CP_TOPIC_ADDRESS: topic_address,
         CP_STATE: state_human if state_human != "UNKNOWN" else None,
         CP_STATE_CHANGED_AT: event_version.get("updatedTime"),
-        CP_SCHEMA_VERSION_ID: event_version.get("schemaVersionId"),
         CP_MODELED_MESH_IDS: ",".join(modeled_mesh_ids) if modeled_mesh_ids else None,
     }
     # Strip Nones — OM rejects unknown-typed nulls.
@@ -291,6 +379,10 @@ def event_to_topic_request(
     # target OM version doesn't define the custom-property type yet.
     if extension and hasattr(request, "extension"):
         request.extension = _as_extension(extension)
+    if attach_to_domain:
+        dref = _domain_ref(domain.get("name"))
+        if dref is not None and hasattr(request, "domain"):
+            request.domain = dref
     if owner is not None and hasattr(request, "owner"):
         request.owner = owner
     return request
@@ -370,6 +462,8 @@ def app_pipeline_fqn(app_name: str, version: str) -> str:
 def app_to_pipeline_request(
     *, domain: Dict[str, Any], app: Dict[str, Any], app_version: Dict[str, Any],
     owner: Any = None,
+    ep_console_url: str = DEFAULT_EP_CONSOLE_URL,
+    attach_to_domain: bool = True,
 ):
     """Build a CreatePipelineRequest from an EP application version.
 
@@ -390,10 +484,8 @@ def app_to_pipeline_request(
 
     from .property_keys import (
         APP_PIPELINE_SERVICE_NAME,
-        CP_APP_DOMAIN_ID,
-        CP_APP_DOMAIN_NAME,
-        CP_APP_ID,
-        CP_APP_VERSION_ID,
+        CP_EP_APP_DOMAIN,
+        CP_EP_APPLICATION,
     )
 
     app_name = app.get("name") or "unknown-app"
@@ -415,11 +507,19 @@ def app_to_pipeline_request(
             source=TagSource.Classification,
         )
     ]
+    domain_id = domain.get("id")
+    app_id = app.get("id")
+    app_version_id = app_version.get("id")
     extension = {
-        CP_APP_ID: app.get("id"),
-        CP_APP_VERSION_ID: app_version.get("id"),
-        CP_APP_DOMAIN_ID: domain.get("id"),
-        CP_APP_DOMAIN_NAME: domain.get("name"),
+        CP_EP_APPLICATION: _md_link(
+            f"{app_name} v{version_str}",
+            _ep_application_version_url(ep_console_url, domain_id, app_id, app_version_id)
+            if domain_id and app_id and app_version_id else None,
+        ),
+        CP_EP_APP_DOMAIN: _md_link(
+            domain.get("name"),
+            _ep_domain_url(ep_console_url, domain_id) if domain_id else None,
+        ),
     }
     extension = {k: v for k, v in extension.items() if v is not None}
 
@@ -432,6 +532,10 @@ def app_to_pipeline_request(
     )
     if extension and hasattr(request, "extension"):
         request.extension = _as_extension(extension)
+    if attach_to_domain:
+        dref = _domain_ref(domain.get("name"))
+        if dref is not None and hasattr(request, "domain"):
+            request.domain = dref
     if owner is not None and hasattr(request, "owner"):
         request.owner = owner
     return request
