@@ -401,39 +401,70 @@ class SolaceEventPortalSource(Source):
                 for version in versions:
                     if not version:
                         continue
-                    # Emit a Pipeline entity per (app, version) so older
-                    # contracts remain navigable in OM.
+                    # Build the Pipeline request, then persist it
+                    # *synchronously* so we get an OM id back for the
+                    # subsequent AddLineage edges. (Yielding via Either
+                    # would defer the actual create to the sink loop --
+                    # too late for the in-iter lineage emit.)
                     pipeline_request = app_to_pipeline_request(
                         domain=domain, app=app, app_version=version,
                         owner=self._resolve(app, domain),
                     )
-                    if pipeline_request is not None:
-                        yield Either(right=pipeline_request)
+                    if pipeline_request is None:
+                        continue
+                    try:
+                        pipeline_entity = self.metadata.create_or_update(
+                            data=pipeline_request
+                        )
+                    except Exception as exc:
+                        yield self._fail(
+                            f"create-pipeline:{app.get('name')}", exc
+                        )
+                        continue
+                    pipeline_id = str(
+                        getattr(
+                            getattr(pipeline_entity, "id", None),
+                            "root",
+                            getattr(pipeline_entity, "id", ""),
+                        )
+                    )
+                    if not pipeline_id:
+                        logger.warning(
+                            "Pipeline %s persisted but id missing; skipping lineage",
+                            pipeline_request.name,
+                        )
+                        continue
 
                     for ev_id in version.get("declaredProducedEventVersionIds") or []:
                         fqn = self._event_version_to_topic_fqn.get(ev_id)
                         if not fqn:
                             continue
+                        topic_id = self._resolve_id("topic", fqn)
+                        if not topic_id:
+                            continue
                         req = app_topic_lineage_request(
-                            topic_fqn_=fqn,
+                            topic_id=topic_id,
+                            pipeline_id=pipeline_id,
                             app=app,
-                            app_version=version,
                             direction="publishes",
                         )
                         if req is not None:
-                            yield Either(right=req)
+                            self._add_lineage(req)
                     for ev_id in version.get("declaredConsumedEventVersionIds") or []:
                         fqn = self._event_version_to_topic_fqn.get(ev_id)
                         if not fqn:
                             continue
+                        topic_id = self._resolve_id("topic", fqn)
+                        if not topic_id:
+                            continue
                         req = app_topic_lineage_request(
-                            topic_fqn_=fqn,
+                            topic_id=topic_id,
+                            pipeline_id=pipeline_id,
                             app=app,
-                            app_version=version,
                             direction="consumes",
                         )
                         if req is not None:
-                            yield Either(right=req)
+                            self._add_lineage(req)
             except Exception as exc:
                 yield self._fail(
                     f"app-lineage:{app.get('name', app.get('id'))}", exc
@@ -525,6 +556,49 @@ class SolaceEventPortalSource(Source):
             if ref is not None:
                 return ref
         return None
+
+    def _add_lineage(self, request) -> None:
+        """Synchronously POST an AddLineageRequest to OM.
+
+        The standard `metadata-rest` sink only knows how to dispatch
+        Create*Request types -- AddLineageRequest is silently dropped if
+        yielded. We post it ourselves and swallow exceptions to a log
+        line so a single failed edge does not abort the whole run.
+        """
+        try:
+            self.metadata.add_lineage(data=request)
+        except Exception:
+            logger.exception("AddLineage failed; continuing")
+
+    def _resolve_id(self, entity_kind: str, fqn: str) -> Optional[str]:
+        """Look up an OM entity id by FQN via the ingestion-bot OM client.
+
+        Returns None on miss (lineage edge gets skipped, not crashed).
+        Used to satisfy OM 1.6+ AddLineage which requires resolved ids
+        on both EntitiesEdge ends.
+        """
+        try:
+            from metadata.generated.schema.entity.data.pipeline import Pipeline
+            from metadata.generated.schema.entity.data.topic import Topic
+        except Exception:
+            logger.warning("OM entity types not importable; skipping resolve")
+            return None
+        cls = {"pipeline": Pipeline, "topic": Topic}.get(entity_kind)
+        if cls is None:
+            logger.warning("Unknown entity_kind for id-resolve: %s", entity_kind)
+            return None
+        try:
+            ent = self.metadata.get_by_name(entity=cls, fqn=fqn)
+        except Exception:
+            logger.debug("get_by_name failed for %s/%s", entity_kind, fqn)
+            return None
+        if ent is None:
+            return None
+        ent_id = getattr(ent, "id", None)
+        # OM 1.6 returns id as a UUID pydantic field
+        if ent_id is None:
+            return None
+        return str(getattr(ent_id, "root", ent_id))
 
     # ------------------------------------------------------------- utilities
 

@@ -52,7 +52,16 @@ logger = logging.getLogger(__name__)
 
 
 # Lifecycle state -> classification tag FQN.
+# Solace Cloud EP v2 returns `stateId` as a numeric string ("1"/"2"/...)
+# referencing GET /architecture/states. Older EP editions surfaced the
+# state name on `state` directly, so we accept both vocabularies.
 _STATE_TAG: Dict[str, str] = {
+    # Numeric IDs from /architecture/states (verified 2026-05).
+    "1": "EventPortal.Draft",
+    "2": "EventPortal.Released",
+    "3": "EventPortal.Deprecated",
+    "4": "EventPortal.Retired",
+    # Name-based fallback for legacy editions.
     "DRAFT": "EventPortal.Draft",
     "RELEASED": "EventPortal.Released",
     "DEPRECATED": "EventPortal.Deprecated",
@@ -100,8 +109,17 @@ def build_topic_name(event_name: str, version: str) -> str:
     return sanitize(f"{event_name}_v{version}")
 
 
+def _quote_if_dotted(part: str) -> str:
+    """OM treats dots as FQN separators; parts containing a literal dot
+    must be quoted (`name.with.dots` -> `"name.with.dots"`). Used for
+    entity FQNs that include semver versions (1.0.0)."""
+    if "." in part and not (part.startswith('"') and part.endswith('"')):
+        return f'"{part}"'
+    return part
+
+
 def topic_fqn(service_name: str, event_name: str, version: str) -> str:
-    return f"{service_name}.{build_topic_name(event_name, version)}"
+    return f"{service_name}.{_quote_if_dotted(build_topic_name(event_name, version))}"
 
 
 def _as_extension(data: Dict[str, Any]):
@@ -189,9 +207,16 @@ def event_to_topic_request(
     event_name = event.get("name") or "unnamed-event"
     version_str = str(event_version.get("version") or "1.0.0")
     topic_address = extract_topic_address(event_version) or event_name
-    state = (
+    # Solace Cloud EP returns stateId as a numeric string ("1".."4");
+    # legacy editions returned the uppercase name on `state`. Look up
+    # the tag map by either. Description prints the human-readable name.
+    raw_state = str(
         event_version.get("stateId") or event_version.get("state") or ""
-    ).upper()
+    )
+    state_key = raw_state.upper()
+    state_human = {
+        "1": "Draft", "2": "Released", "3": "Deprecated", "4": "Retired",
+    }.get(raw_state, state_key.title() or "UNKNOWN")
 
     description = "\n\n".join(
         p
@@ -201,7 +226,7 @@ def event_to_topic_request(
             f"Source: Solace Event Portal application domain "
             f"`{domain.get('name')}`",
             f"Topic address: `{topic_address}`",
-            f"Event Portal version: `{version_str}` (state `{state or 'UNKNOWN'}`)",
+            f"Event Portal version: `{version_str}` (state `{state_human}`)",
         ]
         if p
     )
@@ -226,7 +251,8 @@ def event_to_topic_request(
             )
 
     tags: List[TagLabel] = []
-    state_tag = _STATE_TAG.get(state)
+    # Try numeric ID first (Solace Cloud), fall back to uppercase name.
+    state_tag = _STATE_TAG.get(raw_state) or _STATE_TAG.get(state_key)
     if state_tag:
         tags.append(
             TagLabel(
@@ -243,7 +269,7 @@ def event_to_topic_request(
         CP_EVENT_ID: event.get("id"),
         CP_EVENT_VERSION_ID: event_version.get("id"),
         CP_TOPIC_ADDRESS: topic_address,
-        CP_STATE: state or None,
+        CP_STATE: state_human if state_human != "UNKNOWN" else None,
         CP_STATE_CHANGED_AT: event_version.get("updatedTime"),
         CP_SCHEMA_VERSION_ID: event_version.get("schemaVersionId"),
         CP_MODELED_MESH_IDS: ",".join(modeled_mesh_ids) if modeled_mesh_ids else None,
@@ -338,7 +364,7 @@ def app_pipeline_fqn(app_name: str, version: str) -> str:
     `solace-event-portal-apps` (see APP_PIPELINE_SERVICE_NAME).
     """
     from .property_keys import APP_PIPELINE_SERVICE_NAME
-    return f"{APP_PIPELINE_SERVICE_NAME}.{app_pipeline_name(app_name, version)}"
+    return f"{APP_PIPELINE_SERVICE_NAME}.{_quote_if_dotted(app_pipeline_name(app_name, version))}"
 
 
 def app_to_pipeline_request(
@@ -413,12 +439,17 @@ def app_to_pipeline_request(
 
 def app_topic_lineage_request(
     *,
-    topic_fqn_: str,
+    topic_id: str,
+    pipeline_id: str,
     app: Dict[str, Any],
-    app_version: Dict[str, Any],
     direction: str,
 ):
     """Build an AddLineageRequest between a Pipeline (the EP app) and a Topic.
+
+    OM 1.6+ requires resolved entity IDs on both ends of the edge --
+    FQN alone results in "1 validation error for EntityReference". The
+    connector resolves IDs via `OpenMetadata.get_by_name(...)` before
+    calling this builder.
 
     `direction == "publishes"` -> pipeline -> topic
     `direction == "consumes"`  -> topic -> pipeline
@@ -437,23 +468,21 @@ def app_topic_lineage_request(
         return None
 
     app_name = app.get("name") or "unknown-app"
-    version_str = str(app_version.get("version") or "1.0.0")
-    pipeline_fqn = app_pipeline_fqn(app_name, version_str)
 
     direction = direction.lower()
     if direction == "publishes":
-        from_fqn, from_type = pipeline_fqn, "pipeline"
-        to_fqn, to_type = topic_fqn_, "topic"
+        from_id, from_type = pipeline_id, "pipeline"
+        to_id, to_type = topic_id, "topic"
     elif direction == "consumes":
-        from_fqn, from_type = topic_fqn_, "topic"
-        to_fqn, to_type = pipeline_fqn, "pipeline"
+        from_id, from_type = topic_id, "topic"
+        to_id, to_type = pipeline_id, "pipeline"
     else:
         raise ValueError(f"Unknown lineage direction: {direction}")
 
     return AddLineageRequest(
         edge=EntitiesEdge(
-            fromEntity=EntityReference(id=None, type=from_type, fullyQualifiedName=from_fqn),
-            toEntity=EntityReference(id=None, type=to_type, fullyQualifiedName=to_fqn),
+            fromEntity=EntityReference(id=from_id, type=from_type),
+            toEntity=EntityReference(id=to_id, type=to_type),
             lineageDetails=LineageDetails(
                 description=f"Solace Event Portal: {app_name} {direction}",
             ),
