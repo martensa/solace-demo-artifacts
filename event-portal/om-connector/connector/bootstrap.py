@@ -65,28 +65,21 @@ TAGS: List[Tuple[str, str]] = [
 # `markdown` types render as clickable links in the OM UI -- preferred for
 # the user-facing back-links to the Solace Cloud EP designer. The remaining
 # `string` props (state, topicAddress, ...) carry textual / lookup info.
-# Raw-id properties (CP_DOMAIN_ID etc.) stay registered for backward
-# compatibility with existing data; the connector does not set them on new
-# ingests anymore.
 TOPIC_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [  # (key, type, description)
-    # New: user-facing markdown links back to the EP designer.
     (CP_EP_DOMAIN, "markdown", "Link to the originating EP application domain"),
     (CP_EP_EVENT, "markdown", "Link to the EP event + version"),
     (CP_EP_SCHEMA, "markdown", "Link to the EP schema + version (if present)"),
-    # User-visible textual props.
     (CP_TOPIC_ADDRESS, "string", "Reconstructed Solace topic address with vars"),
     (CP_STATE, "string", "Event Portal lifecycle state (Draft, Released, ...)"),
     (CP_STATE_CHANGED_AT, "string", "ISO timestamp of last state change"),
-    # Legacy raw-id props -- kept registered so existing topics keep their
-    # values; new ingests no longer populate these.
-    (CP_DOMAIN_ID, "string", "(legacy) Event Portal application domain id"),
-    (CP_DOMAIN_NAME, "string", "(legacy) Event Portal application domain name"),
-    (CP_EVENT_ID, "string", "(legacy) Event Portal event id"),
-    (CP_EVENT_VERSION_ID, "string", "(legacy) Event Portal event version id"),
-    (CP_SCHEMA_VERSION_ID, "string", "(legacy) Event Portal schema version id"),
-    (CP_MODELED_MESH_IDS, "string", "Comma-separated modeled event mesh ids"),
-    (CP_PUBLISHED_BY, "string", "(legacy) Application(s) publishing this topic"),
-    (CP_CONSUMED_BY, "string", "(legacy) Application(s) consuming this topic"),
+]
+
+# Legacy properties — once registered for backward compatibility but no
+# longer populated by current ingests. Removed from OM by
+# `om-eventportal-bootstrap --remove-legacy`.
+LEGACY_TOPIC_PROPERTIES: List[str] = [
+    CP_DOMAIN_ID, CP_DOMAIN_NAME, CP_EVENT_ID, CP_EVENT_VERSION_ID,
+    CP_SCHEMA_VERSION_ID, CP_MODELED_MESH_IDS, CP_PUBLISHED_BY, CP_CONSUMED_BY,
 ]
 
 # Watermark for the audit-based reconciliation job is defined in
@@ -101,14 +94,14 @@ MESSAGING_SERVICE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
 
 # Pipeline custom properties for EP applications mapped to Pipeline entities.
 PIPELINE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
-    # New markdown back-links.
     (CP_EP_APPLICATION, "markdown", "Link to the EP application + version"),
     (CP_EP_APP_DOMAIN, "markdown", "Link to the EP application domain"),
-    # Legacy raw-id props (no longer populated on new ingests).
-    (CP_APP_ID, "string", "(legacy) Event Portal application id"),
-    (CP_APP_VERSION_ID, "string", "(legacy) Event Portal application version id"),
-    (CP_APP_DOMAIN_ID, "string", "(legacy) Event Portal application domain id"),
-    (CP_APP_DOMAIN_NAME, "string", "(legacy) Event Portal application domain name"),
+]
+
+# Legacy Pipeline properties (no longer populated; removable via
+# --remove-legacy).
+LEGACY_PIPELINE_PROPERTIES: List[str] = [
+    CP_APP_ID, CP_APP_VERSION_ID, CP_APP_DOMAIN_ID, CP_APP_DOMAIN_NAME,
 ]
 
 
@@ -249,6 +242,66 @@ def ensure_custom_property(
     logger.info("Added custom property %s.%s (%s)", entity_type, key, property_type_name)
 
 
+def delete_custom_property(
+    om, entity_type: str, key: str, host_port: str, jwt: str
+) -> bool:
+    """Remove a custom property from an OM Type. Idempotent.
+
+    OM 1.6 has no per-property DELETE endpoint. We send a JSON-Patch
+    `remove` with explicit `Content-Type: application/json-patch+json`
+    (the default ometa client uses `application/json`, which gives 400).
+    Refresh the property list before each call so the array index stays
+    correct after a previous remove.
+    """
+    import requests as _requests
+
+    type_entity = _get_or_none(
+        om, f"/metadata/types/name/{entity_type}?fields=customProperties"
+    )
+    if not type_entity:
+        logger.warning("Entity type %s not found in OM", entity_type)
+        return False
+    type_id = type_entity.get("id")
+    props = type_entity.get("customProperties") or []
+    index = next((i for i, p in enumerate(props) if p.get("name") == key), None)
+    if index is None:
+        return False
+    patch = [{"op": "remove", "path": f"/customProperties/{index}"}]
+    base = host_port.rstrip("/")
+    if not base.endswith("/v1"):
+        base = base + "/v1"
+    headers = {
+        "Content-Type": "application/json-patch+json",
+        "Accept": "application/json",
+        "Authorization": f"Bearer {jwt}",
+    }
+    url = f"{base}/metadata/types/{type_id}"
+    try:
+        resp = _requests.patch(url, headers=headers, data=json.dumps(patch), timeout=30)
+        resp.raise_for_status()
+    except Exception:
+        logger.exception("PATCH remove failed for %s.%s -- not fatal", entity_type, key)
+        return False
+    logger.info("Removed custom property %s.%s", entity_type, key)
+    return True
+
+
+def remove_legacy_properties(om, host_port: str, jwt: str) -> Dict[str, int]:
+    """Delete every legacy raw-id custom property from Topic + Pipeline.
+
+    Safe to run multiple times -- missing properties are silently skipped.
+    Returns a dict {entity_type: number_removed}.
+    """
+    removed = {"topic": 0, "pipeline": 0}
+    for key in LEGACY_TOPIC_PROPERTIES:
+        if delete_custom_property(om, "topic", key, host_port, jwt):
+            removed["topic"] += 1
+    for key in LEGACY_PIPELINE_PROPERTIES:
+        if delete_custom_property(om, "pipeline", key, host_port, jwt):
+            removed["pipeline"] += 1
+    return removed
+
+
 # ---------------------------------------------------------------- top-level
 
 def bootstrap(om) -> None:
@@ -303,10 +356,28 @@ def main(argv=None) -> int:
         required=True,
         help="Ingestion-bot JWT for OM",
     )
+    parser.add_argument(
+        "--remove-legacy",
+        action="store_true",
+        help="Delete legacy id-only custom properties from Topic + Pipeline "
+        "types after running the regular bootstrap.",
+    )
+    parser.add_argument(
+        "--remove-legacy-only",
+        action="store_true",
+        help="Skip the create/update bootstrap and only remove legacy props.",
+    )
     args = parser.parse_args(argv)
 
     om = _build_om(args.host_port, args.jwt_token)
-    bootstrap(om)
+    if not args.remove_legacy_only:
+        bootstrap(om)
+    if args.remove_legacy or args.remove_legacy_only:
+        removed = remove_legacy_properties(om, args.host_port, args.jwt_token)
+        print(
+            f"Legacy properties removed: topic={removed['topic']} "
+            f"pipeline={removed['pipeline']}"
+        )
     return 0
 
 

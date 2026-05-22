@@ -129,35 +129,87 @@ def topic_fqn(service_name: str, event_name: str, version: str) -> str:
 
 # --------------------------------------------------- EP UI deep-links
 
-from .property_keys import DEFAULT_EP_CONSOLE_URL
+from dataclasses import dataclass, field
+
+from .property_keys import (
+    DEFAULT_EP_APPLICATION_PATH,
+    DEFAULT_EP_APPLICATION_VERSION_PATH,
+    DEFAULT_EP_CONSOLE_URL,
+    DEFAULT_EP_DOMAIN_PATH,
+    DEFAULT_EP_EVENT_PATH,
+    DEFAULT_EP_EVENT_VERSION_PATH,
+    DEFAULT_EP_SCHEMA_PATH,
+    DEFAULT_EP_SCHEMA_VERSION_PATH,
+)
 
 
-def _ep_domain_url(base: str, domain_id: str) -> str:
-    return f"{base.rstrip('/')}/ep/designer/applicationDomains/{domain_id}"
+@dataclass
+class EpUrls:
+    """Bundle of EP-console URL components used to build markdown
+    back-links on Topics and Pipelines. Each path is a `str.format`
+    template with named placeholders.
+    """
+    base: str = DEFAULT_EP_CONSOLE_URL
+    domain_path: str = DEFAULT_EP_DOMAIN_PATH
+    event_path: str = DEFAULT_EP_EVENT_PATH
+    event_version_path: str = DEFAULT_EP_EVENT_VERSION_PATH
+    schema_path: str = DEFAULT_EP_SCHEMA_PATH
+    schema_version_path: str = DEFAULT_EP_SCHEMA_VERSION_PATH
+    application_path: str = DEFAULT_EP_APPLICATION_PATH
+    application_version_path: str = DEFAULT_EP_APPLICATION_VERSION_PATH
 
+    def _resolve(self, tmpl: str, **kw) -> Optional[str]:
+        try:
+            return self.base.rstrip("/") + tmpl.format(**kw)
+        except (KeyError, IndexError):
+            return None
 
-def _ep_event_url(base: str, domain_id: str, event_id: str) -> str:
-    return f"{_ep_domain_url(base, domain_id)}/events/{event_id}"
+    def domain(self, domain_id):
+        return self._resolve(self.domain_path, domain_id=domain_id) if domain_id else None
 
+    def event(self, domain_id, event_id):
+        if not (domain_id and event_id):
+            return None
+        return self._resolve(self.event_path, domain_id=domain_id, event_id=event_id)
 
-def _ep_event_version_url(base: str, domain_id: str, event_id: str, ev_version_id: str) -> str:
-    return f"{_ep_event_url(base, domain_id, event_id)}/eventVersions/{ev_version_id}"
+    def event_version(self, domain_id, event_id, event_version_id):
+        if not (domain_id and event_id and event_version_id):
+            return None
+        return self._resolve(
+            self.event_version_path,
+            domain_id=domain_id, event_id=event_id,
+            event_version_id=event_version_id,
+        )
 
+    def schema(self, domain_id, schema_id):
+        if not (domain_id and schema_id):
+            return None
+        return self._resolve(self.schema_path, domain_id=domain_id, schema_id=schema_id)
 
-def _ep_schema_url(base: str, domain_id: str, schema_id: str) -> str:
-    return f"{_ep_domain_url(base, domain_id)}/schemas/{schema_id}"
+    def schema_version(self, domain_id, schema_id, sv_id):
+        if not (domain_id and schema_id and sv_id):
+            return None
+        return self._resolve(
+            self.schema_version_path,
+            domain_id=domain_id, schema_id=schema_id, schema_version_id=sv_id,
+        )
 
+    def application(self, domain_id, application_id):
+        if not (domain_id and application_id):
+            return None
+        return self._resolve(
+            self.application_path,
+            domain_id=domain_id, application_id=application_id,
+        )
 
-def _ep_schema_version_url(base: str, domain_id: str, schema_id: str, sv_id: str) -> str:
-    return f"{_ep_schema_url(base, domain_id, schema_id)}/schemaVersions/{sv_id}"
-
-
-def _ep_application_url(base: str, domain_id: str, app_id: str) -> str:
-    return f"{_ep_domain_url(base, domain_id)}/applications/{app_id}"
-
-
-def _ep_application_version_url(base: str, domain_id: str, app_id: str, av_id: str) -> str:
-    return f"{_ep_application_url(base, domain_id, app_id)}/applicationVersions/{av_id}"
+    def application_version(self, domain_id, application_id, av_id):
+        if not (domain_id and application_id and av_id):
+            return None
+        return self._resolve(
+            self.application_version_path,
+            domain_id=domain_id, application_id=application_id,
+            application_version_id=av_id,
+        )
 
 
 def _md_link(label: Optional[str], url: Optional[str]) -> Optional[str]:
@@ -263,7 +315,7 @@ def event_to_topic_request(
     schema_payload: Optional[Dict[str, Any]],
     modeled_mesh_ids: Optional[List[str]] = None,
     owner: Any = None,
-    ep_console_url: str = DEFAULT_EP_CONSOLE_URL,
+    ep_urls: Optional[EpUrls] = None,
     attach_to_domain: bool = True,
 ) -> CreateTopicRequest:
     """Build a CreateTopicRequest from an Event Portal event version.
@@ -342,25 +394,20 @@ def event_to_topic_request(
     sv_id = sv.get("id")
     sv_version = sv.get("version")
 
+    urls = ep_urls or EpUrls()
     extension = {
-        CP_EP_DOMAIN: _md_link(
-            domain.get("name"),
-            _ep_domain_url(ep_console_url, domain_id) if domain_id else None,
-        ),
+        CP_EP_DOMAIN: _md_link(domain.get("name"), urls.domain(domain_id)),
         CP_EP_EVENT: _md_link(
             f"{event_name} v{version_str}",
-            _ep_event_version_url(ep_console_url, domain_id, event_id, event_version_id)
-            if domain_id and event_id and event_version_id else None,
+            urls.event_version(domain_id, event_id, event_version_id),
         ),
         CP_EP_SCHEMA: _md_link(
             f"{schema_name} v{sv_version}" if schema_name and sv_version else schema_name,
-            _ep_schema_version_url(ep_console_url, domain_id, schema_id, sv_id)
-            if domain_id and schema_id and sv_id else None,
+            urls.schema_version(domain_id, schema_id, sv_id),
         ),
         CP_TOPIC_ADDRESS: topic_address,
         CP_STATE: state_human if state_human != "UNKNOWN" else None,
         CP_STATE_CHANGED_AT: event_version.get("updatedTime"),
-        CP_MODELED_MESH_IDS: ",".join(modeled_mesh_ids) if modeled_mesh_ids else None,
     }
     # Strip Nones — OM rejects unknown-typed nulls.
     extension = {k: v for k, v in extension.items() if v is not None}
@@ -462,7 +509,7 @@ def app_pipeline_fqn(app_name: str, version: str) -> str:
 def app_to_pipeline_request(
     *, domain: Dict[str, Any], app: Dict[str, Any], app_version: Dict[str, Any],
     owner: Any = None,
-    ep_console_url: str = DEFAULT_EP_CONSOLE_URL,
+    ep_urls: Optional[EpUrls] = None,
     attach_to_domain: bool = True,
 ):
     """Build a CreatePipelineRequest from an EP application version.
@@ -510,16 +557,13 @@ def app_to_pipeline_request(
     domain_id = domain.get("id")
     app_id = app.get("id")
     app_version_id = app_version.get("id")
+    urls = ep_urls or EpUrls()
     extension = {
         CP_EP_APPLICATION: _md_link(
             f"{app_name} v{version_str}",
-            _ep_application_version_url(ep_console_url, domain_id, app_id, app_version_id)
-            if domain_id and app_id and app_version_id else None,
+            urls.application_version(domain_id, app_id, app_version_id),
         ),
-        CP_EP_APP_DOMAIN: _md_link(
-            domain.get("name"),
-            _ep_domain_url(ep_console_url, domain_id) if domain_id else None,
-        ),
+        CP_EP_APP_DOMAIN: _md_link(domain.get("name"), urls.domain(domain_id)),
     }
     extension = {k: v for k, v in extension.items() if v is not None}
 

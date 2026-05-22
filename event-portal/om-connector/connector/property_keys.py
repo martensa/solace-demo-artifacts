@@ -48,5 +48,32 @@ CP_EP_APPLICATION = "eventPortalApplication"          # markdown: [AppName vX.Y.
 CP_EP_APP_DOMAIN = "eventPortalApplicationDomain"     # markdown: [DomainName](url)
 
 # Default Solace Cloud Console base URL; overridable per service via the
-# `epConsoleUrl` connection option.
+# `epConsoleUrl` connection option (e.g. https://solace-sso.solace.cloud).
 DEFAULT_EP_CONSOLE_URL = "https://console.solace.cloud"
+
+# URL path templates relative to `epConsoleUrl`. Each template uses
+# str.format with named placeholders. Overridable per service via the
+# `ep<Entity>UrlTemplate` connection options if Solace changes its routes.
+DEFAULT_EP_DOMAIN_PATH = "/ep/designer/applicationDomains/{domain_id}"
+DEFAULT_EP_EVENT_PATH = (
+    "/ep/designer/applicationDomains/{domain_id}/events/{event_id}"
+)
+DEFAULT_EP_EVENT_VERSION_PATH = (
+    "/ep/designer/applicationDomains/{domain_id}"
+    "/events/{event_id}/eventVersions/{event_version_id}"
+)
+DEFAULT_EP_SCHEMA_PATH = (
+    "/ep/designer/applicationDomains/{domain_id}/schemas/{schema_id}"
+)
+DEFAULT_EP_SCHEMA_VERSION_PATH = (
+    "/ep/designer/applicationDomains/{domain_id}"
+    "/schemas/{schema_id}/schemaVersions/{schema_version_id}"
+)
+DEFAULT_EP_APPLICATION_PATH = (
+    "/ep/designer/applicationDomains/{domain_id}/applications/{application_id}"
+)
+DEFAULT_EP_APPLICATION_VERSION_PATH = (
+    "/ep/designer/applicationDomains/{domain_id}"
+    "/applications/{application_id}"
+    "/applicationVersions/{application_version_id}"
+)

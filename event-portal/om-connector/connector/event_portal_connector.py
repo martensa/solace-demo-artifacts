@@ -71,10 +71,40 @@ class SolaceEventPortalSource(Source):
         # supports it; the EP client tolerates a 404 gracefully either way.
         self.emit_data_products: bool = _as_bool(opts.get("emitDataProducts", "false"))
         self.since: Optional[str] = opts.get("since") or None
-        # Base URL of the Solace Cloud Console; used to build markdown
-        # back-link Custom Properties on Topics and Pipelines.
-        from .property_keys import DEFAULT_EP_CONSOLE_URL
-        self.ep_console_url: str = opts.get("epConsoleUrl") or DEFAULT_EP_CONSOLE_URL
+        # EP-UI back-link configuration: base URL + per-entity path
+        # templates. All overridable via connectionOptions so the user
+        # can flip to a different SSO / regional console without a code
+        # change or image rebuild.
+        from .mappers import EpUrls
+        from .property_keys import (
+            DEFAULT_EP_CONSOLE_URL,
+            DEFAULT_EP_DOMAIN_PATH,
+            DEFAULT_EP_EVENT_PATH,
+            DEFAULT_EP_EVENT_VERSION_PATH,
+            DEFAULT_EP_SCHEMA_PATH,
+            DEFAULT_EP_SCHEMA_VERSION_PATH,
+            DEFAULT_EP_APPLICATION_PATH,
+            DEFAULT_EP_APPLICATION_VERSION_PATH,
+        )
+        self.ep_urls = EpUrls(
+            base=opts.get("epConsoleUrl") or DEFAULT_EP_CONSOLE_URL,
+            domain_path=opts.get("epDomainUrlTemplate") or DEFAULT_EP_DOMAIN_PATH,
+            event_path=opts.get("epEventUrlTemplate") or DEFAULT_EP_EVENT_PATH,
+            event_version_path=(
+                opts.get("epEventVersionUrlTemplate") or DEFAULT_EP_EVENT_VERSION_PATH
+            ),
+            schema_path=opts.get("epSchemaUrlTemplate") or DEFAULT_EP_SCHEMA_PATH,
+            schema_version_path=(
+                opts.get("epSchemaVersionUrlTemplate") or DEFAULT_EP_SCHEMA_VERSION_PATH
+            ),
+            application_path=(
+                opts.get("epApplicationUrlTemplate") or DEFAULT_EP_APPLICATION_PATH
+            ),
+            application_version_path=(
+                opts.get("epApplicationVersionUrlTemplate")
+                or DEFAULT_EP_APPLICATION_VERSION_PATH
+            ),
+        )
 
         # Allow-list-first filter patterns. Empty `includes` => default-deny:
         # nothing in that category is ingested. See connector/filters.py.
@@ -331,7 +361,7 @@ class SolaceEventPortalSource(Source):
                         schema_payload=schema_payload,
                         modeled_mesh_ids=mesh_ids or None,
                         owner=self._resolve(event, domain),
-                        ep_console_url=self.ep_console_url,
+                        ep_urls=self.ep_urls,
                         attach_to_domain=self.emit_domains,
                     )
                     fqn = topic_fqn(
@@ -415,7 +445,7 @@ class SolaceEventPortalSource(Source):
                     pipeline_request = app_to_pipeline_request(
                         domain=domain, app=app, app_version=version,
                         owner=self._resolve(app, domain),
-                        ep_console_url=self.ep_console_url,
+                        ep_urls=self.ep_urls,
                         attach_to_domain=self.emit_domains,
                     )
                     if pipeline_request is None:
