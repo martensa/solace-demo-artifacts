@@ -147,7 +147,10 @@ from .property_keys import (
 class EpUrls:
     """Bundle of EP-console URL components used to build markdown
     back-links on Topics and Pipelines. Each path is a `str.format`
-    template with named placeholders.
+    template with named placeholders. The Solace Cloud Console SPA
+    expects the human-readable domain name as a `domainName=...` query
+    parameter in addition to the id-based path, so every helper takes
+    the domain name as a second argument.
     """
     base: str = DEFAULT_EP_CONSOLE_URL
     domain_path: str = DEFAULT_EP_DOMAIN_PATH
@@ -159,56 +162,73 @@ class EpUrls:
     application_version_path: str = DEFAULT_EP_APPLICATION_VERSION_PATH
 
     def _resolve(self, tmpl: str, **kw) -> Optional[str]:
+        from urllib.parse import quote
+        # URL-encode every value to handle domain names with spaces,
+        # ampersands, etc. (e.g. "Acme Retail - MDM").
+        encoded = {k: quote(str(v), safe="") for k, v in kw.items()}
         try:
-            return self.base.rstrip("/") + tmpl.format(**kw)
+            return self.base.rstrip("/") + tmpl.format(**encoded)
         except (KeyError, IndexError):
             return None
 
-    def domain(self, domain_id):
-        return self._resolve(self.domain_path, domain_id=domain_id) if domain_id else None
-
-    def event(self, domain_id, event_id):
-        if not (domain_id and event_id):
+    def domain(self, domain_id, domain_name):
+        if not (domain_id and domain_name):
             return None
-        return self._resolve(self.event_path, domain_id=domain_id, event_id=event_id)
+        return self._resolve(
+            self.domain_path,
+            domain_id=domain_id, domain_name=domain_name,
+        )
 
-    def event_version(self, domain_id, event_id, event_version_id):
-        if not (domain_id and event_id and event_version_id):
+    def event(self, domain_id, domain_name, event_id):
+        if not (domain_id and domain_name and event_id):
+            return None
+        return self._resolve(
+            self.event_path,
+            domain_id=domain_id, domain_name=domain_name, event_id=event_id,
+        )
+
+    def event_version(self, domain_id, domain_name, event_id, event_version_id):
+        if not (domain_id and domain_name and event_id and event_version_id):
             return None
         return self._resolve(
             self.event_version_path,
-            domain_id=domain_id, event_id=event_id,
-            event_version_id=event_version_id,
+            domain_id=domain_id, domain_name=domain_name,
+            event_id=event_id, event_version_id=event_version_id,
         )
 
-    def schema(self, domain_id, schema_id):
-        if not (domain_id and schema_id):
+    def schema(self, domain_id, domain_name, schema_id):
+        if not (domain_id and domain_name and schema_id):
             return None
-        return self._resolve(self.schema_path, domain_id=domain_id, schema_id=schema_id)
+        return self._resolve(
+            self.schema_path,
+            domain_id=domain_id, domain_name=domain_name, schema_id=schema_id,
+        )
 
-    def schema_version(self, domain_id, schema_id, sv_id):
-        if not (domain_id and schema_id and sv_id):
+    def schema_version(self, domain_id, domain_name, schema_id, sv_id):
+        if not (domain_id and domain_name and schema_id and sv_id):
             return None
         return self._resolve(
             self.schema_version_path,
-            domain_id=domain_id, schema_id=schema_id, schema_version_id=sv_id,
+            domain_id=domain_id, domain_name=domain_name,
+            schema_id=schema_id, schema_version_id=sv_id,
         )
 
-    def application(self, domain_id, application_id):
-        if not (domain_id and application_id):
+    def application(self, domain_id, domain_name, application_id):
+        if not (domain_id and domain_name and application_id):
             return None
         return self._resolve(
             self.application_path,
-            domain_id=domain_id, application_id=application_id,
+            domain_id=domain_id, domain_name=domain_name,
+            application_id=application_id,
         )
 
-    def application_version(self, domain_id, application_id, av_id):
-        if not (domain_id and application_id and av_id):
+    def application_version(self, domain_id, domain_name, application_id, av_id):
+        if not (domain_id and domain_name and application_id and av_id):
             return None
         return self._resolve(
             self.application_version_path,
-            domain_id=domain_id, application_id=application_id,
-            application_version_id=av_id,
+            domain_id=domain_id, domain_name=domain_name,
+            application_id=application_id, application_version_id=av_id,
         )
 
 
@@ -395,15 +415,16 @@ def event_to_topic_request(
     sv_version = sv.get("version")
 
     urls = ep_urls or EpUrls()
+    domain_name = domain.get("name")
     extension = {
-        CP_EP_DOMAIN: _md_link(domain.get("name"), urls.domain(domain_id)),
+        CP_EP_DOMAIN: _md_link(domain_name, urls.domain(domain_id, domain_name)),
         CP_EP_EVENT: _md_link(
             f"{event_name} v{version_str}",
-            urls.event_version(domain_id, event_id, event_version_id),
+            urls.event_version(domain_id, domain_name, event_id, event_version_id),
         ),
         CP_EP_SCHEMA: _md_link(
             f"{schema_name} v{sv_version}" if schema_name and sv_version else schema_name,
-            urls.schema_version(domain_id, schema_id, sv_id),
+            urls.schema_version(domain_id, domain_name, schema_id, sv_id),
         ),
         CP_TOPIC_ADDRESS: topic_address,
         CP_STATE: state_human if state_human != "UNKNOWN" else None,
@@ -555,15 +576,16 @@ def app_to_pipeline_request(
         )
     ]
     domain_id = domain.get("id")
+    domain_name = domain.get("name")
     app_id = app.get("id")
     app_version_id = app_version.get("id")
     urls = ep_urls or EpUrls()
     extension = {
         CP_EP_APPLICATION: _md_link(
             f"{app_name} v{version_str}",
-            urls.application_version(domain_id, app_id, app_version_id),
+            urls.application_version(domain_id, domain_name, app_id, app_version_id),
         ),
-        CP_EP_APP_DOMAIN: _md_link(domain.get("name"), urls.domain(domain_id)),
+        CP_EP_APP_DOMAIN: _md_link(domain_name, urls.domain(domain_id, domain_name)),
     }
     extension = {k: v for k, v in extension.items() if v is not None}
 

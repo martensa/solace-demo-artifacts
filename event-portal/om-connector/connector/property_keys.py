@@ -54,26 +54,38 @@ DEFAULT_EP_CONSOLE_URL = "https://console.solace.cloud"
 # URL path templates relative to `epConsoleUrl`. Each template uses
 # str.format with named placeholders. Overridable per service via the
 # `ep<Entity>UrlTemplate` connection options if Solace changes its routes.
-DEFAULT_EP_DOMAIN_PATH = "/ep/designer/applicationDomains/{domain_id}"
+# Verified against the live Solace Cloud Console (2026-05): the SPA
+# router actually uses /domains/<id>/<kind>/<id> with selectedId +
+# selectedVersionId query params, and the domain landing page is the
+# graph view (not the settings view).
+DEFAULT_EP_DOMAIN_PATH = (
+    "/ep/designer/domains/{domain_id}/graph"
+    "?domainName={domain_name}"
+)
 DEFAULT_EP_EVENT_PATH = (
-    "/ep/designer/applicationDomains/{domain_id}/events/{event_id}"
+    "/ep/designer/domains/{domain_id}/events/{event_id}"
+    "?domainName={domain_name}&selectedId={event_id}"
 )
 DEFAULT_EP_EVENT_VERSION_PATH = (
-    "/ep/designer/applicationDomains/{domain_id}"
-    "/events/{event_id}/eventVersions/{event_version_id}"
+    "/ep/designer/domains/{domain_id}/events/{event_id}"
+    "?domainName={domain_name}&selectedId={event_id}"
+    "&selectedVersionId={event_version_id}"
 )
 DEFAULT_EP_SCHEMA_PATH = (
-    "/ep/designer/applicationDomains/{domain_id}/schemas/{schema_id}"
+    "/ep/designer/domains/{domain_id}/schemas/{schema_id}"
+    "?domainName={domain_name}&selectedId={schema_id}"
 )
 DEFAULT_EP_SCHEMA_VERSION_PATH = (
-    "/ep/designer/applicationDomains/{domain_id}"
-    "/schemas/{schema_id}/schemaVersions/{schema_version_id}"
+    "/ep/designer/domains/{domain_id}/schemas/{schema_id}"
+    "?domainName={domain_name}&selectedId={schema_id}"
+    "&selectedVersionId={schema_version_id}"
 )
 DEFAULT_EP_APPLICATION_PATH = (
-    "/ep/designer/applicationDomains/{domain_id}/applications/{application_id}"
+    "/ep/designer/domains/{domain_id}/applications/{application_id}"
+    "?domainName={domain_name}&selectedId={application_id}"
 )
 DEFAULT_EP_APPLICATION_VERSION_PATH = (
-    "/ep/designer/applicationDomains/{domain_id}"
-    "/applications/{application_id}"
-    "/applicationVersions/{application_version_id}"
+    "/ep/designer/domains/{domain_id}/applications/{application_id}"
+    "?domainName={domain_name}&selectedId={application_id}"
+    "&selectedVersionId={application_version_id}"
 )
