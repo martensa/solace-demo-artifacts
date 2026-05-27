@@ -71,11 +71,22 @@ opensearch:
 # in local-k8s-values.yaml).
 airflow:
   enabled: true
-  airflow:
-    image:
-      repository: docker.getcollate.io/openmetadata/ingestion
-      tag: 1.6.5
+  # Chart 1.11.x relocated the image config from `airflow.airflow.image`
+  # to `airflow.images.airflow` (and added pod_template for the
+  # KubernetesExecutor worker pods). Both must point at our custom
+  # ingestion image to bake the Solace EP connector into every pod that
+  # might `import connector.*` (api-server, scheduler, dag-processor,
+  # triggerer, AND the per-DAG worker pods spawned by the K8s executor).
+  images:
+    airflow:
+      repository: registry.solace.lab/openmetadata-ingestion-solace
+      tag: "0.4.1"
       pullPolicy: IfNotPresent
+    pod_template:
+      repository: registry.solace.lab/openmetadata-ingestion-solace
+      tag: "0.4.1"
+      pullPolicy: IfNotPresent
+  airflow:
     executor: "KubernetesExecutor"
     # Default Airflow admin -- demo only. Used by OM server to call
     # Airflow's REST API.
@@ -109,22 +120,26 @@ airflow:
   # pods all need shared access to the dags/ and logs/ directories. The
   # chart hard-requires ReadWriteMany on logs (and effectively on dags
   # for the multi-pod KubernetesExecutor flow). Rancher Desktop's
-  # local-path provisioner refuses to provision RWX, so start.sh
-  # pre-creates two static hostPath PVs (RWX, on the lima VM filesystem)
-  # and matching PVCs that this chart picks up via existingClaim.
-  # accessMode stays ReadWriteMany only to satisfy the chart's
-  # validate-values gate.
+  # local-path provisioner refuses to provision RWX. start.sh pre-binds
+  # static hostPath PVs with claimRef={openmetadata-dependencies-dags,
+  # openmetadata-dependencies-logs} which match the PVC names the
+  # chart auto-generates ({{ include "airflow.fullname" . }}-dags|-logs
+  # = openmetadata-dependencies-dags|-logs).
+  #
+  # Chart 1.11.x removed the `existingClaim` and `accessMode` keys from
+  # its values schema; chart-managed PVCs bind to our pre-bound PVs via
+  # name match + claimRef. storageClassName="" disables the dynamic
+  # provisioner so the binder uses our static PV instead of trying to
+  # allocate from local-path (which would fail on RWX).
   dags:
     persistence:
       enabled: true
-      existingClaim: openmetadata-dependencies-dags
-      accessMode: ReadWriteMany
+      storageClassName: ""
       size: 5Gi
   logs:
     persistence:
       enabled: true
-      existingClaim: openmetadata-dependencies-logs
-      accessMode: ReadWriteMany
+      storageClassName: ""
       size: 5Gi
   workers:
     replicas: 1

@@ -9,7 +9,7 @@ OM_NAMESPACE="openmetadata-solace-lab"
 OM_RELEASE_DEPS="openmetadata-dependencies"
 OM_RELEASE_SERVER="openmetadata"
 OM_DNS_NAME="openmetadata.solace.lab"
-OM_CHART_VERSION="${OM_CHART_VERSION:-1.6.5}"
+OM_CHART_VERSION="${OM_CHART_VERSION:-1.11.13}"
 
 # --- CLI prerequisites --------------------------------------------
 command -v kubectl >/dev/null 2>&1 || { echo "ERROR: kubectl not found."; exit 1; }
@@ -144,12 +144,19 @@ kubectl create secret generic airflow-secrets \
 # Rancher Desktop's local-path provisioner refuses to provision RWX
 # PVCs, but the Airflow subchart insists on RWX for its dags/ and
 # logs/ directories. Workaround: pre-bind two static hostPath PVs
-# (RWX, DirectoryOrCreate so the path materialises on first mount)
-# to PVCs in this namespace, then let the chart pick them up via
-# existingClaim. Single-node only -- the host path lives on the
-# lima VM filesystem.
+# (RWX, DirectoryOrCreate so the path materialises on first mount).
+# The openmetadata-dependencies chart will create matching PVCs
+# (name pattern `<release>-dags|-logs`) that bind to these PVs via
+# the claimRef set below. Single-node only -- the host path lives on
+# the lima VM filesystem.
+#
+# Note (Wave 0 / OM 1.11.x): we used to also pre-create the PVCs
+# here, but chart 1.11.x' server-side-apply field-manager refuses
+# to overwrite a client-side-applied PVC. Letting the chart create
+# the PVCs avoids the conflict; the chmod step has been moved to
+# AFTER `helm install` (see below).
 echo ""
-echo "Pre-binding hostPath PVs/PVCs for Airflow dags + logs ..."
+echo "Pre-binding hostPath PVs for Airflow dags + logs ..."
 kubectl apply -f - <<EOF >/dev/null
 ---
 apiVersion: v1
@@ -185,39 +192,34 @@ spec:
   claimRef:
     namespace: ${OM_NAMESPACE}
     name: openmetadata-dependencies-logs
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: openmetadata-dependencies-dags
-  namespace: ${OM_NAMESPACE}
-spec:
-  accessModes: ["ReadWriteMany"]
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: ""
-  volumeName: openmetadata-dependencies-dags
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: openmetadata-dependencies-logs
-  namespace: ${OM_NAMESPACE}
-spec:
-  accessModes: ["ReadWriteMany"]
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: ""
-  volumeName: openmetadata-dependencies-logs
 EOF
 
+# --- Dependencies (MySQL + OpenSearch + Airflow) ------------------
+echo ""
+echo "Installing/upgrading $OM_RELEASE_DEPS ..."
+helm upgrade --install "$OM_RELEASE_DEPS" \
+  open-metadata/openmetadata-dependencies \
+  --version "$OM_CHART_VERSION" \
+  --namespace "$OM_NAMESPACE" \
+  --values "$PROJECT_DIR/local-k8s-deps-values.yaml"
+
+# --- Permissive mode on Airflow hostPath volumes ------------------
 # The kubelet creates DirectoryOrCreate hostPath dirs as 0755 root:root
 # and only chgrp's them via fsGroup (no chmod). The Airflow containers
 # run as UID 50000 with supplementary group 0 and need WRITE -- so
-# chmod the volumes 0777 once via a privileged pod that mounts both
-# PVCs. Idempotent: re-creates the pod on every run.
+# chmod the volumes 0777 once via a privileged pod that mounts the
+# chart-created PVCs. Runs AFTER helm install so the PVCs exist; airflow
+# pods may CrashLoop briefly until chmod completes, then auto-recover
+# (we force a restart at the end to avoid waiting for backoff).
+echo ""
+echo "Waiting for Airflow PVCs to be bound by chart ..."
+for pvc in openmetadata-dependencies-dags openmetadata-dependencies-logs; do
+  until [ "$(kubectl get pvc "$pvc" -n "$OM_NAMESPACE" \
+    -o jsonpath='{.status.phase}' 2>/dev/null)" = "Bound" ]; do
+    sleep 2
+  done
+done
+
 echo "Setting permissive mode on Airflow hostPath volumes ..."
 kubectl delete pod chmod-airflow-volumes -n "$OM_NAMESPACE" \
   --ignore-not-found=true >/dev/null
@@ -246,20 +248,16 @@ spec:
       persistentVolumeClaim:
         claimName: openmetadata-dependencies-logs
 EOF
-kubectl wait --for=condition=Ready=false pod/chmod-airflow-volumes \
-  -n "$OM_NAMESPACE" --timeout=60s 2>/dev/null || true
 kubectl wait --for=jsonpath='{.status.phase}'=Succeeded \
   pod/chmod-airflow-volumes -n "$OM_NAMESPACE" --timeout=60s >/dev/null
 kubectl delete pod chmod-airflow-volumes -n "$OM_NAMESPACE" >/dev/null
 
-# --- Dependencies (MySQL + OpenSearch + Airflow) ------------------
-echo ""
-echo "Installing/upgrading $OM_RELEASE_DEPS ..."
-helm upgrade --install "$OM_RELEASE_DEPS" \
-  open-metadata/openmetadata-dependencies \
-  --version "$OM_CHART_VERSION" \
-  --namespace "$OM_NAMESPACE" \
-  --values "$PROJECT_DIR/local-k8s-deps-values.yaml"
+# Force-restart any airflow pods that crash-looped while waiting on
+# the permissions fix. They will mount the now-writable volumes cleanly.
+echo "Restarting Airflow pods to pick up writable volumes ..."
+kubectl delete pods -n "$OM_NAMESPACE" \
+  -l 'app.kubernetes.io/name=airflow' --force --grace-period=0 \
+  >/dev/null 2>&1 || true
 
 # StatefulSets are created asynchronously by helm install -- wait
 # for the resource itself to exist before calling rollout status,
@@ -281,18 +279,20 @@ echo "Waiting for OpenSearch to be ready ..."
 kubectl rollout status statefulset/opensearch \
   --namespace "$OM_NAMESPACE" --timeout=300s || true
 
-# Airflow web is what the OM server will hit for pipeline registration.
+# Airflow API server is what OM contacts for pipeline registration.
 # Wait for the deployment to settle so the server's first contact
-# attempt succeeds; the others (scheduler, triggerer, sync-users) come
-# up on the same critical path so this gates them all.
-echo "Waiting for Airflow web deployment to be ready ..."
-until kubectl get deployment openmetadata-dependencies-web \
+# attempt succeeds; the others (scheduler, dag-processor, triggerer)
+# share the same gating since they all share the dags+logs volumes.
+# Note (Wave 0 / OM 1.11.x): chart 1.11.x renamed the airflow web
+# deployment to `api-server` (matches Airflow 3.x's REST API plane).
+echo "Waiting for Airflow api-server deployment to be ready ..."
+until kubectl get deployment openmetadata-dependencies-api-server \
   -n "$OM_NAMESPACE" >/dev/null 2>&1; do
   sleep 2
 done
-kubectl rollout status deployment/openmetadata-dependencies-web \
+kubectl rollout status deployment/openmetadata-dependencies-api-server \
   --namespace "$OM_NAMESPACE" --timeout=600s || \
-  echo "WARNING: Airflow web did not reach ready within 10 minutes (memory pressure?). Continuing -- OM server can still start."
+  echo "WARNING: Airflow api-server did not reach ready within 10 minutes (memory pressure?). Continuing -- OM server can still start."
 
 # --- OIDC credentials Secret --------------------------------------
 # Server values reference `oidc-secrets` via secretRef for the OIDC

@@ -5,7 +5,11 @@
 
 image:
   repository: docker.getcollate.io/openmetadata/server
-  tag: 1.6.5
+  # Pinned to 1.11.0 to match ALDI Nord's production OM server version
+  # (Cluster 2.1 answer 2026-05-27). Connector image is built on the
+  # same SDK so Topic/Pipeline/DataProduct schemas align. Bump only
+  # when ALDI upgrades their server (next planned: 1.13 once it GAs).
+  tag: 1.11.0
   pullPolicy: IfNotPresent
 
 # Persistent admin auth uses RSA keys mounted from a Secret created by
