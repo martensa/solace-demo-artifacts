@@ -6,13 +6,22 @@ OM exclusively through it. The tests verify:
   * custom property creation is skipped when already present
   * fresh OM gets exactly the expected create calls
 """
+import json as _json
 from unittest.mock import MagicMock
 
 from connector import bootstrap
 
 
 class _FakeClient:
-    """Pretends to be `OpenMetadata.client` with a configurable knowledge base."""
+    """Pretends to be `OpenMetadata.client` with a configurable knowledge base.
+
+    Accepts the same kwargs the real OM REST client accepts:
+      * `post(path, json=dict)` — JSON-encoded body (the bootstrap module's
+        convention for create endpoints; OM rejects form-encoded payloads).
+      * `put(path, data=str)` — `data` is a pre-serialised JSON string for
+        JSON-Patch and a few other PUTs. We decode it so the test assertions
+        can compare against the dict shape used in bootstrap.py.
+    """
 
     def __init__(self, existing=None):
         self.existing = existing or {}
@@ -24,13 +33,20 @@ class _FakeClient:
             raise RuntimeError(f"404 {path}")
         return self.existing[path]
 
-    def post(self, path, data=None):
-        self.posts.append((path, data))
-        return data or {}
+    def post(self, path, data=None, json=None):
+        body = json if json is not None else data
+        self.posts.append((path, body))
+        return body or {}
 
-    def put(self, path, data=None):
-        self.puts.append((path, data))
-        return data or {}
+    def put(self, path, data=None, json=None):
+        body = json if json is not None else data
+        if isinstance(body, (str, bytes)):
+            try:
+                body = _json.loads(body)
+            except (_json.JSONDecodeError, ValueError, TypeError):
+                pass
+        self.puts.append((path, body))
+        return body or {}
 
 
 def _make_om(client):

@@ -7,18 +7,21 @@
 #   - registry.solace.lab/openmetadata-ingestion-solace:latest
 #
 # Override the OM version if needed:
-#   OM_INGESTION_VERSION=1.7.0 ./scripts/build-and-push.sh
+#   OM_INGESTION_VERSION=1.11.14.0 ./scripts/build-and-push.sh
 #
 # Override the registry / image name if pushing somewhere else:
 #   REGISTRY=ghcr.io/martensa IMAGE_NAME=om-eventportal-ingestion \
 #     ./scripts/build-and-push.sh
+#
+# IMPORTANT: OM_INGESTION_VERSION must match ALDI's OM server version
+# exactly (1.11.0.0 today). Bump only when ALDI upgrades their server.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # --- Defaults (overridable via env) -----------------------------------------
-OM_INGESTION_VERSION="${OM_INGESTION_VERSION:-1.6.5}"
+OM_INGESTION_VERSION="${OM_INGESTION_VERSION:-1.11.0.0}"
 REGISTRY="${REGISTRY:-registry.solace.lab}"
 IMAGE_NAME="${IMAGE_NAME:-openmetadata-ingestion-solace}"
 PUSH="${PUSH:-true}"

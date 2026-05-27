@@ -27,20 +27,16 @@ from metadata.generated.schema.api.data.createTopic import CreateTopicRequest
 #   MessageSchema -> Topic    (we re-alias for readability)
 #   SchemaField   -> FieldModel
 #   FieldName: unchanged, but pydantic v2 uses .root instead of .__root__
-try:
-    from metadata.generated.schema.type.schema import (
-        FieldName,
-        FieldModel as SchemaField,
-        SchemaType,
-        Topic as MessageSchema,
-    )
-except ImportError:  # pragma: no cover - legacy fallback
-    from metadata.generated.schema.entity.data.topic import SchemaType  # OM <= 1.5
-    from metadata.generated.schema.type.schema import (
-        FieldName,
-        MessageSchema,
-        SchemaField,
-    )
+# OM 1.6+ consolidated the schema-related types under `metadata.generated.schema.type.schema`
+# (1.5 had them split across `entity.data.topic` for SchemaType). We target OM 1.11
+# (ALDI) so the legacy import path is no longer in play; the fallback was dropped in
+# Wave 0 as part of #47.
+from metadata.generated.schema.type.schema import (
+    FieldName,
+    FieldModel as SchemaField,
+    SchemaType,
+    Topic as MessageSchema,
+)
 from metadata.generated.schema.type.tagLabel import (
     LabelType,
     State,
@@ -449,8 +445,14 @@ def event_to_topic_request(
         request.extension = _as_extension(extension)
     if attach_to_domain:
         dref = _domain_ref(domain.get("name"))
-        if dref is not None and hasattr(request, "domain"):
-            request.domain = dref
+        if dref is not None:
+            # OM 1.9+ renamed `domain` -> `domains` (List[EntityReference]).
+            # Prefer the new field; fall back to the legacy singular for
+            # backward-compat testing against older OM SDKs.
+            if hasattr(request, "domains"):
+                request.domains = [dref]
+            elif hasattr(request, "domain"):
+                request.domain = dref
     if owner is not None and hasattr(request, "owner"):
         request.owner = owner
     return request
@@ -502,15 +504,21 @@ def modeled_mesh_to_data_product_request(mesh: Dict[str, Any], domain_fqn_: str)
         )
         return None
 
-    return CreateDataProductRequest(
+    # OM 1.9+ renamed the constructor kwarg `domain` -> `domains` (List).
+    # Try the new shape first; fall back to the legacy singular if we are
+    # running against an older SDK in a regression test.
+    base_kwargs = dict(
         name=sanitize(mesh.get("name") or mesh.get("id") or "unnamed-mesh"),
         displayName=mesh.get("name"),
         description=(
             mesh.get("description")
             or "Solace Modeled Event Mesh imported from Event Portal."
         ),
-        domain=domain_fqn_,
     )
+    try:
+        return CreateDataProductRequest(**base_kwargs, domains=[domain_fqn_])
+    except TypeError:  # pragma: no cover - pre-1.9 SDK fallback
+        return CreateDataProductRequest(**base_kwargs, domain=domain_fqn_)
 
 
 def app_pipeline_name(app_name: str, version: str) -> str:
@@ -600,8 +608,12 @@ def app_to_pipeline_request(
         request.extension = _as_extension(extension)
     if attach_to_domain:
         dref = _domain_ref(domain.get("name"))
-        if dref is not None and hasattr(request, "domain"):
-            request.domain = dref
+        if dref is not None:
+            # OM 1.9+ rename: domain -> domains (List). See event_to_topic_request.
+            if hasattr(request, "domains"):
+                request.domains = [dref]
+            elif hasattr(request, "domain"):
+                request.domain = dref
     if owner is not None and hasattr(request, "owner"):
         request.owner = owner
     return request
@@ -637,6 +649,16 @@ def app_topic_lineage_request(
         logger.warning("OM Lineage SDK not importable; skipping lineage emit")
         return None
 
+    # OM 1.11+ effectively requires LineageDetails.source so the run-report UI
+    # can group edges by origin. Tag every edge we emit as Manual (we are the
+    # explicit caller, not a query-history parser).
+    lineage_source = None
+    try:
+        from metadata.generated.schema.type.entityLineage import LineageSource
+        lineage_source = LineageSource.Manual
+    except Exception:  # pragma: no cover - pre-1.11 SDK without the enum
+        pass
+
     app_name = app.get("name") or "unknown-app"
 
     direction = direction.lower()
@@ -649,12 +671,16 @@ def app_topic_lineage_request(
     else:
         raise ValueError(f"Unknown lineage direction: {direction}")
 
+    details_kwargs = {
+        "description": f"Solace Event Portal: {app_name} {direction}",
+    }
+    if lineage_source is not None:
+        details_kwargs["source"] = lineage_source
+
     return AddLineageRequest(
         edge=EntitiesEdge(
             fromEntity=EntityReference(id=from_id, type=from_type),
             toEntity=EntityReference(id=to_id, type=to_type),
-            lineageDetails=LineageDetails(
-                description=f"Solace Event Portal: {app_name} {direction}",
-            ),
+            lineageDetails=LineageDetails(**details_kwargs),
         )
     )

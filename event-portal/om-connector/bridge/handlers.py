@@ -144,6 +144,21 @@ def on_schema_upsert(ctx: BridgeContext, payload: Dict[str, Any]) -> None:
         on_event_upsert(ctx, {"eventId": event["id"]})
 
 
+def _entity_id_str(entity: Any) -> Optional[str]:
+    """Extract an OM entity's id as a string regardless of SDK shape.
+
+    OM 1.6+ wraps UUID-typed fields in `RootModel(root=UUID)`; older SDKs
+    exposed the raw UUID. Either way we want a plain string suitable for
+    `EntityReference(id=...)`.
+    """
+    if entity is None:
+        return None
+    raw_id = getattr(entity, "id", None)
+    if raw_id is None:
+        return None
+    return str(getattr(raw_id, "root", raw_id))
+
+
 def on_application_upsert(ctx: BridgeContext, payload: Dict[str, Any]) -> None:
     """Triggered by `application.*` / `applicationVersion.*`.
 
@@ -171,8 +186,16 @@ def on_application_upsert(ctx: BridgeContext, payload: Dict[str, Any]) -> None:
     pipeline_request = app_to_pipeline_request(
         domain=domain, app=app, app_version=version,
     )
-    if pipeline_request is not None:
-        ctx.om.create_or_update(data=pipeline_request)
+    if pipeline_request is None:
+        return
+    pipeline_entity = ctx.om.create_or_update(data=pipeline_request)
+    pipeline_id = _entity_id_str(pipeline_entity)
+    if pipeline_id is None:
+        logger.warning(
+            "bridge on_application_upsert: pipeline create_or_update returned no id"
+            " for app %s; skipping lineage emit", app.get("name"),
+        )
+        return
 
     for ev_id in version.get("declaredProducedEventVersionIds") or []:
         ev_version = ctx.ep_client.get_event_version(ev_id)
@@ -186,10 +209,19 @@ def on_application_upsert(ctx: BridgeContext, payload: Dict[str, Any]) -> None:
             event.get("name") or "unnamed",
             str(ev_version.get("version") or "1.0.0"),
         )
+        topic_entity = ctx.om.get_by_name(entity=Topic, fqn=fqn)
+        topic_id = _entity_id_str(topic_entity)
+        if topic_id is None:
+            logger.warning(
+                "bridge on_application_upsert: topic %s not in OM yet,"
+                " skipping lineage edge (will retry on next event)",
+                fqn,
+            )
+            continue
         req = app_topic_lineage_request(
-            topic_fqn_=fqn,
+            topic_id=topic_id,
+            pipeline_id=pipeline_id,
             app=app,
-            app_version=version,
             direction="publishes",
         )
         if req is not None:

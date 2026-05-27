@@ -1,20 +1,24 @@
 # Bake the Solace Event Portal connector into the OpenMetadata ingestion image
-# so it can be selected from a custom Messaging workflow in the OM UI.
+# so it can be selected from a Messaging workflow in the OM UI.
 #
 # Build (lab):
 #   ./scripts/build-and-push.sh
 #
 # Build (manual):
-#   docker build --build-arg OM_INGESTION_VERSION=1.6.5 \
-#     -t registry.solace.lab/openmetadata-ingestion-solace:0.3.0 .
+#   docker build --build-arg OM_INGESTION_VERSION=1.11.0.0 \
+#     -t registry.solace.lab/openmetadata-ingestion-solace:0.4.0 .
 #
 # The image extends the official Collate ingestion image with the
 # connector package (and its sample-data optional dep). The Helm chart
 # of openmetadata-dependencies has to be flipped to this image; see
 # openmetadata-deployment/local-k8s-deps-values.yaml's airflow.image
 # section.
+#
+# OM_INGESTION_VERSION must match ALDI's OM server version EXACTLY to
+# avoid schema-mismatch 4xx at runtime. Current ALDI server = 1.11.0.0.
+# Bump only after ALDI Platform Team upgrades their server in lockstep.
 
-ARG OM_INGESTION_VERSION=1.6.5
+ARG OM_INGESTION_VERSION=1.11.0.0
 FROM docker.getcollate.io/openmetadata/ingestion:${OM_INGESTION_VERSION}
 
 # The Collate base image guards against root-side pip installs and

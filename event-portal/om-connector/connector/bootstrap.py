@@ -22,7 +22,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .property_keys import (
     APP_PIPELINE_SERVICE_NAME,
-    AUDIT_WATERMARK_KEY,
     CP_APP_DOMAIN_ID,
     CP_APP_DOMAIN_NAME,
     CP_APP_ID,
@@ -82,15 +81,14 @@ LEGACY_TOPIC_PROPERTIES: List[str] = [
     CP_SCHEMA_VERSION_ID, CP_MODELED_MESH_IDS, CP_PUBLISHED_BY, CP_CONSUMED_BY,
 ]
 
-# Watermark for the audit-based reconciliation job is defined in
-# property_keys.py and re-exported above via the import.
-MESSAGING_SERVICE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
-    (
-        AUDIT_WATERMARK_KEY,
-        "string",
-        "ISO timestamp of the last successfully reconciled EP audit event",
-    ),
-]
+# OM 1.11 removed Type registration for service-level entities — there is
+# no `messagingService` Type to attach custom properties to. The audit
+# watermark we used in 0.3.x is dead code anyway: EP Cloud Enterprise
+# does not expose an audit feed (Cluster 1.4), so reconcile is full-pull
+# (#23) with no watermark needed. Kept the constant + import for backward
+# compatibility with downstream code that may still reference it, but the
+# bootstrap no longer tries to register a CP that the server rejects.
+MESSAGING_SERVICE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = []
 
 # Pipeline custom properties for EP applications mapped to Pipeline entities.
 PIPELINE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
@@ -329,9 +327,17 @@ def _build_om(host_port: str, jwt_token: str):
     )
     from metadata.ingestion.ometa.ometa_api import OpenMetadata
 
+    # OM SDK 1.11+ expects the host_port to include the `/api` path
+    # prefix. Operators frequently paste just the OM root URL (e.g.
+    # `http://openmetadata:8585`); auto-append `/api` so the bootstrap
+    # CLI is forgiving. Trailing slashes are tolerated.
+    normalised = host_port.rstrip("/")
+    if not normalised.endswith("/api"):
+        normalised = f"{normalised}/api"
+
     return OpenMetadata(
         OpenMetadataConnection(
-            hostPort=host_port,
+            hostPort=normalised,
             authProvider="openmetadata",
             securityConfig=OpenMetadataJWTClientConfig(jwtToken=jwt_token),
         )

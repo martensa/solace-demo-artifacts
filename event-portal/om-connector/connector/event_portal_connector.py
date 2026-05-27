@@ -159,7 +159,9 @@ class SolaceEventPortalSource(Source):
         metadata: OpenMetadata,
         pipeline_name: Optional[str] = None,
     ) -> "SolaceEventPortalSource":
-        config = WorkflowSource.parse_obj(config_dict)
+        # Pydantic v2 idiom. `parse_obj()` is deprecated since pydantic 2.0
+        # and removed in 2.10 (which OM 1.11+ may pull in transitively).
+        config = WorkflowSource.model_validate(config_dict)
         if not config.serviceName:
             raise InvalidSourceException("Service name is required")
         return cls(config, metadata)
