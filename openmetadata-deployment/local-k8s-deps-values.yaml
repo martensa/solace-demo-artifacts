@@ -80,11 +80,11 @@ airflow:
   images:
     airflow:
       repository: registry.solace.lab/openmetadata-ingestion-solace
-      tag: "0.4.1"
+      tag: "0.5.0"
       pullPolicy: IfNotPresent
     pod_template:
       repository: registry.solace.lab/openmetadata-ingestion-solace
-      tag: "0.4.1"
+      tag: "0.5.0"
       pullPolicy: IfNotPresent
   airflow:
     executor: "KubernetesExecutor"
