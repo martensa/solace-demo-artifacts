@@ -18,6 +18,12 @@ CP_STATE_CHANGED_AT = "eventPortalStateChangedAt"
 CP_MODELED_MESH_IDS = "eventPortalModeledMeshIds"
 CP_PUBLISHED_BY = "eventPortalPublishedBy"
 CP_CONSUMED_BY = "eventPortalConsumedBy"
+# Wave 1 (#54): "true" iff this Topic/Pipeline carries the highest
+# semver among the EP event/application versions ingested in this run.
+# Set on every per-version OM entity so the OM UI can default-filter
+# `eventPortalIsLatestVersion=true` and avoid drowning users in
+# deprecated version entities.
+CP_IS_LATEST_VERSION = "eventPortalIsLatestVersion"
 
 # Pipeline.extension custom properties (for EP applications mapped as
 # Pipeline entities under a synthetic PipelineService).

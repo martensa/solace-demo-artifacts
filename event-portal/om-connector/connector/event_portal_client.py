@@ -266,6 +266,42 @@ class EventPortalClient:
     def get_modeled_event_mesh(self, mesh_id: str) -> Optional[Dict[str, Any]]:
         return self._get_single(f"/architecture/modeledEventMeshes/{mesh_id}")
 
+    # ----------------------------------------------------- custom attributes
+
+    def list_custom_attribute_definitions(
+        self,
+    ) -> List[Dict[str, Any]]:
+        """List EP custom-attribute definitions across all entity types.
+
+        Used by the bootstrap auto-discovery (Wave 1 #43) to pre-create
+        one OM Classification per CA name, so that tag values seen on
+        ingested entities have a parent to reference. Returns `[]` on
+        404 for EP editions that do not expose the endpoint.
+
+        Definition shape (verified on seall 2026-05):
+            {
+              "id": "...",
+              "name": "DataRetention",
+              "valueType": "STRING",
+              "associatedEntityTypes": ["event"],
+              ...
+            }
+        """
+        try:
+            return list(
+                self._paginate(
+                    "/architecture/customAttributeDefinitions"
+                )
+            )
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                logger.info(
+                    "customAttributeDefinitions endpoint not present in this"
+                    " EP edition; CA-tag discovery will be skipped."
+                )
+                return []
+            raise
+
     # ----------------------------------------------------------- webhooks
 
     def list_webhook_subscriptions(self) -> List[Dict[str, Any]]:

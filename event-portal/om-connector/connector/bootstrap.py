@@ -36,6 +36,7 @@ from .property_keys import (
     CP_EP_SCHEMA,
     CP_EVENT_ID,
     CP_EVENT_VERSION_ID,
+    CP_IS_LATEST_VERSION,
     CP_MODELED_MESH_IDS,
     CP_PUBLISHED_BY,
     CP_SCHEMA_VERSION_ID,
@@ -71,6 +72,13 @@ TOPIC_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [  # (key, type, descripti
     (CP_TOPIC_ADDRESS, "string", "Reconstructed Solace topic address with vars"),
     (CP_STATE, "string", "Event Portal lifecycle state (Draft, Released, ...)"),
     (CP_STATE_CHANGED_AT, "string", "ISO timestamp of last state change"),
+    (
+        CP_IS_LATEST_VERSION,
+        "string",
+        "'true' iff this Topic carries the highest semver of its EP event "
+        "(Wave 1 #54). UI default-filter recommendation: "
+        "eventPortalIsLatestVersion=true to hide deprecated history.",
+    ),
 ]
 
 # Legacy properties — once registered for backward compatibility but no
@@ -94,6 +102,12 @@ MESSAGING_SERVICE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = []
 PIPELINE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
     (CP_EP_APPLICATION, "markdown", "Link to the EP application + version"),
     (CP_EP_APP_DOMAIN, "markdown", "Link to the EP application domain"),
+    (
+        CP_IS_LATEST_VERSION,
+        "string",
+        "'true' iff this Pipeline carries the highest semver of its EP "
+        "application (Wave 1 #54).",
+    ),
 ]
 
 # Legacy Pipeline properties (no longer populated; removable via
@@ -302,8 +316,73 @@ def remove_legacy_properties(om, host_port: str, jwt: str) -> Dict[str, int]:
 
 # ---------------------------------------------------------------- top-level
 
-def bootstrap(om) -> None:
-    """Run the full idempotent bootstrap against an OM instance."""
+# Wave 1 (#43): one OM Classification per EP custom-attribute name.
+CA_CLASSIFICATION_PREFIX = "EventPortalCustomAttribute_"
+
+
+def _ca_classification_name(ca_name: str) -> str:
+    """Map an EP CA name to an OM Classification name.
+
+    OM accepts ``[A-Za-z][A-Za-z0-9_]*`` for classifications; sanitise to
+    that vocabulary while preserving readability."""
+    cleaned = "".join(c if c.isalnum() or c == "_" else "_" for c in (ca_name or "unnamed"))
+    if not cleaned or not (cleaned[0].isalpha() or cleaned[0] == "_"):
+        cleaned = f"x_{cleaned}"
+    return f"{CA_CLASSIFICATION_PREFIX}{cleaned}"
+
+
+def discover_custom_attribute_classifications(
+    om,
+    ep_client,
+    exclude: Optional[set] = None,
+) -> List[str]:
+    """Walk EP customAttributeDefinitions and ensure a Classification
+    per CA name (idempotent).
+
+    Returns the list of Classification names created/verified. Tag values
+    within each Classification are lazy-created later, at ingest time by
+    the connector (we cannot pre-enumerate them since EP CAs are
+    free-text per Cluster 1.6).
+
+    ``exclude`` is a set of CA NAMES (case-sensitive) to skip --
+    typically high-cardinality identity-like attributes
+    (e.g. ``acl-principal``) where one-tag-per-value would explode.
+    Configured via the workflow `customAttributeTagExclude` option.
+    """
+    skip = exclude or set()
+    out: List[str] = []
+    try:
+        ca_defs = ep_client.list_custom_attribute_definitions()
+    except Exception as exc:
+        logger.warning("Failed to list EP CA definitions: %s", exc)
+        return out
+    for ca in ca_defs:
+        ca_name = ca.get("name")
+        if not ca_name or ca_name in skip:
+            continue
+        classification_name = _ca_classification_name(ca_name)
+        description = (
+            f"Auto-discovered from Solace Event Portal custom attribute "
+            f"`{ca_name}` (valueType={ca.get('valueType', '?')}). Tag values "
+            f"are lazy-created at ingest time."
+        )
+        ensure_classification(om, name=classification_name, description=description)
+        out.append(classification_name)
+    if out:
+        logger.info(
+            "Discovered %d EP custom-attribute classifications "
+            "(skipped %d via customAttributeTagExclude)",
+            len(out), len(skip),
+        )
+    return out
+
+
+def bootstrap(om, ep_client=None, ca_exclude: Optional[set] = None) -> None:
+    """Run the full idempotent bootstrap against an OM instance.
+
+    Pass ``ep_client`` to also auto-discover custom-attribute classifications
+    from EP (#43). Without it the CA-tagging feature is dormant (the
+    mapper still emits topics, just without CA tags)."""
     ensure_classification(om)
     for tag_name, tag_desc in TAGS:
         ensure_tag(om, CLASSIFICATION_NAME, tag_name, tag_desc)
@@ -314,6 +393,8 @@ def bootstrap(om) -> None:
     for key, ptype, desc in PIPELINE_CUSTOM_PROPERTIES:
         ensure_custom_property(om, "pipeline", key, ptype, desc)
     ensure_pipeline_service(om)
+    if ep_client is not None:
+        discover_custom_attribute_classifications(om, ep_client, exclude=ca_exclude)
 
 
 # ---------------------------------------------------------------- CLI
@@ -373,11 +454,43 @@ def main(argv=None) -> int:
         action="store_true",
         help="Skip the create/update bootstrap and only remove legacy props.",
     )
+    # Wave 1 (#43): Auto-discover EP custom-attribute definitions and
+    # register one OM Classification per CA name so tag values can be
+    # populated at ingest time.
+    parser.add_argument(
+        "--ep-api-url",
+        default="https://api.solace.cloud/api/v2",
+        help="EP REST base URL (default: %(default)s). Only used when --ep-token "
+        "is also given.",
+    )
+    parser.add_argument(
+        "--ep-token",
+        default=None,
+        help="EP API token for #43 custom-attribute auto-discovery. Without "
+        "this flag the CA discovery step is skipped.",
+    )
+    parser.add_argument(
+        "--custom-attribute-exclude",
+        default="",
+        help="Comma-separated list of EP custom-attribute names to NOT register "
+        "as classifications (typically high-cardinality identity attributes "
+        "like 'acl-principal' where one-tag-per-value would explode).",
+    )
     args = parser.parse_args(argv)
+
+    ep_client = None
+    ca_exclude = {
+        s.strip() for s in (args.custom_attribute_exclude or "").split(",") if s.strip()
+    }
+    if args.ep_token:
+        from .event_portal_client import EventPortalClient
+        ep_client = EventPortalClient(
+            base_url=args.ep_api_url, api_token=args.ep_token,
+        )
 
     om = _build_om(args.host_port, args.jwt_token)
     if not args.remove_legacy_only:
-        bootstrap(om)
+        bootstrap(om, ep_client=ep_client, ca_exclude=ca_exclude or None)
     if args.remove_legacy or args.remove_legacy_only:
         removed = remove_legacy_properties(om, args.host_port, args.jwt_token)
         print(

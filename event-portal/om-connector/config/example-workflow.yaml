@@ -35,7 +35,11 @@ source:
           {"includes": [".*"], "excludes": []}
 
         # --- Versioning + lineage ------------------------------------
-        ingestAllVersions: "false"   # if true, every event AND app version
+        # Default ON since Wave 1 (#54) -- ALDI requested full version
+        # history in OM. Each per-version Topic / Pipeline carries
+        # eventPortalIsLatestVersion=true|false so OM UI search can
+        # default-filter to current versions without losing history.
+        ingestAllVersions: "true"
         includeLineage: "true"        # app->topic / topic->app edges
         emitDomains: "true"           # OM Domain per EP application domain
         emitDataProducts: "true"      # OM DataProduct per modeled mesh

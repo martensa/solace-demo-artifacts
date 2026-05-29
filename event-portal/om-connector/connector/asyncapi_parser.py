@@ -23,7 +23,6 @@ from metadata.generated.schema.api.data.createTopic import CreateTopicRequest
 # Alias on import so call sites stay readable.
 try:
     from metadata.generated.schema.type.schema import (
-        FieldName,
         FieldModel as SchemaField,
         SchemaType,
         Topic as MessageSchema,
@@ -31,7 +30,6 @@ try:
 except ImportError:  # pragma: no cover - legacy fallback
     from metadata.generated.schema.entity.data.topic import SchemaType  # OM <= 1.5
     from metadata.generated.schema.type.schema import (
-        FieldName,
         MessageSchema,
         SchemaField,
     )

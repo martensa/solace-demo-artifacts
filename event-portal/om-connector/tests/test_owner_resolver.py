@@ -1,6 +1,4 @@
-import time
 
-import pytest
 
 from connector.owner_resolver import OwnerResolver
 

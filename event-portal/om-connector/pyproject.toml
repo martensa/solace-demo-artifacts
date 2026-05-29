@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openmetadata-solace-eventportal-connector"
-version = "0.4.1"
+version = "0.5.0"
 description = "OpenMetadata custom Messaging connector + webhook bridge for Solace Event Portal"
 readme = "README.md"
 # Bumped to py3.10 in Wave 0 (OM 1.11 dropped py3.9). Aligns with the

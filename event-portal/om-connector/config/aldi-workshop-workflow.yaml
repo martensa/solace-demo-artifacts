@@ -40,7 +40,9 @@ source:
 
         # --- What to emit -----------------------------------------------
         includeLineage: "true"        # Pipeline <-> Topic edges
-        ingestAllVersions: "false"    # latest only for the workshop
+        # Default ON since Wave 1 (#54). Workshop demo can opt out by
+        # flipping this to "false" if the demo flow needs latest-only.
+        ingestAllVersions: "true"
         emitDomains: "true"           # OM Domain per EP application domain
         # Solace Cloud EP v2 has no /architecture/modeledEventMeshes
         # endpoint (verified via scripts/smoke_ep_api.py). Keep OFF; the

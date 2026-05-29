@@ -33,7 +33,7 @@ from metadata.ingestion.api.steps import InvalidSourceException, Source
 from metadata.ingestion.ometa.ometa_api import OpenMetadata
 
 from .asyncapi_parser import asyncapi_to_topic_requests, parse_asyncapi
-from .event_portal_client import EventPortalAuthError, EventPortalClient
+from .event_portal_client import EventPortalClient
 from .filters import FilterPattern, parse_filter_options
 from .mappers import (
     app_to_pipeline_request,
@@ -62,7 +62,12 @@ class SolaceEventPortalSource(Source):
         self.api_token: Optional[str] = opts.get("apiToken")
         self.mode: str = (opts.get("mode") or "rest_api").lower()
         self.include_lineage: bool = _as_bool(opts.get("includeLineage", "true"))
-        self.ingest_all_versions: bool = _as_bool(opts.get("ingestAllVersions", "false"))
+        # Wave 1 (#54): default flipped to "true" -- ALDI explicitly
+        # asked for full version history in OM (Cluster 3.5). Each per-
+        # version Topic / Pipeline gets a `eventPortalIsLatestVersion`
+        # custom property so the OM UI can filter to current versions
+        # by default without losing history from the catalog.
+        self.ingest_all_versions: bool = _as_bool(opts.get("ingestAllVersions", "true"))
         self.emit_domains: bool = _as_bool(opts.get("emitDomains", "true"))
         # Default OFF: Solace Cloud EP v2 does not expose
         # /architecture/modeledEventMeshes (verified by smoke test in
@@ -149,6 +154,23 @@ class SolaceEventPortalSource(Source):
         self._event_version_to_topic_fqn: Dict[str, str] = {}
         # event_version_id -> set of modeled-mesh ids it participates in
         self._event_version_to_meshes: Dict[str, Set[str]] = {}
+
+        # Wave 1 (#43): EP custom attribute -> OM Tag bridge.
+        # `customAttributeTagExclude` is a comma-separated list (or YAML
+        # list) of CA names to skip (high-cardinality identity-like CAs
+        # whose values would explode the tag space).
+        raw_exclude = opts.get("customAttributeTagExclude") or ""
+        if isinstance(raw_exclude, list):
+            self._ca_exclude: Set[str] = {str(s).strip() for s in raw_exclude if s}
+        else:
+            self._ca_exclude = {
+                s.strip() for s in str(raw_exclude).split(",") if s.strip()
+            }
+        # def-id -> CA name. Populated lazily on first use to avoid an
+        # extra REST call when there are no CAs.
+        self._ca_def_name_by_id: Optional[Dict[str, str]] = None
+        # Cache of tags already ensured this run, keyed by FQN.
+        self._ca_tag_ensured: Set[str] = set()
 
     # ------------------------------------------------------------- factories
 
@@ -351,6 +373,10 @@ class SolaceEventPortalSource(Source):
                     if self.ingest_all_versions
                     else [self.client.get_latest_event_version(event["id"])]
                 )
+                # Wave 1 (#54): mark the highest-semver version so the OM
+                # UI can default-filter to current. Cheap because we
+                # already have all versions in memory.
+                latest_id = _latest_version_id(versions)
                 for version in versions:
                     if not version:
                         continue
@@ -365,6 +391,15 @@ class SolaceEventPortalSource(Source):
                         owner=self._resolve(event, domain),
                         ep_urls=self.ep_urls,
                         attach_to_domain=self.emit_domains,
+                        is_latest_version=(
+                            version.get("id") == latest_id if latest_id else None
+                        ),
+                        # Wave 1 (#43): merge EP custom-attribute tags from
+                        # both the event and the event-version payloads.
+                        custom_attribute_tags=(
+                            self._custom_attribute_tags(event)
+                            + self._custom_attribute_tags(version)
+                        ),
                     )
                     fqn = topic_fqn(
                         self.service_name,
@@ -436,6 +471,8 @@ class SolaceEventPortalSource(Source):
                     if self.ingest_all_versions
                     else [self.client.get_latest_application_version(app["id"])]
                 )
+                # Wave 1 (#54): mark highest-semver app version too.
+                latest_id = _latest_version_id(versions)
                 for version in versions:
                     if not version:
                         continue
@@ -449,6 +486,15 @@ class SolaceEventPortalSource(Source):
                         owner=self._resolve(app, domain),
                         ep_urls=self.ep_urls,
                         attach_to_domain=self.emit_domains,
+                        is_latest_version=(
+                            version.get("id") == latest_id if latest_id else None
+                        ),
+                        # Wave 1 (#43): merge EP custom-attribute tags from
+                        # both the application and the version payloads.
+                        custom_attribute_tags=(
+                            self._custom_attribute_tags(app)
+                            + self._custom_attribute_tags(version)
+                        ),
                     )
                     if pipeline_request is None:
                         continue
@@ -640,6 +686,98 @@ class SolaceEventPortalSource(Source):
             return None
         return str(getattr(ent_id, "root", ent_id))
 
+    # -------------------------------------------------- custom attribute tags
+
+    def _ca_name_by_id_map(self) -> Dict[str, str]:
+        """Lazy-load EP custom-attribute definitions and build an id→name map."""
+        if self._ca_def_name_by_id is None:
+            try:
+                defs = self.client.list_custom_attribute_definitions()
+            except Exception as exc:
+                logger.warning("CA definition fetch failed: %s", exc)
+                defs = []
+            self._ca_def_name_by_id = {
+                d["id"]: d["name"]
+                for d in defs
+                if d.get("id") and d.get("name")
+                and d["name"] not in self._ca_exclude
+            }
+        return self._ca_def_name_by_id
+
+    def _custom_attribute_tags(self, entity: Dict[str, Any]) -> list:
+        # Return type omitted (TagLabel imported inside body) to avoid
+        # forward-reference at module-load time.
+        """Build a list of TagLabels from an EP entity's customAttributes.
+
+        Lazy-creates the Tag entity in OM the first time we see a (CA-name,
+        value) combo. Excluded CAs (per workflow `customAttributeTagExclude`)
+        are dropped silently.
+
+        EP customAttribute shape (verified seall 2026-05):
+            entity["customAttributes"] = [
+                {"customAttributeDefinitionId": "<id>", "value": "<str>"}
+            ]
+        """
+        from .bootstrap import _ca_classification_name
+        from metadata.generated.schema.type.tagLabel import (
+            LabelType, State, TagLabel, TagSource,
+        )
+
+        cas = entity.get("customAttributes") or []
+        if not cas:
+            return []
+        id_to_name = self._ca_name_by_id_map()
+        if not id_to_name:
+            return []
+        out: List[TagLabel] = []
+        for ca in cas:
+            def_id = ca.get("customAttributeDefinitionId")
+            value = ca.get("value")
+            if not def_id or not value:
+                continue
+            ca_name = id_to_name.get(def_id)
+            if not ca_name:
+                continue
+            classification = _ca_classification_name(ca_name)
+            # OM Tags accept [A-Za-z0-9_-]; sanitise CA values inline.
+            tag_name = "".join(
+                c if c.isalnum() or c in "_-" else "_" for c in str(value)
+            )[:128] or "unnamed"
+            tag_fqn = f"{classification}.{tag_name}"
+            if tag_fqn not in self._ca_tag_ensured:
+                self._lazy_create_tag(classification, tag_name, value)
+                self._ca_tag_ensured.add(tag_fqn)
+            out.append(
+                TagLabel(
+                    tagFQN=tag_fqn,
+                    labelType=LabelType.Automated,
+                    state=State.Suggested,
+                    source=TagSource.Classification,
+                )
+            )
+        return out
+
+    def _lazy_create_tag(
+        self, classification: str, tag_name: str, value: str
+    ) -> None:
+        """POST a Tag to OM, ignore 409 if it already exists."""
+        body = {
+            "classification": classification,
+            "name": tag_name,
+            "description": (
+                f"Auto-created from Solace Event Portal custom attribute "
+                f"value `{value}`."
+            ),
+        }
+        try:
+            self.metadata.client.post("/tags", json=body)
+        except Exception as exc:
+            # 409 / "already exists" is expected. Log others at DEBUG.
+            logger.debug(
+                "Lazy-create tag %s.%s failed (often 409): %s",
+                classification, tag_name, exc,
+            )
+
     # ------------------------------------------------------------- utilities
 
     @staticmethod
@@ -667,3 +805,34 @@ def _as_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _semver_tuple(version_str: str) -> tuple:
+    """Parse a semver-like string into a tuple for ordering.
+
+    Non-numeric parts fall back to 0 so e.g. ``"1.0.0-rc1"`` < ``"1.0.0"``
+    holds without raising.
+    """
+    parts = []
+    for chunk in (version_str or "0").split("."):
+        digits = "".join(c for c in chunk if c.isdigit())
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts)
+
+
+def _latest_version_id(versions: Iterable[Optional[Dict[str, Any]]]) -> Optional[str]:
+    """Return the EP id of the highest-semver version in ``versions``.
+
+    Returns None when the list is empty / all-None. Used by the topic
+    and pipeline passes to stamp ``eventPortalIsLatestVersion`` on the
+    matching OM entity (#54)."""
+    best_id: Optional[str] = None
+    best_tuple: tuple = ()
+    for v in versions:
+        if not v:
+            continue
+        t = _semver_tuple(str(v.get("version") or "0.0.0"))
+        if best_id is None or t > best_tuple:
+            best_id = v.get("id")
+            best_tuple = t
+    return best_id

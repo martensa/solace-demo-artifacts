@@ -15,7 +15,6 @@ Targets OpenMetadata 1.6+:
 """
 from __future__ import annotations
 
-import json
 import logging
 import re
 from typing import Any, Dict, List, Optional
@@ -32,7 +31,6 @@ from metadata.generated.schema.api.data.createTopic import CreateTopicRequest
 # (ALDI) so the legacy import path is no longer in play; the fallback was dropped in
 # Wave 0 as part of #47.
 from metadata.generated.schema.type.schema import (
-    FieldName,
     FieldModel as SchemaField,
     SchemaType,
     Topic as MessageSchema,
@@ -42,6 +40,22 @@ from metadata.generated.schema.type.tagLabel import (
     State,
     TagLabel,
     TagSource,
+)
+
+# Wave 1 cleanup: these were originally late-imports below `topic_fqn`,
+# which tripped ruff's E402 (Module-level import not at top of file).
+# They are pure-Python with no side effects so moving them up is safe.
+from dataclasses import dataclass
+
+from .property_keys import (
+    DEFAULT_EP_APPLICATION_PATH,
+    DEFAULT_EP_APPLICATION_VERSION_PATH,
+    DEFAULT_EP_CONSOLE_URL,
+    DEFAULT_EP_DOMAIN_PATH,
+    DEFAULT_EP_EVENT_PATH,
+    DEFAULT_EP_EVENT_VERSION_PATH,
+    DEFAULT_EP_SCHEMA_PATH,
+    DEFAULT_EP_SCHEMA_VERSION_PATH,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,6 +102,7 @@ from .property_keys import (  # noqa: E402,F401  (re-export)
     CP_EP_SCHEMA,
     CP_EVENT_ID,
     CP_EVENT_VERSION_ID,
+    CP_IS_LATEST_VERSION,
     CP_MODELED_MESH_IDS,
     CP_PUBLISHED_BY,
     CP_SCHEMA_VERSION_ID,
@@ -124,20 +139,6 @@ def topic_fqn(service_name: str, event_name: str, version: str) -> str:
 
 
 # --------------------------------------------------- EP UI deep-links
-
-from dataclasses import dataclass, field
-
-from .property_keys import (
-    DEFAULT_EP_APPLICATION_PATH,
-    DEFAULT_EP_APPLICATION_VERSION_PATH,
-    DEFAULT_EP_CONSOLE_URL,
-    DEFAULT_EP_DOMAIN_PATH,
-    DEFAULT_EP_EVENT_PATH,
-    DEFAULT_EP_EVENT_VERSION_PATH,
-    DEFAULT_EP_SCHEMA_PATH,
-    DEFAULT_EP_SCHEMA_VERSION_PATH,
-)
-
 
 @dataclass
 class EpUrls:
@@ -333,6 +334,8 @@ def event_to_topic_request(
     owner: Any = None,
     ep_urls: Optional[EpUrls] = None,
     attach_to_domain: bool = True,
+    is_latest_version: Optional[bool] = None,
+    custom_attribute_tags: Optional[List[TagLabel]] = None,
 ) -> CreateTopicRequest:
     """Build a CreateTopicRequest from an Event Portal event version.
 
@@ -397,6 +400,10 @@ def event_to_topic_request(
                 source=TagSource.Classification,
             )
         )
+    # Wave 1 (#43): merge auto-discovered EP custom-attribute -> OM Tag
+    # bindings produced by the connector for the event entity.
+    if custom_attribute_tags:
+        tags.extend(custom_attribute_tags)
 
     # User-facing markdown links back to the EP designer. Labels carry
     # the human-readable name (+ version), URL embeds the id.
@@ -425,6 +432,13 @@ def event_to_topic_request(
         CP_TOPIC_ADDRESS: topic_address,
         CP_STATE: state_human if state_human != "UNKNOWN" else None,
         CP_STATE_CHANGED_AT: event_version.get("updatedTime"),
+        # Wave 1 (#54): mark whether this is the highest semver of the
+        # event. With ingestAllVersions=true (now the default) the OM UI
+        # can default-filter to is-latest=true and hide deprecated
+        # historical versions without losing them from the catalog.
+        CP_IS_LATEST_VERSION: (
+            "true" if is_latest_version else "false"
+        ) if is_latest_version is not None else None,
     }
     # Strip Nones — OM rejects unknown-typed nulls.
     extension = {k: v for k, v in extension.items() if v is not None}
@@ -540,6 +554,8 @@ def app_to_pipeline_request(
     owner: Any = None,
     ep_urls: Optional[EpUrls] = None,
     attach_to_domain: bool = True,
+    is_latest_version: Optional[bool] = None,
+    custom_attribute_tags: Optional[List[TagLabel]] = None,
 ):
     """Build a CreatePipelineRequest from an EP application version.
 
@@ -560,8 +576,6 @@ def app_to_pipeline_request(
 
     from .property_keys import (
         APP_PIPELINE_SERVICE_NAME,
-        CP_EP_APP_DOMAIN,
-        CP_EP_APPLICATION,
     )
 
     app_name = app.get("name") or "unknown-app"
@@ -583,6 +597,9 @@ def app_to_pipeline_request(
             source=TagSource.Classification,
         )
     ]
+    # Wave 1 (#43): merge auto-discovered EP CA tags from connector.
+    if custom_attribute_tags:
+        tags.extend(custom_attribute_tags)
     domain_id = domain.get("id")
     domain_name = domain.get("name")
     app_id = app.get("id")
@@ -594,6 +611,10 @@ def app_to_pipeline_request(
             urls.application_version(domain_id, domain_name, app_id, app_version_id),
         ),
         CP_EP_APP_DOMAIN: _md_link(domain_name, urls.domain(domain_id, domain_name)),
+        # Wave 1 (#54): see event_to_topic_request for rationale.
+        CP_IS_LATEST_VERSION: (
+            "true" if is_latest_version else "false"
+        ) if is_latest_version is not None else None,
     }
     extension = {k: v for k, v in extension.items() if v is not None}
 
