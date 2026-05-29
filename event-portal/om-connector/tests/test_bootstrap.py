@@ -186,3 +186,95 @@ def test_ensure_pipeline_service_noop_when_present():
     bootstrap.ensure_pipeline_service(_make_om(client))
     assert client.posts == []
     assert client.puts == []
+
+
+# --------------------------------------------------------- Wave 1 (#43) tests
+
+
+def test_ca_classification_name_sanitises_arbitrary_chars():
+    """CA names can contain `.`, `-`, spaces; classification names must
+    match `[A-Za-z][A-Za-z0-9_]*`."""
+    name = bootstrap._ca_classification_name("acl-principal")
+    assert name == "EventPortalCustomAttribute_acl_principal"
+    name = bootstrap._ca_classification_name("Data Retention.v1")
+    assert name == "EventPortalCustomAttribute_Data_Retention_v1"
+    # Empty falls back to "unnamed" (already starts with alpha,
+    # so no `x_` prefix needed).
+    assert bootstrap._ca_classification_name("") == "EventPortalCustomAttribute_unnamed"
+    # Numeric-leading names get an `x_` prefix so the classification
+    # starts with a letter / underscore (OM requirement).
+    assert bootstrap._ca_classification_name("9NumericFirst").startswith(
+        "EventPortalCustomAttribute_x_"
+    )
+
+
+class _FakeEpClient:
+    """Stand-in for `EventPortalClient` used in CA-discovery tests."""
+
+    def __init__(self, defs):
+        self._defs = defs
+        self.calls = 0
+
+    def list_custom_attribute_definitions(self):
+        self.calls += 1
+        return self._defs
+
+
+def test_discover_custom_attribute_classifications_registers_per_ca_name():
+    ep_client = _FakeEpClient(defs=[
+        {"id": "a1", "name": "DataRetention", "valueType": "STRING"},
+        {"id": "a2", "name": "DataUsage", "valueType": "STRING"},
+    ])
+    om_client = _FakeClient(existing={})
+    bootstrap.discover_custom_attribute_classifications(
+        _make_om(om_client), ep_client,
+    )
+    posted_paths = [path for path, _ in om_client.posts]
+    assert posted_paths == ["/classifications", "/classifications"]
+    posted_names = [body["name"] for _, body in om_client.posts]
+    assert posted_names == [
+        "EventPortalCustomAttribute_DataRetention",
+        "EventPortalCustomAttribute_DataUsage",
+    ]
+
+
+def test_discover_custom_attribute_classifications_skips_exclude_list():
+    """High-cardinality CAs in the exclude list must NOT be registered."""
+    ep_client = _FakeEpClient(defs=[
+        {"id": "a1", "name": "DataRetention", "valueType": "STRING"},
+        {"id": "a2", "name": "acl-principal", "valueType": "STRING"},
+        {"id": "a3", "name": "DataUsage", "valueType": "STRING"},
+    ])
+    om_client = _FakeClient(existing={})
+    bootstrap.discover_custom_attribute_classifications(
+        _make_om(om_client), ep_client,
+        exclude={"acl-principal"},
+    )
+    posted_names = [body["name"] for _, body in om_client.posts]
+    assert "EventPortalCustomAttribute_DataRetention" in posted_names
+    assert "EventPortalCustomAttribute_DataUsage" in posted_names
+    assert not any(
+        "acl_principal" in n or "acl-principal" in n for n in posted_names
+    )
+
+
+def test_discover_custom_attribute_classifications_handles_empty_defs():
+    ep_client = _FakeEpClient(defs=[])
+    om_client = _FakeClient(existing={})
+    out = bootstrap.discover_custom_attribute_classifications(
+        _make_om(om_client), ep_client,
+    )
+    assert out == []
+    assert om_client.posts == []
+
+
+def test_bootstrap_with_ep_client_runs_ca_discovery_at_end():
+    """Smoke-test that the top-level bootstrap() routes through to CA
+    discovery when ep_client is provided."""
+    ep_client = _FakeEpClient(defs=[
+        {"id": "a1", "name": "DataRetention", "valueType": "STRING"},
+    ])
+    om_client = _FakeClient(existing={})
+    bootstrap.bootstrap(_make_om(om_client), ep_client=ep_client)
+    posted_names = [body.get("name") for _, body in om_client.posts]
+    assert "EventPortalCustomAttribute_DataRetention" in posted_names
