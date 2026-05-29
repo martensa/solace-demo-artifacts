@@ -705,3 +705,59 @@ def app_topic_lineage_request(
             lineageDetails=LineageDetails(**details_kwargs),
         )
     )
+
+
+def pipeline_to_pipeline_lineage_request(
+    *,
+    source_pipeline_id: str,
+    dest_pipeline_id: str,
+    source_app_name: str = "",
+    dest_app_name: str = "",
+):
+    """Build an AddLineageRequest between two Pipelines.
+
+    Wave 2 (#59): emitted from EP's
+    ``inboundApplicationVersionAssociations`` /
+    ``outboundApplicationVersionAssociations`` on each EP application
+    version. The "linked applications" graph is the closest analogue to
+    a producer / consumer chain Event Portal exposes for non-event
+    couplings (file drops, REST calls, shared databases, etc.).
+    """
+    try:
+        from metadata.generated.schema.api.lineage.addLineage import (
+            AddLineageRequest,
+        )
+        from metadata.generated.schema.type.entityLineage import (
+            EntitiesEdge,
+            LineageDetails,
+        )
+        from metadata.generated.schema.type.entityReference import EntityReference
+    except Exception:  # pragma: no cover - depends on OM version
+        logger.warning(
+            "OM Lineage SDK not importable; skipping linked-app lineage emit"
+        )
+        return None
+
+    lineage_source = None
+    try:
+        from metadata.generated.schema.type.entityLineage import LineageSource
+        lineage_source = LineageSource.Manual
+    except Exception:  # pragma: no cover - pre-1.11 SDK without the enum
+        pass
+
+    label = " -> ".join(
+        x for x in [source_app_name, dest_app_name] if x
+    ) or "EP linked applications"
+    details_kwargs = {
+        "description": f"Solace Event Portal Linked Applications: {label}",
+    }
+    if lineage_source is not None:
+        details_kwargs["source"] = lineage_source
+
+    return AddLineageRequest(
+        edge=EntitiesEdge(
+            fromEntity=EntityReference(id=source_pipeline_id, type="pipeline"),
+            toEntity=EntityReference(id=dest_pipeline_id, type="pipeline"),
+            lineageDetails=LineageDetails(**details_kwargs),
+        )
+    )

@@ -41,6 +41,7 @@ from .mappers import (
     domain_to_create_request,
     event_to_topic_request,
     modeled_mesh_to_data_product_request,
+    pipeline_to_pipeline_lineage_request,
     topic_fqn,
 )
 from .owner_resolver import OwnerResolver
@@ -171,6 +172,17 @@ class SolaceEventPortalSource(Source):
         self._ca_def_name_by_id: Optional[Dict[str, str]] = None
         # Cache of tags already ensured this run, keyed by FQN.
         self._ca_tag_ensured: Set[str] = set()
+
+        # Wave 2 (#59): within-EP linked-applications lineage.
+        # Populated as Pipelines are created during pass 3. The deferred
+        # emission at the end of pass 3 then resolves each association's
+        # destination via this cache so cross-domain linked apps work
+        # regardless of iteration order.
+        self._app_version_to_pipeline_id: Dict[str, str] = {}
+        # Each entry: (src_pipeline_id, dest_av_id, src_app_name).
+        # dest_app_name is filled at emit-time once the destination is
+        # known (we may not have its name in scope when buffering).
+        self._pending_linked_app_emits: List[Tuple[str, str, str]] = []
 
     # ------------------------------------------------------------- factories
 
@@ -330,6 +342,9 @@ class SolaceEventPortalSource(Source):
         if self.include_lineage:
             for domain in domains:
                 yield from self._emit_domain_lineage(domain)
+            # Pass 3.5 - within-EP Linked-Applications lineage (#59).
+            # Runs AFTER all domains so cross-domain destinations resolve.
+            yield from self._emit_linked_app_lineage_edges()
 
         # Pass 4 - opt-in sample data via live broker subscribe. Runs last
         # because Topics must exist in OM before we can PUT sampleData onto
@@ -521,6 +536,21 @@ class SolaceEventPortalSource(Source):
                         )
                         continue
 
+                    # Wave 2 (#59): cache the pipeline-id by EP app-version-id
+                    # so the deferred linked-applications emit can look it up.
+                    self._app_version_to_pipeline_id[version["id"]] = pipeline_id
+                    # And buffer this version's outbound linked-app associations
+                    # to be emitted once ALL domains have been processed (so
+                    # destinations in not-yet-iterated domains resolve too).
+                    for assoc in (
+                        version.get("outboundApplicationVersionAssociations") or []
+                    ):
+                        dest_av = assoc.get("destinationId")
+                        if dest_av:
+                            self._pending_linked_app_emits.append(
+                                (pipeline_id, dest_av, app.get("name") or "")
+                            )
+
                     for ev_id in version.get("declaredProducedEventVersionIds") or []:
                         fqn = self._event_version_to_topic_fqn.get(ev_id)
                         if not fqn:
@@ -555,6 +585,44 @@ class SolaceEventPortalSource(Source):
                 yield self._fail(
                     f"app-lineage:{app.get('name', app.get('id'))}", exc
                 )
+
+    def _emit_linked_app_lineage_edges(self) -> Iterable[Either]:
+        """Wave 2 (#59): emit Pipeline<->Pipeline edges from buffered
+        EP linked-applications associations.
+
+        Runs once after all domains have been processed so cross-domain
+        targets are resolvable. Missing destinations (deleted in EP,
+        outside the filter, or in a non-ingested domain) are skipped
+        with a DEBUG log rather than failing the run.
+        """
+        if not self._pending_linked_app_emits:
+            return
+        emitted = 0
+        skipped = 0
+        for src_pipeline_id, dest_av_id, src_app_name in self._pending_linked_app_emits:
+            dest_pipeline_id = self._app_version_to_pipeline_id.get(dest_av_id)
+            if not dest_pipeline_id:
+                logger.debug(
+                    "Linked-apps: destination app-version %s not found in "
+                    "this run's pipeline cache; skipping edge.", dest_av_id,
+                )
+                skipped += 1
+                continue
+            req = pipeline_to_pipeline_lineage_request(
+                source_pipeline_id=src_pipeline_id,
+                dest_pipeline_id=dest_pipeline_id,
+                source_app_name=src_app_name,
+            )
+            if req is not None:
+                self._add_lineage(req)
+                emitted += 1
+        logger.info(
+            "Linked-apps lineage: %d edges emitted, %d skipped (destination "
+            "outside this ingest run).",
+            emitted, skipped,
+        )
+        return
+        yield  # pragma: no cover - generator placeholder
 
     # ------------------------------------------------------------- asyncapi
 
