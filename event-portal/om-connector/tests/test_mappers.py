@@ -12,15 +12,30 @@ import pytest
 pytest.importorskip("metadata.generated.schema.api.data.createTopic")
 
 from connector.mappers import (  # noqa: E402
+    CP_CONSUMER_BROKER_TYPE,
+    CP_CONSUMER_ID,
+    CP_CONSUMER_SUBSCRIPTIONS,
+    CP_CONSUMER_TYPE,
     CP_EP_DOMAIN,
     CP_EP_EVENT,
     CP_STATE,
     CP_TOPIC_ADDRESS,
     build_topic_name,
+    consumer_container_fqn,
+    consumer_to_container_request,
     event_to_topic_request,
     extract_topic_address,
     sanitize,
     topic_fqn,
+    topic_segment_container_fqn,
+    topic_segment_to_container_request,
+)
+from connector.property_keys import (  # noqa: E402
+    CONSUMER_STORAGE_SERVICE_NAME,
+    CP_TOPIC_SEGMENT,
+    CP_TOPIC_SEGMENT_DEPTH,
+    CP_TOPIC_SEGMENT_PATH,
+    TOPIC_TREE_STORAGE_SERVICE_NAME,
 )
 
 
@@ -98,3 +113,122 @@ def test_event_to_topic_request_sets_custom_properties():
     assert "ev-1" in str(ext.get(CP_EP_EVENT, ""))
     assert ext.get(CP_TOPIC_ADDRESS) == "orders/created"
     assert ext.get(CP_STATE) == "Released"
+
+
+# --------------------------------------------------------- Wave 3 (#55)
+
+
+def test_consumer_container_fqn_is_under_consumer_storage_service():
+    fqn = consumer_container_fqn("orders-svc", "orders.q")
+    assert fqn.startswith(f"{CONSUMER_STORAGE_SERVICE_NAME}.")
+    # Container name is sanitised ({app}_{consumer}) and the dotted segment
+    # gets wrapped in double-quotes by `_quote_if_dotted` -- but neither
+    # input contains a "." here once sanitised, so plain join.
+    assert "orders-svc_orders_q" in fqn
+
+
+def test_consumer_to_container_request_populates_extension():
+    consumer = {
+        "id": "c-1",
+        "name": "orders.queue",
+        "consumerType": "eventQueue",
+        "brokerType": "solace",
+        "subscriptions": [
+            {
+                "subscriptionType": "TOPIC",
+                "value": "orders/*/created",
+                "attractedEventVersionIds": ["ev-1", "ev-2"],
+            },
+            {
+                "subscriptionType": "TOPIC",
+                "value": "orders/*/cancelled",
+                "attractedEventVersionIds": ["ev-3"],
+            },
+        ],
+    }
+    app = {"id": "a-1", "name": "OrdersConsumer"}
+    app_version = {"id": "av-1", "version": "2.0.0"}
+    domain = {"id": "d-1", "name": "orders-domain"}
+
+    req = consumer_to_container_request(
+        consumer=consumer, app=app, app_version=app_version, domain=domain,
+    )
+    assert req is not None
+    # Service is the synthetic consumer StorageService.
+    svc = getattr(req.service, "root", req.service)
+    assert str(svc) == CONSUMER_STORAGE_SERVICE_NAME
+    # Container name = sanitize("{app}_{consumer}"). The literal "." in
+    # "orders.queue" becomes "_".
+    assert req.name.root == "OrdersConsumer_orders_queue"
+
+    ext_raw = getattr(req, "extension", None)
+    ext = getattr(ext_raw, "root", ext_raw) or {}
+    assert ext.get(CP_CONSUMER_ID) == "c-1"
+    assert ext.get(CP_CONSUMER_TYPE) == "eventQueue"
+    assert ext.get(CP_CONSUMER_BROKER_TYPE) == "solace"
+    subs_md = ext.get(CP_CONSUMER_SUBSCRIPTIONS) or ""
+    # Markdown table renders the patterns + their matched-events count.
+    assert "orders/*/created" in subs_md
+    assert "orders/*/cancelled" in subs_md
+    # First row has 2 matched events, second has 1.
+    assert "| 2 |" in subs_md
+    assert "| 1 |" in subs_md
+
+
+# --------------------------------------------------------- Wave 3 (#53)
+
+
+def test_topic_segment_container_fqn_translates_variable_segments():
+    """Variable segments `{region}` become `_region_` in the FQN."""
+    fqn = topic_segment_container_fqn(["orders", "{region}", "created"])
+    assert fqn.startswith(f"{TOPIC_TREE_STORAGE_SERVICE_NAME}.")
+    # The variable segment was rewritten so it's a valid identifier.
+    assert "_region_" in fqn
+    assert "{region}" not in fqn
+
+
+def test_topic_segment_to_container_request_populates_segment_metadata():
+    req = topic_segment_to_container_request(
+        segment="{region}",
+        depth=2,
+        segment_path=["orders", "{region}"],
+        parent_fqn=f"{TOPIC_TREE_STORAGE_SERVICE_NAME}.orders",
+    )
+    assert req is not None
+    svc = getattr(req.service, "root", req.service)
+    assert str(svc) == TOPIC_TREE_STORAGE_SERVICE_NAME
+    # The Container name (used in FQN) is identifier-safe; the displayName
+    # keeps the original `{region}` form for UI readability.
+    assert req.name.root == "_region_"
+    dn = getattr(req, "displayName", None)
+    assert dn == "{region}"
+    # Parent reference is set (when supported).
+    parent = getattr(req, "parent", None)
+    parent_fqn = getattr(parent, "fullyQualifiedName", None) if parent else None
+    parent_fqn_root = getattr(parent_fqn, "root", parent_fqn) if parent_fqn else None
+    assert parent_fqn_root == f"{TOPIC_TREE_STORAGE_SERVICE_NAME}.orders"
+    ext_raw = getattr(req, "extension", None)
+    ext = getattr(ext_raw, "root", ext_raw) or {}
+    assert ext.get(CP_TOPIC_SEGMENT) == "{region}"
+    assert ext.get(CP_TOPIC_SEGMENT_PATH) == "orders/{region}"
+    assert ext.get(CP_TOPIC_SEGMENT_DEPTH) == "2"
+
+
+def test_consumer_to_container_request_handles_no_subscriptions():
+    """No subscriptions -> subscription CP is absent (not the literal None)."""
+    consumer = {"id": "c-2", "name": "orphan.queue"}
+    app = {"id": "a-2", "name": "App2"}
+    app_version = {"id": "av-2", "version": "1.0.0"}
+    domain = {"id": "d-2", "name": "orphans"}
+
+    req = consumer_to_container_request(
+        consumer=consumer, app=app, app_version=app_version, domain=domain,
+    )
+    assert req is not None
+    ext_raw = getattr(req, "extension", None)
+    ext = getattr(ext_raw, "root", ext_raw) or {}
+    # None-valued keys are stripped from the extension.
+    assert CP_CONSUMER_SUBSCRIPTIONS not in ext
+    # Sensible defaults filled in for missing consumerType/brokerType.
+    assert ext.get(CP_CONSUMER_TYPE) == "eventQueue"
+    assert ext.get(CP_CONSUMER_BROKER_TYPE) == "solace"

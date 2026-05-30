@@ -93,6 +93,10 @@ _INVALID_FQN_CHARS = re.compile(r"[^A-Za-z0-9_\-.]")
 # Re-export for callers that historically imported from connector.mappers.
 from .property_keys import (  # noqa: E402,F401  (re-export)
     CP_CONSUMED_BY,
+    CP_CONSUMER_BROKER_TYPE,
+    CP_CONSUMER_ID,
+    CP_CONSUMER_SUBSCRIPTIONS,
+    CP_CONSUMER_TYPE,
     CP_DOMAIN_ID,
     CP_DOMAIN_NAME,
     CP_EP_APP_DOMAIN,
@@ -537,6 +541,687 @@ def modeled_mesh_to_data_product_request(mesh: Dict[str, Any], domain_fqn_: str)
 
 def app_pipeline_name(app_name: str, version: str) -> str:
     return sanitize(f"{app_name}_v{version}")
+
+
+# --------------------------------------------------------- Event API (#44)
+
+
+def event_api_to_container_request(
+    *,
+    event_api: Dict[str, Any],
+    event_api_version: Dict[str, Any],
+    domain: Dict[str, Any],
+    ep_urls: Optional[EpUrls] = None,
+    is_latest_version: Optional[bool] = None,
+):
+    """Build a CreateContainerRequest from an EP Event API + version.
+
+    Wave 3 (#44). Container lives under the synthetic StorageService
+    ``solace-event-portal-event-apis`` so OM's Container UI can show
+    the API contract -- description, owner, lifecycle, version
+    history, EP UI back-link -- alongside the actual lineage edges
+    to the topics the API produces / consumes (emitted separately).
+
+    Returns ``None`` when the OM SDK does not expose Container types
+    (very old environments), so the connector keeps emitting other
+    entities.
+    """
+    try:
+        from metadata.generated.schema.api.data.createContainer import (
+            CreateContainerRequest,
+        )
+    except Exception:  # pragma: no cover - depends on OM version
+        logger.warning("OM Container entity not importable; skipping Event API")
+        return None
+
+    from .property_keys import (
+        CP_EP_EVENT_API,
+        CP_EVENT_API_ID,
+        CP_EVENT_API_VERSION_ID,
+        CP_IS_LATEST_VERSION,
+        CP_STATE,
+        EVENT_API_STORAGE_SERVICE_NAME,
+    )
+
+    name = event_api.get("name") or "unnamed-event-api"
+    version_str = str(event_api_version.get("version") or "1.0.0")
+    state_id = str(event_api_version.get("stateId") or "")
+    state_human = (
+        _STATE_TAG.get(state_id, "EventPortal.Unknown").split(".", 1)[-1]
+    )
+
+    description = "\n\n".join(
+        p for p in [
+            event_api.get("description") or "",
+            event_api_version.get("description") or "",
+            f"Solace Event Portal Event API `{name}` v{version_str} in domain "
+            f"`{domain.get('name')}` (state `{state_human}`).",
+        ] if p
+    )
+
+    domain_id = domain.get("id")
+    domain_name = domain.get("name")
+    event_api_id = event_api.get("id")
+    event_api_version_id = event_api_version.get("id")
+    urls = ep_urls or EpUrls()
+    # EP doesn't have a dedicated event-api designer URL template, fall back
+    # to the domain graph page.
+    api_url = urls.domain(domain_id, domain_name)
+
+    extension = {
+        CP_EP_EVENT_API: _md_link(f"{name} v{version_str}", api_url),
+        CP_EVENT_API_ID: event_api_id,
+        CP_EVENT_API_VERSION_ID: event_api_version_id,
+        CP_STATE: state_human if state_human != "Unknown" else None,
+        CP_IS_LATEST_VERSION: (
+            "true" if is_latest_version else "false"
+        ) if is_latest_version is not None else None,
+    }
+    extension = {k: v for k, v in extension.items() if v is not None}
+
+    request = CreateContainerRequest(
+        name=sanitize(f"{name}_v{version_str}"),
+        displayName=f"{name} v{version_str}",
+        description=description or None,
+        service=EVENT_API_STORAGE_SERVICE_NAME,
+    )
+    if extension and hasattr(request, "extension"):
+        request.extension = _as_extension(extension)
+    if hasattr(request, "domains"):
+        dref = _domain_ref(domain_name)
+        if dref is not None:
+            request.domains = [dref]
+    return request
+
+
+def event_api_container_fqn(event_api_name: str, version: str) -> str:
+    """FQN of the EventAPI Container under the synthetic StorageService."""
+    from .property_keys import EVENT_API_STORAGE_SERVICE_NAME
+    inner = sanitize(f"{event_api_name}_v{version}")
+    return f"{EVENT_API_STORAGE_SERVICE_NAME}.{_quote_if_dotted(inner)}"
+
+
+# --------------------------------------------------------- EAPP (#45)
+
+
+def eapp_to_data_product_request(
+    *,
+    eapp: Dict[str, Any],
+    eapp_version: Dict[str, Any],
+    domain: Dict[str, Any],
+    container_asset_refs: Optional[List[Any]] = None,
+    ep_urls: Optional[EpUrls] = None,
+    is_latest_version: Optional[bool] = None,
+):
+    """Build a CreateDataProductRequest from an EP Event API Product version.
+
+    Wave 3 (#45). The EAPP is the consumer-facing "product surface"
+    bundling one or more Event APIs (see ``docs/asset-mapping-spec.md``
+    Cluster 1.7). Asset references point at the EventAPI Container
+    entities created by #44; OM 1.11+ DataProduct natively supports
+    that via the ``assets`` field.
+
+    ``plans[].solaceClassOfServicePolicy`` lands as a markdown table in
+    a Custom Property so analysts see QoS / SLA at-a-glance on the
+    DataProduct page without drilling back into EP.
+    """
+    try:
+        from metadata.generated.schema.api.domains.createDataProduct import (
+            CreateDataProductRequest,
+        )
+    except Exception:  # pragma: no cover
+        logger.warning("OM DataProduct entity not importable; skipping EAPP")
+        return None
+
+    from .property_keys import (
+        CP_EAPP_ID,
+        CP_EAPP_PLANS,
+        CP_EAPP_VERSION_ID,
+        CP_EP_EAPP,
+        CP_IS_LATEST_VERSION,
+        CP_STATE,
+    )
+
+    name = eapp.get("name") or "unnamed-eapp"
+    version_str = str(eapp_version.get("version") or "1.0.0")
+    state_id = str(eapp_version.get("stateId") or "")
+    state_human = (
+        _STATE_TAG.get(state_id, "EventPortal.Unknown").split(".", 1)[-1]
+    )
+    domain_id = domain.get("id")
+    domain_name = domain.get("name")
+    urls = ep_urls or EpUrls()
+    eapp_url = urls.domain(domain_id, domain_name)
+
+    description = "\n\n".join(
+        p for p in [
+            eapp.get("description") or "",
+            eapp_version.get("description") or "",
+            f"Solace Event Portal Event API Product `{name}` v{version_str} "
+            f"in domain `{domain_name}` (state `{state_human}`).",
+        ] if p
+    )
+
+    plans_md = _render_eapp_plans_markdown(eapp_version.get("plans") or [])
+
+    extension = {
+        CP_EP_EAPP: _md_link(f"{name} v{version_str}", eapp_url),
+        CP_EAPP_ID: eapp.get("id"),
+        CP_EAPP_VERSION_ID: eapp_version.get("id"),
+        CP_EAPP_PLANS: plans_md,
+        CP_STATE: state_human if state_human != "Unknown" else None,
+        CP_IS_LATEST_VERSION: (
+            "true" if is_latest_version else "false"
+        ) if is_latest_version is not None else None,
+    }
+    extension = {k: v for k, v in extension.items() if v is not None}
+
+    base_kwargs = dict(
+        name=sanitize(f"{name}_v{version_str}"),
+        displayName=f"{name} v{version_str}",
+        description=description or None,
+    )
+    if container_asset_refs:
+        base_kwargs["assets"] = container_asset_refs
+
+    try:
+        request = CreateDataProductRequest(
+            **base_kwargs, domains=[domain_fqn(domain_name)]
+        )
+    except TypeError:  # pragma: no cover - pre-1.9 SDK
+        request = CreateDataProductRequest(
+            **base_kwargs, domain=domain_fqn(domain_name)
+        )
+    if extension and hasattr(request, "extension"):
+        request.extension = _as_extension(extension)
+    return request
+
+
+# --------------------------------------------------------- Consumer Queue (#55)
+
+
+def consumer_to_container_request(
+    *,
+    consumer: Dict[str, Any],
+    app: Dict[str, Any],
+    app_version: Dict[str, Any],
+    domain: Dict[str, Any],
+):
+    """Build a CreateContainerRequest for one EP applicationVersion.consumers[]
+    entry.
+
+    Wave 3 (#55). The Container represents the Solace queue (or
+    topic-endpoint) the application binds to consume events. Lineage
+    Topic -> Container (for each ``attractedEventVersionId`` the queue's
+    subscription patterns match) + Container -> Pipeline (the consuming
+    app's pipeline) is emitted by the connector separately.
+    """
+    try:
+        from metadata.generated.schema.api.data.createContainer import (
+            CreateContainerRequest,
+        )
+    except Exception:  # pragma: no cover
+        logger.warning("OM Container entity not importable; skipping consumer")
+        return None
+    from .property_keys import CONSUMER_STORAGE_SERVICE_NAME
+
+    name = consumer.get("name") or "unnamed-consumer"
+    consumer_type = consumer.get("consumerType") or "eventQueue"
+    broker_type = consumer.get("brokerType") or "solace"
+    app_name = app.get("name") or "unknown-app"
+    app_version_str = str(app_version.get("version") or "1.0.0")
+
+    subs = consumer.get("subscriptions") or []
+    patterns_md = _render_consumer_patterns_markdown(subs)
+
+    description = (
+        f"Solace Event Portal consumer queue `{name}` "
+        f"({consumer_type}, broker {broker_type}) bound to application "
+        f"`{app_name}` v{app_version_str} in domain `{domain.get('name')}`."
+    )
+
+    extension = {
+        CP_CONSUMER_ID: consumer.get("id"),
+        CP_CONSUMER_TYPE: consumer_type,
+        CP_CONSUMER_BROKER_TYPE: broker_type,
+        CP_CONSUMER_SUBSCRIPTIONS: patterns_md,
+        CP_EP_APPLICATION: app_name,
+        CP_EP_APP_DOMAIN: domain.get("name"),
+    }
+    extension = {k: v for k, v in extension.items() if v is not None}
+
+    request = CreateContainerRequest(
+        name=sanitize(f"{app_name}_{name}"),
+        displayName=name,
+        description=description,
+        service=CONSUMER_STORAGE_SERVICE_NAME,
+    )
+    if extension and hasattr(request, "extension"):
+        request.extension = _as_extension(extension)
+    return request
+
+
+def _render_consumer_patterns_markdown(subscriptions: List[Dict[str, Any]]) -> Optional[str]:
+    if not subscriptions:
+        return None
+    rows = ["| Type | Pattern | Matched Events |", "| --- | --- | --- |"]
+    for s in subscriptions:
+        kind = s.get("subscriptionType") or "?"
+        value = (s.get("value") or "").replace("|", "/")
+        matched = len(s.get("attractedEventVersionIds") or [])
+        rows.append(f"| {kind} | `{value}` | {matched} |")
+    return "\n".join(rows)
+
+
+def consumer_container_fqn(app_name: str, consumer_name: str) -> str:
+    """FQN of the Consumer Container under the synthetic StorageService.
+
+    Mirrors how `consumer_to_container_request` builds the Container name:
+    sanitized ``{app}_{consumer}`` under ``solace-event-portal-consumers``.
+    """
+    from .property_keys import CONSUMER_STORAGE_SERVICE_NAME
+    inner = sanitize(f"{app_name}_{consumer_name}")
+    return f"{CONSUMER_STORAGE_SERVICE_NAME}.{_quote_if_dotted(inner)}"
+
+
+# --------------------------------------------------------- Schemas (#52)
+
+
+def domain_database_schema_fqn(domain_name: str) -> str:
+    """FQN of the DatabaseSchema standing in for an EP Application Domain.
+
+    Lives under ``solace-event-portal-schemas.schemas.<domain>`` so a
+    user navigating in the OM 'Databases' panel can drill from
+    Solace Event Portal Schemas -> schemas -> <domain> -> <SchemaName_vX>.
+    """
+    from .property_keys import SCHEMA_DATABASE_NAME, SCHEMA_DATABASE_SERVICE_NAME
+    inner = sanitize(domain_name)
+    return f"{SCHEMA_DATABASE_SERVICE_NAME}.{SCHEMA_DATABASE_NAME}.{_quote_if_dotted(inner)}"
+
+
+def schema_table_fqn(domain_name: str, schema_name: str, version: str) -> str:
+    """FQN of a Schema Table under the synthetic DatabaseSchema."""
+    inner = sanitize(f"{schema_name}_v{version}")
+    return f"{domain_database_schema_fqn(domain_name)}.{_quote_if_dotted(inner)}"
+
+
+def domain_to_database_schema_request(domain: Dict[str, Any]):
+    """Build a CreateDatabaseSchemaRequest for an EP Application Domain.
+
+    Wave 3 (#52). One DatabaseSchema per EP domain hosts the per-Schema
+    Table entities below it. The bootstrap creates the parent DatabaseService
+    + Database lazily; this request just adds the per-domain bucket.
+    """
+    try:
+        from metadata.generated.schema.api.data.createDatabaseSchema import (
+            CreateDatabaseSchemaRequest,
+        )
+    except Exception:  # pragma: no cover
+        logger.warning("OM DatabaseSchema entity not importable; skipping")
+        return None
+    from .property_keys import SCHEMA_DATABASE_NAME, SCHEMA_DATABASE_SERVICE_NAME
+    domain_name = domain.get("name") or domain.get("id") or "unknown-domain"
+    description = (
+        f"Solace Event Portal application domain `{domain_name}`. "
+        f"Hosts one OM Table per EP Schema + version for this domain."
+    )
+    return CreateDatabaseSchemaRequest(
+        name=sanitize(domain_name),
+        displayName=domain_name,
+        description=description,
+        database=f"{SCHEMA_DATABASE_SERVICE_NAME}.{SCHEMA_DATABASE_NAME}",
+    )
+
+
+def schema_version_to_table_request(
+    *,
+    schema: Dict[str, Any],
+    schema_version: Dict[str, Any],
+    domain: Dict[str, Any],
+    ep_urls: Optional["EpUrls"] = None,
+    is_latest_version: Optional[bool] = None,
+):
+    """Build a CreateTableRequest representing one EP Schema + version.
+
+    Wave 3 (#52). Promotes EP Schemas from a Topic sub-property to
+    first-class OM entities. Schema fields are converted to Table columns
+    (recursive STRUCT for records), the raw schemaText is also preserved as
+    a markdown CP for human review when the parser declines (e.g. XSD).
+    Lineage Table -> Topic for each consuming Topic is emitted by the
+    connector separately.
+    """
+    try:
+        from metadata.generated.schema.api.data.createTable import (
+            CreateTableRequest,
+        )
+    except Exception:  # pragma: no cover
+        logger.warning("OM Table entity not importable; skipping schema")
+        return None
+    from .property_keys import (
+        CP_SCHEMA_CONTENT,
+        CP_SCHEMA_ID,
+        CP_SCHEMA_TYPE,
+    )
+
+    schema_name = schema.get("name") or schema.get("id") or "unknown-schema"
+    version_str = str(schema_version.get("version") or "1.0.0")
+    fmt = (
+        schema.get("schemaType")
+        or schema.get("contentType")
+        or "JSON"
+    ).upper()
+    text = schema_version.get("content") or ""
+
+    columns = _build_table_columns_from_text(fmt, text)
+
+    raw_state = (
+        str(schema_version.get("stateId") or "").strip()
+        or str(schema_version.get("state") or "").strip()
+    )
+    state_human = _STATE_HUMAN.get(raw_state) or _STATE_HUMAN.get(
+        raw_state.upper()
+    ) or "Unknown"
+
+    description = "\n\n".join(
+        p for p in (
+            schema.get("description") or "",
+            f"Solace Event Portal schema `{schema_name}` v{version_str} "
+            f"(state `{state_human}`).",
+        ) if p
+    )
+
+    urls = ep_urls or EpUrls()
+    domain_id = domain.get("id")
+    domain_name = domain.get("name")
+    schema_id = schema.get("id")
+    sv_id = schema_version.get("id")
+
+    extension: Dict[str, Any] = {
+        CP_EP_SCHEMA: _md_link(
+            f"{schema_name} v{version_str}",
+            urls.schema_version(domain_id, domain_name, schema_id, sv_id),
+        ),
+        CP_SCHEMA_ID: schema_id,
+        CP_SCHEMA_VERSION_ID: sv_id,
+        CP_SCHEMA_TYPE: fmt,
+        CP_STATE: state_human if state_human != "Unknown" else None,
+        CP_STATE_CHANGED_AT: schema_version.get("updatedTime"),
+        CP_SCHEMA_CONTENT: _wrap_schema_text_markdown(text, fmt) if text else None,
+    }
+    if is_latest_version is not None:
+        extension[CP_IS_LATEST_VERSION] = "true" if is_latest_version else "false"
+    extension = {k: v for k, v in extension.items() if v is not None}
+
+    request = CreateTableRequest(
+        name=sanitize(f"{schema_name}_v{version_str}"),
+        displayName=f"{schema_name} v{version_str}",
+        description=description or None,
+        databaseSchema=domain_database_schema_fqn(domain_name or "unknown-domain"),
+        columns=columns,
+    )
+    if extension and hasattr(request, "extension"):
+        request.extension = _as_extension(extension)
+    return request
+
+
+def _wrap_schema_text_markdown(text: str, fmt: str) -> str:
+    """Wrap raw schema text in a markdown fenced code block."""
+    lang = {"JSON": "json", "AVRO": "json", "PROTOBUF": "protobuf"}.get(fmt, "")
+    # Trim very long bodies so the OM custom-property editor stays usable.
+    snippet = text if len(text) < 8000 else text[:8000] + "\n... (truncated)"
+    return f"```{lang}\n{snippet}\n```"
+
+
+def _build_table_columns_from_text(fmt: str, schema_text: str) -> List[Any]:
+    """Parse a schema payload to SchemaField[], then convert to Column[].
+
+    Returns ``[]`` on parse failure or unsupported format (XSD/XML) -- the
+    Table still ingests with its name + raw schema content in the
+    `eventPortalSchemaContent` CP, just without per-column breakdown.
+    """
+    try:
+        from .schema_parsers import parse_fields
+    except Exception:  # pragma: no cover
+        return []
+    fields = parse_fields(fmt, schema_text)
+    if not fields:
+        # Provide a sentinel single-column table so OM still shows the
+        # schema as a tangible entity (TableType requires at least 1 col
+        # on some OM versions; a single 'rawSchema' col is the cheapest
+        # fallback).
+        return _sentinel_raw_schema_column()
+    cols = []
+    for f in fields:
+        col = _field_model_to_column(f)
+        if col is not None:
+            cols.append(col)
+    if not cols:
+        return _sentinel_raw_schema_column()
+    return cols
+
+
+def _sentinel_raw_schema_column() -> List[Any]:
+    try:
+        from metadata.generated.schema.entity.data.table import (
+            Column,
+            DataType,
+        )
+    except Exception:  # pragma: no cover
+        return []
+    try:
+        return [
+            Column(
+                name="rawSchema",
+                dataType=DataType.STRING,
+                dataTypeDisplay="raw schema (unparsed)",
+                description=(
+                    "Schema body is preserved in the eventPortalSchemaContent "
+                    "custom property. Field-level parsing was skipped (format "
+                    "not supported or parse error)."
+                ),
+            )
+        ]
+    except Exception:  # pragma: no cover
+        return []
+
+
+# Map an OM SchemaField.dataType string to a Table Column DataType enum
+# member. Defaults to UNKNOWN for anything we don't recognise.
+_FIELD_TO_COLUMN_DATA_TYPE: Dict[str, str] = {
+    "STRING": "STRING",
+    "INT": "INT",
+    "LONG": "BIGINT",
+    "BIGINT": "BIGINT",
+    "FLOAT": "FLOAT",
+    "DOUBLE": "DOUBLE",
+    "BOOLEAN": "BOOLEAN",
+    "BYTES": "BINARY",
+    "BINARY": "BINARY",
+    "ENUM": "ENUM",
+    "ARRAY": "ARRAY",
+    "MAP": "MAP",
+    "RECORD": "STRUCT",
+    "STRUCT": "STRUCT",
+    "UNION": "UNION",
+    "NULL": "NULL",
+    "DATE": "DATE",
+    "TIME": "TIME",
+    "TIMESTAMP": "TIMESTAMP",
+    "DECIMAL": "DECIMAL",
+    "UUID": "UUID",
+}
+
+
+def _field_model_to_column(field: Any):
+    """Recursively translate one OM SchemaField (FieldModel) to a Table Column."""
+    try:
+        from metadata.generated.schema.entity.data.table import (
+            Column,
+            DataType,
+        )
+    except Exception:  # pragma: no cover
+        return None
+    name = _field_name(field)
+    if not name:
+        return None
+    # SchemaField.dataType is itself an enum on the schema-side; we read
+    # its string form and look up the equivalent table-side enum.
+    raw_dt = getattr(field, "dataType", None)
+    dt_str = str(getattr(raw_dt, "value", raw_dt) or "").upper()
+    target = _FIELD_TO_COLUMN_DATA_TYPE.get(dt_str, "UNKNOWN")
+    try:
+        col_data_type = getattr(DataType, target)
+    except Exception:
+        col_data_type = DataType.UNKNOWN
+    children_raw = getattr(field, "children", None) or []
+    children = []
+    for c in children_raw:
+        cc = _field_model_to_column(c)
+        if cc is not None:
+            children.append(cc)
+    try:
+        return Column(
+            name=name,
+            dataType=col_data_type,
+            dataTypeDisplay=getattr(field, "dataTypeDisplay", None),
+            description=getattr(field, "description", None),
+            children=children or None,
+        )
+    except Exception:  # pragma: no cover
+        return None
+
+
+def _field_name(field: Any) -> str:
+    """Mirror of `schema_parsers._field_name` -- unwrap RootModel name."""
+    n = getattr(field, "name", None)
+    if n is None:
+        return ""
+    return str(getattr(n, "root", getattr(n, "__root__", n)))
+
+
+# --------------------------------------------------------- Topic-tree (#53)
+
+
+def topic_segment_to_container_request(
+    *,
+    segment: str,
+    depth: int,
+    segment_path: List[str],
+    parent_fqn: Optional[str] = None,
+):
+    """Build a CreateContainerRequest for one topic-address segment.
+
+    Wave 3 (#53). The full topic-address tree is materialised as nested
+    OM Containers under the synthetic StorageService
+    ``solace-event-portal-topic-tree``. Variable segments
+    (``{region}``, ``{orderId}``) are kept verbatim in the displayName,
+    but sanitised to ``_region_`` in the Container name so the OM FQN
+    stays valid.
+
+    ``segment_path`` is the full chain leading to this segment
+    (e.g. ``["orders", "{region}", "created"]`` for the leaf of
+    ``orders/{region}/created``). ``depth`` mirrors len(segment_path)
+    for symmetry.
+    """
+    try:
+        from metadata.generated.schema.api.data.createContainer import (
+            CreateContainerRequest,
+        )
+    except Exception:  # pragma: no cover
+        logger.warning("OM Container entity not importable; skipping segment")
+        return None
+    from .property_keys import (
+        CP_TOPIC_SEGMENT,
+        CP_TOPIC_SEGMENT_DEPTH,
+        CP_TOPIC_SEGMENT_PATH,
+        TOPIC_TREE_STORAGE_SERVICE_NAME,
+    )
+
+    name = sanitize(_variable_to_safe_name(segment))
+    full_path = "/".join(segment_path)
+    description = (
+        f"Solace topic-address segment `{segment}` at depth {depth} "
+        f"(full path: `{full_path}`). Auto-materialised from the Event "
+        f"Portal topic-address hierarchy."
+    )
+    extension = {
+        CP_TOPIC_SEGMENT: segment,
+        CP_TOPIC_SEGMENT_PATH: full_path,
+        CP_TOPIC_SEGMENT_DEPTH: str(depth),
+    }
+    extension = {k: v for k, v in extension.items() if v is not None}
+
+    request = CreateContainerRequest(
+        name=name,
+        displayName=segment,
+        description=description,
+        service=TOPIC_TREE_STORAGE_SERVICE_NAME,
+    )
+    if parent_fqn and hasattr(request, "parent"):
+        try:
+            from metadata.generated.schema.type.entityReference import (
+                EntityReference,
+            )
+            request.parent = EntityReference(
+                fullyQualifiedName=parent_fqn, type="container",
+            )
+        except Exception:  # pragma: no cover
+            pass
+    if extension and hasattr(request, "extension"):
+        request.extension = _as_extension(extension)
+    return request
+
+
+def topic_segment_container_fqn(segment_path: List[str]) -> str:
+    """FQN of a topic-tree segment Container under the synthetic StorageService.
+
+    The FQN composes one quoted segment per level so '.' inside a topic
+    name (rare but legal in Solace) does not collide with the OM FQN
+    separator.
+    """
+    from .property_keys import TOPIC_TREE_STORAGE_SERVICE_NAME
+    parts = [TOPIC_TREE_STORAGE_SERVICE_NAME]
+    for seg in segment_path:
+        parts.append(_quote_if_dotted(sanitize(_variable_to_safe_name(seg))))
+    return ".".join(parts)
+
+
+def _variable_to_safe_name(segment: str) -> str:
+    """Translate ``{region}`` -> ``_region_`` so the name is a valid identifier."""
+    if not segment:
+        return "_"
+    if segment.startswith("{") and segment.endswith("}"):
+        return f"_{segment[1:-1]}_"
+    return segment
+
+
+# Lowercase / id-based EP state values mapped back to the human-readable
+# tag suffix. Used by the schema mapper since EP returns numeric state IDs.
+_STATE_HUMAN: Dict[str, str] = {
+    "1": "Draft",
+    "2": "Released",
+    "3": "Deprecated",
+    "4": "Retired",
+    "DRAFT": "Draft",
+    "RELEASED": "Released",
+    "DEPRECATED": "Deprecated",
+    "RETIRED": "Retired",
+}
+
+
+def _render_eapp_plans_markdown(plans: List[Dict[str, Any]]) -> Optional[str]:
+    """Render EAPP version ``plans[]`` as a small markdown table for the
+    DataProduct.extension custom property."""
+    if not plans:
+        return None
+    rows = ["| Plan | Class of Service | Description |", "| --- | --- | --- |"]
+    for p in plans:
+        pname = p.get("name") or "?"
+        cos = p.get("solaceClassOfServicePolicy") or {}
+        cos_kind = cos.get("classOfService") or cos.get("queueType") or "-"
+        desc = (p.get("description") or "").replace("|", "/")[:120]
+        rows.append(f"| {pname} | {cos_kind} | {desc} |")
+    return "\n".join(rows)
 
 
 def app_pipeline_fqn(app_name: str, version: str) -> str:

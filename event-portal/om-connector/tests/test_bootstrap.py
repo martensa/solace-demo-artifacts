@@ -159,11 +159,102 @@ def test_full_bootstrap_is_idempotent_on_a_populated_om():
     populated[
         f"/services/pipelineServices/name/{bootstrap.APP_PIPELINE_SERVICE_NAME}"
     ] = {"name": bootstrap.APP_PIPELINE_SERVICE_NAME}
+    # Wave 3 (#44 + #55 + #53): Container CPs (EventAPI + Consumer +
+    # TopicTree) + synthetic StorageServices.
+    populated["/metadata/types/name/container"] = {
+        "id": "container-id",
+        "customProperties": [
+            {"name": k}
+            for k, _, _ in (
+                bootstrap.CONTAINER_CUSTOM_PROPERTIES
+                + bootstrap.CONSUMER_CUSTOM_PROPERTIES
+                + bootstrap.TOPIC_TREE_CUSTOM_PROPERTIES
+            )
+        ],
+    }
+    populated[
+        f"/services/storageServices/name/{bootstrap.EVENT_API_STORAGE_SERVICE_NAME}"
+    ] = {"name": bootstrap.EVENT_API_STORAGE_SERVICE_NAME}
+    populated[
+        f"/services/storageServices/name/{bootstrap.CONSUMER_STORAGE_SERVICE_NAME}"
+    ] = {"name": bootstrap.CONSUMER_STORAGE_SERVICE_NAME}
+    populated[
+        f"/services/storageServices/name/{bootstrap.TOPIC_TREE_STORAGE_SERVICE_NAME}"
+    ] = {"name": bootstrap.TOPIC_TREE_STORAGE_SERVICE_NAME}
+    # Wave 3 (#45): DataProduct CPs for EAPP.
+    populated["/metadata/types/name/dataProduct"] = {
+        "id": "dp-id",
+        "customProperties": [
+            {"name": k} for k, _, _ in bootstrap.DATAPRODUCT_CUSTOM_PROPERTIES
+        ],
+    }
+    populated["/metadata/types/name/markdown"] = {"id": "markdown-id"}
+    # Wave 3 (#52): Table CPs + synthetic DatabaseService + Database.
+    populated["/metadata/types/name/table"] = {
+        "id": "table-id",
+        "customProperties": [
+            {"name": k} for k, _, _ in bootstrap.TABLE_CUSTOM_PROPERTIES
+        ],
+    }
+    populated[
+        f"/services/databaseServices/name/{bootstrap.SCHEMA_DATABASE_SERVICE_NAME}"
+    ] = {"name": bootstrap.SCHEMA_DATABASE_SERVICE_NAME}
+    populated[
+        f"/databases/name/{bootstrap.SCHEMA_DATABASE_SERVICE_NAME}."
+        f"{bootstrap.SCHEMA_DATABASE_NAME}"
+    ] = {"name": bootstrap.SCHEMA_DATABASE_NAME}
 
     client = _FakeClient(existing=populated)
     bootstrap.bootstrap(_make_om(client))
     assert client.posts == []
     assert client.puts == []
+
+
+def test_ensure_database_service_creates_when_missing():
+    client = _FakeClient(existing={})
+    bootstrap.ensure_database_service(
+        _make_om(client),
+        bootstrap.SCHEMA_DATABASE_SERVICE_NAME,
+        display_name="Solace Event Portal Schemas",
+        description="d",
+    )
+    assert len(client.posts) == 1
+    path, body = client.posts[0]
+    assert path == "/services/databaseServices"
+    assert body["name"] == bootstrap.SCHEMA_DATABASE_SERVICE_NAME
+    assert body["serviceType"] == "CustomDatabase"
+
+
+def test_ensure_database_service_noop_when_present():
+    client = _FakeClient(
+        existing={
+            f"/services/databaseServices/name/{bootstrap.SCHEMA_DATABASE_SERVICE_NAME}":
+                {"name": bootstrap.SCHEMA_DATABASE_SERVICE_NAME},
+        }
+    )
+    bootstrap.ensure_database_service(
+        _make_om(client),
+        bootstrap.SCHEMA_DATABASE_SERVICE_NAME,
+        display_name="x",
+        description="d",
+    )
+    assert client.posts == []
+
+
+def test_ensure_database_creates_when_missing():
+    client = _FakeClient(existing={})
+    bootstrap.ensure_database(
+        _make_om(client),
+        bootstrap.SCHEMA_DATABASE_NAME,
+        service=bootstrap.SCHEMA_DATABASE_SERVICE_NAME,
+        display_name="Schemas",
+        description="d",
+    )
+    assert len(client.posts) == 1
+    path, body = client.posts[0]
+    assert path == "/databases"
+    assert body["name"] == bootstrap.SCHEMA_DATABASE_NAME
+    assert body["service"] == bootstrap.SCHEMA_DATABASE_SERVICE_NAME
 
 
 def test_ensure_pipeline_service_creates_when_missing():

@@ -22,11 +22,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .property_keys import (
     APP_PIPELINE_SERVICE_NAME,
+    CONSUMER_STORAGE_SERVICE_NAME,
+    EVENT_API_STORAGE_SERVICE_NAME,
+    SCHEMA_DATABASE_NAME,
+    SCHEMA_DATABASE_SERVICE_NAME,
+    TOPIC_TREE_STORAGE_SERVICE_NAME,
     CP_APP_DOMAIN_ID,
     CP_APP_DOMAIN_NAME,
     CP_APP_ID,
     CP_APP_VERSION_ID,
     CP_CONSUMED_BY,
+    CP_CONSUMER_BROKER_TYPE,
+    CP_CONSUMER_ID,
+    CP_CONSUMER_SUBSCRIPTIONS,
+    CP_CONSUMER_TYPE,
     CP_DOMAIN_ID,
     CP_DOMAIN_NAME,
     CP_EP_APP_DOMAIN,
@@ -34,15 +43,28 @@ from .property_keys import (
     CP_EP_DOMAIN,
     CP_EP_EVENT,
     CP_EP_SCHEMA,
+    CP_EAPP_ID,
+    CP_EAPP_PLANS,
+    CP_EAPP_VERSION_ID,
+    CP_EP_EAPP,
+    CP_EP_EVENT_API,
+    CP_EVENT_API_ID,
+    CP_EVENT_API_VERSION_ID,
     CP_EVENT_ID,
     CP_EVENT_VERSION_ID,
     CP_IS_LATEST_VERSION,
     CP_MODELED_MESH_IDS,
     CP_PUBLISHED_BY,
+    CP_SCHEMA_CONTENT,
+    CP_SCHEMA_ID,
+    CP_SCHEMA_TYPE,
     CP_SCHEMA_VERSION_ID,
     CP_STATE,
     CP_STATE_CHANGED_AT,
     CP_TOPIC_ADDRESS,
+    CP_TOPIC_SEGMENT,
+    CP_TOPIC_SEGMENT_DEPTH,
+    CP_TOPIC_SEGMENT_PATH,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,6 +119,108 @@ LEGACY_TOPIC_PROPERTIES: List[str] = [
 # compatibility with downstream code that may still reference it, but the
 # bootstrap no longer tries to register a CP that the server rejects.
 MESSAGING_SERVICE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = []
+
+# Wave 3 (#45): DataProduct CPs for EAPP.
+DATAPRODUCT_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
+    (CP_EP_EAPP, "markdown", "Link to the EP Event API Product + version"),
+    (CP_EAPP_ID, "string", "EP Event API Product id"),
+    (CP_EAPP_VERSION_ID, "string", "EP Event API Product version id"),
+    (CP_EAPP_PLANS, "markdown", "EAPP plans + Class-of-Service policy table"),
+    (
+        CP_IS_LATEST_VERSION,
+        "string",
+        "'true' iff this DataProduct carries the highest semver of its EP "
+        "Event API Product (Wave 3 #45).",
+    ),
+]
+
+
+# Wave 3 (#44): EventAPI Container custom properties.
+CONTAINER_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
+    (CP_EP_EVENT_API, "markdown", "Link to the EP Event API + version"),
+    (CP_EVENT_API_ID, "string", "EP Event API id (stable)"),
+    (CP_EVENT_API_VERSION_ID, "string", "EP Event API version id (per-version)"),
+    (
+        CP_IS_LATEST_VERSION,
+        "string",
+        "'true' iff this Container carries the highest semver of its EP "
+        "Event API (Wave 3 #44).",
+    ),
+]
+
+
+# Wave 3 (#53): Container custom properties for topic-tree segment Containers.
+# Registered on the `container` entity type (same as #44/#55 Containers).
+TOPIC_TREE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
+    (
+        CP_TOPIC_SEGMENT,
+        "string",
+        "Topic-address segment value (`orders` / `{region}` / ...).",
+    ),
+    (
+        CP_TOPIC_SEGMENT_PATH,
+        "string",
+        "Full slash-joined path from the topic-tree root to this segment.",
+    ),
+    (
+        CP_TOPIC_SEGMENT_DEPTH,
+        "string",
+        "1-based depth of this segment within the tree.",
+    ),
+]
+
+
+# Wave 3 (#52): Table custom properties for first-class EP Schemas.
+# Registered on the `table` entity type since EP Schemas land as OM Tables
+# under the synthetic `solace-event-portal-schemas` DatabaseService.
+TABLE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
+    (CP_EP_SCHEMA, "markdown", "Link to the EP Schema + version"),
+    (CP_SCHEMA_ID, "string", "EP Schema id (stable across versions)"),
+    (CP_SCHEMA_VERSION_ID, "string", "EP Schema version id (per-version)"),
+    (CP_SCHEMA_TYPE, "string", "Schema format (JSON, AVRO, PROTOBUF, XSD...)"),
+    (
+        CP_SCHEMA_CONTENT,
+        "markdown",
+        "Raw schema body rendered as a fenced markdown code block for "
+        "in-OM review when field-level parsing was skipped (e.g. XSD).",
+    ),
+    (CP_STATE, "string", "Event Portal lifecycle state of this schema version"),
+    (CP_STATE_CHANGED_AT, "string", "ISO timestamp of last state change"),
+    (
+        CP_IS_LATEST_VERSION,
+        "string",
+        "'true' iff this Table carries the highest semver of its EP "
+        "Schema (Wave 3 #52).",
+    ),
+]
+
+
+# Wave 3 (#55): Consumer-Queue Container custom properties.
+# Registered on the same `container` entity type as CONTAINER_CUSTOM_PROPERTIES
+# above. ensure_custom_property is idempotent so the loop just adds the
+# missing ones — Container.customProperties grows by the union of both.
+CONSUMER_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
+    (CP_CONSUMER_ID, "string", "EP applicationVersion.consumers[].id (stable)"),
+    (
+        CP_CONSUMER_TYPE,
+        "string",
+        "EP consumer type (eventQueue, topicEndpoint, ...). Reflects how the "
+        "binding behaves on the Solace broker.",
+    ),
+    (
+        CP_CONSUMER_BROKER_TYPE,
+        "string",
+        "EP broker type the consumer binds to (solace, kafka, ...).",
+    ),
+    (
+        CP_CONSUMER_SUBSCRIPTIONS,
+        "markdown",
+        "Subscription patterns table (type | pattern | matched event count) "
+        "rendered from EP consumer.subscriptions[] for at-a-glance reading "
+        "on the OM Container page.",
+    ),
+]
+
 
 # Pipeline custom properties for EP applications mapped to Pipeline entities.
 PIPELINE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
@@ -162,6 +286,119 @@ def ensure_tag(om, classification: str, name: str, description: str) -> None:
         },
     )
     logger.info("Created tag %s", fqn)
+
+
+def ensure_storage_service(
+    om,
+    name: str,
+    *,
+    display_name: str,
+    description: str,
+    service_type: str = "CustomStorage",
+) -> None:
+    """Idempotently create a synthetic StorageService.
+
+    Wave 3 (#44): used to host the EventAPI Containers under
+    ``solace-event-portal-event-apis``. Container entities in OM
+    require a StorageService as their service field; we pick the
+    CustomStorage type so we never collide with a real S3 / ADLS
+    storage definition.
+    """
+    existing = _get_or_none(om, f"/services/storageServices/name/{name}")
+    if existing:
+        logger.info("StorageService %s already exists", name)
+        return
+    body = {
+        "name": name,
+        "displayName": display_name,
+        "description": description,
+        "serviceType": service_type,
+        "connection": {
+            "config": {
+                "type": service_type,
+                "sourcePythonClass": "connector.event_portal_connector.SolaceEventPortalSource",
+            }
+        },
+    }
+    try:
+        _client(om).post("/services/storageServices", json=body)
+        logger.info("Created StorageService %s", name)
+    except Exception:
+        logger.warning(
+            "POST /services/storageServices failed for %s; container emission "
+            "may be skipped on older OM versions", name,
+        )
+
+
+def ensure_database_service(
+    om,
+    name: str,
+    *,
+    display_name: str,
+    description: str,
+    service_type: str = "CustomDatabase",
+) -> None:
+    """Idempotently create a synthetic DatabaseService.
+
+    Wave 3 (#52): used to host the EP Schema Tables under
+    ``solace-event-portal-schemas``. Tables in OM require a
+    DatabaseService -> Database -> DatabaseSchema -> Table chain; this
+    helper handles the root service.
+    """
+    existing = _get_or_none(om, f"/services/databaseServices/name/{name}")
+    if existing:
+        logger.info("DatabaseService %s already exists", name)
+        return
+    body = {
+        "name": name,
+        "displayName": display_name,
+        "description": description,
+        "serviceType": service_type,
+        "connection": {
+            "config": {
+                "type": service_type,
+                "sourcePythonClass": "connector.event_portal_connector.SolaceEventPortalSource",
+            }
+        },
+    }
+    try:
+        _client(om).post("/services/databaseServices", json=body)
+        logger.info("Created DatabaseService %s", name)
+    except Exception:
+        logger.warning(
+            "POST /services/databaseServices failed for %s; schema Table "
+            "emission may be skipped on older OM versions", name,
+        )
+
+
+def ensure_database(
+    om,
+    name: str,
+    *,
+    service: str,
+    display_name: Optional[str] = None,
+    description: str = "",
+) -> None:
+    """Idempotently create a Database under an existing DatabaseService."""
+    fqn = f"{service}.{name}"
+    existing = _get_or_none(om, f"/databases/name/{fqn}")
+    if existing:
+        logger.info("Database %s already exists", fqn)
+        return
+    body = {
+        "name": name,
+        "displayName": display_name or name,
+        "description": description,
+        "service": service,
+    }
+    try:
+        _client(om).post("/databases", json=body)
+        logger.info("Created Database %s", fqn)
+    except Exception:
+        logger.warning(
+            "POST /databases failed for %s; schema Table emission may be skipped",
+            fqn,
+        )
 
 
 def ensure_pipeline_service(
@@ -392,7 +629,78 @@ def bootstrap(om, ep_client=None, ca_exclude: Optional[set] = None) -> None:
         ensure_custom_property(om, "messagingService", key, ptype, desc)
     for key, ptype, desc in PIPELINE_CUSTOM_PROPERTIES:
         ensure_custom_property(om, "pipeline", key, ptype, desc)
+    for key, ptype, desc in CONTAINER_CUSTOM_PROPERTIES:
+        ensure_custom_property(om, "container", key, ptype, desc)
+    for key, ptype, desc in CONSUMER_CUSTOM_PROPERTIES:
+        ensure_custom_property(om, "container", key, ptype, desc)
+    for key, ptype, desc in TOPIC_TREE_CUSTOM_PROPERTIES:
+        ensure_custom_property(om, "container", key, ptype, desc)
+    for key, ptype, desc in DATAPRODUCT_CUSTOM_PROPERTIES:
+        ensure_custom_property(om, "dataProduct", key, ptype, desc)
+    for key, ptype, desc in TABLE_CUSTOM_PROPERTIES:
+        ensure_custom_property(om, "table", key, ptype, desc)
     ensure_pipeline_service(om)
+    # Wave 3 (#44): synthetic StorageService for EventAPI Containers.
+    ensure_storage_service(
+        om,
+        EVENT_API_STORAGE_SERVICE_NAME,
+        display_name="Solace Event Portal Event APIs",
+        description=(
+            "Synthetic OM StorageService that holds one Container per EP "
+            "Event API + version, with lineage to the topics each API "
+            "produces / consumes."
+        ),
+    )
+    # Wave 3 (#55): synthetic StorageService for consumer-queue Containers.
+    ensure_storage_service(
+        om,
+        CONSUMER_STORAGE_SERVICE_NAME,
+        display_name="Solace Event Portal Consumer Queues",
+        description=(
+            "Synthetic OM StorageService that holds one Container per EP "
+            "applicationVersion.consumers[] entry (the Solace queue / "
+            "topic-endpoint a consuming app binds to). Lineage edges "
+            "Topic -> Container -> Pipeline reflect the in-broker fan-out."
+        ),
+    )
+    # Wave 3 (#53): synthetic StorageService for topic-tree segment Containers.
+    ensure_storage_service(
+        om,
+        TOPIC_TREE_STORAGE_SERVICE_NAME,
+        display_name="Solace Event Portal Topic Tree",
+        description=(
+            "Synthetic OM StorageService materialising the Solace "
+            "topic-address namespace as nested Containers. Each segment "
+            "(literal or `{variable}`) becomes a Container under its "
+            "parent; lineage edges run from the deepest segment Container "
+            "to the Topic. Configurable depth via the `topicTreeMaxDepth` "
+            "connection option."
+        ),
+    )
+    # Wave 3 (#52): synthetic DatabaseService + Database for first-class
+    # EP Schemas (one Table per Schema + version).
+    ensure_database_service(
+        om,
+        SCHEMA_DATABASE_SERVICE_NAME,
+        display_name="Solace Event Portal Schemas",
+        description=(
+            "Synthetic OM DatabaseService that promotes EP Schemas to "
+            "first-class OM Tables. Each EP Application Domain becomes a "
+            "DatabaseSchema; each EP Schema + version becomes a Table "
+            "(columns = parsed Avro/JSON/Protobuf fields)."
+        ),
+    )
+    ensure_database(
+        om,
+        SCHEMA_DATABASE_NAME,
+        service=SCHEMA_DATABASE_SERVICE_NAME,
+        display_name="Schemas",
+        description=(
+            "Top-level container for per-domain DatabaseSchemas. EP has no "
+            "matching concept; this single Database exists only to satisfy "
+            "OM's DatabaseService -> Database -> DatabaseSchema -> Table chain."
+        ),
+    )
     if ep_client is not None:
         discover_custom_attribute_classifications(om, ep_client, exclude=ca_exclude)
 

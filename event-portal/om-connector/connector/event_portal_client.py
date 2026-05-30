@@ -217,6 +217,36 @@ class EventPortalClient:
             f"/architecture/schemaVersions/{schema_version_id}"
         )
 
+    def list_schemas(
+        self,
+        application_domain_id: str,
+        since: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List EP Schemas in a domain (Wave 3 #52).
+
+        ``applicationDomainId`` is singular for /architecture/schemas (EP v2
+        confirms this) and matches the /architecture/events convention --
+        ``applicationDomainIds`` plural would 400.
+        """
+        params: Dict[str, Any] = {"applicationDomainId": application_domain_id}
+        if since:
+            params["updatedTime"] = f"gte:{since}"
+        return list(self._paginate("/architecture/schemas", params=params))
+
+    def list_schema_versions(self, schema_id: str) -> List[Dict[str, Any]]:
+        """List versions of a single EP Schema."""
+        return list(
+            self._paginate(
+                "/architecture/schemaVersions",
+                params={"schemaIds": schema_id, "pageSize": 100},
+            )
+        )
+
+    def get_latest_schema_version(
+        self, schema_id: str
+    ) -> Optional[Dict[str, Any]]:
+        return _latest(self.list_schema_versions(schema_id))
+
     def export_application_asyncapi(
         self,
         application_version_id: str,
@@ -234,6 +264,63 @@ class EventPortalClient:
             return None
         resp.raise_for_status()
         return resp.text
+
+    # -------------------------------------------------- event APIs (Wave 3 #44/#45)
+
+    def list_event_apis(
+        self, application_domain_id: str, since: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List EP Event APIs in a domain (Cloud Enterprise + Self-Managed)."""
+        params: Dict[str, Any] = {"applicationDomainIds": application_domain_id}
+        if since:
+            params["updatedTime"] = f"gte:{since}"
+        return list(
+            self._paginate("/architecture/eventApis", params=params)
+        )
+
+    def list_event_api_versions(self, event_api_id: str) -> List[Dict[str, Any]]:
+        return list(
+            self._paginate(
+                "/architecture/eventApiVersions",
+                params={"eventApiIds": event_api_id, "pageSize": 100},
+            )
+        )
+
+    def get_latest_event_api_version(
+        self, event_api_id: str
+    ) -> Optional[Dict[str, Any]]:
+        versions = self.list_event_api_versions(event_api_id)
+        return versions[-1] if versions else None
+
+    def list_event_api_products(
+        self, application_domain_id: str, since: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List EP Event API Products (EAPP) in a domain."""
+        params: Dict[str, Any] = {"applicationDomainIds": application_domain_id}
+        if since:
+            params["updatedTime"] = f"gte:{since}"
+        return list(
+            self._paginate("/architecture/eventApiProducts", params=params)
+        )
+
+    def list_event_api_product_versions(
+        self, event_api_product_id: str
+    ) -> List[Dict[str, Any]]:
+        return list(
+            self._paginate(
+                "/architecture/eventApiProductVersions",
+                params={
+                    "eventApiProductIds": event_api_product_id,
+                    "pageSize": 100,
+                },
+            )
+        )
+
+    def get_latest_event_api_product_version(
+        self, event_api_product_id: str
+    ) -> Optional[Dict[str, Any]]:
+        versions = self.list_event_api_product_versions(event_api_product_id)
+        return versions[-1] if versions else None
 
     # ----------------------------------------------------------- modeled mesh
 

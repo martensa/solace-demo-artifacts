@@ -38,11 +38,17 @@ from .filters import FilterPattern, parse_filter_options
 from .mappers import (
     app_to_pipeline_request,
     app_topic_lineage_request,
+    consumer_to_container_request,
     domain_to_create_request,
+    domain_to_database_schema_request,
+    event_api_to_container_request,
     event_to_topic_request,
     modeled_mesh_to_data_product_request,
     pipeline_to_pipeline_lineage_request,
+    schema_version_to_table_request,
     topic_fqn,
+    topic_segment_container_fqn,
+    topic_segment_to_container_request,
 )
 from .owner_resolver import OwnerResolver
 
@@ -76,6 +82,33 @@ class SolaceEventPortalSource(Source):
         # Enable explicitly with emitDataProducts=true if your edition
         # supports it; the EP client tolerates a 404 gracefully either way.
         self.emit_data_products: bool = _as_bool(opts.get("emitDataProducts", "false"))
+        # Wave 3 (#44): emit OM Containers per EP Event API + lineage to topics.
+        # Default ON since ALDI Cluster 1.7 confirmed they use Event APIs.
+        self.emit_event_apis: bool = _as_bool(opts.get("emitEventApis", "true"))
+        # Wave 3 (#45): emit OM DataProducts per EP Event API Product.
+        self.emit_event_api_products: bool = _as_bool(
+            opts.get("emitEventApiProducts", "true")
+        )
+        # Wave 3 (#55): emit OM Containers per applicationVersion.consumers[]
+        # entry (the Solace queue / topic-endpoint the consuming app binds
+        # to) plus Topic -> Container -> Pipeline lineage.
+        self.emit_consumers: bool = _as_bool(opts.get("emitConsumers", "true"))
+        # Wave 3 (#52): promote EP Schemas to first-class OM Tables under
+        # the synthetic `solace-event-portal-schemas` DatabaseService.
+        # Default ON since ALDI Cluster 3.1 confirmed schemas must be
+        # browsable/queryable independent of their carrying topic.
+        self.emit_schemas: bool = _as_bool(opts.get("emitSchemas", "true"))
+        # Wave 3 (#53): materialise the Solace topic-address namespace
+        # as nested Containers + lineage from the deepest segment to the
+        # Topic. Depth cap defaults to 3 -- below that the visual tree
+        # gets noisy for typical EP customers (5-6 segments are common).
+        self.emit_topic_tree: bool = _as_bool(opts.get("emitTopicTree", "true"))
+        try:
+            self.topic_tree_max_depth: int = max(
+                1, int(opts.get("topicTreeMaxDepth", 3))
+            )
+        except (TypeError, ValueError):
+            self.topic_tree_max_depth = 3
         self.since: Optional[str] = opts.get("since") or None
         # EP-UI back-link configuration: base URL + per-entity path
         # templates. All overridable via connectionOptions so the user
@@ -183,6 +216,28 @@ class SolaceEventPortalSource(Source):
         # dest_app_name is filled at emit-time once the destination is
         # known (we may not have its name in scope when buffering).
         self._pending_linked_app_emits: List[Tuple[str, str, str]] = []
+
+        # Wave 3 (#44 / #45): EventAPI Container cache for EAPP assets.
+        self._event_api_version_to_container_id: Dict[str, str] = {}
+        self._event_api_version_to_container_fqn: Dict[str, str] = {}
+
+        # Wave 3 (#52): per-domain Schema Table cache for Schema -> Topic
+        # lineage. Keyed by EP schemaVersionId; values are OM Table ids.
+        self._schema_version_to_table_id: Dict[str, str] = {}
+        # Domains for which the DatabaseSchema has already been ensured in
+        # this run (one-shot per domain).
+        self._database_schema_ensured: Set[str] = set()
+        # Reverse lookup populated during pass 1: topic FQN -> the EP
+        # schemaVersionId it carries (when present). Pass 1.4 walks this
+        # to emit Table -> Topic lineage without re-fetching anything.
+        self._topic_fqn_to_schema_version: Dict[str, str] = {}
+        # Wave 3 (#53): topic FQN -> its full topic-address (parsed during
+        # pass 1) for the topic-tree pass to consume without re-fetching.
+        # The leading reconstruction lives inside `mappers.extract_topic_address`.
+        self._topic_fqn_to_address: Dict[str, str] = {}
+        # Cache of segment FQNs already emitted this run so we don't
+        # repeatedly POST the same shared prefix containers.
+        self._topic_segment_ensured: Set[str] = set()
 
     # ------------------------------------------------------------- factories
 
@@ -329,6 +384,31 @@ class SolaceEventPortalSource(Source):
         for domain in domains:
             yield from self._emit_domain_topics(domain, mesh_by_domain.get(domain["id"]))
 
+        # Pass 1.4 - Wave 3 (#52): first-class Schemas as OM Tables, plus
+        # Table -> Topic lineage for every Topic carrying that schema
+        # version. Runs after the Topic pass so the lineage POSTs can
+        # resolve Topic ids by FQN.
+        if self.emit_schemas:
+            for domain in domains:
+                yield from self._emit_domain_schemas(domain)
+
+        # Pass 1.5 - Wave 3 (#44): EventAPI Containers + their topic lineage.
+        if self.emit_event_apis:
+            for domain in domains:
+                yield from self._emit_domain_event_apis(domain)
+
+        # Pass 1.6 - Wave 3 (#45): EventAPI Product -> OM DataProduct.
+        if self.emit_event_api_products:
+            for domain in domains:
+                yield from self._emit_domain_event_api_products(domain)
+
+        # Pass 1.7 - Wave 3 (#53): topic-tree segment Containers + lineage
+        # from the deepest in-cap segment to every matching Topic. Runs
+        # after pass 1 so it can read `_topic_fqn_to_address`, and after
+        # pass 1.4-1.6 because there's no inter-pass dependency either way.
+        if self.emit_topic_tree:
+            yield from self._emit_topic_tree()
+
         # Pass 2 - Data Products (Modeled Event Meshes), with topic FQNs
         # discovered in pass 1 as their assets.
         if self.emit_data_products:
@@ -422,9 +502,20 @@ class SolaceEventPortalSource(Source):
                         str(version.get("version") or "1.0.0"),
                     )
                     self._event_version_to_topic_fqn[version["id"]] = fqn
+                    # Wave 3 (#52): remember which schema version this Topic
+                    # carries so the Schema pass can build Table -> Topic
+                    # lineage without re-walking events.
+                    sv_id = (schema_payload or {}).get("version", {}).get("id")
+                    if sv_id:
+                        self._topic_fqn_to_schema_version[fqn] = sv_id
+                    # Wave 3 (#53): also keep the topic address indexed by
+                    # FQN so the topic-tree pass can walk segments without
+                    # re-parsing the EP payload.
+                    from .mappers import extract_topic_address
+                    addr = extract_topic_address(version)
+                    if addr:
+                        self._topic_fqn_to_address[fqn] = addr
                     if self.sample_data_enabled:
-                        from .mappers import extract_topic_address
-                        addr = extract_topic_address(version)
                         if addr:
                             self._pending_samples.append((fqn, addr))
                     yield Either(right=request)
@@ -432,6 +523,531 @@ class SolaceEventPortalSource(Source):
                 yield self._fail(
                     f"event:{event.get('name', event.get('id'))}", exc
                 )
+
+    def _emit_domain_schemas(self, domain: Dict[str, Any]) -> Iterable[Either]:
+        """Wave 3 (#52): emit one OM DatabaseSchema per EP Application Domain
+        and one OM Table per EP Schema + version below it. Then build
+        Table -> Topic lineage for every Topic that referenced this
+        schema version in pass 1.
+
+        Schemas without any version are skipped.
+        """
+        domain_name = domain.get("name") or domain.get("id")
+        try:
+            schemas = self.client.list_schemas(domain["id"], since=self.since)
+        except Exception as exc:
+            yield self._fail(f"list-schemas:{domain_name}", exc)
+            return
+
+        # Apply schemaFilterPattern -- same gate the Topic pass uses for
+        # message-schema attachment, but here we drop the whole Table.
+        schemas = [
+            s for s in schemas if self.schema_filter.match(s.get("name"))
+        ]
+        if not schemas:
+            return
+
+        # One-shot DatabaseSchema ensure (per-domain) before any Tables go in.
+        if domain["id"] not in self._database_schema_ensured:
+            try:
+                ds_req = domain_to_database_schema_request(domain)
+                if ds_req is not None:
+                    self.metadata.create_or_update(data=ds_req)
+                self._database_schema_ensured.add(domain["id"])
+            except Exception as exc:
+                yield self._fail(
+                    f"create-database-schema:{domain_name}", exc
+                )
+                return
+
+        for schema in schemas:
+            try:
+                versions = (
+                    self.client.list_schema_versions(schema["id"])
+                    if self.ingest_all_versions
+                    else [self.client.get_latest_schema_version(schema["id"])]
+                )
+                latest_id = _latest_version_id(versions)
+                for version in versions:
+                    if not version:
+                        continue
+                    req = schema_version_to_table_request(
+                        schema=schema,
+                        schema_version=version,
+                        domain=domain,
+                        ep_urls=self.ep_urls,
+                        is_latest_version=(
+                            version.get("id") == latest_id if latest_id else None
+                        ),
+                    )
+                    if req is None:
+                        continue
+                    try:
+                        table_entity = self.metadata.create_or_update(data=req)
+                    except Exception as exc:
+                        yield self._fail(
+                            f"create-schema-table:{schema.get('name')}", exc
+                        )
+                        continue
+                    table_id = str(
+                        getattr(
+                            getattr(table_entity, "id", None),
+                            "root",
+                            getattr(table_entity, "id", ""),
+                        )
+                    )
+                    if not table_id:
+                        continue
+                    self._schema_version_to_table_id[version["id"]] = table_id
+
+                    # Table -> Topic lineage for every Topic carrying this
+                    # schemaVersionId. Built from the cache populated in
+                    # pass 1.
+                    for topic_fqn_, sv_id in self._topic_fqn_to_schema_version.items():
+                        if sv_id != version["id"]:
+                            continue
+                        topic_id = self._resolve_id("topic", topic_fqn_)
+                        if not topic_id:
+                            continue
+                        self._post_consumer_lineage(
+                            source_id=table_id, source_type="table",
+                            dest_id=topic_id, dest_type="topic",
+                            label=(
+                                f"Solace EP schema '{schema.get('name')}' "
+                                f"v{version.get('version')} carried on topic"
+                            ),
+                        )
+            except Exception as exc:
+                yield self._fail(
+                    f"schema:{schema.get('name', schema.get('id'))}", exc
+                )
+
+    def _emit_domain_event_apis(self, domain: Dict[str, Any]) -> Iterable[Either]:
+        """Wave 3 (#44): emit one OM Container per EP Event API version
+        and the produces / consumes edges to the topics it references.
+
+        Container lives under the synthetic StorageService
+        ``solace-event-portal-event-apis`` (created by bootstrap). Lineage
+        is emitted only for produced/consumed event-version ids that are
+        present in this run's topic-FQN cache (#54 latest-only ingests
+        only carry the latest version of each event so older Event API
+        versions referencing deprecated event versions silently skip
+        those edges -- expected behaviour, not a regression).
+        """
+        try:
+            event_apis = self.client.list_event_apis(domain["id"], since=self.since)
+        except Exception as exc:
+            yield self._fail(f"list-event-apis:{domain.get('name')}", exc)
+            return
+
+        for ea in event_apis:
+            try:
+                versions = (
+                    self.client.list_event_api_versions(ea["id"])
+                    if self.ingest_all_versions
+                    else [self.client.get_latest_event_api_version(ea["id"])]
+                )
+                latest_id = _latest_version_id(versions)
+                for version in versions:
+                    if not version:
+                        continue
+                    container_req = event_api_to_container_request(
+                        event_api=ea,
+                        event_api_version=version,
+                        domain=domain,
+                        ep_urls=self.ep_urls,
+                        is_latest_version=(
+                            version.get("id") == latest_id if latest_id else None
+                        ),
+                    )
+                    if container_req is None:
+                        continue
+                    try:
+                        container_entity = self.metadata.create_or_update(
+                            data=container_req
+                        )
+                    except Exception as exc:
+                        yield self._fail(
+                            f"create-event-api:{ea.get('name')}", exc
+                        )
+                        continue
+                    container_id = str(
+                        getattr(
+                            getattr(container_entity, "id", None),
+                            "root",
+                            getattr(container_entity, "id", ""),
+                        )
+                    )
+                    if not container_id:
+                        continue
+
+                    # Wave 3 (#45): cache for EAPP DataProduct asset refs.
+                    self._event_api_version_to_container_id[version["id"]] = container_id
+                    from .mappers import event_api_container_fqn
+                    self._event_api_version_to_container_fqn[version["id"]] = (
+                        event_api_container_fqn(
+                            ea.get("name") or "unnamed-event-api",
+                            str(version.get("version") or "1.0.0"),
+                        )
+                    )
+
+                    # Lineage edges Container <-> Topic.
+                    ea_name = ea.get("name") or "EventAPI"
+                    for ev_id in version.get("producedEventVersionIds") or []:
+                        fqn = self._event_version_to_topic_fqn.get(ev_id)
+                        if not fqn:
+                            continue
+                        topic_id = self._resolve_id("topic", fqn)
+                        if not topic_id:
+                            continue
+                        self._post_event_api_lineage(
+                            container_id, topic_id, "produces", ea_name,
+                        )
+                    for ev_id in version.get("consumedEventVersionIds") or []:
+                        fqn = self._event_version_to_topic_fqn.get(ev_id)
+                        if not fqn:
+                            continue
+                        topic_id = self._resolve_id("topic", fqn)
+                        if not topic_id:
+                            continue
+                        self._post_event_api_lineage(
+                            container_id, topic_id, "consumes", ea_name,
+                        )
+            except Exception as exc:
+                yield self._fail(
+                    f"event-api:{ea.get('name', ea.get('id'))}", exc
+                )
+
+    def _emit_topic_tree(self) -> Iterable[Either]:
+        """Wave 3 (#53): materialise the topic-address namespace as a
+        Container tree.
+
+        For every cached (topic FQN, address) pair from pass 1 we walk
+        the address's segments (capped at `topic_tree_max_depth`),
+        creating one Container per unique segment-path, then emit
+        ContainerLeaf -> Topic lineage for the topic at the matching
+        prefix. Shared prefixes across topics dedupe via
+        `_topic_segment_ensured`.
+
+        Errors during a single segment's create do not abort sibling
+        addresses -- topic-tree is a navigation aid, never a hard
+        dependency of the metadata model.
+        """
+        if not self._topic_fqn_to_address:
+            return
+        emitted = 0
+        for tfqn, address in self._topic_fqn_to_address.items():
+            try:
+                segments = [s for s in (address or "").split("/") if s]
+                if not segments:
+                    continue
+                capped = segments[: self.topic_tree_max_depth]
+                leaf_fqn: Optional[str] = None
+                leaf_id: Optional[str] = None
+                parent_fqn: Optional[str] = None
+                for depth, seg in enumerate(capped, start=1):
+                    path_so_far = capped[:depth]
+                    seg_fqn = topic_segment_container_fqn(path_so_far)
+                    leaf_fqn = seg_fqn
+                    if seg_fqn in self._topic_segment_ensured:
+                        # Already created on a sibling topic. Still pull
+                        # the id so we can use it for lineage at the leaf.
+                        if depth == len(capped):
+                            leaf_id = self._resolve_id("container", seg_fqn)
+                        parent_fqn = seg_fqn
+                        continue
+                    req = topic_segment_to_container_request(
+                        segment=seg,
+                        depth=depth,
+                        segment_path=path_so_far,
+                        parent_fqn=parent_fqn,
+                    )
+                    if req is None:
+                        parent_fqn = seg_fqn
+                        continue
+                    try:
+                        container_entity = self.metadata.create_or_update(data=req)
+                        self._topic_segment_ensured.add(seg_fqn)
+                        emitted += 1
+                        if depth == len(capped):
+                            leaf_id = str(
+                                getattr(
+                                    getattr(container_entity, "id", None),
+                                    "root",
+                                    getattr(container_entity, "id", ""),
+                                )
+                            )
+                    except Exception as exc:
+                        yield self._fail(
+                            f"create-topic-segment:{seg_fqn}", exc
+                        )
+                    parent_fqn = seg_fqn
+
+                if not leaf_id and leaf_fqn:
+                    leaf_id = self._resolve_id("container", leaf_fqn)
+                if not leaf_id:
+                    continue
+                topic_id = self._resolve_id("topic", tfqn)
+                if not topic_id:
+                    continue
+                self._post_consumer_lineage(
+                    source_id=leaf_id, source_type="container",
+                    dest_id=topic_id, dest_type="topic",
+                    label=(
+                        f"Solace topic-tree segment '{capped[-1]}' "
+                        f"(depth {len(capped)}) carries topic"
+                    ),
+                )
+            except Exception as exc:
+                yield self._fail(f"topic-tree:{tfqn}", exc)
+        logger.info(
+            "Topic-tree pass: %d new segment Containers emitted across %d topics",
+            emitted, len(self._topic_fqn_to_address),
+        )
+
+    def _emit_app_version_consumers(
+        self,
+        *,
+        domain: Dict[str, Any],
+        app: Dict[str, Any],
+        app_version: Dict[str, Any],
+        pipeline_id: str,
+    ) -> Iterable[Either]:
+        """Wave 3 (#55): one OM Container per applicationVersion.consumers[]
+        entry, plus Topic -> Container -> Pipeline lineage.
+
+        Subscribed topics are derived from each consumer's
+        ``subscriptions[].attractedEventVersionIds`` (EP pre-resolves which
+        event versions a pattern would match). Failures on a single
+        consumer are reported via Either and do not abort sibling
+        consumers / the broader app pass.
+        """
+        consumers = app_version.get("consumers") or []
+        if not consumers:
+            return
+        app_name = app.get("name") or app.get("id") or "unknown-app"
+        for consumer in consumers:
+            try:
+                req = consumer_to_container_request(
+                    consumer=consumer,
+                    app=app,
+                    app_version=app_version,
+                    domain=domain,
+                )
+                if req is None:
+                    continue
+                try:
+                    container_entity = self.metadata.create_or_update(data=req)
+                except Exception as exc:
+                    yield self._fail(
+                        f"create-consumer:{app_name}:{consumer.get('name')}", exc
+                    )
+                    continue
+                container_id = str(
+                    getattr(
+                        getattr(container_entity, "id", None),
+                        "root",
+                        getattr(container_entity, "id", ""),
+                    )
+                )
+                if not container_id:
+                    logger.warning(
+                        "Consumer container %s persisted but id missing; "
+                        "skipping lineage", consumer.get("name"),
+                    )
+                    continue
+
+                # Topic -> Container per matched event version.
+                seen_topic_ids: Set[str] = set()
+                for sub in consumer.get("subscriptions") or []:
+                    for ev_id in sub.get("attractedEventVersionIds") or []:
+                        fqn = self._event_version_to_topic_fqn.get(ev_id)
+                        if not fqn:
+                            continue
+                        topic_id = self._resolve_id("topic", fqn)
+                        if not topic_id or topic_id in seen_topic_ids:
+                            continue
+                        seen_topic_ids.add(topic_id)
+                        self._post_consumer_lineage(
+                            source_id=topic_id, source_type="topic",
+                            dest_id=container_id, dest_type="container",
+                            label=(
+                                f"Solace EP consumer queue '{consumer.get('name')}' "
+                                f"subscribed pattern"
+                            ),
+                        )
+
+                # Container -> Pipeline (the owning consuming app).
+                if pipeline_id:
+                    self._post_consumer_lineage(
+                        source_id=container_id, source_type="container",
+                        dest_id=pipeline_id, dest_type="pipeline",
+                        label=(
+                            f"Solace EP consumer queue '{consumer.get('name')}' "
+                            f"feeds app '{app_name}'"
+                        ),
+                    )
+            except Exception as exc:
+                yield self._fail(
+                    f"consumer:{app_name}:{consumer.get('name', consumer.get('id'))}",
+                    exc,
+                )
+
+    def _post_consumer_lineage(
+        self,
+        *,
+        source_id: str,
+        source_type: str,
+        dest_id: str,
+        dest_type: str,
+        label: str,
+    ) -> None:
+        """Wave 3 (#55) helper. Build + POST a generic AddLineage edge."""
+        try:
+            from metadata.generated.schema.api.lineage.addLineage import (
+                AddLineageRequest,
+            )
+            from metadata.generated.schema.type.entityLineage import (
+                EntitiesEdge,
+                LineageDetails,
+                LineageSource,
+            )
+            from metadata.generated.schema.type.entityReference import (
+                EntityReference,
+            )
+        except Exception:
+            return
+        req = AddLineageRequest(
+            edge=EntitiesEdge(
+                fromEntity=EntityReference(id=source_id, type=source_type),
+                toEntity=EntityReference(id=dest_id, type=dest_type),
+                lineageDetails=LineageDetails(
+                    description=label,
+                    source=LineageSource.Manual,
+                ),
+            )
+        )
+        self._add_lineage(req)
+
+    def _post_event_api_lineage(
+        self,
+        container_id: str,
+        topic_id: str,
+        direction: str,
+        event_api_name: str,
+    ) -> None:
+        """Wave 3 (#44) helper. Build + POST Container<->Topic lineage."""
+        try:
+            from metadata.generated.schema.api.lineage.addLineage import (
+                AddLineageRequest,
+            )
+            from metadata.generated.schema.type.entityLineage import (
+                EntitiesEdge,
+                LineageDetails,
+                LineageSource,
+            )
+            from metadata.generated.schema.type.entityReference import (
+                EntityReference,
+            )
+        except Exception:
+            return
+        if direction == "produces":
+            from_id, from_type = container_id, "container"
+            to_id, to_type = topic_id, "topic"
+        else:  # consumes
+            from_id, from_type = topic_id, "topic"
+            to_id, to_type = container_id, "container"
+        req = AddLineageRequest(
+            edge=EntitiesEdge(
+                fromEntity=EntityReference(id=from_id, type=from_type),
+                toEntity=EntityReference(id=to_id, type=to_type),
+                lineageDetails=LineageDetails(
+                    description=(
+                        f"Solace Event Portal Event API: "
+                        f"{event_api_name} {direction}"
+                    ),
+                    source=LineageSource.Manual,
+                ),
+            )
+        )
+        self._add_lineage(req)
+
+    def _emit_domain_event_api_products(
+        self, domain: Dict[str, Any]
+    ) -> Iterable[Either]:
+        """Wave 3 (#45): emit one OM DataProduct per EP Event API Product
+        version, with ``assets`` referencing the EventAPI Containers
+        created by pass 1.5 (#44).
+        """
+        try:
+            from .mappers import eapp_to_data_product_request
+        except Exception as exc:
+            yield self._fail("import-mapper:eapp", exc)
+            return
+        try:
+            eapps = self.client.list_event_api_products(
+                domain["id"], since=self.since,
+            )
+        except Exception as exc:
+            yield self._fail(f"list-eapps:{domain.get('name')}", exc)
+            return
+
+        for eapp in eapps:
+            try:
+                versions = (
+                    self.client.list_event_api_product_versions(eapp["id"])
+                    if self.ingest_all_versions
+                    else [
+                        self.client.get_latest_event_api_product_version(eapp["id"])
+                    ]
+                )
+                latest_id = _latest_version_id(versions)
+                for version in versions:
+                    if not version:
+                        continue
+                    asset_refs = self._build_eapp_asset_refs(version)
+                    req = eapp_to_data_product_request(
+                        eapp=eapp,
+                        eapp_version=version,
+                        domain=domain,
+                        container_asset_refs=asset_refs or None,
+                        ep_urls=self.ep_urls,
+                        is_latest_version=(
+                            version.get("id") == latest_id if latest_id else None
+                        ),
+                    )
+                    if req is None:
+                        continue
+                    try:
+                        self.metadata.create_or_update(data=req)
+                    except Exception as exc:
+                        yield self._fail(f"create-eapp:{eapp.get('name')}", exc)
+            except Exception as exc:
+                yield self._fail(
+                    f"eapp:{eapp.get('name', eapp.get('id'))}", exc
+                )
+
+    def _build_eapp_asset_refs(self, eapp_version: Dict[str, Any]) -> List[Any]:
+        """For each EAPP version, build EntityReference[] pointing at the
+        EventAPI Containers that #44 emitted in this run."""
+        try:
+            from metadata.generated.schema.type.entityReference import (
+                EntityReference,
+            )
+        except Exception:
+            return []
+        refs = []
+        for ea_v_id in eapp_version.get("eventApiVersionIds") or []:
+            container_id = self._event_api_version_to_container_id.get(ea_v_id)
+            if not container_id:
+                continue
+            try:
+                refs.append(
+                    EntityReference(id=container_id, type="container")
+                )
+            except Exception:
+                continue
+        return refs
 
     def _resolve_schema(
         self, event_version: Dict[str, Any]
@@ -581,6 +1197,17 @@ class SolaceEventPortalSource(Source):
                         )
                         if req is not None:
                             self._add_lineage(req)
+
+                    # Wave 3 (#55): per-consumer Container + lineage
+                    # Topic -> Container -> Pipeline. Captures EP's queue /
+                    # topic-endpoint binding (the Solace fan-out point).
+                    if self.emit_consumers:
+                        yield from self._emit_app_version_consumers(
+                            domain=domain,
+                            app=app,
+                            app_version=version,
+                            pipeline_id=pipeline_id,
+                        )
             except Exception as exc:
                 yield self._fail(
                     f"app-lineage:{app.get('name', app.get('id'))}", exc
@@ -737,7 +1364,20 @@ class SolaceEventPortalSource(Source):
         except Exception:
             logger.warning("OM entity types not importable; skipping resolve")
             return None
-        cls = {"pipeline": Pipeline, "topic": Topic}.get(entity_kind)
+        # Container is imported lazily because not every OM version we
+        # support ships it (1.6 did; 1.11 still does).
+        container_cls = None
+        try:
+            from metadata.generated.schema.entity.data.container import (
+                Container as container_cls,  # noqa: N813
+            )
+        except Exception:
+            container_cls = None
+        cls = {
+            "pipeline": Pipeline,
+            "topic": Topic,
+            "container": container_cls,
+        }.get(entity_kind)
         if cls is None:
             logger.warning("Unknown entity_kind for id-resolve: %s", entity_kind)
             return None

@@ -36,6 +36,55 @@ CP_APP_DOMAIN_NAME = "eventPortalApplicationDomainName"
 # every EP Application.
 APP_PIPELINE_SERVICE_NAME = "solace-event-portal-apps"
 
+# Wave 3 (#44): synthetic StorageService that holds one OM Container per
+# EP Event API. Containers under here carry the API contract metadata
+# (display name, description, lifecycle, owner, etc.) and lineage edges
+# to / from the topics the API produces / consumes.
+EVENT_API_STORAGE_SERVICE_NAME = "solace-event-portal-event-apis"
+
+# Container.extension custom properties for Event APIs.
+CP_EVENT_API_ID = "eventPortalEventApiId"
+CP_EVENT_API_VERSION_ID = "eventPortalEventApiVersionId"
+CP_EP_EVENT_API = "eventPortalEventApi"  # markdown link in EP UI
+
+# Wave 3 (#45): DataProduct.extension custom properties for Event API Products.
+CP_EAPP_ID = "eventPortalEventApiProductId"
+CP_EAPP_VERSION_ID = "eventPortalEventApiProductVersionId"
+CP_EP_EAPP = "eventPortalEventApiProduct"  # markdown link
+CP_EAPP_PLANS = "eventPortalPlans"  # markdown table of plans
+
+# Wave 3 (#55): synthetic StorageService holding one OM Container per
+# EP applicationVersion.consumers[] entry (the Solace queue / subscription).
+CONSUMER_STORAGE_SERVICE_NAME = "solace-event-portal-consumers"
+CP_CONSUMER_ID = "eventPortalConsumerId"
+CP_CONSUMER_TYPE = "eventPortalConsumerType"
+CP_CONSUMER_BROKER_TYPE = "eventPortalBrokerType"
+CP_CONSUMER_SUBSCRIPTIONS = "eventPortalSubscriptionPatterns"  # markdown list
+
+# Wave 3 (#52): synthetic CustomDatabase DatabaseService holding one OM
+# DatabaseSchema per EP Application Domain, with one Table per EP Schema +
+# Version. Schema columns are the parsed SchemaField[] tree from the Avro /
+# JSON-Schema / Protobuf payload (see `connector.schema_parser`).
+# This promotes EP Schemas to first-class OM entities (visible in OM's
+# tables view, queryable via lineage), rather than being a sub-property of
+# the Topic only.
+SCHEMA_DATABASE_SERVICE_NAME = "solace-event-portal-schemas"
+SCHEMA_DATABASE_NAME = "schemas"
+CP_SCHEMA_ID = "eventPortalSchemaId"
+CP_SCHEMA_TYPE = "eventPortalSchemaType"  # JSON / AVRO / PROTOBUF / XSD / ...
+CP_SCHEMA_CONTENT = "eventPortalSchemaContent"  # markdown code block
+
+# Wave 3 (#53): synthetic StorageService that materialises the Solace
+# topic-address hierarchy as a Container folder tree. Each unique segment
+# path (e.g. orders/{region}/created) becomes a nested Container, with
+# lineage edges from the deepest segment Container to every Topic whose
+# address matches that prefix. Lets users browse the *topic name space*
+# the same way they'd browse a folder tree.
+TOPIC_TREE_STORAGE_SERVICE_NAME = "solace-event-portal-topic-tree"
+CP_TOPIC_SEGMENT = "eventPortalTopicSegment"
+CP_TOPIC_SEGMENT_PATH = "eventPortalTopicSegmentPath"
+CP_TOPIC_SEGMENT_DEPTH = "eventPortalTopicSegmentDepth"
+
 # MessagingService.extension property used by the reconciliation job.
 AUDIT_WATERMARK_KEY = "eventPortalAuditWatermark"
 
