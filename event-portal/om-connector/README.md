@@ -1,114 +1,120 @@
-# OpenMetadata Solace Event Portal Connector + Webhook Bridge
+# OpenMetadata Solace Event Portal Connector
 
-Two cooperating components that govern an Event Portal estate from
-OpenMetadata:
+Two cooperating components that govern a Solace Event Portal estate
+from OpenMetadata:
 
-- **Pull connector** (`connector/`) — a custom OpenMetadata Source.
-  Ingests application domains as **Data Domains**, events as **Topics**
-  (with schema, lifecycle state, topic address, modeled-mesh membership),
-  modeled event meshes as **Data Products**, and emits real
-  **lineage edges** between applications and topics. Runs on the standard
-  ingestion schedule and also serves as the daily reconciliation pass.
+- **Pull connector** (`connector/`) — a custom OpenMetadata Source
+  that ingests EP application domains, events, applications, schemas,
+  Event APIs, Event API Products, consumer queues, and the
+  topic-address hierarchy. Emits real lineage edges and lifecycle
+  tags. Runs on the standard ingestion schedule and also serves as
+  the daily reconciliation pass.
 - **Webhook bridge** (`bridge/`) — a small FastAPI / Solace consumer
-  service. Subscribes to Event Portal change webhooks, verifies the HMAC
-  signature, dedupes, and pushes the deltas into OpenMetadata through
-  the same mappers the pull connector uses. Two transports ship out of
-  the box:
-  - **HTTP**: Event Portal posts directly to the bridge.
-  - **Solace**: an upstream forwarder publishes EP payloads onto a
-    Solace queue; the bridge consumes from the queue. Resilient, replay-
-    able, and uses your existing mesh as the audit trail.
+  service. Today's Solace Cloud Event Portal does not expose outbound
+  webhooks, so the bridge runs in **polling mode** against the same
+  REST API as the pull connector. The bridge also runs the
+  soft-delete drift pass.
 
-## Architecture
+Current image:
+`registry.solace.lab/openmetadata-ingestion-solace:0.8.0`.
 
-```text
-Event Portal v2 ─┐
-   REST API      ├─► EventPortalClient ─► Pull connector ─► ometa SDK ─► OpenMetadata
-   Webhooks      │                                          (also: reconcile)   ▲
-   Audit feed   ─┤                                                              │
-                 │   ┌──────────────────────┐  HTTP                             │
-                 ├──►│ bridge (HTTP)        ├────────────────────────────────────┤
-                 │   └──────────────────────┘                                    │
-                 │                                                               │
-                 │       ┌─────────────────────┐ publish   ┌────────────────────┐│
-                 └──────►│ bridge (forwarder)  ├──────────►│ bridge (Solace)    ├┘
-                         └─────────────────────┘  queue    └────────────────────┘
-```
+See `CLAUDE.md` for the per-wave status grid and the architectural
+overview. See `docs/implementation-plan.md` for the full delivery
+plan including the next wave.
 
-All three roles are the same image (`Dockerfile.bridge`); pick the role
-with `BRIDGE_MODE=http|solace|forwarder`.
+## Compatibility
 
-## Mapping
+| Connector | OpenMetadata SDK | Notes |
+|---|---|---|
+| 0.8.x | 1.11 | Wave 4: Identity + Soft-delete drift pass |
+| 0.7.x | 1.11 | Wave 3: new entity types (Event API, EAPP, Schemas, Tree, Consumer) |
+| 0.6.x | 1.11 | Wave 2: ServiceSpec split + cross-system lineage |
+| 0.5.x | 1.11 | Wave 1: parsed SchemaFields + CA-to-Tag + all-versions default |
+| 0.4.x | 1.11 | Wave 0: SDK migration baseline |
+| 0.3.x | 1.6 - 1.7 | Pilot: pre-Wave-0 baseline (CustomMessaging) |
 
-| Event Portal                     | OpenMetadata (1.6+)                                              |
-| -------------------------------- | ---------------------------------------------------------------- |
-| Application Domain               | `Domain` entity (+ owner from EP, resolved to OM user)           |
-| Modeled Event Mesh               | `DataProduct` entity                                             |
-| Event Version                    | `Topic` (+ owner)                                                |
-| Topic Address                    | `Topic.description` + `eventPortalTopicAddress`                  |
-| Schema (JSON / Avro / Proto/XSD) | `Topic.messageSchema` with recursive `schemaFields`              |
-| Lifecycle state                  | Tag (`EventPortal.Draft`/`Released`/...) + Custom Property       |
-| Application Version              | `Pipeline` entity under PipelineService `solace-event-portal-apps` |
-| Application publishes Y          | Lineage edge: Pipeline → Topic                                   |
-| Application consumes Y           | Lineage edge: Topic → Pipeline                                   |
-| Modeled mesh membership          | Custom property `eventPortalModeledMeshIds`                      |
-| Live messages (opt-in)           | `Topic.sampleData` (via Solace SMF subscribe)                    |
+## Mapping (current as of image 0.8.0)
 
-Custom property keys are stable contract — see
-[connector/property_keys.py](connector/property_keys.py).
+| Event Portal | OpenMetadata entity | Service |
+|---|---|---|
+| Application Domain | `Domain` | (root); optional sub-domain via `omDomainParentMap` |
+| Application Version | `Pipeline` | `solace-event-portal-apps` (CustomPipeline) |
+| Event Version | `Topic` | the configured MessagingService |
+| Schema Version | `Table` (columns from parsed fields) | `solace-event-portal-schemas` (CustomDatabase) |
+| Event API Version | `Container` | `solace-event-portal-event-apis` (CustomStorage) |
+| Event API Product Version | `DataProduct` with `assets[]` | (root) |
+| `consumers[]` entry | `Container` | `solace-event-portal-consumers` (CustomStorage) |
+| Topic-address segment | nested `Container` chain | `solace-event-portal-topic-tree` (CustomStorage) |
+| Lifecycle state | `EventPortal.{Draft,Released,Deprecated,Retired,Application}` tag | (classification) |
+| EP Custom Attribute | `EventPortalCustomAttribute_<name>.<value>` tag | (classification, auto-discovered) |
+| Modeled Event Mesh | `DataProduct` (when edition supports it) | feature-flag `emitDataProducts`, default OFF |
 
-### Compatibility
+Lineage edges:
 
-| Connector | OpenMetadata | Notes                                                  |
-| --------- | ------------ | ------------------------------------------------------ |
-| 0.3.x     | 1.6 – 1.7    | Pipeline-Entity mapping requires OM >= 1.5             |
-| 0.2.x     | 1.6          | Pre-Pipeline: apps modeled as synthetic Topics         |
-| 0.1.x     | 1.5 – 1.6    | Initial scaffolding, no filter patterns                |
+- Pipeline (App) to / from Topic per
+  `declaredProduced` / `declaredConsumed` event-version IDs.
+- Container (Event API) to / from Topic per
+  `producedEventVersionIds` / `consumedEventVersionIds`.
+- Topic to Container (Consumer Queue) per
+  `attractedEventVersionId`; Container to Pipeline for the owning
+  consuming app.
+- Container (Topic-tree leaf segment) to Topic at the deepest
+  in-cap segment.
+- Table (Schema) to Topic per `schemaVersionId`.
+- Pipeline to Pipeline within EP via
+  `inbound/outboundApplicationVersionAssociations` (EP Linked Apps).
+- Cross-system edges from a YAML mapping (`lineageEdges` option) +
+  external-system fallback via EP Custom Attributes
+  (`externalSourceOmFqn` / `externalSinkOmFqn`).
 
-### Migration from 0.2.x → 0.3.x
-
-EP applications are now `Pipeline` entities, not synthetic Topics. After
-upgrading:
-
-1. `om-eventportal-bootstrap …` — creates the new `solace-event-portal-apps`
-   PipelineService and the Pipeline custom properties.
-2. Run the ingestion workflow once with the new release.
-3. Manually soft-delete the old synthetic Topics in OM (Topics named
-   `app_*_v*` under your Messaging service). They're orphans now —
-   their lineage was migrated to the new Pipeline entities.
+Custom property keys are stable contract; see
+`connector/property_keys.py`.
 
 ## One-time: bootstrap OpenMetadata
 
-Before the first ingest or webhook delivery, register the EventPortal
-classification + tags and the custom-property definitions the connector
-relies on. The script is idempotent — safe to re-run after every
-deployment.
+Before the first ingestion or bridge run, register the EventPortal
+classification + tags, all custom-property definitions, and the
+synthetic services the connector relies on. Idempotent; safe to
+re-run after every deployment.
 
 ```bash
-# from a container with `openmetadata-ingestion` installed (e.g. the
-# custom ingestion image you build below, or the bridge image)
-om-eventportal-bootstrap --host-port http://openmetadata-server:8585/api \
-                         --jwt-token "$OM_INGESTION_BOT_TOKEN"
+om-eventportal-bootstrap \
+  --host-port http://openmetadata-server:8585/api \
+  --jwt-token "$OM_INGESTION_BOT_TOKEN" \
+  --ep-token "$EP_API_TOKEN"   # optional: enables CA auto-discovery
 ```
 
-Creates:
+Bootstrap creates:
+
 - Classification `EventPortal` with tags `Draft`, `Released`,
   `Deprecated`, `Retired`, `Application`.
-- All `eventPortal*` custom properties on `Topic` (see
-  [connector/property_keys.py](connector/property_keys.py)).
-- `eventPortalAuditWatermark` custom property on `MessagingService`
-  (used by the reconciliation job).
+- All `eventPortal*` custom properties on `Topic`, `Pipeline`,
+  `Container`, `DataProduct`, and `Table` types.
+- Synthetic services:
+  `solace-event-portal-apps` (PipelineService / CustomPipeline),
+  `solace-event-portal-event-apis` (StorageService / CustomStorage),
+  `solace-event-portal-consumers` (StorageService),
+  `solace-event-portal-topic-tree` (StorageService),
+  `solace-event-portal-schemas` (DatabaseService / CustomDatabase)
+  with a single `schemas` Database underneath.
+- When `--ep-token` is supplied: one `EventPortalCustomAttribute_*`
+  Classification per EP custom-attribute definition found via
+  `/architecture/customAttributeDefinitions`.
 
-## Install — pull connector
+## Install: pull connector
 
 Bake into a custom `openmetadata-ingestion` image:
 
 ```bash
-docker build -t my-org/openmetadata-ingestion-solace:1.6.0 .
-# Reference in your OM deployment, e.g. docker-compose:
-#   ingestion:
-#     image: my-org/openmetadata-ingestion-solace:1.6.0
+bash scripts/build-and-push.sh
+# Builds + pushes
+#   registry.solace.lab/openmetadata-ingestion-solace:<pyproject version>
+# and (latest tag).
 ```
+
+The OM Airflow deployment then points at that tag via
+`openmetadata-deployment/local-k8s-deps-values.yaml`
+(`airflow.images.airflow.tag` + `airflow.images.pod_template.tag`).
 
 Or install into an existing Python ingestion env:
 
@@ -116,158 +122,190 @@ Or install into an existing Python ingestion env:
 pip install -e .
 ```
 
-## Configure — pull connector
+## Configure: pull connector
 
-1. In Event Portal, generate an API token with `read` permission on the
-   target application domains.
-2. In OpenMetadata: **Settings → Services → Messaging → Add New Service →
-   Custom Messaging**.
+1. In Event Portal, generate an API token with read permission on
+   the target application domains.
+2. In OpenMetadata: Settings -> Services -> Messaging -> Add New
+   Service -> Custom Messaging.
 3. Set:
-   - **Source Python Class Name** —
+
+   - **Source Python Class Name**
      `connector.event_portal_connector.SolaceEventPortalSource`
-   - **Connection Options** — see table below.
+   - **Connection Options**: see table below.
 
-| Option                     | Default                              | Description                                                                                 |
-| -------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `apiUrl`                   | `https://api.solace.cloud/api/v2`    | Event Portal REST base                                                                      |
-| `apiToken`                 | *(required)*                         | Bearer token. Use `secret:<name>` to pull from OM secrets.                                  |
-| `mode`                     | `rest_api`                           | `rest_api` or `asyncapi`                                                                    |
-| `domainFilterPattern`      | `{}` (default-deny)                  | JSON `{includes:[regex...], excludes:[regex...]}`. Allow-list-only: empty includes -> none. |
-| `eventFilterPattern`       | `{}` (default-deny)                  | Same shape; filters event names within matched domains.                                     |
-| `schemaFilterPattern`      | `{}` (default-deny)                  | Same shape; controls which schemas are attached to Topics.                                  |
-| `applicationFilterPattern` | `{}` (default-deny)                  | Same shape; controls which apps become Pipelines + lineage.                                 |
-| `includeLineage`           | `true`                               | Emit App ↔ Topic lineage edges                                                              |
-| `ingestAllVersions`        | `false`                              | Emit a Topic / Pipeline per version (otherwise latest only)                                 |
-| `emitDomains`              | `true`                               | Emit OM `Domain` per EP application domain                                                  |
-| `emitDataProducts`         | `true`                               | Emit OM `DataProduct` per modeled event mesh                                                |
-| `resolveOwners`            | `true`                               | Resolve EP owner e-mails to OM users (Keycloak identity)                                    |
-| `since`                    | *(empty)*                            | ISO timestamp for incremental runs                                                          |
-| `sampleDataEnabled`        | `false`                              | If true, subscribe to broker and capture last N messages per Topic                          |
-| `brokerHost`               | *(empty)*                            | Solace broker URL (`tcp://`, `tcps://`, `ws://`, `wss://`)                                  |
-| `brokerVpn`                | `default`                            | Solace VPN                                                                                  |
-| `brokerUsername`           | *(empty)*                            | Broker auth user                                                                            |
-| `brokerPassword`           | *(empty)*                            | Broker auth password                                                                        |
+Connection options (most users only set `apiUrl`, `apiToken`, and
+the four `*FilterPattern` options):
 
-See [`config/example-workflow.yaml`](config/example-workflow.yaml) for a
-full ingestion workflow definition.
+| Option | Default | Description |
+|---|---|---|
+| `apiUrl` | `https://api.solace.cloud/api/v2` | EP REST base URL |
+| `apiToken` | *(required)* | Bearer token. Use `secret:<name>` to pull from OM secrets. |
+| `domainFilterPattern` | `{}` (default-deny) | JSON `{includes:[regex...], excludes:[regex...]}`. Empty includes => zero domains ingested. |
+| `eventFilterPattern` | `{}` (default-deny) | Same shape; filters event names. |
+| `schemaFilterPattern` | `{}` (default-deny) | Same shape; filters schemas attached to Topics + emitted as Tables. |
+| `applicationFilterPattern` | `{}` (default-deny) | Same shape; filters apps that become Pipelines. |
+| `includeLineage` | `true` | Emit App <-> Topic + container lineage edges |
+| `ingestAllVersions` | `true` | Emit one Topic / Pipeline per version (Wave 1 flipped on). |
+| `emitDomains` | `true` | Emit OM `Domain` per EP application domain |
+| `emitDataProducts` | `false` | Emit `DataProduct` per modeled event mesh (Cloud Enterprise: 404 since the endpoint is missing). |
+| `emitEventApis` | `true` | Emit Containers + lineage for EP Event APIs (Wave 3 / `#44`) |
+| `emitEventApiProducts` | `true` | Emit DataProducts for EP Event API Products (Wave 3 / `#45`) |
+| `emitSchemas` | `true` | Promote EP Schemas to first-class Tables (Wave 3 / `#52`) |
+| `emitTopicTree` | `true` | Materialise topic-address tree as Containers (Wave 3 / `#53`) |
+| `topicTreeMaxDepth` | `3` | Depth cap for the topic-tree Containers |
+| `emitConsumers` | `true` | Emit Container per `consumers[]` entry (Wave 3 / `#55`) |
+| `resolveOwners` | `true` | Resolve EP owner IDs to OM users (Wave 4 / `#57`) |
+| `userIdToEmailMap` | `{}` | Static EP-user-ID to email map; dict OR `id1:email1,id2:email2`. |
+| `omDomainParentMap` | `{}` | Static EP-domain-name to OM Domain FQN map for sub-domain hierarchy (Wave 4 / `#48`). |
+| `customAttributeTagExclude` | `""` | Comma-separated EP CA names to skip during auto-discovery. |
+| `asyncApiVersion` | `2.5.0` | AsyncAPI spec version in the Pipeline `sourceUrl` |
+| `asyncApiFormat` | `json` | AsyncAPI doc format in the Pipeline `sourceUrl` |
+| `epConsoleUrl` | `https://console.solace.cloud` | Base URL for the markdown back-links to the EP UI |
+| `since` | *(empty)* | ISO timestamp for incremental runs |
+| `sampleDataEnabled` | `false` | Subscribe to broker and capture last N messages per Topic |
+| `brokerHost` | *(empty)* | Solace broker URL (`tcp://`, `tcps://`, `ws://`, `wss://`) |
+| `brokerVpn` | `default` | Solace VPN |
+| `brokerUsername` | *(empty)* | Broker auth user |
+| `brokerPassword` | *(empty)* | Broker auth password |
 
-## Install — webhook bridge
+See `config/example-workflow.yaml` for a full workflow definition.
+
+## Install: webhook bridge
 
 ```bash
-docker build -f Dockerfile.bridge -t my-org/om-eventportal-bridge:0.1.0 .
+docker build -f Dockerfile.bridge -t my-org/om-eventportal-bridge:0.8.0 .
 ```
 
 Or install in a venv:
 
 ```bash
-pip install '.[bridge]'             # HTTP only
+pip install '.[bridge]'                # HTTP + polling only
 pip install '.[bridge,bridge-solace]'  # also Solace transport
 ```
 
-## Configure — webhook bridge
+## Configure: webhook bridge
 
-Copy [`config/bridge.example.env`](config/bridge.example.env) to `.env`
-and fill in. Then either:
+Copy `config/bridge.example.env` to `.env` and fill in. Then start
+the bridge:
 
 ```bash
-# HTTP mode — bridge listens on :8080 for EP webhook posts
+# Polling mode (default; works against Solace Cloud EP v2)
 python -m bridge.main
 
-# Solace mode — bridge subscribes to the configured queue
+# HTTP webhook receiver (only if your EP edition supports outbound
+# webhooks; Solace Cloud Enterprise does NOT)
+BRIDGE_MODE=http python -m bridge.main
+
+# Solace consumer (when a forwarder publishes EP payloads onto a queue)
 BRIDGE_MODE=solace python -m bridge.main
+
+# Forwarder: receive EP webhooks, publish raw payload onto Solace
+BRIDGE_MODE=forwarder python -m bridge.main
 ```
 
-### Registering the webhook with Event Portal
-
-Once the bridge is reachable from EP (HTTP mode only), register the
-subscription with one command:
+CLI sub-commands:
 
 ```bash
-python -m bridge.main --register-webhook https://bridge.example.com/webhook/event-portal
+# One-shot full-pull reconciliation (catch up after an outage)
+python -m bridge.main --reconcile
+python -m bridge.main --reconcile --since 2026-05-17T00:00:00Z
+
+# Soft-delete drift pass: tag OM entities missing on EP as Retired
+# (Wave 4 / #61). Idempotent; safe to run on a cron.
+python -m bridge.main --soft-delete-missing
+python -m bridge.main --soft-delete-missing --auto-purge-after-days 30
+
+# Register the bridge URL with EP as a webhook target (one-shot;
+# noop on EP editions without outbound webhooks)
+python -m bridge.main \
+  --register-webhook https://bridge.example.com/webhook/event-portal
 ```
 
-The command creates a webhook subscription, scoping to the event types
-the bridge knows about (`event.*`, `eventVersion.*`, `schema.*`,
-`application.*`, `applicationDomain.*`).
+### Polling vs webhook vs Solace transport
 
-### Picking a transport
-
-- **`http`** — simplest. EP posts directly to the bridge; the bridge
-  applies the delta to OpenMetadata. Requires a public (or
-  VPN-reachable) HTTPS endpoint. Loses webhook payloads if the bridge
-  or OM is down longer than EP's retry window.
+- **`polling`** (default) — bridge polls the EP REST API on an
+  interval. The only transport that works against Solace Cloud EP
+  today. Same idempotent handler set as the other transports.
+- **`http`** — EP posts directly to the bridge; the bridge applies
+  the delta to OpenMetadata. Requires outbound EP webhooks (not
+  available on Solace Cloud Enterprise as of 2026-05).
 - **`forwarder` + `solace`** — run two bridge containers: a
-  `forwarder` (publicly reachable; verifies the signature and republishes
-  the raw payload onto `om/sync/eventportal/<eventType>`) and a `solace`
-  consumer (subscribes to a durable queue, applies to OM). Persistent
-  queues absorb OM downtime; every EP change is auditable on your mesh.
-  Trade-off: extra hop + extra container.
+  `forwarder` (verifies the signature and republishes the raw
+  payload onto `om/sync/eventportal/<eventType>`) and a `solace`
+  consumer. Persistent queues absorb OM downtime; every EP change
+  is auditable on your mesh.
 
-You can run `http` and `solace` consumers at once for belt-and-braces;
-the dedupe cache prevents double application as long as `eventId` is
-stable across transports.
+You can run `http` and `solace` consumers at once for
+belt-and-braces; the dedupe cache prevents double application as
+long as `eventId` is stable across transports.
 
-### Reconciliation
+### Reconciliation strategy
 
-Two complementary mechanisms:
+Three complementary mechanisms:
 
-1. **Audit replay** (`--reconcile`) — the bridge reads the EP audit
-   feed since its persisted watermark, replays each change through the
-   live handler set, and advances the watermark on success. Cheap; run
-   it whenever the bridge has been offline.
+1. **Full pull** — the standard ingestion workflow scheduled daily
+   with `since=<yesterday>` overwrites anything the bridge missed
+   between polls.
+2. **`--reconcile`** — re-pulls since the watermark stored as
+   `eventPortalAuditWatermark` on the MessagingService.
+3. **`--soft-delete-missing`** — drift-diff against EP, tags
+   missing OM entities with `EventPortal.Retired` and
+   `eventPortalDeletedAt` (Wave 4 / `#61`). Optional
+   `--auto-purge-after-days N` hard-deletes once the tombstone
+   ages past the cutoff.
 
-   ```bash
-   om-eventportal-bridge --reconcile                          # since last run
-   om-eventportal-bridge --reconcile --since 2026-05-17T00:00:00Z
-   ```
+## Cross-system lineage to Kafka / Snowflake / Databricks
 
-   The watermark is stored as a custom property
-   (`eventPortalAuditWatermark`) on the `MessagingService` entity — that
-   property is created by the bootstrap script.
+Wave 2 wired two paths:
 
-2. **Full pull** — the standard ingestion workflow remains the
-   authoritative reconciliation pass. Schedule it daily with
-   `since=<yesterday>` to overwrite anything the bridge missed.
+1. **YAML-driven** — declare cross-system edges in the workflow
+   YAML via the `lineageEdges` option (see
+   `docs/asset-mapping-spec.md` Cluster 2.5 for the shape). The
+   `EventPortalLineageSource` resolves both FQNs via OM and emits
+   one `AddLineageRequest` each.
+2. **EP CA fallback** — when no auto-link hit, set the
+   `externalSourceOmFqn` / `externalSinkOmFqn` custom attributes on
+   the originating EP entity. The bridge looks them up in OM and
+   emits the edge.
 
-## Lineage to Databricks
-
-Lineage between Solace Topics and Databricks Delta tables is not emitted
-by this connector — that bridge runs at runtime through the
-`pubsubplus-connector-spark` Spark Structured Streaming connector, which
-OM cannot see directly.
-
-The recommended pattern is a small companion workflow that:
-
-1. Lists Databricks notebooks / jobs that import
-   `solacecoe.connectors.spark`.
-2. Parses the `host`, `vpn`, and queue / topic subscription from the
-   Spark options to resolve the Event Portal Topic FQN.
-3. Reads the `writeStream` sink to resolve the Delta table FQN.
-4. Calls OM's `/v1/lineage` API to add the edge.
-
-A reference implementation lives at
-`scripts/emit_databricks_lineage.py` *(planned — not in this
-scaffolding)*.
-
-## Limitations and roadmap
-
-- **Applications as entities.** OM has no `Application` entity yet, so
-  apps are modeled as a synthetic Topic tagged
-  `EventPortal.Application`. Switch to `CreateApplicationRequest` once
-  OM ships first-class support.
-- **Multi-version ingestion** (`ingestAllVersions`) is implemented for
-  events but not yet for applications.
-- **Event Portal webhook payload schema** is verified against EP Cloud;
-  on-prem editions may emit slightly different `eventType` strings. The
-  bridge's `DEFAULT_HANDLERS` table is the one place to extend.
-- **HA dedupe**: the in-memory dedupe store is single-replica only. For
-  multi-replica deployments swap in `RedisDedupeStore`
-  (see [`bridge/dedupe.py`](bridge/dedupe.py)).
+Databricks Spark Structured Streaming via
+`pubsubplus-connector-spark` is still not auto-discoverable from
+OM; the recommended companion is a small workflow that introspects
+the Databricks job for the Solace topic + Delta table, then calls
+OM's `/v1/lineage` API. Reference implementation tracked in the
+implementation plan.
 
 ## Development
 
 ```bash
-pip install -e '.[dev,bridge]'
-pytest                       # signature + dispatcher + dedupe tests
-pytest tests/test_mappers.py # skipped unless openmetadata-ingestion installed
+# Lint
+pipx run --spec=ruff ruff check connector tests bridge
+
+# Tests (3 skipped locally because openmetadata-ingestion is only
+# present inside the built image)
+python -m pytest tests --ignore=tests/test_connector_helpers.py -q
+
+# Markdown lint
+npx --yes markdownlint-cli CLAUDE.md README.md docs/
 ```
+
+See `CLAUDE.md` for the full coding conventions and the
+"continue in another session" pickup checklist.
+
+## Limitations and roadmap
+
+- **EP Teams to OM Teams** — BLOCKED. EP v2 Cloud Enterprise
+  exposes no team API (smoke-tested 2026-05-27). Tracked as
+  ticket `#58`.
+- **OM to EP write-back** — DEFERRED to Wave 4.5 / image `0.8.5`.
+  Ticket `#49`; design in `docs/implementation-plan.md` and
+  `docs/asset-mapping-spec.md` Cluster 5.
+- **Modeled Event Mesh** — Cloud Enterprise returns 404 for
+  `/architecture/modeledEventMeshes` (Cluster 1.3); feature flag
+  `emitDataProducts` stays default OFF.
+- **PII detection / OTel telemetry / multi-tenant template /
+  Helm chart** — Wave 5 work.
+- **OpenMetadata upstream PR** — Wave 7, planned for Q3 2026.
+
+Full per-wave breakdown: `docs/implementation-plan.md`.

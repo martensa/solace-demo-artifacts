@@ -183,7 +183,8 @@ variables.
 
 - Version: `1.0.0`
 - State: `Released`
-- Description: `Processes OrderCreated events; emits OrderShipped or OrderCancelled depending on inventory.`
+- Description: `Processes OrderCreated events; emits OrderShipped or
+  OrderCancelled depending on inventory.`
 - Owner: same as the domain.
 - Declared **consumed** event versions:
   - `OrderCreated v1.0.0`

@@ -20,11 +20,13 @@ Three findings shape the entire delivery plan:
 1. **EP Cloud Enterprise has zero IAM/team APIs** (10-path smoke test).
    Identity resolution must use a static `userIdToEmailMap` curated
    by ALDI Platform Team; OM-Teams from EP is impossible in v1.0.
+
 2. **EP Linked-Apps + Consumer-Queue ARE in the REST payload** but on
    the `applicationVersion` resource (not under `/linkedApplications`).
    This unblocks ALDI's full E2E lineage vision
    (SAP -> EP-Pipeline -> Topic -> Queue -> EP-Pipeline -> SAP) without
    any EP-side write-back for the core lineage.
+
 3. **OM jump 1.6.5 -> 1.11 is structurally invasive** but mechanical
    (Python 3.10+, Airflow 3.x, `domain` -> `domains` rename across 7
    sites, Pydantic-v2-only). Must be the first wave of work — every
@@ -172,10 +174,13 @@ These become the leading bullets of the upstream PR description.
   MetadataSource + LineageSource as today's monolith won't scale to
   the lineage + bi-dir complexity. Mirrors Databricks's
   `DefaultDatabaseSpec(metadata_source_class=..., lineage_source_class=...)`.
+
 - **Cross-system lineage via `crossSystemServiceFqns` config + ES-FQN search**
   (mirror Databricks `crossDatabaseServiceNames`). Not regex; metadata-driven.
+
 - **Multi-step test-connection** with per-step green/red UI feedback
   (already partial in #8; align naming taxonomy with Databricks).
+
 - **Standardised `Either(left=StackTraceError(name=...))` taxonomy** —
   group failures in OM run report by name=`Topic`/`Schema`/`Lineage`/`Tag`.
 
@@ -184,6 +189,7 @@ These become the leading bullets of the upstream PR description.
 ## Decision log
 
 DECIDED (binding for v1.0):
+
 - All cluster items in tables above
 - OM SDK target = 1.11.x; upper bound `<1.13` (revisit at 1.13 GA)
 - Python 3.10+ minimum (driven by OM 1.11)
@@ -193,12 +199,14 @@ DECIDED (binding for v1.0):
 - Soft-delete with Retired tag (no auto-hard-delete)
 
 PARKED (revisit):
+
 - #42 Modeled Event Mesh (reopen if ALDI confirms MEM in their UI)
 - #58 EP Teams mapping (until EP exposes team API OR ALDI commits to external source-of-truth)
 - Webhook-Reconciler #14 (until EP exposes outbound webhooks)
 - AsyncAPI v1.1 fetch-and-store (vs v1.0 sourceUrl-link)
 
 DEFERRED to v1.1+:
+
 - Vault-backed secret rotation (#67)
 - Cross-system lineage auto-discovery (vs YAML edges in v1.0)
 - AsyncAPI fetch-store on shared volume

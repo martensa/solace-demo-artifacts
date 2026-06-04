@@ -79,8 +79,10 @@ filter pattern). PipelineService is shared (`solace-event-portal-apps`)
 but Pipeline FQNs are tenant-prefixed to avoid collision.
 
 **Alternatives rejected.**
+
 - *2 OM instances:* doubles operational cost, defeats the "single
   pane of glass" goal.
+
 - *1 MessagingService with both tenants merged:* loses the per-tenant
   RBAC / certification / filter boundary; entity FQNs would have to
   encode tenant manually.
@@ -108,6 +110,7 @@ revisit. Until then the EAPP mapping (#45) covers their use case.
   Property** (string) on the target entity (Topic for Event/Schema
   CAs, Pipeline for App CAs, OM Domain for Domain CAs). The CP name
   is `epCustom_<attributeName>` (camelCase, sanitised).
+
 - **Allow-list override**: workflow config exposes
   `customAttributeAsTag: ["acl-principal", "confidential", ...]`.
   Each listed attribute name is instead mapped to a **Classification**
@@ -125,8 +128,10 @@ config flag for the attributes where Tag semantics actually fit
 (low-cardinality, controlled vocabulary).
 
 **Alternatives rejected.**
+
 - *All as Custom Properties:* simple but defeats ALDI's stated goal
   of using CAs for governance filters.
+
 - *All as Tags:* tag explosion on high-cardinality string CAs.
 
 **Implementation notes.** Auto-discovery walks
@@ -145,6 +150,7 @@ lazily during ingestion as values are observed.
   edges Container -> Topic for each `producedEventVersionId` /
   `consumedEventVersionIds` (direction matters: produced = Container
   -> Topic, consumed = Topic -> Container).
+
 - **Event API Product** -> OM **DataProduct**. One DataProduct per
   EAPP+latest-Version. `assets` list references the underlying Event
   API Containers (`eventApiVersionIds`). Plans
@@ -157,17 +163,22 @@ is reserved for the higher-level marketing surface (EAPP) which
 *declares* one or more APIs and is what a consumer subscribes to.
 
 **Alternatives rejected.**
+
 - *Event API as Pipeline:* Pipeline implies execution semantics;
   Event API is a contract, not a runtime.
+
 - *Event API + EAPP both as DataProduct:* loses the two-tier
   distinction (contract vs. product).
+
 - *Event API as a tag on Topic:* loses ability to surface API-level
   description/version/owner in OM UI.
 
 **Open follow-ups.**
+
 - ALDI says 1-10 Event APIs per domain bundled by 2-5 EAPPs. At that
   scale, Container is fine. If volume grows 10x, revisit (Container
   list views get noisy past ~50 per service).
+
 - Plan list flattening: should each Plan be a child entity (Container
   inside Container) or stay as JSON in a Custom Property? Locked when
   we have a real plan example from ALDI.
@@ -197,13 +208,16 @@ upper bound = the upcoming 1.13 line (NOT YET RELEASED as of
 2026-05-13). When 1.13 ships we re-pin to `<1.14` after a probe.
 
 **Verified breaking changes from 1.6 -> 1.11 (release notes).**
+
 - **OM 1.9**: `domain` field renamed to `domains` (List) on every
   entity. `patch_domain()` signature changed. -> 7 call sites in
   `mappers.py` + `event_portal_connector.py` + `bridge/handlers.py`.
+
 - **OM 1.11**: Python 3.9 EOL'd. Minimum Python = 3.10. Airflow 3.x
   is the new default ingestion base image. Elasticsearch 8.x +
   OpenSearch 2.x server required (ALDI Plattform-Team
   responsibility).
+
 - **OM 1.10**: `workflow.print_status()` moved inside `execute()`.
   We don't call it externally; no impact.
 
@@ -213,14 +227,18 @@ checked, but plausible. Confirm at build time against
 `openmetadata/server:1.11.x`.
 
 **Action items.**
+
 1. Bump `pyproject.toml` `requires-python` to `>=3.10`,
    `target-version = "py310"`, add SDK pin.
+
 2. Bump `Dockerfile` `OM_INGESTION_VERSION` 1.6.5 -> 1.11.14.
 3. Patch 7 `domain=` -> `domains=[...]` sites.
 4. Migrate Pydantic v1 shims (`parse_obj` -> `model_validate`,
    `__root__` -> `root`).
+
 5. Rebuild Docker, run pytest, smoke-test against an
    `openmetadata/server:1.11.x` instance BEFORE shipping.
+
 6. Add a `tox` matrix entry for 1.11 (and 1.12 once we're stable).
 
 **Risk.** SDK pin `<1.13` doesn't guarantee server compat with
@@ -246,9 +264,11 @@ FQN. Empty / missing entries -> domain is created flat under the
 service root.
 
 **Alternatives rejected.**
+
 - *Naming-convention split (e.g. dot in domain name):* EP domain names
   don't follow a consistent convention at ALDI; would produce wrong
   hierarchies for legacy names.
+
 - *EP Custom Attribute lookup (e.g. CA `parentDomain`):* possible for
   v1.1 once ALDI agrees on a CA name; for v1.0 the explicit map is
   predictable and reviewable.
@@ -270,6 +290,7 @@ Out of scope per ALDI. No mapper. Re-open if ALDI later wants
   -> dedicated Classification `EventPortalTag` with one Tag per
   EP-tag value. *(Pilot already ships Lifecycle-State this way under
   `EventPortal.<State>`.)*
+
 - **EP Custom Attributes** -> one Classification per CA-name
   (`EventPortalCustomAttribute_<name>`), one Tag per unique value
   seen at ingest time. **Override:** the hybrid-with-CP fallback from
@@ -324,6 +345,7 @@ Databricks workspace + Snowflake metadata — explicit follow-up in
 Cluster 3 (asset-completeness).
 
 **Alternatives rejected.**
+
 - *Broker-payload-shape matching:* too fuzzy, false-positive prone.
 - *In-band lineage in this connector:* lineage spans OTHER services
   (Snowflake, Databricks); belongs in a sibling workflow that runs
@@ -444,6 +466,7 @@ later adopts Categories — would map to OM Tags consistent with
 under the parent EAPP DataProduct (or under a synthetic
 `solace-event-portal-subscriptions` service). Subscription entity
 carries:
+
 - description (consumer rationale, owner-provided)
 - owner (consuming-app owner)
 - filter pattern (EP subscription wildcard, e.g. `acme/md/customer/>`)
@@ -515,6 +538,7 @@ static config-driven map works for v1.0.
 - **4.3 EP user-lookup endpoint**: NO. Confirmed via 10-path probe.
 - **4.4 Static `userIdToEmailMap`**: YES (only viable path). #57
   ships the connection option + mapper integration.
+
 - **4.6 EP Teams -> OM Teams**: BLOCKED. EP exposes no team API.
   #58 parks pending ALDI clarification.
 
@@ -605,6 +629,7 @@ SAP ERP (Target)                  [OM-Table from SAP connector]
   `{sourceId, destinationId}` between applicationVersions. Direct
   map to OM Pipeline-Pipeline lineage. *(That IS EP's Linked Apps
   feature — it's just not under `/linkedApplications` REST path.)*
+
 - `applicationVersion.consumers[]` — shape:
   `{id, name, consumerType, brokerType, subscriptions: [{value,
   attractedEventVersionIds}]}`. Direct map to OM Container per
@@ -634,7 +659,7 @@ SAP ERP (Target)                  [OM-Table from SAP connector]
 EP service-account token currently scoped **read-only**. Bi-dir sync
 needs **write** scope on `/architecture/<entity>/{id}` (for CA value
 PUT). ALDI Platform Team must rotate to a write-scoped token before
-#49 production deploy. This is a Cluster-6 risk to track.
+the ticket `#49` production deploy. This is a Cluster-6 risk to track.
 
 ---
 
@@ -658,6 +683,7 @@ PUT). ALDI Platform Team must rotate to a write-scoped token before
 ### 6.3 — Sample-data retention recommendation
 
 Reference connector defaults (verified during research):
+
 - Kafka connector: 7 days
 - Snowflake connector: 30 days
 - Databricks connector: 30 days
@@ -695,9 +721,11 @@ parked indefinitely until EP exposes outbound webhooks.
 Bi-dir sync (#49) requires write-scope token on
 `/architecture/<entity>/{id}`. Today's token is read-only. ALDI
 Platform Team must:
+
 1. Generate a separate write-scoped token in Solace Cloud Console
 2. Store separately in K8s Secret `ep-token-writer` (split from
    `ep-token-reader` used by the connector)
+
 3. Bridge uses the writer token; connector + reconcile use the reader
 4. Rotate both on 90d manual cadence (Cluster 4.7)
 5. **v1.1 risk-mitigation**: Vault-backed dual rotation (#67)

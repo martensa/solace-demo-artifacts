@@ -87,6 +87,16 @@ cp .env.example .env                 # edit LLM_SERVICE_API_KEY
   injected at deploy time. Never add real production
   credentials to `local-k8s-values.yaml`.
 
+## Subprojects with their own CLAUDE.md
+
+The repo also hosts standalone deliverables that maintain their
+own per-project instructions and waves of work. When a task is
+inside one of these subdirs, prefer the per-project guide:
+
+- `event-portal/om-connector/CLAUDE.md` — Solace Event Portal to
+  OpenMetadata ingestion connector + bridge. Status grid, wave plan,
+  and pickup checklist for cross-session continuation.
+
 ## Writing Documentation
 
 README files are written in English. Avoid special characters

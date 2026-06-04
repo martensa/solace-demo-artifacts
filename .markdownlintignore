@@ -1,0 +1,12 @@
+# Historical artifacts kept verbatim for archival reasons:
+# - The ALDI discovery one-pager is the source of the PDF handed to
+#   ALDI during workshop kick-off; reformatting would break the PDF
+#   intent.
+# - The workshop demo script is the pilot-era walkthrough; superseded
+#   by the live demo flow described in CLAUDE.md +
+#   docs/implementation-plan.md.
+event-portal/om-connector/docs/aldi-discovery-onepager.md
+event-portal/om-connector/docs/workshop-demo-script.md
+
+# node_modules (defensive)
+**/node_modules/**
