@@ -229,14 +229,23 @@ EP's coverage 1:1. Image `0.7.0` to staging.
 
 ---
 
-## Wave 4 — Identity + Bi-Directional (Week 6)
+## Wave 4 — Identity + Soft-delete (Week 6)
 
-**Goal**: owners resolve to humans. OM enrichments flow back to EP for
-the governance fields.
+**Goal**: owners resolve to humans. Drift-detection catches deletes
+on the EP side and tombstones the matching OM entity.
 
 **Tickets**: #57 (userIdToEmailMap), #56 (AsyncAPI sourceUrl),
-#48 (Sub-Domain hierarchy), #49 (bi-dir write-back),
-#61 (soft-delete with Retired tag), #58 (EP Teams parked).
+#48 (Sub-Domain hierarchy), #61 (soft-delete with Retired tag),
+#58 (EP Teams parked).
+
+**Deferred to Wave 4.5 / 5**: #49 (OM -> EP bi-directional write-back).
+This is the largest single chunk in the original Wave 4 scope
+(~500-800 lines: new bridge/writeback.py, EP CA bootstrap, separate
+ep-token-writer K8s Secret, drift-diff cron, EntityChangeEvent
+webhook subscriber). It rides on Cluster 5 (Bi-Dir Sync) and is
+gated by Cluster 4 (Identity) which Wave 4 has now closed. Sliced
+out so the Identity + Soft-delete shipment lands at 0.8.0 without
+the write-back risk surface.
 
 **Concrete work**:
 
@@ -254,31 +263,37 @@ the governance fields.
    - New workflow-config option `omDomainParentMap: {domainName: parentFqn}`.
    - `mappers.py.domain_to_create_request()` resolves parent FQN, sets
      `CreateDomainRequest.parent`.
-4. #49 — Bi-dir write-back (separated process):
-   - New `bridge/writeback.py` — subscribes to OM EntityChangeEvents
-     via OM webhook subscription (registered idempotently on startup).
-   - For each change, applies the per-field policy table (see
-     `asset-mapping-spec.md` Cluster 5).
-   - PUT EP `/architecture/<entity>/{id}` for CA values:
-     epExtendedDescription, epCertification, epAdditionalOwners,
-     externalSourceOmFqn, externalSinkOmFqn.
-   - Bootstrap: registers required EP CA definitions if missing.
-   - **Two separate K8s Secrets**: `ep-token-reader` (used by
-     metadata/lineage sources) + `ep-token-writer` (used only by
-     bridge/writeback). ALDI rotates both 90d manual.
-   - Daily drift-diff cron compares OM vs EP for OM-wins fields,
-     reports via OTel (alert if drift > threshold).
-   - Feature-flagged: `writebackEnabled: false` default.
-5. #61 — Soft-delete with Retired tag:
+4. #61 — Soft-delete with Retired tag:
    - Extend reconcile (#23) to detect missing-in-EP entities.
-   - Apply tag `EventPortalLifecycle.Retired` + CP `eventPortalDeletedAt`.
-   - Optional `retiredAutoPurgeAfterDays` for hard-delete (default null).
-6. #58 — Document parked.
-7. Tests.
+   - Apply tag `EventPortal.Retired` + CP `eventPortalDeletedAt`.
+   - Optional `--auto-purge-after-days` for hard-delete (default null).
+5. #58 — Document parked.
+6. Tests.
 
-**Exit criterion**: OM users see human owners. Adding a tag in OM (e.g.
-`EventPortalCertification.Tier1`) appears as EP CA on the matching
-entity within 5 minutes. Image `0.8.0` to staging.
+**Exit criterion**: OM users see human owners (via the static
+userIdToEmailMap). Topics + Pipelines for events / apps deleted on
+the EP side get the `EventPortal.Retired` tag within one
+``--soft-delete-missing`` cron tick. Image `0.8.0` to staging.
+
+### Deferred — Wave 4.5: #49 OM -> EP write-back
+
+Sliced into a dedicated wave so the high-blast-radius write path
+gets its own image and shadow-deploy. Concrete work when picked up:
+- New `bridge/writeback.py` — subscribes to OM EntityChangeEvents
+  via OM webhook subscription (registered idempotently on startup).
+- For each change, applies the per-field policy table (see
+  `asset-mapping-spec.md` Cluster 5).
+- PUT EP `/architecture/<entity>/{id}` for CA values:
+  epExtendedDescription, epCertification, epAdditionalOwners,
+  externalSourceOmFqn, externalSinkOmFqn.
+- Bootstrap: registers required EP CA definitions if missing.
+- **Two separate K8s Secrets**: `ep-token-reader` (used by
+  metadata/lineage sources) + `ep-token-writer` (used only by
+  bridge/writeback). ALDI rotates both 90d manual.
+- Daily drift-diff cron compares OM vs EP for OM-wins fields,
+  reports via OTel (alert if drift > threshold).
+- Feature-flagged: `writebackEnabled: false` default.
+- Target image: `0.8.5` (separate from Wave 4's `0.8.0`).
 
 ---
 

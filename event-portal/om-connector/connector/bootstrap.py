@@ -46,6 +46,7 @@ from .property_keys import (
     CP_EAPP_ID,
     CP_EAPP_PLANS,
     CP_EAPP_VERSION_ID,
+    CP_EP_DELETED_AT,
     CP_EP_EAPP,
     CP_EP_EVENT_API,
     CP_EVENT_API_ID,
@@ -100,6 +101,13 @@ TOPIC_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [  # (key, type, descripti
         "'true' iff this Topic carries the highest semver of its EP event "
         "(Wave 1 #54). UI default-filter recommendation: "
         "eventPortalIsLatestVersion=true to hide deprecated history.",
+    ),
+    (
+        CP_EP_DELETED_AT,
+        "string",
+        "ISO-8601 UTC timestamp set by the reconcile drift pass when the "
+        "EP event version is no longer visible. Combined with the "
+        "EventPortal.Retired tag (Wave 4 #61).",
     ),
 ]
 
@@ -231,6 +239,13 @@ PIPELINE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
         "string",
         "'true' iff this Pipeline carries the highest semver of its EP "
         "application (Wave 1 #54).",
+    ),
+    (
+        CP_EP_DELETED_AT,
+        "string",
+        "ISO-8601 UTC timestamp set by the reconcile drift pass when the "
+        "EP application version is no longer visible. Combined with the "
+        "EventPortal.Retired tag (Wave 4 #61).",
     ),
 ]
 

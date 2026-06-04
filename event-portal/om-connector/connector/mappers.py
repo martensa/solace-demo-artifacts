@@ -16,7 +16,6 @@ Targets OpenMetadata 1.6+:
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any, Dict, List, Optional
 
 from metadata.generated.schema.api.data.createTopic import CreateTopicRequest
@@ -88,8 +87,6 @@ _SCHEMA_TYPE_MAP: Dict[str, SchemaType] = {
     "PROTOBUF": SchemaType.Protobuf,
 }
 
-_INVALID_FQN_CHARS = re.compile(r"[^A-Za-z0-9_\-.]")
-
 # Re-export for callers that historically imported from connector.mappers.
 from .property_keys import (  # noqa: E402,F401  (re-export)
     CP_CONSUMED_BY,
@@ -119,27 +116,15 @@ from .property_keys import (  # noqa: E402,F401  (re-export)
 # --------------------------------------------------------------- name helpers
 
 
-def sanitize(name: Optional[str]) -> str:
-    """Make `name` safe to embed in an OpenMetadata FQN."""
-    return _INVALID_FQN_CHARS.sub("_", name or "unnamed")
-
-
-def build_topic_name(event_name: str, version: str) -> str:
-    """Topic entity name = `<event>_v<version>`, FQN-safe."""
-    return sanitize(f"{event_name}_v{version}")
-
-
-def _quote_if_dotted(part: str) -> str:
-    """OM treats dots as FQN separators; parts containing a literal dot
-    must be quoted (`name.with.dots` -> `"name.with.dots"`). Used for
-    entity FQNs that include semver versions (1.0.0)."""
-    if "." in part and not (part.startswith('"') and part.endswith('"')):
-        return f'"{part}"'
-    return part
-
-
-def topic_fqn(service_name: str, event_name: str, version: str) -> str:
-    return f"{service_name}.{_quote_if_dotted(build_topic_name(event_name, version))}"
+# FQN helpers moved to `.fqn` (pure module, no OM SDK dependency) so
+# the bridge's reconcile + soft-delete paths can use them. Re-exported
+# here for backwards compatibility with existing imports.
+from .fqn import (  # noqa: F401, E402
+    build_topic_name,
+    quote_if_dotted as _quote_if_dotted,
+    sanitize,
+    topic_fqn,
+)
 
 
 # --------------------------------------------------- EP UI deep-links
@@ -161,6 +146,15 @@ class EpUrls:
     schema_version_path: str = DEFAULT_EP_SCHEMA_VERSION_PATH
     application_path: str = DEFAULT_EP_APPLICATION_PATH
     application_version_path: str = DEFAULT_EP_APPLICATION_VERSION_PATH
+    # Wave 4 (#56): EP REST API base URL (e.g. https://api.solace.cloud/api/v2)
+    # used to build downloadable AsyncAPI document URLs that land on
+    # Pipeline.sourceUrl. Defaults to None -- when unset the AsyncAPI link
+    # is simply not emitted (the OM Pipeline still ingests).
+    api_url: Optional[str] = None
+    # Default AsyncAPI version + format echoed back to OM. Override via
+    # workflow option `asyncApiVersion` / `asyncApiFormat` if needed.
+    async_api_version: str = "2.5.0"
+    async_api_format: str = "json"
 
     def _resolve(self, tmpl: str, **kw) -> Optional[str]:
         from urllib.parse import quote
@@ -221,6 +215,21 @@ class EpUrls:
             self.application_path,
             domain_id=domain_id, domain_name=domain_name,
             application_id=application_id,
+        )
+
+    def async_api(self, app_version_id: Optional[str]) -> Optional[str]:
+        """Return the downloadable EP AsyncAPI document URL for an
+        applicationVersion. Wave 4 (#56). Returns ``None`` when
+        ``api_url`` is unset or the version id is missing.
+        """
+        if not (self.api_url and app_version_id):
+            return None
+        from urllib.parse import quote
+        return (
+            f"{self.api_url.rstrip('/')}/architecture/applicationVersions/"
+            f"{quote(str(app_version_id), safe='')}/asyncApi"
+            f"?asyncApiVersion={quote(self.async_api_version, safe='')}"
+            f"&format={quote(self.async_api_format, safe='')}"
         )
 
     def application_version(self, domain_id, domain_name, application_id, av_id):
@@ -476,12 +485,22 @@ def event_to_topic_request(
     return request
 
 
-def domain_to_create_request(domain: Dict[str, Any], owner: Any = None):
+def domain_to_create_request(
+    domain: Dict[str, Any],
+    owner: Any = None,
+    *,
+    parent_fqn: Optional[str] = None,
+):
     """Build an OM CreateDomainRequest from an EP application domain.
 
     Imported lazily because the symbol path differs across OM versions
     (1.3 vs 1.6). Falls back to returning a plain dict if unavailable, so
     callers running against an older OM can degrade to tags-only mapping.
+
+    Wave 4 (#48): ``parent_fqn`` -- when given, set as the new Domain's
+    parent so OM renders a hierarchy (parent → child) in the Domain
+    tree. Pass a fully-qualified Domain name; the connector resolves
+    EP-domain → parent FQN via the workflow option ``omDomainParentMap``.
     """
     try:
         from metadata.generated.schema.api.domains.createDomain import (
@@ -503,6 +522,23 @@ def domain_to_create_request(domain: Dict[str, Any], owner: Any = None):
     )
     if owner is not None and hasattr(request, "owner"):
         request.owner = owner
+    # Wave 4 (#48): attach to a pre-existing OM Domain (sub-domain shape).
+    # OM 1.11 CreateDomainRequest.parent accepts a fullyQualifiedName
+    # string directly; pre-1.11 wanted an EntityReference. Try string
+    # first, fall back to EntityReference for back-compat.
+    if parent_fqn and hasattr(request, "parent"):
+        try:
+            request.parent = parent_fqn
+        except Exception:
+            try:
+                from metadata.generated.schema.type.entityReference import (
+                    EntityReference,
+                )
+                request.parent = EntityReference(
+                    fullyQualifiedName=parent_fqn, type="domain",
+                )
+            except Exception:  # pragma: no cover - SDK divergence
+                pass
     return request
 
 
@@ -539,8 +575,7 @@ def modeled_mesh_to_data_product_request(mesh: Dict[str, Any], domain_fqn_: str)
         return CreateDataProductRequest(**base_kwargs, domain=domain_fqn_)
 
 
-def app_pipeline_name(app_name: str, version: str) -> str:
-    return sanitize(f"{app_name}_v{version}")
+# app_pipeline_name + app_pipeline_fqn live in `.fqn`; re-exported below.
 
 
 # --------------------------------------------------------- Event API (#44)
@@ -1224,14 +1259,8 @@ def _render_eapp_plans_markdown(plans: List[Dict[str, Any]]) -> Optional[str]:
     return "\n".join(rows)
 
 
-def app_pipeline_fqn(app_name: str, version: str) -> str:
-    """FQN of a Pipeline entity standing in for an EP application version.
-
-    Pipelines live under the synthetic PipelineService
-    `solace-event-portal-apps` (see APP_PIPELINE_SERVICE_NAME).
-    """
-    from .property_keys import APP_PIPELINE_SERVICE_NAME
-    return f"{APP_PIPELINE_SERVICE_NAME}.{_quote_if_dotted(app_pipeline_name(app_name, version))}"
+# app_pipeline_fqn moved to `.fqn`; re-export below for back-compat.
+from .fqn import app_pipeline_fqn, app_pipeline_name  # noqa: F401,E402
 
 
 def app_to_pipeline_request(
@@ -1310,6 +1339,13 @@ def app_to_pipeline_request(
         service=APP_PIPELINE_SERVICE_NAME,
         tags=tags,
     )
+    # Wave 4 (#56): sourceUrl points OM users at the downloadable EP
+    # AsyncAPI document for this application version. The endpoint
+    # requires a valid EP bearer token; OM still renders it as a
+    # clickable "source" link on the Pipeline page.
+    async_api_url = urls.async_api(app_version_id)
+    if async_api_url and hasattr(request, "sourceUrl"):
+        request.sourceUrl = async_api_url
     if extension and hasattr(request, "extension"):
         request.extension = _as_extension(extension)
     if attach_to_domain:

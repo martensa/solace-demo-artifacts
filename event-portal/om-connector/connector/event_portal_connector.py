@@ -50,7 +50,7 @@ from .mappers import (
     topic_segment_container_fqn,
     topic_segment_to_container_request,
 )
-from .owner_resolver import OwnerResolver
+from .owner_resolver import OwnerResolver, parse_user_id_map
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +143,12 @@ class SolaceEventPortalSource(Source):
                 opts.get("epApplicationVersionUrlTemplate")
                 or DEFAULT_EP_APPLICATION_VERSION_PATH
             ),
+            # Wave 4 (#56): wire the API base URL into EpUrls so Pipeline
+            # mapper can compose the downloadable AsyncAPI sourceUrl.
+            # Overridable spec version + format are forwarded too.
+            api_url=self.api_url,
+            async_api_version=opts.get("asyncApiVersion") or "2.5.0",
+            async_api_format=opts.get("asyncApiFormat") or "json",
         )
 
         # Allow-list-first filter patterns. Empty `includes` => default-deny:
@@ -162,18 +168,33 @@ class SolaceEventPortalSource(Source):
 
         self.client = EventPortalClient(base_url=self.api_url, api_token=self.api_token)
 
+        # Wave 4 (#57): static map from EP user-ID -> e-mail. EP Cloud
+        # Enterprise returns IDs on createdBy / changedBy with no
+        # /users/{id} endpoint to resolve them. Operators populate this
+        # map at workflow-config time. Accepts either an inline mapping
+        # (dict) or a comma-separated `id1:email1,id2:email2` string.
+        raw_user_map = opts.get("userIdToEmailMap") or {}
+        self._user_id_to_email: Dict[str, str] = parse_user_id_map(raw_user_map)
+
+        # Wave 4 (#48): static map from EP-domain name -> OM parent-Domain
+        # FQN. Lets operators stitch the per-tenant EP domain set under a
+        # pre-existing OM domain hierarchy (e.g. all EP domains under
+        # `Marketplace`). Same dict-or-string shape as userIdToEmailMap.
+        raw_dom_map = opts.get("omDomainParentMap") or {}
+        self._om_domain_parent_map: Dict[str, str] = _parse_string_map(raw_dom_map)
+
         # Resolves EP owner e-mails to OM users via the OM REST API.
         # Negative results are cached too so we don't keep re-querying for
         # owners that are not Keycloak users (yet).
-        self.owner_resolver = OwnerResolver(self.metadata)
-        # Default OFF: EP v2 returns user-ids (e.g. "udz8x00uz2o") on
-        # `createdBy`/`changedBy`, NOT e-mails, and there is no public
-        # `/users/{id}` lookup. Resolving against OM users via e-mail
-        # therefore needs an explicit static mapping (planned: option
-        # `userIdToEmailMap`). Enable resolveOwners=true only once your
-        # EP edition either ships e-mails on owner fields or you wire
-        # up the static map.
-        self.resolve_owners: bool = _as_bool(opts.get("resolveOwners", "false"))
+        self.owner_resolver = OwnerResolver(
+            self.metadata,
+            user_id_to_email=self._user_id_to_email,
+        )
+        # Wave 4 (#57): default flipped to ON. With userIdToEmailMap in
+        # place, the resolver now degrades gracefully (WARN log on miss)
+        # so the previous "opt-in" gating is no longer needed. Set
+        # resolveOwners=false to suppress all owner resolution.
+        self.resolve_owners: bool = _as_bool(opts.get("resolveOwners", "true"))
 
         # Sample-data via live broker subscribe (opt-in).
         self.sample_data_enabled: bool = _as_bool(
@@ -375,7 +396,14 @@ class SolaceEventPortalSource(Source):
         if self.emit_domains:
             for domain in domains:
                 owner = self._resolve(domain)
-                req = domain_to_create_request(domain, owner=owner)
+                # Wave 4 (#48): map EP-domain -> OM parent-Domain FQN to
+                # render a sub-domain hierarchy in the OM UI. Lookup is
+                # case-sensitive by EP domain name; misses leave the
+                # Domain at the top level.
+                parent_fqn = self._om_domain_parent_map.get(domain.get("name") or "")
+                req = domain_to_create_request(
+                    domain, owner=owner, parent_fqn=parent_fqn or None,
+                )
                 if req is not None:
                     yield Either(right=req)
 
@@ -1513,6 +1541,37 @@ def _as_bool(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _parse_string_map(raw: Any) -> Dict[str, str]:
+    """Coerce a workflow-config value to a plain ``{str: str}`` map.
+
+    Same shape as ``parse_user_id_map`` but without the e-mail check.
+    Used for Wave 4 (#48) ``omDomainParentMap`` and any future
+    string-to-string options.
+    """
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return {
+            str(k).strip(): str(v).strip()
+            for k, v in raw.items()
+            if k and v
+        }
+    if isinstance(raw, str):
+        out: Dict[str, str] = {}
+        for pair in raw.split(","):
+            if ":" not in pair:
+                continue
+            k, _, v = pair.partition(":")
+            k = k.strip()
+            v = v.strip()
+            if k and v:
+                out[k] = v
+        return out
+    return {}
+
+
 
 
 def _semver_tuple(version_str: str) -> tuple:

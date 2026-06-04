@@ -20,9 +20,12 @@ from connector.mappers import (  # noqa: E402
     CP_EP_EVENT,
     CP_STATE,
     CP_TOPIC_ADDRESS,
+    EpUrls,
+    app_to_pipeline_request,
     build_topic_name,
     consumer_container_fqn,
     consumer_to_container_request,
+    domain_to_create_request,
     event_to_topic_request,
     extract_topic_address,
     sanitize,
@@ -232,3 +235,99 @@ def test_consumer_to_container_request_handles_no_subscriptions():
     # Sensible defaults filled in for missing consumerType/brokerType.
     assert ext.get(CP_CONSUMER_TYPE) == "eventQueue"
     assert ext.get(CP_CONSUMER_BROKER_TYPE) == "solace"
+
+
+# --------------------------------------------------------- Wave 4 (#56)
+
+
+def test_ep_urls_async_api_builds_downloadable_url():
+    urls = EpUrls(
+        api_url="https://api.solace.cloud/api/v2",
+        async_api_version="2.5.0",
+        async_api_format="json",
+    )
+    out = urls.async_api("av-123")
+    assert out == (
+        "https://api.solace.cloud/api/v2/architecture/applicationVersions/"
+        "av-123/asyncApi?asyncApiVersion=2.5.0&format=json"
+    )
+
+
+def test_ep_urls_async_api_returns_none_when_api_url_missing():
+    """Without api_url the connector must NOT emit a broken Pipeline.sourceUrl."""
+    assert EpUrls().async_api("av-123") is None
+    assert EpUrls(api_url="").async_api("av-123") is None
+
+
+def test_ep_urls_async_api_returns_none_when_version_id_missing():
+    urls = EpUrls(api_url="https://api.solace.cloud/api/v2")
+    assert urls.async_api(None) is None
+    assert urls.async_api("") is None
+
+
+def test_app_to_pipeline_request_sets_async_api_source_url():
+    """The Pipeline carries Pipeline.sourceUrl pointing at the
+    downloadable AsyncAPI doc. Wave 4 (#56)."""
+    urls = EpUrls(
+        base="https://console.solace.cloud",
+        api_url="https://api.solace.cloud/api/v2",
+    )
+    req = app_to_pipeline_request(
+        domain={"id": "d-1", "name": "orders"},
+        app={"id": "a-1", "name": "OrderService"},
+        app_version={"id": "av-9", "version": "1.2.0"},
+        ep_urls=urls,
+        attach_to_domain=False,
+    )
+    assert req is not None
+    src = getattr(req, "sourceUrl", None)
+    src_str = getattr(src, "root", src)
+    assert str(src_str) == (
+        "https://api.solace.cloud/api/v2/architecture/applicationVersions/"
+        "av-9/asyncApi?asyncApiVersion=2.5.0&format=json"
+    )
+
+
+# --------------------------------------------------------- Wave 4 (#48)
+
+
+def test_domain_to_create_request_attaches_parent_fqn_when_given():
+    """parent_fqn from the operator-configured map should land on
+    CreateDomainRequest.parent so OM renders a sub-domain hierarchy."""
+    req = domain_to_create_request(
+        {"id": "d-1", "name": "Marketplace.Orders"},
+        parent_fqn="Marketplace",
+    )
+    assert req is not None
+    parent = getattr(req, "parent", None)
+    # OM 1.11 accepts a plain FQN string; older SDKs an EntityReference.
+    if hasattr(parent, "fullyQualifiedName"):
+        fqn = getattr(parent, "fullyQualifiedName")
+        fqn = getattr(fqn, "root", fqn)
+        assert fqn == "Marketplace"
+    else:
+        # Plain string-form parent.
+        assert str(getattr(parent, "root", parent)) == "Marketplace"
+
+
+def test_domain_to_create_request_keeps_parent_none_without_mapping():
+    """Without a parent_fqn the Domain is top-level (default behaviour)."""
+    req = domain_to_create_request({"id": "d-1", "name": "Orders"})
+    assert req is not None
+    # No exception when accessing parent; pydantic returns None.
+    assert getattr(req, "parent", None) is None
+
+
+def test_app_to_pipeline_request_skips_source_url_when_api_url_missing():
+    """If the operator hasn't passed api_url, the Pipeline should ingest
+    without a sourceUrl rather than carrying a broken URL."""
+    req = app_to_pipeline_request(
+        domain={"id": "d-1", "name": "orders"},
+        app={"id": "a-1", "name": "OrderService"},
+        app_version={"id": "av-9", "version": "1.2.0"},
+        ep_urls=EpUrls(),  # no api_url
+        attach_to_domain=False,
+    )
+    assert req is not None
+    src = getattr(req, "sourceUrl", None)
+    assert src is None

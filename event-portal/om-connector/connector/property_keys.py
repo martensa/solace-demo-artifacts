@@ -88,6 +88,12 @@ CP_TOPIC_SEGMENT_DEPTH = "eventPortalTopicSegmentDepth"
 # MessagingService.extension property used by the reconciliation job.
 AUDIT_WATERMARK_KEY = "eventPortalAuditWatermark"
 
+# Wave 4 (#61): soft-delete timestamp written by the reconcile drift pass
+# when an entity is no longer visible in EP. Carries an ISO-8601 UTC
+# string. Hard-delete is opt-in via the `retiredAutoPurgeAfterDays`
+# bridge option.
+CP_EP_DELETED_AT = "eventPortalDeletedAt"
+
 # --- Human-friendly markdown links to the EP UI (preferred over raw IDs).
 # These render in the OM UI as clickable "[Name v1.0.0](https://...)" links
 # straight back to the originating Solace Cloud EP entity, so a data

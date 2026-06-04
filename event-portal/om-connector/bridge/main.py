@@ -20,6 +20,10 @@ Usage:
   python -m bridge.main --reconcile
   python -m bridge.main --reconcile --since 2026-05-17T00:00:00Z
 
+  # Soft-delete drift pass (tag OM entities missing on EP as Retired)
+  python -m bridge.main --soft-delete-missing
+  python -m bridge.main --soft-delete-missing --auto-purge-after-days 30
+
 Settings come from environment variables (see bridge/config.py).
 """
 from __future__ import annotations
@@ -29,6 +33,7 @@ import logging
 import signal
 import sys
 import threading
+from typing import Optional
 
 from .config import BridgeSettings
 from .dispatcher import Dispatcher
@@ -115,6 +120,31 @@ def _reconcile(settings: BridgeSettings, since: str = None) -> int:
     return 0
 
 
+def _soft_delete(settings: BridgeSettings, auto_purge_after_days: Optional[int]) -> int:
+    """Wave 4 (#61): tombstone OM entities whose EP source is gone.
+
+    Optional hard-delete kicks in when ``auto_purge_after_days`` is
+    given AND the entity's ``eventPortalDeletedAt`` is older than that
+    cutoff. Default behaviour is forever-tombstone, since most
+    customers want to audit the history manually.
+    """
+    from .reconcile import soft_delete_missing_entities
+
+    ep_client = _build_ep_client(settings)
+    om = _build_om(settings)
+    summary = soft_delete_missing_entities(
+        ep_client=ep_client,
+        om=om,
+        service_name=settings.om.service_name,
+        auto_purge_after_days=auto_purge_after_days,
+    )
+    print(
+        f"soft-delete: scanned={summary['scanned']} "
+        f"retired={summary['retired']} purged={summary['purged']}"
+    )
+    return 0
+
+
 def main(argv=None) -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -136,6 +166,27 @@ def main(argv=None) -> int:
         metavar="ISO_TS",
         help="Override watermark for --reconcile (default: read from OM)",
     )
+    # Wave 4 (#61): drift detection for entities that disappeared on EP.
+    parser.add_argument(
+        "--soft-delete-missing",
+        action="store_true",
+        help=(
+            "Walk OM Topics + Pipelines, tombstone every entry whose EP "
+            "source is no longer present (adds EventPortal.Retired tag + "
+            "eventPortalDeletedAt timestamp). Idempotent; safe to run on "
+            "a cron."
+        ),
+    )
+    parser.add_argument(
+        "--auto-purge-after-days",
+        type=int,
+        default=None,
+        help=(
+            "Hard-delete tombstoned entities whose deletedAt is older "
+            "than N days. Combine with --soft-delete-missing. Default "
+            "leaves tombstones in place forever."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = BridgeSettings()
@@ -145,6 +196,9 @@ def main(argv=None) -> int:
 
     if args.reconcile:
         return _reconcile(settings, since=args.since)
+
+    if args.soft_delete_missing:
+        return _soft_delete(settings, args.auto_purge_after_days)
 
     mode = settings.transport.mode
 
