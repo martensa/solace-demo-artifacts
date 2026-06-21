@@ -1,10 +1,11 @@
 # Solace EP to OpenMetadata Connector: v1.0 Implementation Plan
 
-**Status**: Waves 0-4 shipped (current image
-`registry.solace.lab/openmetadata-ingestion-solace:0.8.0`).
-Wave 4.5 (`#49` write-back) carved out from Wave 4 and queued next.
+**Status**: Waves 0-5 shipped (code-complete; `pyproject.toml` at
+`0.9.0`, image build + `local-k8s-deps-values.yaml` tag bump pending).
+Wave 4.5 (`#49` write-back) carved out from Wave 4 remains the only
+carry-over; Wave 6 (upstream PR prep) is next.
 
-**Last updated**: 2026-06-05 (post-Wave 4 closure).
+**Last updated**: 2026-06-21 (post-Wave 5 closure).
 
 **Companion docs**: `discovery-closure-summary.md`,
 `asset-mapping-spec.md`.
@@ -28,9 +29,9 @@ contribution) is post-GA and time-boxed to one quarter.
 | 2 | shipped | 0.6.0 | ServiceSpec split + Linked-Apps + cross-system |
 | 3 | shipped | 0.7.0 | New entity types (Event API / EAPP / Schemas / Tree / Consumer) |
 | 4 | shipped | 0.8.0 | Identity (userIdToEmailMap) + Soft-delete drift pass |
-| 4.5 | next | 0.8.5 | OM to EP write-back (`#49`, carved out from Wave 4) |
-| 5 | future | 0.9.0 | Production hardening (PII, OTel, metrics, Helm, ...) |
-| 6 | future | 1.0.0 | v1.0 GA + ALDI prod cutover |
+| 4.5 | deferred | 0.8.5 | OM to EP write-back (`#49`, carved out from Wave 4) |
+| 5 | shipped | 0.9.0 | Production hardening (multi-tenant, PII, OTel, metrics, logging, shutdown, Helm) |
+| 6 | next | 1.0.0 | v1.0 GA + ALDI prod cutover |
 | 7 | future | upstream | OpenMetadata upstream contribution |
 
 The active deployment tag lives in
@@ -383,10 +384,18 @@ deploy before enabling on prod.
 
 ---
 
-## Wave 5 (Week 7-8, target image 0.9.0)
+## Wave 5 (Week 7-8, SHIPPED at image 0.9.0)
 
 **Goal**: enterprise-grade observability + secrets + multi-tenant +
 PII.
+
+**Closure note**: delivered in four slices (commits on master):
+observability + lifecycle foundation (#11/#13/#10/#63), then
+multi-tenant (#41), PII (#62), Helm chart (#15), and these docs
+(#16/#67). Each non-locally-testable diff was verified by an
+adversarial multi-agent review before commit. `dynamic classification`
+(#65) stays parked. The bridge write-back queue-depth metric (#10) is
+registered at 0 until Wave 4.5 / #49 ships the queue.
 
 **Tickets**: `#41` (multi-tenant), `#62` (PII), `#63` (OTel),
 `#10` (Prometheus metrics), `#11` (structured logging), `#13`

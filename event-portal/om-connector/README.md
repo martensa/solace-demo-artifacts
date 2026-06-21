@@ -16,16 +16,41 @@ from OpenMetadata:
   soft-delete drift pass.
 
 Current image:
-`registry.solace.lab/openmetadata-ingestion-solace:0.8.0`.
+`registry.solace.lab/openmetadata-ingestion-solace:0.9.0`.
 
 See `CLAUDE.md` for the per-wave status grid and the architectural
 overview. See `docs/implementation-plan.md` for the full delivery
 plan including the next wave.
 
+## Why this connector
+
+Event Portal is the system of record for event-driven architecture.
+This connector is purpose-built for it rather than retrofitting the
+generic Kafka messaging connector, and it exceeds that connector on
+seven axes (the `#67` Beat-Kafka list):
+
+1. **Application modelling** — native Producer / Consumer / Application
+   entities; the Kafka connector leans on KafkaConnect.
+2. **Domain** — sets `Topic.domains` natively; the Kafka connector
+   never sets it.
+3. **Lifecycle** — EP states become OM Tags
+   (`EventPortal.{Draft,Released,Deprecated,Retired}`); the Kafka
+   connector emits zero tags.
+4. **Versions** — one Topic / Pipeline per version
+   (`ingestAllVersions` default on); the Kafka connector flattens to
+   latest silently.
+5. **Logical types** — Avro / JSON-Schema logical types preserved in
+   `dataTypeDisplay`; the Kafka connector drops them.
+6. **Schemas** — first-class Schema / Table entity; the Kafka
+   connector only embeds the schema in the Topic.
+7. **Refs** — `$ref` graph resolution across schemas; the Kafka
+   connector string-concatenates.
+
 ## Compatibility
 
 | Connector | OpenMetadata SDK | Notes |
 |---|---|---|
+| 0.9.x | 1.11 | Wave 5: production hardening (multi-tenant, PII, observability, Helm) |
 | 0.8.x | 1.11 | Wave 4: Identity + Soft-delete drift pass |
 | 0.7.x | 1.11 | Wave 3: new entity types (Event API, EAPP, Schemas, Tree, Consumer) |
 | 0.6.x | 1.11 | Wave 2: ServiceSpec split + cross-system lineage |
@@ -159,6 +184,10 @@ the four `*FilterPattern` options):
 | `userIdToEmailMap` | `{}` | Static EP-user-ID to email map; dict OR `id1:email1,id2:email2`. |
 | `omDomainParentMap` | `{}` | Static EP-domain-name to OM Domain FQN map for sub-domain hierarchy (Wave 4 / `#48`). |
 | `customAttributeTagExclude` | `""` | Comma-separated EP CA names to skip during auto-discovery. |
+| `tenantPrefix` | `""` | Multi-tenant: prefix for the shared synthetic services so two EP tenants do not collide (Wave 5 / `#41`). Empty = single-tenant. |
+| `piiCaName` | `""` | PII signal: EP Custom Attribute name(s) that mark an entity PII (Wave 5 / `#62`). Single value, comma list, or list. |
+| `piiTagNames` | `""` | PII signal: EP/OM tag name(s) that mark an entity PII. |
+| `piiTopicSegmentPattern` | `""` | PII signal: regex over the topic address that marks a Topic PII. |
 | `asyncApiVersion` | `2.5.0` | AsyncAPI spec version in the Pipeline `sourceUrl` |
 | `asyncApiFormat` | `json` | AsyncAPI doc format in the Pipeline `sourceUrl` |
 | `epConsoleUrl` | `https://console.solace.cloud` | Base URL for the markdown back-links to the EP UI |
@@ -174,7 +203,10 @@ See `config/example-workflow.yaml` for a full workflow definition.
 ## Install: webhook bridge
 
 ```bash
-docker build -f Dockerfile.bridge -t my-org/om-eventportal-bridge:0.8.0 .
+# Convenience wrapper (tags from pyproject.toml, pushes to the registry):
+bash scripts/build-bridge-image.sh
+# Or directly:
+docker build -f Dockerfile.bridge -t my-org/om-eventportal-bridge:0.9.0 .
 ```
 
 Or install in a venv:
@@ -276,6 +308,76 @@ the Databricks job for the Solace topic + Delta table, then calls
 OM's `/v1/lineage` API. Reference implementation tracked in the
 implementation plan.
 
+## Production hardening (Wave 5)
+
+### Multi-tenant deployment (`#41`)
+
+Two EP tenants can share one OpenMetadata instance. Each tenant runs
+its own ingestion workflow with a distinct `serviceName` (isolates the
+MessagingService + every Topic FQN) and a distinct `tenantPrefix`
+(isolates the five shared synthetic services). Bootstrap once per
+tenant with the matching prefix:
+
+```bash
+om-eventportal-bootstrap --host-port "$OM_HOST_PORT" \
+  --jwt-token "$OM_INGESTION_BOT_TOKEN" --tenant-prefix tenant-b
+```
+
+An empty prefix is byte-identical to single-tenant, so the existing
+deployment is unaffected. See `config/example-workflow-tenant-b.yaml`.
+Known boundary: OM Domains + DataProducts are global (not under a
+service), so two tenants sharing an EP domain name co-locate there by
+design.
+
+### PII handling (`#62`)
+
+A Topic / Pipeline is flagged PII when any declarative signal fires:
+an EP Custom Attribute name (`piiCaName`), an EP/OM tag (`piiTagNames`),
+a topic-address regex (`piiTopicSegmentPattern`), or a schema field
+annotated `x-pii`. A flagged entity gets the `EventPortalCompliance.PII`
+tag + the `eventPortalContainsPii` custom property, x-pii columns get a
+`[PII]` marker, and the live sample-data subscribe is HARD-BLOCKED for
+that Topic (PII payloads are never captured). Detection is read-only
+against EP and off until at least one signal is configured. Bootstrap
+creates the `EventPortalCompliance` classification + `PII` tag.
+
+### Observability (`#11` / `#63` / `#10` / `#13`)
+
+Bridge-process knobs, all `BRIDGE_OBS_*` env (see `bridge/config.py`):
+
+- `BRIDGE_OBS_LOG_FORMAT=json` — structured JSON logs with a
+  per-tick / per-event `correlation_id` (and `trace_id` when tracing
+  is on).
+- `BRIDGE_OBS_OTEL_ENABLED=true` (+ `BRIDGE_OBS_OTEL_ENDPOINT`) —
+  OpenTelemetry spans on the poll tick + each dispatch, OTLP/HTTP.
+- `BRIDGE_OBS_METRICS_ENABLED=true` (+ `BRIDGE_OBS_METRICS_PORT`) —
+  Prometheus `/metrics` (dispatch latency, poll ticks, events
+  seen / dispatched, EP 401s).
+- `BRIDGE_OBS_SHUTDOWN_GRACE_SECONDS` — SIGTERM drains the current
+  tick + flushes dedupe before exit.
+
+The connector-in-ingestion path is unchanged: these are opt-in extras
+with no-op fallbacks, so OM's own run report and logging are untouched.
+
+### Helm chart (`#15`)
+
+`charts/solace-eventportal-bridge` packages the bridge image with the
+surfaces above. Build + push the image, then install:
+
+```bash
+bash scripts/build-bridge-image.sh
+helm install ep-bridge charts/solace-eventportal-bridge \
+  --set secret.epApiToken="$EP_API_TOKEN" \
+  --set secret.omJwtToken="$OM_JWT_TOKEN" \
+  --set observability.metrics.enabled=true \
+  --set cron.softDelete.enabled=true
+```
+
+Probes are mode-gated (polling has no HTTP server, so it never
+crashloops); set `secret.existingSecret` to use a Vault-synced Secret
+instead of chart-managed token values. See `values.yaml` for the full
+surface (OTel sidecar, lab CA mount, CronJob schedules).
+
 ## Development
 
 ```bash
@@ -304,8 +406,8 @@ See `CLAUDE.md` for the full coding conventions and the
 - **Modeled Event Mesh** — Cloud Enterprise returns 404 for
   `/architecture/modeledEventMeshes` (Cluster 1.3); feature flag
   `emitDataProducts` stays default OFF.
-- **PII detection / OTel telemetry / multi-tenant template /
-  Helm chart** — Wave 5 work.
+- **PII detection / OTel telemetry / multi-tenant / Helm chart** —
+  SHIPPED in Wave 5 / image `0.9.0` (see "Production hardening" above).
 - **OpenMetadata upstream PR** — Wave 7, planned for Q3 2026.
 
 Full per-wave breakdown: `docs/implementation-plan.md`.

@@ -16,7 +16,7 @@ and cross-system lineage to non-EP entities. Per-field
 source-of-truth policy lives in `docs/asset-mapping-spec.md`
 (Cluster 5 table).
 
-## Current state (post-Wave 4)
+## Current state (post-Wave 5)
 
 | Wave | Status | Image | Highlights |
 |---|---|---|---|
@@ -26,13 +26,21 @@ source-of-truth policy lives in `docs/asset-mapping-spec.md`
 | Wave 3 | shipped | 0.7.0 | New entity types: Event API Container (#44), EAPP DataProduct (#45), first-class Schemas (#52), Topic-tree (#53), Consumer-Queue (#55) |
 | Wave 4 | shipped | 0.8.0 | userIdToEmailMap (#57), AsyncAPI sourceUrl (#56), Sub-Domain hierarchy (#48), Soft-delete drift pass (#61) |
 | Wave 4.5 | deferred | 0.8.5 | #49 OM -> EP write-back (split out of Wave 4) |
-| Wave 5 | next | 0.9.0 | Production hardening: multi-tenant (#41), PII (#62), OTel (#63), metrics (#10), structured logging (#11), graceful shutdown (#13), Helm chart (#15), Phase 2 docs (#16), Beat-Kafka (#67) |
-| Wave 6 | future | 0.10.0 | OpenMetadata upstream PR prep |
+| Wave 5 | shipped | 0.9.0 | Production hardening: multi-tenant (#41), PII (#62), OTel (#63), metrics (#10), structured logging (#11), graceful shutdown (#13), Helm chart (#15), Phase 2 docs (#16), Beat-Kafka (#67) |
+| Wave 6 | next | 0.10.0 | OpenMetadata upstream PR prep |
 | Wave 7 | future | 1.0.0 | OpenMetadata upstream contribution + GA |
 
-Active image: `registry.solace.lab/openmetadata-ingestion-solace:0.8.0`.
-The image is also tagged `:latest`. Tag bumps live in
-`openmetadata-deployment/local-k8s-deps-values.yaml`.
+Active image: `registry.solace.lab/openmetadata-ingestion-solace:0.9.0`.
+`pyproject.toml` is bumped to `0.9.0`; the image must still be built +
+pushed (`bash scripts/build-and-push.sh` for the ingestion image,
+`bash scripts/build-bridge-image.sh` for the bridge), then the tag bump
+in `openmetadata-deployment/local-k8s-deps-values.yaml` (still `0.8.0`)
+committed. The image is also tagged `:latest`. Wave 5 / #41 + #62
+added connector code paths (`connector/pii.py`, tenant-prefix FQNs) and
+the `bridge` got observability (`bridge/logging_setup.py`,
+`bridge/metrics.py`, `bridge/lifecycle.py`, `connector/telemetry.py`)
+plus the Helm chart `charts/solace-eventportal-bridge/`. Wave 4.5
+(#49 write-back) remains the only carry-over.
 
 ## Stack (target for v1.0)
 
@@ -59,7 +67,9 @@ connector/
   metadata_source.py         EventPortalMetadataSource (Wave 2)
   lineage_source.py          EventPortalLineageSource (Wave 2)
   mappers.py                 Pure functions: EP payload -> OM Create*Request
-  fqn.py                     Pure FQN helpers (Wave 4; no OM SDK dep)
+  fqn.py                     Pure FQN helpers + tenant prefix (Wave 4/5; no OM SDK)
+  pii.py                     Pure PII signal detection + should_sample (Wave 5 #62)
+  telemetry.py               Dep-free OTel span + counter shim (Wave 5 #63/#10)
   schema_parsers/            Per-format parser dispatch package (Wave 1)
   asyncapi_parser.py         AsyncAPI v2 -> Topic requests (private build)
   filters.py                 Allow-list filter pattern
@@ -69,17 +79,23 @@ connector/
   sample_data.py             Live Solace subscribe -> Topic sample data
 bridge/
   main.py                    Bridge entrypoint + CLI flags
-  config.py                  BridgeSettings (env-var driven)
+  config.py                  BridgeSettings (env-var driven; + ObservabilitySettings)
   dispatcher.py              Event-type -> handler routing
   handlers.py                Bridge event handlers
   forwarder.py               Webhook -> Solace forwarder (private build)
   signature.py               EP webhook HMAC verification
-  dedupe.py                  In-memory + Redis dedupe stores
+  dedupe.py                  In-memory + Redis dedupe stores (+ flush)
   reconcile.py               Full-pull reconcile + soft-delete (#61)
+  logging_setup.py           JSON logging + correlation id (Wave 5 #11)
+  metrics.py                 Prometheus metrics + exposition (Wave 5 #10)
+  lifecycle.py               Graceful shutdown (Wave 5 #13)
   transport/polling.py       EP polling-mode (no outbound webhooks)
   writeback.py               (DEFERRED -- Wave 4.5 / #49)
+charts/
+  solace-eventportal-bridge/ Helm chart for the bridge (Wave 5 #15)
 config/
   example-workflow.yaml      Sample `metadata ingest -c` workflow
+  example-workflow-tenant-b.yaml  Second-tenant example (Wave 5 #41)
 docs/
   asset-mapping-spec.md       Living mapping spec (per-cluster decisions)
   discovery-closure-summary.md ALDI discovery sign-off envelope
@@ -92,6 +108,7 @@ docs/
   openmetadata-image-flip.md  Helm image flip procedure
 scripts/
   build-and-push.sh           Build + push the OM ingestion image
+  build-bridge-image.sh       Build + push the standalone bridge image (Wave 5 #15)
   smoke_ep_api.py             EP-API smoke-test against a live tenant
 Dockerfile                    Bakes the connector into openmetadata/ingestion
 pyproject.toml
@@ -352,18 +369,27 @@ image (`0.8.5`) with shadow-deploy. The hook lives in
 
 The shortest path back into the codebase from a fresh Claude session:
 
-1. Read this file plus `docs/implementation-plan.md` (Wave 5 is the
-   next concrete unit of work; Wave 4.5 / #49 is the only Wave 4
-   spillover).
+1. Read this file plus `docs/implementation-plan.md`. Wave 5 is
+   code-complete (shipped); Wave 6 (upstream PR prep) is the next
+   concrete unit of work, and Wave 4.5 / #49 (OM -> EP write-back) is
+   the only remaining carry-over.
 2. Glance at `docs/discovery-closure-summary.md` to remember which
    product decisions are locked in vs still negotiable.
 3. Check the project tasks list -- the task IDs in there map to the
    `#NN` references peppered through this document and the
    implementation plan.
-4. `git log --oneline -10` shows the Wave 4 closure commits
-   (`feat(om-connector): Wave 4 ...` + `fix(openmetadata-deployment):
-   bump ingestion image to 0.8.0 (Wave 4)`).
-5. Active image tag: `0.8.0`. The
-   `openmetadata-deployment/local-k8s-deps-values.yaml` already
-   points at it. Run `bash scripts/build-and-push.sh` after any
-   `pyproject.toml` version bump.
+4. `git log --oneline -10` shows the Wave 5 closure commits
+   (`feat(om-connector): Wave 5 ...` for Slice 1 / #41 / #62 / #15 and
+   the docs+version bump).
+5. `pyproject.toml` is at `0.9.0` but the images are NOT built/pushed
+   yet, and `openmetadata-deployment/local-k8s-deps-values.yaml` still
+   pins `0.8.0`. To finish the cutover: run
+   `bash scripts/build-and-push.sh` (ingestion image) +
+   `bash scripts/build-bridge-image.sh` (bridge image), then bump the
+   deps-values tag to `0.9.0` and commit. Requires Docker + push
+   access to `registry.solace.lab`.
+6. Local test env caveat: Python 3.9 + no OM SDK, so connector mapper
+   / schema / lineage / handler tests skip locally (Docker-only); pure
+   modules (`fqn`, `pii`, `telemetry`, bridge `logging_setup`/`metrics`/
+   `lifecycle`) + reconcile/bootstrap run locally. Verify SDK-bound
+   diffs via an adversarial Workflow review before committing.
