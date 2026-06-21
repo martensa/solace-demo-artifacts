@@ -588,6 +588,7 @@ def event_api_to_container_request(
     domain: Dict[str, Any],
     ep_urls: Optional[EpUrls] = None,
     is_latest_version: Optional[bool] = None,
+    service_name: Optional[str] = None,
 ):
     """Build a CreateContainerRequest from an EP Event API + version.
 
@@ -618,6 +619,7 @@ def event_api_to_container_request(
         EVENT_API_STORAGE_SERVICE_NAME,
     )
 
+    service = service_name or EVENT_API_STORAGE_SERVICE_NAME
     name = event_api.get("name") or "unnamed-event-api"
     version_str = str(event_api_version.get("version") or "1.0.0")
     state_id = str(event_api_version.get("stateId") or "")
@@ -658,7 +660,7 @@ def event_api_to_container_request(
         name=sanitize(f"{name}_v{version_str}"),
         displayName=f"{name} v{version_str}",
         description=description or None,
-        service=EVENT_API_STORAGE_SERVICE_NAME,
+        service=service,
     )
     if extension and hasattr(request, "extension"):
         request.extension = _as_extension(extension)
@@ -669,11 +671,14 @@ def event_api_to_container_request(
     return request
 
 
-def event_api_container_fqn(event_api_name: str, version: str) -> str:
+def event_api_container_fqn(
+    event_api_name: str, version: str, service_name: Optional[str] = None
+) -> str:
     """FQN of the EventAPI Container under the synthetic StorageService."""
     from .property_keys import EVENT_API_STORAGE_SERVICE_NAME
+    service = service_name or EVENT_API_STORAGE_SERVICE_NAME
     inner = sanitize(f"{event_api_name}_v{version}")
-    return f"{EVENT_API_STORAGE_SERVICE_NAME}.{_quote_if_dotted(inner)}"
+    return f"{service}.{_quote_if_dotted(inner)}"
 
 
 # --------------------------------------------------------- EAPP (#45)
@@ -781,6 +786,7 @@ def consumer_to_container_request(
     app: Dict[str, Any],
     app_version: Dict[str, Any],
     domain: Dict[str, Any],
+    service_name: Optional[str] = None,
 ):
     """Build a CreateContainerRequest for one EP applicationVersion.consumers[]
     entry.
@@ -800,6 +806,7 @@ def consumer_to_container_request(
         return None
     from .property_keys import CONSUMER_STORAGE_SERVICE_NAME
 
+    service = service_name or CONSUMER_STORAGE_SERVICE_NAME
     name = consumer.get("name") or "unnamed-consumer"
     consumer_type = consumer.get("consumerType") or "eventQueue"
     broker_type = consumer.get("brokerType") or "solace"
@@ -829,7 +836,7 @@ def consumer_to_container_request(
         name=sanitize(f"{app_name}_{name}"),
         displayName=name,
         description=description,
-        service=CONSUMER_STORAGE_SERVICE_NAME,
+        service=service,
     )
     if extension and hasattr(request, "extension"):
         request.extension = _as_extension(extension)
@@ -848,21 +855,26 @@ def _render_consumer_patterns_markdown(subscriptions: List[Dict[str, Any]]) -> O
     return "\n".join(rows)
 
 
-def consumer_container_fqn(app_name: str, consumer_name: str) -> str:
+def consumer_container_fqn(
+    app_name: str, consumer_name: str, service_name: Optional[str] = None
+) -> str:
     """FQN of the Consumer Container under the synthetic StorageService.
 
     Mirrors how `consumer_to_container_request` builds the Container name:
     sanitized ``{app}_{consumer}`` under ``solace-event-portal-consumers``.
     """
     from .property_keys import CONSUMER_STORAGE_SERVICE_NAME
+    service = service_name or CONSUMER_STORAGE_SERVICE_NAME
     inner = sanitize(f"{app_name}_{consumer_name}")
-    return f"{CONSUMER_STORAGE_SERVICE_NAME}.{_quote_if_dotted(inner)}"
+    return f"{service}.{_quote_if_dotted(inner)}"
 
 
 # --------------------------------------------------------- Schemas (#52)
 
 
-def domain_database_schema_fqn(domain_name: str) -> str:
+def domain_database_schema_fqn(
+    domain_name: str, service_name: Optional[str] = None
+) -> str:
     """FQN of the DatabaseSchema standing in for an EP Application Domain.
 
     Lives under ``solace-event-portal-schemas.schemas.<domain>`` so a
@@ -870,17 +882,24 @@ def domain_database_schema_fqn(domain_name: str) -> str:
     Solace Event Portal Schemas -> schemas -> <domain> -> <SchemaName_vX>.
     """
     from .property_keys import SCHEMA_DATABASE_NAME, SCHEMA_DATABASE_SERVICE_NAME
+    service = service_name or SCHEMA_DATABASE_SERVICE_NAME
     inner = sanitize(domain_name)
-    return f"{SCHEMA_DATABASE_SERVICE_NAME}.{SCHEMA_DATABASE_NAME}.{_quote_if_dotted(inner)}"
+    return f"{service}.{SCHEMA_DATABASE_NAME}.{_quote_if_dotted(inner)}"
 
 
-def schema_table_fqn(domain_name: str, schema_name: str, version: str) -> str:
+def schema_table_fqn(
+    domain_name: str, schema_name: str, version: str,
+    service_name: Optional[str] = None,
+) -> str:
     """FQN of a Schema Table under the synthetic DatabaseSchema."""
     inner = sanitize(f"{schema_name}_v{version}")
-    return f"{domain_database_schema_fqn(domain_name)}.{_quote_if_dotted(inner)}"
+    parent = domain_database_schema_fqn(domain_name, service_name=service_name)
+    return f"{parent}.{_quote_if_dotted(inner)}"
 
 
-def domain_to_database_schema_request(domain: Dict[str, Any]):
+def domain_to_database_schema_request(
+    domain: Dict[str, Any], service_name: Optional[str] = None
+):
     """Build a CreateDatabaseSchemaRequest for an EP Application Domain.
 
     Wave 3 (#52). One DatabaseSchema per EP domain hosts the per-Schema
@@ -895,6 +914,7 @@ def domain_to_database_schema_request(domain: Dict[str, Any]):
         logger.warning("OM DatabaseSchema entity not importable; skipping")
         return None
     from .property_keys import SCHEMA_DATABASE_NAME, SCHEMA_DATABASE_SERVICE_NAME
+    service = service_name or SCHEMA_DATABASE_SERVICE_NAME
     domain_name = domain.get("name") or domain.get("id") or "unknown-domain"
     description = (
         f"Solace Event Portal application domain `{domain_name}`. "
@@ -904,7 +924,7 @@ def domain_to_database_schema_request(domain: Dict[str, Any]):
         name=sanitize(domain_name),
         displayName=domain_name,
         description=description,
-        database=f"{SCHEMA_DATABASE_SERVICE_NAME}.{SCHEMA_DATABASE_NAME}",
+        database=f"{service}.{SCHEMA_DATABASE_NAME}",
     )
 
 
@@ -915,6 +935,7 @@ def schema_version_to_table_request(
     domain: Dict[str, Any],
     ep_urls: Optional["EpUrls"] = None,
     is_latest_version: Optional[bool] = None,
+    service_name: Optional[str] = None,
 ):
     """Build a CreateTableRequest representing one EP Schema + version.
 
@@ -991,7 +1012,9 @@ def schema_version_to_table_request(
         name=sanitize(f"{schema_name}_v{version_str}"),
         displayName=f"{schema_name} v{version_str}",
         description=description or None,
-        databaseSchema=domain_database_schema_fqn(domain_name or "unknown-domain"),
+        databaseSchema=domain_database_schema_fqn(
+            domain_name or "unknown-domain", service_name=service_name
+        ),
         columns=columns,
     )
     if extension and hasattr(request, "extension"):
@@ -1143,6 +1166,7 @@ def topic_segment_to_container_request(
     depth: int,
     segment_path: List[str],
     parent_fqn: Optional[str] = None,
+    service_name: Optional[str] = None,
 ):
     """Build a CreateContainerRequest for one topic-address segment.
 
@@ -1172,6 +1196,7 @@ def topic_segment_to_container_request(
         TOPIC_TREE_STORAGE_SERVICE_NAME,
     )
 
+    service = service_name or TOPIC_TREE_STORAGE_SERVICE_NAME
     name = sanitize(_variable_to_safe_name(segment))
     full_path = "/".join(segment_path)
     description = (
@@ -1190,7 +1215,7 @@ def topic_segment_to_container_request(
         name=name,
         displayName=segment,
         description=description,
-        service=TOPIC_TREE_STORAGE_SERVICE_NAME,
+        service=service,
     )
     if parent_fqn and hasattr(request, "parent"):
         try:
@@ -1207,7 +1232,9 @@ def topic_segment_to_container_request(
     return request
 
 
-def topic_segment_container_fqn(segment_path: List[str]) -> str:
+def topic_segment_container_fqn(
+    segment_path: List[str], service_name: Optional[str] = None
+) -> str:
     """FQN of a topic-tree segment Container under the synthetic StorageService.
 
     The FQN composes one quoted segment per level so '.' inside a topic
@@ -1215,7 +1242,7 @@ def topic_segment_container_fqn(segment_path: List[str]) -> str:
     separator.
     """
     from .property_keys import TOPIC_TREE_STORAGE_SERVICE_NAME
-    parts = [TOPIC_TREE_STORAGE_SERVICE_NAME]
+    parts = [service_name or TOPIC_TREE_STORAGE_SERVICE_NAME]
     for seg in segment_path:
         parts.append(_quote_if_dotted(sanitize(_variable_to_safe_name(seg))))
     return ".".join(parts)
@@ -1270,6 +1297,7 @@ def app_to_pipeline_request(
     attach_to_domain: bool = True,
     is_latest_version: Optional[bool] = None,
     custom_attribute_tags: Optional[List[TagLabel]] = None,
+    service_name: Optional[str] = None,
 ):
     """Build a CreatePipelineRequest from an EP application version.
 
@@ -1292,6 +1320,7 @@ def app_to_pipeline_request(
         APP_PIPELINE_SERVICE_NAME,
     )
 
+    service = service_name or APP_PIPELINE_SERVICE_NAME
     app_name = app.get("name") or "unknown-app"
     version_str = str(app_version.get("version") or "1.0.0")
     description = "\n\n".join(
@@ -1336,7 +1365,7 @@ def app_to_pipeline_request(
         name=app_pipeline_name(app_name, version_str),
         displayName=f"{app_name} v{version_str}",
         description=description,
-        service=APP_PIPELINE_SERVICE_NAME,
+        service=service,
         tags=tags,
     )
     # Wave 4 (#56): sourceUrl points OM users at the downloadable EP

@@ -183,8 +183,15 @@ def on_application_upsert(ctx: BridgeContext, payload: Dict[str, Any]) -> None:
     domain = ctx.ep_client.get_application_domain(app.get("applicationDomainId"))
     if not domain:
         return
+    # Wave 5 (#41): write under the same tenant-prefixed apps PipelineService
+    # the metadata pass + soft-delete use, so the bridge's incremental
+    # upserts don't create duplicate Pipelines under the bare service name.
+    from connector.fqn import apply_tenant_prefix
+    from connector.property_keys import APP_PIPELINE_SERVICE_NAME
+
+    app_service = apply_tenant_prefix(APP_PIPELINE_SERVICE_NAME, ctx.tenant_prefix)
     pipeline_request = app_to_pipeline_request(
-        domain=domain, app=app, app_version=version,
+        domain=domain, app=app, app_version=version, service_name=app_service,
     )
     if pipeline_request is None:
         return

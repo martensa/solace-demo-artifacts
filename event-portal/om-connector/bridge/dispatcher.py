@@ -27,6 +27,11 @@ class BridgeContext:
     ep_client: Any  # EventPortalClient
     om: Any  # OpenMetadata SDK
     service_name: str
+    # Wave 5 (#41): prefix for the shared synthetic services so the
+    # bridge's incremental upserts write Pipelines under the same
+    # prefixed apps PipelineService the metadata pass + soft-delete use.
+    # Empty = single-tenant (legacy names).
+    tenant_prefix: str = ""
 
 
 HandlerFn = Callable[[BridgeContext, Dict[str, Any]], None]

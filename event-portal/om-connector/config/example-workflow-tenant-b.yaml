@@ -1,0 +1,72 @@
+# Multi-tenant example (Wave 5 / #41): the SECOND of two EP tenants
+# ingested into one OpenMetadata instance.
+#
+# The two tenants share OM and the synthetic services (apps
+# PipelineService, schemas DatabaseService, the StorageServices), so each
+# tenant MUST differ in BOTH:
+#   * serviceName   -> isolates the EP MessagingService + every Topic FQN
+#   * tenantPrefix  -> isolates the shared synthetic-service FQNs
+# Tenant A uses config/example-workflow.yaml (serviceName
+# solace-event-portal, empty prefix = legacy names). Tenant B is below.
+#
+# Bootstrap each tenant once (the prefixed synthetic services must exist):
+#   om-eventportal-bootstrap --host-port $OM_HOST_PORT \
+#     --jwt-token $OM_INGESTION_BOT_TOKEN --tenant-prefix tenant-b
+#
+# Run:
+#   metadata ingest -c config/example-workflow-tenant-b.yaml
+#
+# Known boundary: OM Domains + DataProducts are global (not under a
+# service), so two tenants sharing an EP domain name still co-locate
+# there by design -- see docs/asset-mapping-spec.md.
+
+source:
+  type: customMessaging
+  serviceName: solace-event-portal-tenant-b
+  serviceConnection:
+    config:
+      type: CustomMessaging
+      sourcePythonClass: connector.event_portal_connector.SolaceEventPortalSource
+      connectionOptions:
+        apiUrl: https://api.solace.cloud/api/v2
+        apiToken: "${SOLACE_EVENTPORTAL_TOKEN_TENANT_B}"
+        mode: rest_api
+
+        # Tenant B's allow-list. Each tenant governs its own domains.
+        domainFilterPattern: |
+          {"includes": [".*"], "excludes": []}
+        eventFilterPattern: |
+          {"includes": [".*"], "excludes": []}
+        schemaFilterPattern: |
+          {"includes": [".*"], "excludes": []}
+        applicationFilterPattern: |
+          {"includes": [".*"], "excludes": []}
+
+        ingestAllVersions: "true"
+        includeLineage: "true"
+        emitDomains: "true"
+        emitDataProducts: "true"
+
+        # The isolating prefix for tenant B's shared synthetic services.
+        # Must match the --tenant-prefix passed to bootstrap above.
+        tenantPrefix: "tenant-b"
+
+        resolveOwners: "true"
+        since: ""
+        sampleDataEnabled: "false"
+  sourceConfig:
+    config:
+      type: MessagingMetadata
+      generateSampleData: false
+
+sink:
+  type: metadata-rest
+  config: {}
+
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: http://openmetadata-server:8585/api
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: "${OM_INGESTION_BOT_TOKEN}"

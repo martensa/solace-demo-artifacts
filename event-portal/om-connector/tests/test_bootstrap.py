@@ -279,6 +279,54 @@ def test_ensure_pipeline_service_noop_when_present():
     assert client.puts == []
 
 
+def test_bootstrap_tenant_prefix_creates_prefixed_synthetic_services():
+    """Wave 5 (#41): bootstrap with a tenant prefix creates the five shared
+    synthetic services under prefixed names so two tenants do not collide.
+    The Database NAME stays unprefixed -- only its parent service shifts."""
+    client = _FakeClient(existing={})
+    bootstrap.bootstrap(_make_om(client), tenant_prefix="t1")
+
+    created = {}
+    for path, body in client.posts:
+        if path in (
+            "/services/pipelineServices",
+            "/services/storageServices",
+            "/services/databaseServices",
+            "/databases",
+        ):
+            created.setdefault(path, []).append(body)
+
+    pipe_names = [b["name"] for b in created["/services/pipelineServices"]]
+    storage_names = {b["name"] for b in created["/services/storageServices"]}
+    db_service_names = [b["name"] for b in created["/services/databaseServices"]]
+
+    assert pipe_names == [f"t1-{bootstrap.APP_PIPELINE_SERVICE_NAME}"]
+    assert storage_names == {
+        f"t1-{bootstrap.EVENT_API_STORAGE_SERVICE_NAME}",
+        f"t1-{bootstrap.CONSUMER_STORAGE_SERVICE_NAME}",
+        f"t1-{bootstrap.TOPIC_TREE_STORAGE_SERVICE_NAME}",
+    }
+    assert db_service_names == [f"t1-{bootstrap.SCHEMA_DATABASE_SERVICE_NAME}"]
+
+    db_body = created["/databases"][0]
+    assert db_body["name"] == bootstrap.SCHEMA_DATABASE_NAME  # unprefixed
+    assert db_body["service"] == f"t1-{bootstrap.SCHEMA_DATABASE_SERVICE_NAME}"
+
+
+def test_bootstrap_default_prefix_is_single_tenant_unchanged():
+    """Empty prefix must create the legacy service names byte-identically."""
+    client = _FakeClient(existing={})
+    bootstrap.bootstrap(_make_om(client))
+    service_names = {
+        b["name"]
+        for p, b in client.posts
+        if p.startswith("/services/")
+    }
+    assert bootstrap.APP_PIPELINE_SERVICE_NAME in service_names
+    assert bootstrap.SCHEMA_DATABASE_SERVICE_NAME in service_names
+    assert not any(n.startswith("t1-") for n in service_names)
+
+
 # --------------------------------------------------------- Wave 1 (#43) tests
 
 

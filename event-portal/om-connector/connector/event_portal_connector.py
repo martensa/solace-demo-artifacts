@@ -110,6 +110,36 @@ class SolaceEventPortalSource(Source):
         except (TypeError, ValueError):
             self.topic_tree_max_depth = 3
         self.since: Optional[str] = opts.get("since") or None
+        # Wave 5 (#41): multi-tenant. Two EP tenants share the synthetic
+        # services (apps PipelineService, schemas DatabaseService, the
+        # StorageServices), so an optional tenantPrefix isolates their FQNs.
+        # Empty prefix => byte-identical single-tenant FQNs (zero drift for
+        # the existing ALDI tenant). The MessagingService (self.service_name)
+        # is already isolated by a distinct serviceName per tenant workflow.
+        from .fqn import apply_tenant_prefix
+        from .property_keys import (
+            APP_PIPELINE_SERVICE_NAME,
+            CONSUMER_STORAGE_SERVICE_NAME,
+            EVENT_API_STORAGE_SERVICE_NAME,
+            SCHEMA_DATABASE_SERVICE_NAME,
+            TOPIC_TREE_STORAGE_SERVICE_NAME,
+        )
+        self.tenant_prefix: str = opts.get("tenantPrefix") or ""
+        self.app_pipeline_service = apply_tenant_prefix(
+            APP_PIPELINE_SERVICE_NAME, self.tenant_prefix
+        )
+        self.event_api_service = apply_tenant_prefix(
+            EVENT_API_STORAGE_SERVICE_NAME, self.tenant_prefix
+        )
+        self.consumer_service = apply_tenant_prefix(
+            CONSUMER_STORAGE_SERVICE_NAME, self.tenant_prefix
+        )
+        self.schema_db_service = apply_tenant_prefix(
+            SCHEMA_DATABASE_SERVICE_NAME, self.tenant_prefix
+        )
+        self.topic_tree_service = apply_tenant_prefix(
+            TOPIC_TREE_STORAGE_SERVICE_NAME, self.tenant_prefix
+        )
         # EP-UI back-link configuration: base URL + per-entity path
         # templates. All overridable via connectionOptions so the user
         # can flip to a different SSO / regional console without a code
@@ -578,7 +608,9 @@ class SolaceEventPortalSource(Source):
         # One-shot DatabaseSchema ensure (per-domain) before any Tables go in.
         if domain["id"] not in self._database_schema_ensured:
             try:
-                ds_req = domain_to_database_schema_request(domain)
+                ds_req = domain_to_database_schema_request(
+                    domain, service_name=self.schema_db_service
+                )
                 if ds_req is not None:
                     self.metadata.create_or_update(data=ds_req)
                 self._database_schema_ensured.add(domain["id"])
@@ -607,6 +639,7 @@ class SolaceEventPortalSource(Source):
                         is_latest_version=(
                             version.get("id") == latest_id if latest_id else None
                         ),
+                        service_name=self.schema_db_service,
                     )
                     if req is None:
                         continue
@@ -687,6 +720,7 @@ class SolaceEventPortalSource(Source):
                         is_latest_version=(
                             version.get("id") == latest_id if latest_id else None
                         ),
+                        service_name=self.event_api_service,
                     )
                     if container_req is None:
                         continue
@@ -716,6 +750,7 @@ class SolaceEventPortalSource(Source):
                         event_api_container_fqn(
                             ea.get("name") or "unnamed-event-api",
                             str(version.get("version") or "1.0.0"),
+                            service_name=self.event_api_service,
                         )
                     )
 
@@ -775,7 +810,9 @@ class SolaceEventPortalSource(Source):
                 parent_fqn: Optional[str] = None
                 for depth, seg in enumerate(capped, start=1):
                     path_so_far = capped[:depth]
-                    seg_fqn = topic_segment_container_fqn(path_so_far)
+                    seg_fqn = topic_segment_container_fqn(
+                        path_so_far, service_name=self.topic_tree_service
+                    )
                     leaf_fqn = seg_fqn
                     if seg_fqn in self._topic_segment_ensured:
                         # Already created on a sibling topic. Still pull
@@ -789,6 +826,7 @@ class SolaceEventPortalSource(Source):
                         depth=depth,
                         segment_path=path_so_far,
                         parent_fqn=parent_fqn,
+                        service_name=self.topic_tree_service,
                     )
                     if req is None:
                         parent_fqn = seg_fqn
@@ -861,6 +899,7 @@ class SolaceEventPortalSource(Source):
                     app=app,
                     app_version=app_version,
                     domain=domain,
+                    service_name=self.consumer_service,
                 )
                 if req is None:
                     continue
@@ -1154,6 +1193,7 @@ class SolaceEventPortalSource(Source):
                             self._custom_attribute_tags(app)
                             + self._custom_attribute_tags(version)
                         ),
+                        service_name=self.app_pipeline_service,
                     )
                     if pipeline_request is None:
                         continue

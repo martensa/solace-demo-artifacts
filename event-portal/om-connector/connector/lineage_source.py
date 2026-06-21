@@ -76,6 +76,16 @@ class EventPortalLineageSource(Source):
         self._cross_system_services: List[str] = list(
             opts.get("crossSystemServiceFqns") or []
         )
+        # Wave 5 (#41): same tenant prefix as the metadata source, so the
+        # Pipeline FQNs we resolve for #60 edges match the prefixed apps
+        # PipelineService the metadata pass created.
+        from .fqn import apply_tenant_prefix
+        from .property_keys import APP_PIPELINE_SERVICE_NAME
+
+        self.tenant_prefix: str = opts.get("tenantPrefix") or ""
+        self.app_pipeline_service = apply_tenant_prefix(
+            APP_PIPELINE_SERVICE_NAME, self.tenant_prefix
+        )
 
         # EP client for #60 + #65 -- shared shape with metadata source.
         self._ep_client = EventPortalClient(
@@ -254,7 +264,13 @@ class EventPortalLineageSource(Source):
                 if not source_fqns and not sink_fqns:
                     continue
                 # Resolve our OM Pipeline FQN for this application version.
-                pipe_fqn = f"solace-event-portal-apps.{app_pipeline_fqn(app['name'], str(latest.get('version') or '1.0.0'))}"
+                # app_pipeline_fqn already includes the (tenant-prefixed)
+                # PipelineService segment -- do not prepend it again.
+                pipe_fqn = app_pipeline_fqn(
+                    app["name"],
+                    str(latest.get("version") or "1.0.0"),
+                    service_name=self.app_pipeline_service,
+                )
                 pipe_id = self._resolve_entity_id("pipeline", pipe_fqn)
                 if not pipe_id:
                     logger.debug(

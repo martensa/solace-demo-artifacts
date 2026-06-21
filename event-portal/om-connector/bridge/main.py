@@ -115,6 +115,7 @@ def _reconcile(settings: BridgeSettings, since: str = None) -> int:
         ep_client=ep_client,
         om=om,
         service_name=settings.om.service_name,
+        tenant_prefix=settings.om.tenant_prefix,
         since=since,
     )
     print(
@@ -140,6 +141,7 @@ def _soft_delete(settings: BridgeSettings, auto_purge_after_days: Optional[int])
         ep_client=ep_client,
         om=om,
         service_name=settings.om.service_name,
+        tenant_prefix=settings.om.tenant_prefix,
         auto_purge_after_days=auto_purge_after_days,
     )
     print(

@@ -57,7 +57,8 @@ def run_solace_consumer(
         ttl_seconds=settings.transport.dedupe_ttl_seconds,
     )
     ctx = BridgeContext(
-        ep_client=ep_client, om=om, service_name=settings.om.service_name
+        ep_client=ep_client, om=om, service_name=settings.om.service_name,
+        tenant_prefix=settings.om.tenant_prefix,
     )
     stop_event = stop_event or threading.Event()
 

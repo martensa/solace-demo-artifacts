@@ -102,6 +102,7 @@ def replay_audit_since(
     ep_client,
     om,
     service_name: str,
+    tenant_prefix: str = "",
     since: Optional[str] = None,
     dispatcher: Optional[Dispatcher] = None,
     domain_ids: Optional[List[str]] = None,
@@ -126,7 +127,10 @@ def replay_audit_since(
     if dispatcher is None:
         from .handlers import register_defaults
         dispatcher = register_defaults(Dispatcher())
-    ctx = BridgeContext(ep_client=ep_client, om=om, service_name=service_name)
+    ctx = BridgeContext(
+        ep_client=ep_client, om=om, service_name=service_name,
+        tenant_prefix=tenant_prefix,
+    )
     watermark = since or read_watermark(om, service_name)
     logger.info("Reconciliation starting from %s", watermark)
 
@@ -189,6 +193,7 @@ def soft_delete_missing_entities(
     ep_client,
     om,
     service_name: str,
+    tenant_prefix: str = "",
     auto_purge_after_days: Optional[int] = None,
     now: Optional[datetime] = None,
 ) -> Dict[str, int]:
@@ -215,7 +220,10 @@ def soft_delete_missing_entities(
 
     Returns ``{retired: int, purged: int, scanned: int}``.
     """
-    from connector.fqn import app_pipeline_fqn, topic_fqn
+    from connector.fqn import app_pipeline_fqn, apply_tenant_prefix, topic_fqn
+    # Wave 5 (#41): a per-tenant bridge must only tombstone its own
+    # prefixed apps PipelineService, never another tenant's pipelines.
+    app_service = apply_tenant_prefix(APP_PIPELINE_SERVICE_NAME, tenant_prefix)
     now = now or datetime.now(timezone.utc)
     deleted_at = now.isoformat(timespec="seconds")
 
@@ -270,7 +278,11 @@ def soft_delete_missing_entities(
                     if not v:
                         continue
                     expected_pipeline_fqns.add(
-                        app_pipeline_fqn(app_name, str(v.get("version") or "1.0.0"))
+                        app_pipeline_fqn(
+                            app_name,
+                            str(v.get("version") or "1.0.0"),
+                            service_name=app_service,
+                        )
                     )
         except Exception:
             logger.exception("list_applications(%s) failed during soft-delete", domain_id)
@@ -288,7 +300,7 @@ def soft_delete_missing_entities(
         om=om,
         list_path="/pipelines",
         list_params={
-            "service": APP_PIPELINE_SERVICE_NAME, "fields": "tags,extension",
+            "service": app_service, "fields": "tags,extension",
         },
         expected_fqns=expected_pipeline_fqns,
         deleted_at=deleted_at,
@@ -306,7 +318,7 @@ def soft_delete_missing_entities(
         purged += _hard_delete_aged_tombstones(
             om=om, list_path="/pipelines",
             list_params={
-                "service": APP_PIPELINE_SERVICE_NAME, "fields": "tags,extension",
+                "service": app_service, "fields": "tags,extension",
             },
             cutoff=cutoff,
         )

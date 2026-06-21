@@ -629,12 +629,29 @@ def discover_custom_attribute_classifications(
     return out
 
 
-def bootstrap(om, ep_client=None, ca_exclude: Optional[set] = None) -> None:
+def bootstrap(
+    om,
+    ep_client=None,
+    ca_exclude: Optional[set] = None,
+    tenant_prefix: str = "",
+) -> None:
     """Run the full idempotent bootstrap against an OM instance.
 
     Pass ``ep_client`` to also auto-discover custom-attribute classifications
     from EP (#43). Without it the CA-tagging feature is dormant (the
-    mapper still emits topics, just without CA tags)."""
+    mapper still emits topics, just without CA tags).
+
+    Wave 5 (#41): ``tenant_prefix`` prefixes the five shared synthetic
+    services so two EP tenants do not collide. Empty = single-tenant
+    (legacy names, unchanged). Run once per tenant with its prefix."""
+    from .fqn import apply_tenant_prefix
+
+    app_pipeline_service = apply_tenant_prefix(APP_PIPELINE_SERVICE_NAME, tenant_prefix)
+    event_api_service = apply_tenant_prefix(EVENT_API_STORAGE_SERVICE_NAME, tenant_prefix)
+    consumer_service = apply_tenant_prefix(CONSUMER_STORAGE_SERVICE_NAME, tenant_prefix)
+    topic_tree_service = apply_tenant_prefix(TOPIC_TREE_STORAGE_SERVICE_NAME, tenant_prefix)
+    schema_db_service = apply_tenant_prefix(SCHEMA_DATABASE_SERVICE_NAME, tenant_prefix)
+
     ensure_classification(om)
     for tag_name, tag_desc in TAGS:
         ensure_tag(om, CLASSIFICATION_NAME, tag_name, tag_desc)
@@ -654,11 +671,11 @@ def bootstrap(om, ep_client=None, ca_exclude: Optional[set] = None) -> None:
         ensure_custom_property(om, "dataProduct", key, ptype, desc)
     for key, ptype, desc in TABLE_CUSTOM_PROPERTIES:
         ensure_custom_property(om, "table", key, ptype, desc)
-    ensure_pipeline_service(om)
+    ensure_pipeline_service(om, name=app_pipeline_service)
     # Wave 3 (#44): synthetic StorageService for EventAPI Containers.
     ensure_storage_service(
         om,
-        EVENT_API_STORAGE_SERVICE_NAME,
+        event_api_service,
         display_name="Solace Event Portal Event APIs",
         description=(
             "Synthetic OM StorageService that holds one Container per EP "
@@ -669,7 +686,7 @@ def bootstrap(om, ep_client=None, ca_exclude: Optional[set] = None) -> None:
     # Wave 3 (#55): synthetic StorageService for consumer-queue Containers.
     ensure_storage_service(
         om,
-        CONSUMER_STORAGE_SERVICE_NAME,
+        consumer_service,
         display_name="Solace Event Portal Consumer Queues",
         description=(
             "Synthetic OM StorageService that holds one Container per EP "
@@ -681,7 +698,7 @@ def bootstrap(om, ep_client=None, ca_exclude: Optional[set] = None) -> None:
     # Wave 3 (#53): synthetic StorageService for topic-tree segment Containers.
     ensure_storage_service(
         om,
-        TOPIC_TREE_STORAGE_SERVICE_NAME,
+        topic_tree_service,
         display_name="Solace Event Portal Topic Tree",
         description=(
             "Synthetic OM StorageService materialising the Solace "
@@ -696,7 +713,7 @@ def bootstrap(om, ep_client=None, ca_exclude: Optional[set] = None) -> None:
     # EP Schemas (one Table per Schema + version).
     ensure_database_service(
         om,
-        SCHEMA_DATABASE_SERVICE_NAME,
+        schema_db_service,
         display_name="Solace Event Portal Schemas",
         description=(
             "Synthetic OM DatabaseService that promotes EP Schemas to "
@@ -708,7 +725,7 @@ def bootstrap(om, ep_client=None, ca_exclude: Optional[set] = None) -> None:
     ensure_database(
         om,
         SCHEMA_DATABASE_NAME,
-        service=SCHEMA_DATABASE_SERVICE_NAME,
+        service=schema_db_service,
         display_name="Schemas",
         description=(
             "Top-level container for per-domain DatabaseSchemas. EP has no "
@@ -799,6 +816,15 @@ def main(argv=None) -> int:
         "as classifications (typically high-cardinality identity attributes "
         "like 'acl-principal' where one-tag-per-value would explode).",
     )
+    # Wave 5 (#41): multi-tenant. Prefix the five shared synthetic services
+    # so two EP tenants do not collide. Must match the connector workflow's
+    # tenantPrefix. Run once per tenant.
+    parser.add_argument(
+        "--tenant-prefix",
+        default="",
+        help="Prefix for the shared synthetic services (apps/event-apis/"
+        "consumers/topic-tree/schemas). Empty = single-tenant (default).",
+    )
     args = parser.parse_args(argv)
 
     ep_client = None
@@ -813,7 +839,12 @@ def main(argv=None) -> int:
 
     om = _build_om(args.host_port, args.jwt_token)
     if not args.remove_legacy_only:
-        bootstrap(om, ep_client=ep_client, ca_exclude=ca_exclude or None)
+        bootstrap(
+            om,
+            ep_client=ep_client,
+            ca_exclude=ca_exclude or None,
+            tenant_prefix=args.tenant_prefix,
+        )
     if args.remove_legacy or args.remove_legacy_only:
         removed = remove_legacy_properties(om, args.host_port, args.jwt_token)
         print(

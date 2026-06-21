@@ -45,7 +45,8 @@ def build_http_app(
         ttl_seconds=settings.transport.dedupe_ttl_seconds,
     )
     ctx = BridgeContext(
-        ep_client=ep_client, om=om, service_name=settings.om.service_name
+        ep_client=ep_client, om=om, service_name=settings.om.service_name,
+        tenant_prefix=settings.om.tenant_prefix,
     )
 
     app = FastAPI(title="om-eventportal-bridge", version="0.1.0")

@@ -319,6 +319,62 @@ def test_soft_delete_auto_purge_hard_deletes_aged_tombstones():
     assert not any("t-fresh" in p for p in client.deletes)
 
 
+def test_soft_delete_pipeline_isolation_uses_tenant_prefix():
+    """Wave 5 (#41): a per-tenant bridge must scope its pipeline soft-delete
+    to its own prefixed apps PipelineService AND rebuild expected FQNs with
+    the same prefix, so it never tombstones another tenant's pipelines."""
+    ep = MagicMock()
+    ep.list_application_domains.return_value = [{"id": "d-1"}]
+    ep.list_events.return_value = []
+    ep.list_applications.return_value = [{"id": "a-1", "name": "OrderService"}]
+    ep.list_application_versions.return_value = [{"id": "av-1", "version": "1.2.0"}]
+
+    prefixed_service = "t1-" + APP_PIPELINE_SERVICE_NAME
+    captured = {}
+
+    class _CapturingOMClient(_FakeOMClient):
+        def get(self, path, data=None):
+            if path == "/pipelines":
+                captured["pipelines_params"] = data
+            return super().get(path, data)
+
+    client = _CapturingOMClient(
+        list_responses={
+            "/topics": {"data": [], "paging": {}},
+            "/pipelines": {
+                "data": [
+                    {
+                        "id": "p-alive",
+                        "fullyQualifiedName": (
+                            f'{prefixed_service}."OrderService_v1.2.0"'
+                        ),
+                        "tags": [], "extension": {},
+                    },
+                    {
+                        "id": "p-zombie",
+                        "fullyQualifiedName": (
+                            f'{prefixed_service}."PaymentService_v1.0.0"'
+                        ),
+                        "tags": [], "extension": {},
+                    },
+                ],
+                "paging": {},
+            },
+        }
+    )
+    summary = soft_delete_missing_entities(
+        ep_client=ep, om=_make_om(client),
+        service_name="t1-solace-ep", tenant_prefix="t1",
+    )
+
+    # The pipeline list query was scoped to the prefixed PipelineService.
+    assert captured["pipelines_params"]["service"] == prefixed_service
+    # Expected FQNs were rebuilt with the prefix, so the alive pipeline is
+    # preserved and only the prefixed zombie is tombstoned.
+    assert summary["retired"] == 1
+    assert client.patches[0][0] == "/pipelines/p-zombie"
+
+
 def test_soft_delete_aborts_cleanly_when_ep_unreachable():
     """If list_application_domains throws, the function must not blow up
     the cron -- return zeros and log."""

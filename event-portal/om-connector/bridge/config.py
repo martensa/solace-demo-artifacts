@@ -28,6 +28,10 @@ class OpenMetadataSettings(BaseSettings):
     host_port: str = "http://openmetadata-server:8585/api"
     jwt_token: str = ""
     service_name: str = "solace-event-portal"
+    # Wave 5 (#41): must match the connector's tenantPrefix so the
+    # soft-delete pass diffs the prefixed apps PipelineService for THIS
+    # tenant only. Empty = single-tenant (legacy, unchanged).
+    tenant_prefix: str = ""
 
     model_config = SettingsConfigDict(env_prefix="OM_", env_file=".env", extra="ignore")
 

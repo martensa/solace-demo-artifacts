@@ -44,6 +44,16 @@ source:
         emitDomains: "true"           # OM Domain per EP application domain
         emitDataProducts: "true"      # OM DataProduct per modeled mesh
 
+        # --- Multi-tenant (Wave 5 / #41) -----------------------------
+        # Two EP tenants share the synthetic services (apps
+        # PipelineService, schemas DatabaseService, the StorageServices).
+        # Set a distinct tenantPrefix per tenant to isolate their FQNs,
+        # AND give each tenant a distinct serviceName above. Empty =
+        # single-tenant (default; FQNs unchanged). Run
+        # `om-eventportal-bootstrap --tenant-prefix <prefix>` once per
+        # tenant. See config/example-workflow-tenant-b.yaml.
+        tenantPrefix: ""
+
         # --- Owner sync ----------------------------------------------
         # Resolves EP owner e-mails to OM users via Keycloak identity.
         # Set to "false" to skip the lookup entirely.
