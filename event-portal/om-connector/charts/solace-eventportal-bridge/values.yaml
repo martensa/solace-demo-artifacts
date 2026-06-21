@@ -1,0 +1,145 @@
+# Default values for solace-eventportal-bridge.
+# Mirrors bridge/config.py: every env var the bridge reads has a value here.
+
+# -- Bridge runtime mode: polling | http | forwarder | solace.
+# polling is the Solace Cloud EP v2 default (no outbound webhooks).
+mode: polling
+
+replicaCount: 1
+
+image:
+  repository: registry.solace.lab/om-eventportal-bridge
+  tag: ""          # defaults to .Chart.AppVersion when empty
+  pullPolicy: IfNotPresent
+
+# Lab convention (agent-mesh-deployment): private registry pull secret.
+imagePullSecrets:
+  - name: registry-pull-secret
+
+nameOverride: ""
+fullnameOverride: ""
+
+# --- Event Portal -----------------------------------------------------------
+eventPortal:
+  apiUrl: https://api.solace.cloud/api/v2
+
+# --- OpenMetadata -----------------------------------------------------------
+openMetadata:
+  hostPort: http://openmetadata-server:8585/api
+  serviceName: solace-event-portal
+  # Wave 5 (#41): must match the connector workflow's tenantPrefix for a
+  # per-tenant bridge. Empty = single-tenant.
+  tenantPrefix: ""
+
+# --- Secrets ----------------------------------------------------------------
+# Plain K8s Secret (v1.0 decision). Provide token values here for the chart
+# to create the Secret, OR set existingSecret to reference your own (e.g. a
+# Vault-synced secret in v1.1). Never commit real tokens into values.yaml.
+secret:
+  # When set, the chart does NOT create a Secret and reads keys from this one.
+  existingSecret: ""
+  # Keys within the Secret (own or chart-created).
+  epApiTokenKey: ep-api-token
+  omJwtTokenKey: om-jwt-token
+  epWebhookSecretKey: ep-webhook-secret
+  solacePasswordKey: solace-password
+  # Values used ONLY when existingSecret is empty (chart creates the Secret).
+  epApiToken: ""
+  omJwtToken: ""
+  epWebhookSecret: ""
+  solacePassword: ""
+
+# --- Transport behaviour (BRIDGE_*) ----------------------------------------
+bridge:
+  pollingIntervalSeconds: 10
+  pollingDomainIds: []        # empty = every domain the token can see
+  dedupe:
+    ttlSeconds: 600
+    maxEntries: 10000
+  acceptEventTypes: []        # empty = accept all
+  bindPort: 8080              # http/forwarder webhook receiver
+  forwarderTopicPrefix: om/sync/eventportal
+
+solace:
+  host: tcp://solace_1:55555
+  vpn: default
+  username: om-bridge
+  queue: om/sync/eventportal
+
+# --- Observability (BRIDGE_OBS_*, Wave 5) ----------------------------------
+observability:
+  logFormat: text             # text | json (#11)
+  logLevel: INFO
+  shutdownGraceSeconds: 10     # #13
+  metrics:
+    enabled: false            # #10 Prometheus /metrics
+    port: 9100
+    # Annotate the Service for prometheus.io scraping when metrics enabled.
+    serviceAnnotations: true
+  otel:
+    enabled: false            # #63 OpenTelemetry tracing
+    # Endpoint left empty -> bridge SDK default, OR the in-cluster sidecar
+    # below when otelCollector.enabled.
+    endpoint: ""
+    protocol: http/protobuf   # http/protobuf | grpc
+    serviceName: om-eventportal-bridge
+
+# Optional in-cluster OTel collector sidecar (#63). When enabled, the bridge
+# ships spans to it on localhost:4318 (data-residency: never an external SaaS).
+otelCollector:
+  enabled: false
+  image: otel/opentelemetry-collector:0.103.1
+  # Where the collector forwards (e.g. a Tempo/Jaeger OTLP endpoint). Keep
+  # in-region per ALDI EU data-residency.
+  exporterEndpoint: ""
+
+# --- CronJobs ---------------------------------------------------------------
+cron:
+  softDelete:
+    enabled: false
+    schedule: "0 * * * *"     # hourly
+    autoPurgeAfterDays: 0     # 0 = forever-tombstone (no hard delete)
+    concurrencyPolicy: Forbid
+  reconcile:
+    enabled: false
+    schedule: "*/15 * * * *"
+    concurrencyPolicy: Forbid
+
+# --- On-prem OM TLS: mount the lab CA bundle (per local-k8s-values.yaml).
+# EP (api.solace.cloud) uses public CAs; on-prem OM may need the lab CA.
+labCaTrust:
+  enabled: false
+  configMapName: solace-lab-ca-trust-bundle
+  # Mount path + the env the bridge's requests stack honours.
+  mountPath: /etc/ssl/certs/solace-lab-ca.crt
+  subPath: ca.crt
+
+# --- Pod scheduling / security ---------------------------------------------
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+
+# terminationGracePeriodSeconds is computed as max(this, pollingInterval+5)
+# in the template so SIGTERM can drain a poll tick (#13).
+terminationGracePeriodSeconds: 30

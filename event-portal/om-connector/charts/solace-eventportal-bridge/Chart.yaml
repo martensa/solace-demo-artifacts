@@ -1,0 +1,22 @@
+apiVersion: v2
+name: solace-eventportal-bridge
+description: >-
+  Solace Event Portal -> OpenMetadata bridge (Wave 5 / #15). Deploys the
+  standalone bridge image (polling / http / forwarder / solace modes) with
+  the Wave 5 observability surfaces: Prometheus /metrics (#10), optional
+  OpenTelemetry collector sidecar (#63), graceful shutdown (#13), and
+  structured logging (#11). Soft-delete (#61) and reconcile run as CronJobs.
+type: application
+# Chart version is independent of the app; bump on chart changes.
+version: 0.1.0
+# Tracks the bridge image tag (Wave 5 = 0.9.0). Keep in lockstep with
+# pyproject.toml + scripts/build-bridge-image.sh.
+appVersion: "0.9.0"
+keywords:
+  - solace
+  - event-portal
+  - openmetadata
+  - metadata
+home: https://github.com/martensa/solace-demo-artifacts
+maintainers:
+  - name: Solace

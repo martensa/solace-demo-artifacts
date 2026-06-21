@@ -1,0 +1,33 @@
+Solace Event Portal -> OpenMetadata bridge deployed.
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Mode:      {{ .Values.mode }}
+Image:     {{ include "solace-eventportal-bridge.image" . }}
+
+{{- if .Values.secret.existingSecret }}
+Secrets:   using existing Secret "{{ .Values.secret.existingSecret }}".
+{{- else }}
+Secrets:   chart-created Secret "{{ include "solace-eventportal-bridge.fullname" . }}"
+           (keys: {{ .Values.secret.epApiTokenKey }}, {{ .Values.secret.omJwtTokenKey }}).
+{{- end }}
+
+Observability:
+  logFormat={{ .Values.observability.logFormat }} logLevel={{ .Values.observability.logLevel }}
+  metrics={{ .Values.observability.metrics.enabled }}{{ if .Values.observability.metrics.enabled }} (/metrics on :{{ .Values.observability.metrics.port }}){{ end }}
+  otel={{ or .Values.observability.otel.enabled .Values.otelCollector.enabled }}{{ if .Values.otelCollector.enabled }} (in-cluster collector sidecar){{ end }}
+
+CronJobs:
+  soft-delete: {{ if .Values.cron.softDelete.enabled }}ENABLED ({{ .Values.cron.softDelete.schedule }}){{ else }}disabled{{ end }}
+  reconcile:   {{ if .Values.cron.reconcile.enabled }}ENABLED ({{ .Values.cron.reconcile.schedule }}){{ else }}disabled{{ end }}
+
+{{- if eq .Values.mode "polling" }}
+
+Polling mode has no HTTP server. Tail logs to confirm ticks:
+  kubectl logs -n {{ .Release.Namespace }} deploy/{{ include "solace-eventportal-bridge.fullname" . }} -f
+{{- end }}
+
+Before first run, ensure OM has the EP classifications + custom properties:
+  om-eventportal-bootstrap --host-port {{ .Values.openMetadata.hostPort }} \
+    --jwt-token <om-jwt>{{ if .Values.openMetadata.tenantPrefix }} \
+    --tenant-prefix {{ .Values.openMetadata.tenantPrefix }}{{ end }}

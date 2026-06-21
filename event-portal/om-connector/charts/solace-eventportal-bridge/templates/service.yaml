@@ -1,0 +1,31 @@
+{{- if or .Values.observability.metrics.enabled (eq .Values.mode "http") (eq .Values.mode "forwarder") }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "solace-eventportal-bridge.fullname" . }}
+  labels:
+    {{- include "solace-eventportal-bridge.labels" . | nindent 4 }}
+  {{- if and .Values.observability.metrics.enabled .Values.observability.metrics.serviceAnnotations }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: {{ .Values.observability.metrics.port | quote }}
+    prometheus.io/path: /metrics
+  {{- end }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "solace-eventportal-bridge.selectorLabels" . | nindent 4 }}
+  ports:
+    {{- if or (eq .Values.mode "http") (eq .Values.mode "forwarder") }}
+    - name: webhook
+      port: {{ .Values.bridge.bindPort }}
+      targetPort: webhook
+      protocol: TCP
+    {{- end }}
+    {{- if .Values.observability.metrics.enabled }}
+    - name: metrics
+      port: {{ .Values.observability.metrics.port }}
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
+{{- end }}

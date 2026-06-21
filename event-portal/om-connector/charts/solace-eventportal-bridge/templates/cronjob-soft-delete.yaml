@@ -1,0 +1,59 @@
+{{- if .Values.cron.softDelete.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "solace-eventportal-bridge.fullname" . }}-soft-delete
+  labels:
+    {{- include "solace-eventportal-bridge.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.cron.softDelete.schedule | quote }}
+  concurrencyPolicy: {{ .Values.cron.softDelete.concurrencyPolicy }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "solace-eventportal-bridge.selectorLabels" . | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: soft-delete
+              image: {{ include "solace-eventportal-bridge.image" . | quote }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              args:
+                - --soft-delete-missing
+                {{- if gt (int .Values.cron.softDelete.autoPurgeAfterDays) 0 }}
+                - --auto-purge-after-days
+                - {{ .Values.cron.softDelete.autoPurgeAfterDays | quote }}
+                {{- end }}
+              env:
+                {{- include "solace-eventportal-bridge.env" . | nindent 16 }}
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                {{- if .Values.labCaTrust.enabled }}
+                - name: lab-ca
+                  mountPath: {{ .Values.labCaTrust.mountPath }}
+                  subPath: {{ .Values.labCaTrust.subPath }}
+                  readOnly: true
+                {{- end }}
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            {{- if .Values.labCaTrust.enabled }}
+            - name: lab-ca
+              configMap:
+                name: {{ .Values.labCaTrust.configMapName }}
+                defaultMode: 0444
+            {{- end }}
+{{- end }}

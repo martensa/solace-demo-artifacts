@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "solace-eventportal-bridge.fullname" . }}
+  labels:
+    {{- include "solace-eventportal-bridge.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "solace-eventportal-bridge.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "solace-eventportal-bridge.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- if and .Values.observability.metrics.enabled .Values.observability.metrics.serviceAnnotations }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.observability.metrics.port | quote }}
+        prometheus.io/path: /metrics
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # SIGTERM drains a poll tick (#13); keep grace > the poll interval.
+      terminationGracePeriodSeconds: {{ max .Values.terminationGracePeriodSeconds (add .Values.bridge.pollingIntervalSeconds 5) }}
+      containers:
+        - name: bridge
+          image: {{ include "solace-eventportal-bridge.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            {{- include "solace-eventportal-bridge.env" . | nindent 12 }}
+          ports:
+            {{- if or (eq .Values.mode "http") (eq .Values.mode "forwarder") }}
+            - name: webhook
+              containerPort: {{ .Values.bridge.bindPort }}
+              protocol: TCP
+            {{- end }}
+            {{- if .Values.observability.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.observability.metrics.port }}
+              protocol: TCP
+            {{- end }}
+          {{- if or (eq .Values.mode "http") (eq .Values.mode "forwarder") }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: webhook
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: {{ if eq .Values.mode "http" }}/readyz{{ else }}/healthz{{ end }}
+              port: webhook
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          {{- else if .Values.observability.metrics.enabled }}
+          # polling / solace have no HTTP app; probe the metrics port (TCP)
+          # only when it exists, so the pod does not crashloop without one.
+          livenessProbe:
+            tcpSocket:
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.labCaTrust.enabled }}
+            - name: lab-ca
+              mountPath: {{ .Values.labCaTrust.mountPath }}
+              subPath: {{ .Values.labCaTrust.subPath }}
+              readOnly: true
+            {{- end }}
+        {{- if .Values.otelCollector.enabled }}
+        - name: otel-collector
+          image: {{ .Values.otelCollector.image | quote }}
+          args: ["--config=/etc/otel/config.yaml"]
+          ports:
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otel
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.labCaTrust.enabled }}
+        - name: lab-ca
+          configMap:
+            name: {{ .Values.labCaTrust.configMapName }}
+            defaultMode: 0444
+        {{- end }}
+        {{- if .Values.otelCollector.enabled }}
+        - name: otel-config
+          configMap:
+            name: {{ include "solace-eventportal-bridge.fullname" . }}-otel
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
