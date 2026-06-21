@@ -331,3 +331,31 @@ def test_app_to_pipeline_request_skips_source_url_when_api_url_missing():
     assert req is not None
     src = getattr(req, "sourceUrl", None)
     assert src is None
+
+
+def test_event_to_topic_request_pii_tag_and_cp():
+    """Wave 5 (#62): contains_pii=True attaches the EventPortalCompliance.PII
+    TagLabel + eventPortalContainsPii CP; default leaves both off."""
+    from connector.mappers import CP_CONTAINS_PII, PII_TAG_FQN
+
+    domain = {"id": "d-1", "name": "orders-domain"}
+    event = {"id": "e-1", "name": "OrderCreated"}
+    version = {"id": "ev-1", "version": "1.0.0", "stateId": "RELEASED"}
+
+    base = event_to_topic_request(
+        service_name="solace-ep", domain=domain, event=event,
+        event_version=version, schema_payload=None,
+    )
+    base_ext = getattr(getattr(base, "extension", None), "root", {}) or {}
+    assert CP_CONTAINS_PII not in base_ext
+    base_tags = [str(getattr(t, "tagFQN", t)) for t in (base.tags or [])]
+    assert not any(PII_TAG_FQN in s for s in base_tags)
+
+    pii = event_to_topic_request(
+        service_name="solace-ep", domain=domain, event=event,
+        event_version=version, schema_payload=None, contains_pii=True,
+    )
+    pii_ext = getattr(getattr(pii, "extension", None), "root", {}) or {}
+    assert pii_ext.get(CP_CONTAINS_PII) == "true"
+    pii_tags = [str(getattr(t, "tagFQN", t)) for t in (pii.tags or [])]
+    assert any(PII_TAG_FQN in s for s in pii_tags)

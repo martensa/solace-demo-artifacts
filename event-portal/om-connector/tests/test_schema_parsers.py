@@ -257,3 +257,31 @@ def test_empty_content_returns_empty_list():
 def test_malformed_json_returns_empty_list_does_not_raise():
     # Parser exception is swallowed; caller still gets [].
     assert parse_fields("JSON", "{not valid json}") == []
+
+
+def test_json_schema_x_pii_field_marked_when_opted_in():
+    """Wave 5 (#62): with mark_pii=True an x-pii field gets a [PII] marker in
+    dataTypeDisplay; non-PII fields are untouched."""
+    schema = json.dumps({
+        "type": "object",
+        "properties": {
+            "email": {"type": "string", "x-pii": True},
+            "name": {"type": "string"},
+        },
+    })
+    top = _top(parse_fields("JSON", schema, mark_pii=True))
+    by_name = {_name(c): c for c in _children(top)}
+    assert "[PII]" in (_display(by_name["email"]) or "")
+    assert "[PII]" not in (_display(by_name["name"]) or "")
+
+
+def test_x_pii_field_not_marked_when_not_opted_in():
+    """Default (mark_pii=False) leaves dataTypeDisplay byte-identical -- an
+    existing ingest that never opted into PII sees no [PII] markers."""
+    schema = json.dumps({
+        "type": "object",
+        "properties": {"email": {"type": "string", "x-pii": True}},
+    })
+    top = _top(parse_fields("JSON", schema))  # mark_pii defaults False
+    by_name = {_name(c): c for c in _children(top)}
+    assert "[PII]" not in (_display(by_name["email"]) or "")

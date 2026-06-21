@@ -94,6 +94,7 @@ from .property_keys import (  # noqa: E402,F401  (re-export)
     CP_CONSUMER_ID,
     CP_CONSUMER_SUBSCRIPTIONS,
     CP_CONSUMER_TYPE,
+    CP_CONTAINS_PII,
     CP_DOMAIN_ID,
     CP_DOMAIN_NAME,
     CP_EP_APP_DOMAIN,
@@ -110,6 +111,7 @@ from .property_keys import (  # noqa: E402,F401  (re-export)
     CP_STATE,
     CP_STATE_CHANGED_AT,
     CP_TOPIC_ADDRESS,
+    PII_TAG_FQN,
 )
 
 
@@ -125,6 +127,19 @@ from .fqn import (  # noqa: F401, E402
     sanitize,
     topic_fqn,
 )
+
+
+def pii_tag() -> TagLabel:
+    """The ``EventPortalCompliance.PII`` TagLabel applied when a PII signal
+    fires (Wave 5 / #62). Pure -- the boolean decision is made upstream in
+    the connector via ``connector.pii.has_pii_signal``; the mapper only
+    renders the tag it is told to attach."""
+    return TagLabel(
+        tagFQN=PII_TAG_FQN,
+        labelType=LabelType.Automated,
+        state=State.Suggested,
+        source=TagSource.Classification,
+    )
 
 
 # --------------------------------------------------- EP UI deep-links
@@ -322,15 +337,18 @@ def extract_topic_address(event_version: Dict[str, Any]) -> Optional[str]:
 # --------------------------------------------------------- schema extraction
 
 
-def parse_schema_fields(content: Optional[str], schema_format: str) -> List[SchemaField]:
+def parse_schema_fields(
+    content: Optional[str], schema_format: str, *, mark_pii: bool = False
+) -> List[SchemaField]:
     """Dispatch to the per-format parser in `connector.schema_parsers`.
 
     JSON Schema, Avro, Protobuf, and XSD are all handled with recursive
     field extraction; unknown formats return an empty list (the Topic
-    still ingests with the raw schemaText preserved).
+    still ingests with the raw schemaText preserved). ``mark_pii`` (#62)
+    is the connector's PII opt-in -- only then are x-pii fields marked.
     """
     from .schema_parsers import parse_fields as _dispatch
-    return _dispatch(schema_format, content or "")
+    return _dispatch(schema_format, content or "", mark_pii=mark_pii)
 
 
 # ---------------------------------------------------------------- builders
@@ -349,6 +367,7 @@ def event_to_topic_request(
     attach_to_domain: bool = True,
     is_latest_version: Optional[bool] = None,
     custom_attribute_tags: Optional[List[TagLabel]] = None,
+    contains_pii: bool = False,
 ) -> CreateTopicRequest:
     """Build a CreateTopicRequest from an Event Portal event version.
 
@@ -393,7 +412,9 @@ def event_to_topic_request(
         ).upper()
         om_type = _SCHEMA_TYPE_MAP.get(fmt, SchemaType.Other)
         text = schema_version.get("content")
-        fields = parse_schema_fields(text, fmt)
+        # Wave 5 (#62): mark x-pii fields only when this Topic is flagged
+        # PII (contains_pii implies the PII opt-in is on + a signal fired).
+        fields = parse_schema_fields(text, fmt, mark_pii=contains_pii)
         if text or fields:
             message_schema = MessageSchema(
                 schemaType=om_type,
@@ -417,6 +438,9 @@ def event_to_topic_request(
     # bindings produced by the connector for the event entity.
     if custom_attribute_tags:
         tags.extend(custom_attribute_tags)
+    # Wave 5 (#62): PII compliance tag when the connector detected a signal.
+    if contains_pii:
+        tags.append(pii_tag())
 
     # User-facing markdown links back to the EP designer. Labels carry
     # the human-readable name (+ version), URL embeds the id.
@@ -452,6 +476,8 @@ def event_to_topic_request(
         CP_IS_LATEST_VERSION: (
             "true" if is_latest_version else "false"
         ) if is_latest_version is not None else None,
+        # Wave 5 (#62): PII flag mirrors the EventPortalCompliance.PII tag.
+        CP_CONTAINS_PII: "true" if contains_pii else None,
     }
     # Strip Nones — OM rejects unknown-typed nulls.
     extension = {k: v for k, v in extension.items() if v is not None}
@@ -936,6 +962,7 @@ def schema_version_to_table_request(
     ep_urls: Optional["EpUrls"] = None,
     is_latest_version: Optional[bool] = None,
     service_name: Optional[str] = None,
+    mark_pii: bool = False,
 ):
     """Build a CreateTableRequest representing one EP Schema + version.
 
@@ -968,7 +995,7 @@ def schema_version_to_table_request(
     ).upper()
     text = schema_version.get("content") or ""
 
-    columns = _build_table_columns_from_text(fmt, text)
+    columns = _build_table_columns_from_text(fmt, text, mark_pii=mark_pii)
 
     raw_state = (
         str(schema_version.get("stateId") or "").strip()
@@ -1030,7 +1057,9 @@ def _wrap_schema_text_markdown(text: str, fmt: str) -> str:
     return f"```{lang}\n{snippet}\n```"
 
 
-def _build_table_columns_from_text(fmt: str, schema_text: str) -> List[Any]:
+def _build_table_columns_from_text(
+    fmt: str, schema_text: str, *, mark_pii: bool = False
+) -> List[Any]:
     """Parse a schema payload to SchemaField[], then convert to Column[].
 
     Returns ``[]`` on parse failure or unsupported format (XSD/XML) -- the
@@ -1041,7 +1070,7 @@ def _build_table_columns_from_text(fmt: str, schema_text: str) -> List[Any]:
         from .schema_parsers import parse_fields
     except Exception:  # pragma: no cover
         return []
-    fields = parse_fields(fmt, schema_text)
+    fields = parse_fields(fmt, schema_text, mark_pii=mark_pii)
     if not fields:
         # Provide a sentinel single-column table so OM still shows the
         # schema as a tangible entity (TableType requires at least 1 col
@@ -1298,6 +1327,7 @@ def app_to_pipeline_request(
     is_latest_version: Optional[bool] = None,
     custom_attribute_tags: Optional[List[TagLabel]] = None,
     service_name: Optional[str] = None,
+    contains_pii: bool = False,
 ):
     """Build a CreatePipelineRequest from an EP application version.
 
@@ -1343,6 +1373,9 @@ def app_to_pipeline_request(
     # Wave 1 (#43): merge auto-discovered EP CA tags from connector.
     if custom_attribute_tags:
         tags.extend(custom_attribute_tags)
+    # Wave 5 (#62): PII compliance tag when the connector detected a signal.
+    if contains_pii:
+        tags.append(pii_tag())
     domain_id = domain.get("id")
     domain_name = domain.get("name")
     app_id = app.get("id")
@@ -1358,6 +1391,8 @@ def app_to_pipeline_request(
         CP_IS_LATEST_VERSION: (
             "true" if is_latest_version else "false"
         ) if is_latest_version is not None else None,
+        # Wave 5 (#62): PII flag mirrors the EventPortalCompliance.PII tag.
+        CP_CONTAINS_PII: "true" if contains_pii else None,
     }
     extension = {k: v for k, v in extension.items() if v is not None}
 

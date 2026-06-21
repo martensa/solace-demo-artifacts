@@ -139,6 +139,13 @@ def test_full_bootstrap_is_idempotent_on_a_populated_om():
     }
     for tag, _ in bootstrap.TAGS:
         populated[f"/tags/name/EventPortal.{tag}"] = {"name": tag}
+    # Wave 5 (#62): compliance classification + PII tag.
+    populated[f"/classifications/name/{bootstrap.PII_CLASSIFICATION}"] = {
+        "name": bootstrap.PII_CLASSIFICATION
+    }
+    populated[
+        f"/tags/name/{bootstrap.PII_CLASSIFICATION}.{bootstrap.PII_TAG_NAME}"
+    ] = {"name": bootstrap.PII_TAG_NAME}
     populated["/metadata/types/name/topic"] = {
         "id": "topic-id",
         "customProperties": [{"name": k} for k, _, _ in bootstrap.TOPIC_CUSTOM_PROPERTIES],
@@ -325,6 +332,44 @@ def test_bootstrap_default_prefix_is_single_tenant_unchanged():
     assert bootstrap.APP_PIPELINE_SERVICE_NAME in service_names
     assert bootstrap.SCHEMA_DATABASE_SERVICE_NAME in service_names
     assert not any(n.startswith("t1-") for n in service_names)
+
+
+def test_bootstrap_creates_pii_classification_and_tag():
+    """Wave 5 (#62): a dedicated EventPortalCompliance classification with a
+    PII tag. (The eventPortalContainsPii CP on Topic + Pipeline is covered
+    by the idempotency test, whose populated set derives from the CP lists.)"""
+    client = _FakeClient(existing={})
+    bootstrap.bootstrap(_make_om(client))
+
+    posted = [(p, b.get("name")) for p, b in client.posts]
+    assert ("/classifications", bootstrap.PII_CLASSIFICATION) in posted
+    pii_tags = [
+        b for p, b in client.posts
+        if p == "/tags" and b.get("name") == bootstrap.PII_TAG_NAME
+    ]
+    assert pii_tags and pii_tags[0]["classification"] == bootstrap.PII_CLASSIFICATION
+
+
+def test_pii_cp_registered_on_topic_and_pipeline_types():
+    """eventPortalContainsPii is registered on both Topic + Pipeline types
+    when those types exist."""
+    client = _FakeClient(
+        existing={
+            "/metadata/types/name/topic": {"id": "topic-id", "customProperties": []},
+            "/metadata/types/name/pipeline": {"id": "pipe-id", "customProperties": []},
+            "/metadata/types/name/string": {"id": "string-id"},
+        }
+    )
+    for et, key, ptype, desc in (
+        ("topic", bootstrap.CP_CONTAINS_PII, "string", "d"),
+        ("pipeline", bootstrap.CP_CONTAINS_PII, "string", "d"),
+    ):
+        bootstrap.ensure_custom_property(
+            _make_om(client), entity_type=et, key=key,
+            property_type_name=ptype, description=desc,
+        )
+    put_names = [b.get("name") for _, b in client.puts]
+    assert put_names.count(bootstrap.CP_CONTAINS_PII) == 2
 
 
 # --------------------------------------------------------- Wave 1 (#43) tests

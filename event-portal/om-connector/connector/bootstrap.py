@@ -36,6 +36,7 @@ from .property_keys import (
     CP_CONSUMER_ID,
     CP_CONSUMER_SUBSCRIPTIONS,
     CP_CONSUMER_TYPE,
+    CP_CONTAINS_PII,
     CP_DOMAIN_ID,
     CP_DOMAIN_NAME,
     CP_EP_APP_DOMAIN,
@@ -66,9 +67,17 @@ from .property_keys import (
     CP_TOPIC_SEGMENT,
     CP_TOPIC_SEGMENT_DEPTH,
     CP_TOPIC_SEGMENT_PATH,
+    PII_CLASSIFICATION,
+    PII_TAG_NAME,
 )
 
 logger = logging.getLogger(__name__)
+
+# Wave 5 (#62): a dedicated compliance classification so ALDI IT-Sec can
+# govern the PII tag independently of the lifecycle EventPortal.* tags.
+PII_CLASSIFICATION_DESC = (
+    "Compliance + data-protection tags for Solace Event Portal entities."
+)
 
 
 CLASSIFICATION_NAME = "EventPortal"
@@ -108,6 +117,13 @@ TOPIC_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [  # (key, type, descripti
         "ISO-8601 UTC timestamp set by the reconcile drift pass when the "
         "EP event version is no longer visible. Combined with the "
         "EventPortal.Retired tag (Wave 4 #61).",
+    ),
+    (
+        CP_CONTAINS_PII,
+        "string",
+        "'true' iff a PII signal fired for this Topic (EP CA / tag / "
+        "topic-segment / schema x-pii field). Pairs with the "
+        "EventPortalCompliance.PII tag (Wave 5 #62).",
     ),
 ]
 
@@ -246,6 +262,12 @@ PIPELINE_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
         "ISO-8601 UTC timestamp set by the reconcile drift pass when the "
         "EP application version is no longer visible. Combined with the "
         "EventPortal.Retired tag (Wave 4 #61).",
+    ),
+    (
+        CP_CONTAINS_PII,
+        "string",
+        "'true' iff a PII signal fired for this application Pipeline "
+        "(Wave 5 #62). Pairs with the EventPortalCompliance.PII tag.",
     ),
 ]
 
@@ -655,6 +677,13 @@ def bootstrap(
     ensure_classification(om)
     for tag_name, tag_desc in TAGS:
         ensure_tag(om, CLASSIFICATION_NAME, tag_name, tag_desc)
+    # Wave 5 (#62): compliance classification + PII tag.
+    ensure_classification(om, name=PII_CLASSIFICATION, description=PII_CLASSIFICATION_DESC)
+    ensure_tag(
+        om, PII_CLASSIFICATION, PII_TAG_NAME,
+        "Entity carries personally identifiable information (declarative: "
+        "EP CA / tag / topic-segment / schema x-pii).",
+    )
     for key, ptype, desc in TOPIC_CUSTOM_PROPERTIES:
         ensure_custom_property(om, "topic", key, ptype, desc)
     for key, ptype, desc in MESSAGING_SERVICE_CUSTOM_PROPERTIES:

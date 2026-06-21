@@ -234,6 +234,19 @@ class SolaceEventPortalSource(Source):
         # and drained at the end of _iter_rest_api into the broker session.
         self._pending_samples: List[Tuple[str, str]] = []
 
+        # Wave 5 (#62): PII detection. All signals are READ-ONLY against EP
+        # (registering a pii CA definition back into EP needs an EP write
+        # path -- reserved for Wave 4.5 / #49). Detection is active iff at
+        # least one signal source is configured.
+        from .pii import parse_pii_ca_names, parse_pii_tag_names
+
+        self._pii_ca_names: List[str] = parse_pii_ca_names(opts.get("piiCaName"))
+        self._pii_tag_names: List[str] = parse_pii_tag_names(opts.get("piiTagNames"))
+        self._pii_topic_pattern: str = opts.get("piiTopicSegmentPattern") or ""
+        self._pii_enabled: bool = bool(
+            self._pii_ca_names or self._pii_tag_names or self._pii_topic_pattern
+        )
+
         # Indexes built during pass 1 + consumed by pass 2 (lineage).
         # event_version_id -> topic FQN
         self._event_version_to_topic_fqn: Dict[str, str] = {}
@@ -534,6 +547,23 @@ class SolaceEventPortalSource(Source):
                     if not version:
                         continue
                     schema_payload = self._resolve_schema(version)
+                    from .mappers import extract_topic_address
+                    addr = extract_topic_address(version)
+                    # Wave 1 (#43): EP custom-attribute -> OM Tag bindings
+                    # from both the event and the event-version payloads.
+                    # Computed once and reused for PII detection below.
+                    ca_tags = (
+                        self._custom_attribute_tags(event)
+                        + self._custom_attribute_tags(version)
+                    )
+                    # Wave 5 (#62): declarative PII detection (read-only).
+                    contains_pii = self._detect_pii(
+                        entity=event,
+                        version=version,
+                        topic_address=addr,
+                        schema_payload=schema_payload,
+                        ca_tags=ca_tags,
+                    )
                     request = event_to_topic_request(
                         service_name=self.service_name,
                         domain=domain,
@@ -547,12 +577,8 @@ class SolaceEventPortalSource(Source):
                         is_latest_version=(
                             version.get("id") == latest_id if latest_id else None
                         ),
-                        # Wave 1 (#43): merge EP custom-attribute tags from
-                        # both the event and the event-version payloads.
-                        custom_attribute_tags=(
-                            self._custom_attribute_tags(event)
-                            + self._custom_attribute_tags(version)
-                        ),
+                        custom_attribute_tags=ca_tags,
+                        contains_pii=contains_pii,
                     )
                     fqn = topic_fqn(
                         self.service_name,
@@ -569,13 +595,21 @@ class SolaceEventPortalSource(Source):
                     # Wave 3 (#53): also keep the topic address indexed by
                     # FQN so the topic-tree pass can walk segments without
                     # re-parsing the EP payload.
-                    from .mappers import extract_topic_address
-                    addr = extract_topic_address(version)
                     if addr:
                         self._topic_fqn_to_address[fqn] = addr
-                    if self.sample_data_enabled:
-                        if addr:
+                    # Wave 5 (#62): HARD-BLOCK sample-data for PII topics --
+                    # never subscribe to a topic that may carry PII payloads.
+                    # The gate is the pure, unit-tested pii.should_sample().
+                    if self.sample_data_enabled and addr:
+                        from .pii import should_sample
+
+                        if should_sample(True, True, contains_pii):
                             self._pending_samples.append((fqn, addr))
+                        else:
+                            logger.info(
+                                "PII topic %s excluded from sample-data "
+                                "collection (#62)", fqn,
+                            )
                     yield Either(right=request)
             except Exception as exc:
                 yield self._fail(
@@ -640,6 +674,7 @@ class SolaceEventPortalSource(Source):
                             version.get("id") == latest_id if latest_id else None
                         ),
                         service_name=self.schema_db_service,
+                        mark_pii=self._pii_enabled,
                     )
                     if req is None:
                         continue
@@ -1179,6 +1214,21 @@ class SolaceEventPortalSource(Source):
                     # subsequent AddLineage edges. (Yielding via Either
                     # would defer the actual create to the sink loop --
                     # too late for the in-iter lineage emit.)
+                    # Wave 1 (#43): EP custom-attribute -> OM Tag bindings
+                    # from the application + version payloads (reused for
+                    # PII detection). Wave 5 (#62): apps have no topic
+                    # address / schema, so the CA-name + tag signals apply.
+                    app_ca_tags = (
+                        self._custom_attribute_tags(app)
+                        + self._custom_attribute_tags(version)
+                    )
+                    app_contains_pii = self._detect_pii(
+                        entity=app,
+                        version=version,
+                        topic_address=None,
+                        schema_payload=None,
+                        ca_tags=app_ca_tags,
+                    )
                     pipeline_request = app_to_pipeline_request(
                         domain=domain, app=app, app_version=version,
                         owner=self._resolve(app, domain),
@@ -1187,13 +1237,9 @@ class SolaceEventPortalSource(Source):
                         is_latest_version=(
                             version.get("id") == latest_id if latest_id else None
                         ),
-                        # Wave 1 (#43): merge EP custom-attribute tags from
-                        # both the application and the version payloads.
-                        custom_attribute_tags=(
-                            self._custom_attribute_tags(app)
-                            + self._custom_attribute_tags(version)
-                        ),
+                        custom_attribute_tags=app_ca_tags,
                         service_name=self.app_pipeline_service,
+                        contains_pii=app_contains_pii,
                     )
                     if pipeline_request is None:
                         continue
@@ -1463,6 +1509,56 @@ class SolaceEventPortalSource(Source):
         return str(getattr(ent_id, "root", ent_id))
 
     # -------------------------------------------------- custom attribute tags
+
+    def _present_ca_names(self, entity: Dict[str, Any]) -> set:
+        """Set of EP custom-attribute *names* present on an entity (Wave 5
+        #62). PII CA detection matches by name, never by free-text value."""
+        id_to_name = self._ca_name_by_id_map()
+        names = set()
+        for ca in entity.get("customAttributes") or []:
+            nm = id_to_name.get(ca.get("customAttributeDefinitionId"))
+            if nm:
+                names.add(nm)
+        return names
+
+    @staticmethod
+    def _schema_text_and_type(schema_payload):
+        """Extract (content, schemaType) from a resolved schema payload,
+        matching how mappers.event_to_topic_request reads it (#62)."""
+        if not schema_payload:
+            return None, None
+        schema = schema_payload.get("schema") or {}
+        version = schema_payload.get("version") or {}
+        stype = schema.get("schemaType") or schema.get("contentType")
+        return version.get("content"), stype
+
+    def _detect_pii(self, *, entity, version, topic_address, schema_payload,
+                    ca_tags) -> bool:
+        """Combine the four declarative PII signals for an entity (#62).
+
+        No-op (False) unless at least one PII signal source is configured,
+        so single-tenant deployments that don't opt in pay nothing.
+        """
+        if not self._pii_enabled:
+            return False
+        from .pii import has_pii_signal
+
+        present_ca = self._present_ca_names(entity) | self._present_ca_names(version)
+        present_tags = {
+            getattr(t, "tagFQN", None) for t in (ca_tags or [])
+        }
+        present_tags.discard(None)
+        schema_text, schema_type = self._schema_text_and_type(schema_payload)
+        return has_pii_signal(
+            present_ca_names=present_ca,
+            pii_ca_names=self._pii_ca_names,
+            present_tag_names=present_tags,
+            pii_tag_names=self._pii_tag_names,
+            topic_address=topic_address,
+            topic_pattern=self._pii_topic_pattern,
+            schema_text=schema_text,
+            schema_type=schema_type,
+        )
 
     def _ca_name_by_id_map(self) -> Dict[str, str]:
         """Lazy-load EP custom-attribute definitions and build an id→name map."""

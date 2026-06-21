@@ -36,7 +36,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------- public dispatch
 
 
-def parse_fields(schema_format: str, schema_text: str) -> List[Any]:
+def parse_fields(
+    schema_format: str, schema_text: str, *, mark_pii: bool = False
+) -> List[Any]:
     """Dispatch to the OM parser for ``schema_format``.
 
     Recognised formats (case-insensitive): ``JSON``, ``AVRO``,
@@ -87,7 +89,46 @@ def parse_fields(schema_format: str, schema_text: str) -> List[Any]:
             "logical-type enrichment failed for %s: %s; continuing", fmt, exc
         )
 
+    # Wave 5 (#62): field-level PII annotation. Gated by ``mark_pii`` (the
+    # connector passes its PII opt-in) so a deployment that never configured
+    # PII detection gets byte-identical dataTypeDisplay output. Reuses the
+    # pure scanner in connector.pii so detection lives in one place;
+    # FieldModel has no guaranteed tags slot across OM 1.11 builds, so PII
+    # is surfaced as a [PII] marker in dataTypeDisplay (version-safe).
+    if mark_pii:
+        try:
+            from ..pii import schema_text_pii_fields
+
+            _mark_pii_fields(fields, schema_text_pii_fields(schema_text, fmt))
+        except Exception as exc:  # pragma: no cover
+            logger.debug("PII field annotation failed for %s: %s; continuing", fmt, exc)
+
     return fields
+
+
+def _mark_pii_fields(fields: Iterable[Any], pii_names) -> None:
+    """Append a ``[PII]`` marker to ``dataTypeDisplay`` for x-pii fields."""
+    if not pii_names:
+        return
+    marker = "[PII]"
+    stack: List[Any] = list(fields)
+    visited = 0
+    while stack and visited < 10000:  # safety against pathological cycles
+        f = stack.pop()
+        visited += 1
+        if _field_name(f) in pii_names:
+            existing = getattr(f, "dataTypeDisplay", None)
+            if not existing:
+                new_display = marker
+            elif marker not in existing:
+                new_display = f"{existing} {marker}"
+            else:
+                new_display = existing
+            try:
+                f.dataTypeDisplay = new_display
+            except Exception:  # pragma: no cover
+                pass
+        stack.extend(getattr(f, "children", None) or [])
 
 
 # ------------------------------------------------------- OM parser delegates

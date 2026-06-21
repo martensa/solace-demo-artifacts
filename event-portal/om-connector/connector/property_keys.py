@@ -25,6 +25,15 @@ CP_CONSUMED_BY = "eventPortalConsumedBy"
 # deprecated version entities.
 CP_IS_LATEST_VERSION = "eventPortalIsLatestVersion"
 
+# Wave 5 (#62): PII. A Topic/Pipeline is flagged when any declarative
+# signal fires (EP CA / tag / topic-segment regex / schema x-pii field).
+# The tag lives in its own classification so ALDI IT-Sec can govern it
+# separately from the lifecycle EventPortal.* tags.
+CP_CONTAINS_PII = "eventPortalContainsPii"
+PII_CLASSIFICATION = "EventPortalCompliance"
+PII_TAG_NAME = "PII"
+PII_TAG_FQN = "EventPortalCompliance.PII"
+
 # Pipeline.extension custom properties (for EP applications mapped as
 # Pipeline entities under a synthetic PipelineService).
 CP_APP_ID = "eventPortalApplicationId"
