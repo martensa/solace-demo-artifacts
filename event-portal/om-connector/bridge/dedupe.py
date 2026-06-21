@@ -16,6 +16,15 @@ from typing import Protocol
 class DedupeStore(Protocol):
     def seen(self, event_id: str) -> bool: ...
 
+    def flush(self) -> int:
+        """Persist any in-flight state on graceful shutdown (#13).
+
+        Returns the number of entries the store was holding. For stores
+        that are already durable (Redis) or have nothing to persist
+        (in-memory recency cache) this is a reporting no-op.
+        """
+        ...
+
 
 class InMemoryDedupeStore:
     def __init__(self, max_entries: int = 10_000, ttl_seconds: int = 600):
@@ -55,6 +64,11 @@ class InMemoryDedupeStore:
         while len(self._cache) > self._max:
             self._cache.popitem(last=False)
 
+    def flush(self) -> int:
+        """No durable state to write; report the live entry count (#13)."""
+        with self._lock:
+            return len(self._cache)
+
 
 class RedisDedupeStore:  # pragma: no cover - opt-in
     """Production-mode dedupe backed by Redis SETEX.
@@ -75,3 +89,7 @@ class RedisDedupeStore:  # pragma: no cover - opt-in
         # SET key 1 NX EX ttl  -> returns truthy if the key was actually set.
         created = self._redis.set(key, b"1", nx=True, ex=self._ttl)
         return not bool(created)
+
+    def flush(self) -> int:
+        """Redis is already durable; nothing to persist on shutdown (#13)."""
+        return 0

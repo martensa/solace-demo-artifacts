@@ -30,6 +30,7 @@ except ImportError as exc:  # pragma: no cover
         "fastapi is required: pip install '.[bridge]'"
     ) from exc
 
+from . import metrics
 from .config import BridgeSettings
 from .signature import SignatureError, verify
 
@@ -133,6 +134,11 @@ def build_forwarder_app(
 ) -> "FastAPI":
     pub = publisher or SolacePublisher(settings)
     app = FastAPI(title="om-eventportal-forwarder", version="0.1.0")
+
+    if settings.obs.metrics_enabled:
+        asgi = metrics.metrics_asgi_app()
+        if asgi is not None:
+            app.mount("/metrics", asgi)
 
     @app.get("/healthz")
     def healthz() -> Dict[str, str]:

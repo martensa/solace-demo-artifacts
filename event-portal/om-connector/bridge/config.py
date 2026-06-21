@@ -82,6 +82,37 @@ class TransportSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="BRIDGE_", env_file=".env", extra="ignore")
 
 
+class ObservabilitySettings(BaseSettings):
+    """Production-hardening knobs (Wave 5): logging, metrics, tracing,
+    graceful shutdown. All env vars share the ``BRIDGE_OBS_`` prefix.
+
+    Defaults are conservative so the bridge behaves exactly like 0.8.0
+    out of the box: text logs, no metrics server, no tracing. Operators
+    opt in via the Helm chart (#15).
+    """
+
+    # #11 structured logging
+    log_format: Literal["text", "json"] = "text"
+    log_level: str = "INFO"
+
+    # #13 graceful shutdown
+    shutdown_grace_seconds: int = 10
+
+    # #10 Prometheus metrics
+    metrics_enabled: bool = False
+    metrics_port: int = 9100
+
+    # #63 OpenTelemetry tracing
+    otel_enabled: bool = False
+    otel_endpoint: str = ""  # e.g. http://otel-collector:4318 (empty = SDK default)
+    otel_protocol: Literal["http/protobuf", "grpc"] = "http/protobuf"
+    otel_service_name: str = "om-eventportal-bridge"
+
+    model_config = SettingsConfigDict(
+        env_prefix="BRIDGE_OBS_", env_file=".env", extra="ignore"
+    )
+
+
 class BridgeSettings:
     """Bag-of-config so handler functions can take one parameter."""
 
@@ -90,7 +121,9 @@ class BridgeSettings:
         ep: Optional[EventPortalSettings] = None,
         om: Optional[OpenMetadataSettings] = None,
         transport: Optional[TransportSettings] = None,
+        obs: Optional[ObservabilitySettings] = None,
     ):
         self.ep = ep or EventPortalSettings()
         self.om = om or OpenMetadataSettings()
         self.transport = transport or TransportSettings()
+        self.obs = obs or ObservabilitySettings()

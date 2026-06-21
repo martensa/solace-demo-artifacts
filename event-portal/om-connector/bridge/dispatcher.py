@@ -12,6 +12,11 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List
 
+from connector import telemetry
+
+from . import metrics
+from .logging_setup import get_correlation_id, reset_correlation_id, set_correlation_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,13 +63,30 @@ class Dispatcher:
             logger.debug("No handler registered for event type %s", event_type)
             return 0
 
-        for handler in handlers:
-            try:
-                handler(ctx, payload)
-            except Exception:
-                logger.exception(
-                    "Handler %s failed for %s",
-                    getattr(handler, "__name__", repr(handler)),
-                    event_type,
-                )
+        # One correlation id per dispatched event so all handler logs for
+        # the same event line up (the polling/HTTP transports may set a
+        # coarser id; mint a per-event one only when none is bound).
+        token = set_correlation_id() if get_correlation_id() == "-" else None
+        ep_entity_id = payload.get("eventId") or payload.get("id")
+        try:
+            for handler in handlers:
+                handler_name = getattr(handler, "__name__", repr(handler))
+                # Let a handler error propagate through the span + latency
+                # timer (so both record outcome=error), then catch it here
+                # so one failing handler never blocks the others.
+                try:
+                    with metrics.time_dispatch(event_type), telemetry.span(
+                        "bridge.dispatch",
+                        action=event_type,
+                        handler=handler_name,
+                        **{"ep.entity.id": ep_entity_id},
+                    ):
+                        handler(ctx, payload)
+                except Exception:
+                    logger.exception(
+                        "Handler %s failed for %s", handler_name, event_type
+                    )
+        finally:
+            if token is not None:
+                reset_correlation_id(token)
         return len(handlers)

@@ -22,10 +22,14 @@ import threading
 import time
 from typing import Any, Dict, Iterable, Optional
 
+from connector import telemetry
+
 from ..config import BridgeSettings
 from ..dedupe import DedupeStore, InMemoryDedupeStore
 from ..dispatcher import BridgeContext, Dispatcher
+from ..logging_setup import reset_correlation_id, set_correlation_id
 from ..reconcile import read_watermark, write_watermark
+from .. import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -70,13 +74,21 @@ def run_polling_loop(
     )
 
     while not stop_event.is_set():
+        # Fresh correlation id per tick so all logs/spans within one poll
+        # share an id; the dispatcher reuses it for the events it handles.
+        token = set_correlation_id()
         try:
-            seen, dispatched, _ = _tick(ctx, ep_client, om, dispatcher, dedupe,
-                                        settings.om.service_name, domain_ids)
+            with telemetry.span("bridge.poll_tick"):
+                seen, dispatched, _ = _tick(ctx, ep_client, om, dispatcher, dedupe,
+                                            settings.om.service_name, domain_ids)
+            metrics.record_tick("ok", seen=seen, dispatched=dispatched)
             if seen:
                 logger.info("Poll tick: seen=%d dispatched=%d", seen, dispatched)
         except Exception:
+            metrics.record_tick("error")
             logger.exception("Polling tick failed; will retry next interval")
+        finally:
+            reset_correlation_id(token)
         # interruptible sleep so SIGTERM doesn't wait the full interval
         for _ in range(interval):
             if stop_event.is_set():

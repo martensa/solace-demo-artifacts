@@ -35,15 +35,23 @@ dev = [
     "responses>=0.24",
     "ruff>=0.1",
 ]
-# Webhook bridge — HTTP receiver
+# Webhook bridge — HTTP receiver + Prometheus metrics (Wave 5 / #10)
 bridge = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
     "pydantic-settings>=2.0",
+    "prometheus-client>=0.20",
 ]
 # Webhook bridge — Solace consumer transport (optional)
 bridge-solace = [
     "solace-pubsubplus>=1.5",
+]
+# OpenTelemetry tracing for the bridge (Wave 5 / #63). Kept OUT of the
+# connector core deps so the OM ingestion image stays lean; the bridge
+# image installs it explicitly (see Dockerfile.bridge).
+otel = [
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-http>=1.20",
 ]
 # Live sample-data ingest via Solace broker subscribe (optional)
 sample-data = [

@@ -22,6 +22,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from . import telemetry
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,6 +85,7 @@ class EventPortalClient:
             timeout=self.timeout,
         )
         if resp.status_code == 401:
+            telemetry.record_ep_auth_failure()
             raise EventPortalAuthError("Event Portal rejected the API token")
         resp.raise_for_status()
 
@@ -111,6 +114,7 @@ class EventPortalClient:
                 f"{self.base_url}{path}", params=params, timeout=self.timeout
             )
             if resp.status_code == 401:
+                telemetry.record_ep_auth_failure()
                 raise EventPortalAuthError("Event Portal token unauthorized")
             resp.raise_for_status()
             body = resp.json()
@@ -428,6 +432,7 @@ class EventPortalClient:
         if resp.status_code == 404:
             return None
         if resp.status_code == 401:
+            telemetry.record_ep_auth_failure()
             raise EventPortalAuthError("Event Portal token unauthorized")
         resp.raise_for_status()
         return resp.json().get("data")
