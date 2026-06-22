@@ -1,14 +1,14 @@
-# Solace EP to OpenMetadata Connector: v1.0 Implementation Plan
+# Solace EP to OpenMetadata Connector: Delivery Plan (Beta)
 
-**Status**: Waves 0-5 shipped (code-complete; `pyproject.toml` at
-`0.9.0`, image build + `local-k8s-deps-values.yaml` tag bump pending).
-Wave 4.5 (`#49` write-back) is code-complete (flag-off). Wave 6
-(v1.0 GA) is in progress: its engineering deliverables -- the
-operations runbook + migration guide -- are shipped; deploy / soak /
-GA tag / prod cutover are ALDI operational steps. Wave 7 (OM upstream
-contribution) is the only remaining code wave.
+**Status**: feature-complete for the **Beta**. Waves 0-5 + Wave 4.5
+(`#49` write-back, flag-off) are code-complete on the `0.9.0` line.
+The roadmap ends here: the former Wave 6 (v1.0 GA + ALDI prod cutover)
+and Wave 7 (OpenMetadata upstream contribution) are **dropped / out of
+scope**. Remaining work is the operational Beta release -- build +
+push the `0.9.0` images and flip the
+`local-k8s-deps-values.yaml` tag (see `docs/operations.md`).
 
-**Last updated**: 2026-06-21 (post-Wave 5 closure).
+**Last updated**: 2026-06-22 (Beta scope; Waves 6-7 dropped).
 
 **Companion docs**: `discovery-closure-summary.md`,
 `asset-mapping-spec.md`.
@@ -18,8 +18,9 @@ This plan turns the prioritised tickets from discovery into sequential
 a ticket bundle, and a defined exit criterion. No wave is started
 until the prior wave's exit criterion is met.
 
-Total: ~10 weeks from kick-off to v1.0.0 GA. Wave 7 (OM upstream
-contribution) is post-GA and time-boxed to one quarter.
+Scope: Waves 0-5 + Wave 4.5 deliver the Beta. The originally-planned
+Wave 6 (GA + prod cutover) and Wave 7 (OM upstream contribution) have
+been dropped; their sections were removed from this plan.
 
 ---
 
@@ -34,8 +35,10 @@ contribution) is post-GA and time-boxed to one quarter.
 | 4 | shipped | 0.8.0 | Identity (userIdToEmailMap) + Soft-delete drift pass |
 | 4.5 | code-complete | flag-off | OM to EP write-back (`#49`); off + dry-run by default |
 | 5 | shipped | 0.9.0 | Production hardening (multi-tenant, PII, OTel, metrics, logging, shutdown, Helm) |
-| 6 | in progress | 1.0.0 | v1.0 GA + ALDI prod cutover (docs shipped; deploy/cutover = ALDI ops) |
-| 7 | future | upstream | OpenMetadata upstream contribution |
+
+Waves 6 (GA + prod cutover) and 7 (OM upstream contribution) were
+dropped -- the `0.9.0` line is the Beta. See `docs/operations.md` for
+the operational Beta release + run procedures.
 
 The active deployment tag lives in
 `openmetadata-deployment/local-k8s-deps-values.yaml`. Bump
@@ -455,198 +458,11 @@ Prometheus dashboards live. Image `0.9.0` deployed.
 
 ---
 
-## Wave 6 (Week 9-10, IN PROGRESS, target image 1.0.0)
-
-**Goal**: v1.0.0 GA to ALDI production.
-
-**Progress note**: the engineering deliverables of this wave -- the
-production operations runbook (`docs/operations.md`) and the pilot->GA
-migration guide (`docs/migration-from-0.x.md`) -- are shipped, and the
-GA cutover sequence is documented in the runbook. The remaining items
-(staging deploy, 1-week soak, `1.0.0` GA tag + image push, ALDI prod
-cutover, pilot decommission) are ALDI operational steps that require
-the production cluster + registry; they are not code and are tracked
-in the runbook's "GA cutover sequence" section.
-
-**Work**:
-
-1. v1.0.0-rc1 to ALDI staging (2 tenants in 1 region).
-2. Soak test 1 week. Compare OM entity-count + lineage-edge-count
-   vs expected. Resolve any drift.
-3. Documentation: README full rewrite. `docs/operations.md`
-   runbook. `docs/migration-from-0.x.md` for sites that ran the
-   pilot.
-4. v1.0.0 GA tag. Push images. ALDI production cutover.
-5. Decommission CustomMessaging-service pilot setup.
-6. Capture lessons-learned for Wave 7.
-
-**Exit criterion**: ALDI prod runs v1.0.0 for 30 days without major
-incident. Then trigger Wave 7.
-
----
-
-## Wave 7 (Q3 2026, post-GA)
-
-**Goal**: ship Event Portal as a first-class native messaging
-connector in `openmetadata-ingestion` PyPI +
-`openmetadata/ingestion` Docker image, replacing our
-`registry.solace.lab` private image for OSS users.
-
-**Reference**: PR #28153 (NATS JetStream) is the structural
-template; PR #25021 (PubSub) added the `yield_topic_lineage`
-extension point we will use.
-
-### License + identity setup
-
-- Repo root: Apache-2.0; `ingestion/` subdir: **Collate Community
-  License 1.0**. Every new Python file under `ingestion/` MUST
-  carry the Collate license header (10-line block copied verbatim
-  from
-  `ingestion/src/metadata/ingestion/source/messaging/kafka/metadata.py`).
-- No CLA bot. Acceptance is implicit via PR submission with correct
-  headers. Introduce in Slack `#contributor` first.
-- Author named on the PR = Solace; ALDI optionally credited as
-  reference customer in PR description (boosts review velocity).
-
-### File layout (14 new + 4 modify)
-
-**JSON schema** (handwritten):
-
-- `openmetadata-spec/src/main/resources/json/schema/entity/services/connections/messaging/eventPortalConnection.json`
-- Modify `messagingService.json` -- add `"EventPortal"` to
-  `definitions.messagingServiceType.enum` + `javaEnums` + `oneOf`
-  entry.
-
-**Python source** (new package, 5 files):
-
-- `ingestion/src/metadata/ingestion/source/messaging/eventportal/__init__.py`
-- `.../eventportal/connection.py` -- `get_connection` +
-  `test_connection_steps`; lift today's
-  `connector/event_portal_client.py`.
-- `.../eventportal/metadata.py` --
-  `EventPortalSource(MessagingServiceSource)`; implements
-  `get_topic_list`, `yield_topic`, `yield_topic_lineage`.
-- `.../eventportal/models.py` -- dataclasses for EP payload shapes.
-- `.../eventportal/service_spec.py` --
-  `ServiceSpec = BaseSpec(metadata_source_class=EventPortalSource)`.
-
-**Test connection definition** (1 new):
-
-- `openmetadata-service/src/main/resources/json/data/testConnections/messaging/eventPortal.json`
-  steps: ListDomains, ListEvents, ListApplications, ListSchemas,
-  ListVersions, ListCustomAttributes.
-
-**Workflow example** (1 new):
-
-- `ingestion/src/metadata/examples/workflows/eventportal.yaml`.
-
-**Tests** (6 new):
-
-- `ingestion/tests/unit/source/messaging/test_eventportal.py` --
-  `responses`-library mocks; matrix: published event, consumed
-  event, no-schema, JSON-Schema path, Avro path, EAPP-DataProduct
-  path.
-- `ingestion/tests/integration/eventportal/__init__.py`.
-- `.../integration/eventportal/conftest.py`.
-- `.../integration/eventportal/test_metadata.py`.
-- `.../integration/eventportal/populate_eventportal.py`.
-- Solace Cloud is not dockerizable, so `responses` mocks only.
-
-**UI assets** (4 new + edits):
-
-- `openmetadata-ui/.../EventPortal.md` locale entry.
-- `openmetadata-ui/.../service-icon-eventportal.png` icon.
-- Modify `MessagingServiceUtils.ts` -- add lazy loader entry in
-  `messagingSchemaLoaders` map.
-- Modify `ServiceIconUtils.ts` -- register icon.
-
-**Auto-regenerated** (~13 files): must run TS codegen locally
-(`cd openmetadata-ui/src/main/resources/ui && ./json2ts-generate-all.sh`)
-because the GH-Actions bot can not push back to forks.
-
-**Setup** (1 modify):
-
-- `ingestion/setup.py` -- add `"eventportal": set()` to `plugins`
-  dict around line 332 (no new deps; `requests` already in
-  `base_requirements`).
-
-**CI labels** (1 modify):
-
-- `.github/scripts/label_connector.py` RULES list -- add
-  `connector:eventportal`.
-
-### Pre-contribution refactor checklist (must do before PR)
-
-- [ ] **Drop the `CustomMessaging` registration** -- become a
-  first-class `MessagingServiceType.EventPortal` enum value.
-- [ ] **Replace `print` with
-  `metadata.utils.logger.ingestion_logger()`** across all migrated
-  files (T20 ruff rule + NATS reviewer enforced this explicitly).
-- [ ] **Resolve `_patch_topic_with_app` TODO** -- use real
-  `metadata.patch(entity=Topic, source=..., destination=...)`.
-  Placeholder code will be rejected.
-- [ ] **Do not fake `partitions`** -- Solace topics are not
-  partitioned. Keep `partitions=1` (hardcode) AND document the
-  rationale in `EventPortal.md` (NATS reviewer flagged this as
-  smell).
-- [ ] **Run `make generate`** to produce pydantic v2 models from
-  the hand-written JSON schema. Commit the generated tree under
-  `ingestion/src/metadata/generated/`.
-- [ ] **Ruff clean** (line-length=120, target=py310, all rule
-  families enabled).
-- [ ] **AsyncAPI mode parking** -- does NOT fit upstream pattern;
-  leave it as a follow-up PR (keep `asyncapi_parser.py` in our
-  private repo).
-
-### 14-step contribution sequence
-
-1. **Slack intro** in `open-metadata/OpenMetadata` `#contributor`.
-2. **Tracking issue** titled "Add Solace Event Portal messaging
-   connector" using the Connector dropdown.
-3. **Fork + branch** `feat/messaging-eventportal`.
-4. **Hand-write** `eventPortalConnection.json` (use
-   `kafkaConnection.json` as template).
-5. **Diff** `messagingService.json` to register the enum.
-6. **`make generate`** -> regenerated pydantic models committed.
-7. **Port code**: split today's `event_portal_connector.py` into
-   `connection.py` + `metadata.py`; port `mappers.py` + client;
-   apply Collate header to every file; strip every `print`.
-8. **Add** `service_spec.py` + workflow YAML + test-connection JSON.
-9. **Write** unit tests with `responses` mocks.
-10. **Write** integration tests with `responses` mocks.
-11. **Add** UI assets (locale Markdown, icon, lazy loader, service
-    icon util, label rule).
-12. **TS codegen locally** and commit regenerated files.
-13. **Lint + test**:
-    `make install install_test install_dev && make generate &&`
-    `make py_format_check && pytest .../test_eventportal.py`.
-14. **Open PR** against `main`, link the issue, request
-    `safe to test` label in PR description + Slack ping. Lead the
-    PR description with the Beat-Kafka 7-point list (`#67`).
-
-### Reviewer-expected feedback themes (pre-empt)
-
-From NATS PR #28153 review history:
-
-- No prints.
-- TS codegen not pushed from fork -> regenerate locally + push.
-- `connection.py` mutable-module-level state will be flagged by
-  `gitar-bot` -> use proper class scoping.
-- `partitions` semantics -- pre-empt by documenting.
-
-**Exit criterion**: PR merged into OM main. Next OM release ships
-EventPortal as native enum. Drop
-`registry.solace.lab/openmetadata-ingestion-solace` from customer
-documentation (point to
-`docker.getcollate.io/openmetadata/ingestion:<version>`).
-
----
-
 ## Cross-wave concerns
 
 - **Versioning**: bump minor for each wave (`0.4.0` Wave 0,
-  `0.5.0` Wave 1, ..., `0.9.0` Wave 5, `1.0.0` Wave 6). Wave 4.5
-  uses `0.8.5` so it is unambiguously between `0.8.0` and `0.9.0`.
+  `0.5.0` Wave 1, ..., `0.9.0` Wave 5 = the Beta). Wave 4.5 rides the
+  `0.9.0` line as a flag-off feature.
 - **Branching**: stay on master per repo convention; tag at each
   wave exit.
 - **CI**: pytest + ruff after every wave; add tox matrix for
@@ -666,5 +482,3 @@ documentation (point to
    write-token approval (security topic).
 3. Wave 5 / ticket `#62` -- list of source-signal patterns for PII
    detection (CA name? Tag name pattern? Topic-segment pattern?).
-4. Wave 7 -- does ALDI want to be named in the upstream PR as the
-   reference customer? Helps the PR land faster.

@@ -2,12 +2,16 @@
 
 ## Mission
 
-A production-ready OpenMetadata ingestion connector that imports
-Solace Event Portal metadata as a Messaging Service, with cross-system
-lineage (EP -> Kafka / Snowflake / Databricks / SAP) and (planned)
+An OpenMetadata ingestion connector that imports Solace Event Portal
+metadata as a Messaging Service, with cross-system lineage
+(EP -> Kafka / Snowflake / Databricks / SAP) and flag-gated
 bi-directional sync of governance metadata. Customer anchor: ALDI
-Nord (Cloud Enterprise, 2 tenants, EU). Target: v1.0.0 GA in 10
-weeks; OM upstream contribution in the following quarter.
+Nord (Cloud Enterprise, 2 tenants, EU).
+
+**Goal: ship the current state (Waves 0-5 + 4.5) as a Beta release.**
+The former GA-in-prod wave (Wave 6) and OpenMetadata upstream
+contribution wave (Wave 7) are dropped / out of scope. The roadmap
+ends at the Beta.
 
 EP is the system of record for EDA models (events, schemas,
 applications, topic-addresses, pub/sub declarations). OM enriches it
@@ -27,8 +31,12 @@ source-of-truth policy lives in `docs/asset-mapping-spec.md`
 | Wave 4 | shipped | 0.8.0 | userIdToEmailMap (#57), AsyncAPI sourceUrl (#56), Sub-Domain hierarchy (#48), Soft-delete drift pass (#61) |
 | Wave 4.5 | code-complete | flag-off | #49 OM -> EP write-back (`bridge/writeback.py`; off + dry-run by default, ships in the next image) |
 | Wave 5 | shipped | 0.9.0 | Production hardening: multi-tenant (#41), PII (#62), OTel (#63), metrics (#10), structured logging (#11), graceful shutdown (#13), Helm chart (#15), Phase 2 docs (#16), Beat-Kafka (#67) |
-| Wave 6 | in progress | 1.0.0 | v1.0 GA + ALDI prod cutover: ops runbook + migration guide shipped; deploy/soak/cutover are ALDI ops |
-| Wave 7 | future | upstream | OpenMetadata upstream contribution (Q3 2026) |
+
+The roadmap ends here: the `0.9.0` line (Waves 0-5 + the flag-off
+Wave 4.5) is the **Beta**. The former Wave 6 (v1.0 GA + ALDI prod
+cutover) and Wave 7 (OpenMetadata upstream contribution) are dropped /
+out of scope. `docs/operations.md` + `docs/migration-from-0.x.md`
+remain useful for running + upgrading the Beta.
 
 Active image: `registry.solace.lab/openmetadata-ingestion-solace:0.9.0`.
 `pyproject.toml` is bumped to `0.9.0`; the image must still be built +
@@ -44,7 +52,7 @@ plus the Helm chart `charts/solace-eventportal-bridge/`. Wave 4.5
 `EventPortalWriter`, and the `BRIDGE_MODE=writeback` receiver -- OFF +
 dry-run by default (see the write-back design below).
 
-## Stack (target for v1.0)
+## Stack (current)
 
 - Python 3.10+ (OM 1.11 dropped 3.9)
 - `openmetadata-ingestion >= 1.11.5, < 1.13` (pin upper bound below
@@ -52,10 +60,9 @@ dry-run by default (see the write-back design below).
 - `metadata.parsers.{avro_parser, json_schema_parser, protobuf_parser}` --
   USE OM's built-in schema parsers, don't reimplement
 - `requests` + `urllib3` retry adapter for the REST client
-- `pyyaml` for AsyncAPI parsing (private-build only; out of scope for
-  the upstream contribution)
-- `pytest` + `responses` for unit tests (OM upstream uses `responses`)
-- `ruff` (line-length=120 to match OM upstream, target-version=py310)
+- `pyyaml` for AsyncAPI parsing (private build only)
+- `pytest` + `responses` for unit tests
+- `ruff` (line-length=100, target-version=py310; see `pyproject.toml`)
 - `opentelemetry-sdk` + `opentelemetry-exporter-otlp` for telemetry
   (Wave 5 / #63)
 
@@ -109,8 +116,8 @@ docs/
   aldi-discovery-onepager.md  ALDI one-pager (PDF generated alongside)
   demo-seed-data.md           Demo seeding script
   openmetadata-image-flip.md  Helm image flip procedure
-  operations.md               Production runbook (Wave 6 GA)
-  migration-from-0.x.md       Pilot -> GA migration guide (Wave 6)
+  operations.md               Production runbook (deploy/ops/troubleshoot)
+  migration-from-0.x.md       Pilot -> Beta migration guide
 scripts/
   build-and-push.sh           Build + push the OM ingestion image
   build-bridge-image.sh       Build + push the standalone bridge image (Wave 5 #15)
@@ -230,13 +237,9 @@ going live.
 - Use `sanitize()` from `connector.fqn` for FQN segments. OM 1.11
   quotes segments containing `.` automatically via `fqn.quote_name()`;
   prefer that to bespoke quoting.
-- Logging: `metadata.utils.logger.ingestion_logger()` (Wave 7
-  contribution). Today's `logging.getLogger(__name__)` is fine for
-  the private build. **Never `print`** -- OM upstream lints it out.
-- For Wave 7 / upstream contribution: every Python file under
-  `ingestion/` MUST carry the **Collate Community License 1.0**
-  header (copy verbatim from any
-  `metadata/ingestion/source/messaging/kafka/*.py`).
+- Logging: `logging.getLogger(__name__)` is the convention for this
+  build. **Never `print`** in the connector path. (The bridge CLIs +
+  `bridge/logging_setup.py` own their stdout intentionally.)
 - Documentation: Markdown lines <= 80 chars (MD013), URLs in backticks
   or angle brackets (MD034), no HTML (MD033). Config at
   `event-portal/om-connector/.markdownlint.json`.
@@ -276,8 +279,9 @@ going live.
 
 - Base URL: `https://api.solace.cloud/api/v2`
 - Auth: `Authorization: Bearer <token>` from My Account -> Token
-  Management. Two tokens planned for v1.0: `ep-token-reader` (used by
-  Metadata + Lineage sources) and `ep-token-writer` (Wave 4.5 / #49).
+  Management. Two tokens: `ep-token-reader` (used by Metadata +
+  Lineage sources + reconcile) and `ep-token-writer` (Wave 4.5 / #49
+  write-back only).
 - All resource endpoints live under `/architecture/`.
 - Pagination: `pageNumber` + `pageSize` query params; response meta
   carries `meta.pagination.totalPages`. Keep `pageSize <= 100` for
@@ -338,8 +342,7 @@ going live.
 - Outbound webhook subscriptions: NOT used (Cloud Enterprise doesn't
   expose outbound webhooks; bridge stays in polling mode forever).
 - EP Teams -> OM Teams: BLOCKED (EP exposes no team API). See #58.
-- AsyncAPI standalone mode: PRIVATE BUILD ONLY (out of scope for the
-  upstream PR; revisit as separate follow-up after v1.0 lands).
+- AsyncAPI standalone mode: PRIVATE BUILD ONLY.
 - Configure event brokers: read-only on the broker side (we touch
   EP, not the broker SEMP).
 - Manage OAuth flows: only Bearer tokens for v1.0.
@@ -353,13 +356,15 @@ going live.
    risks (sign-off envelope)
 2. `docs/asset-mapping-spec.md` -- per-cluster mapping rationale
    (changes as discovery answers shift)
-3. `docs/implementation-plan.md` -- 7-wave delivery plan + Wave 4.5
-   carve-out
+3. `docs/implementation-plan.md` -- delivery record (Waves 0-5 + 4.5;
+   Beta). Waves 6-7 dropped.
 4. `docs/EP-edition-compatibility.md` -- per-EP-edition endpoint
    matrix
-5. `docs/workshop-demo-script.md` -- pilot demo walkthrough (kept for
+5. `docs/operations.md` -- production runbook; `docs/migration-from-0.x.md`
+   -- pilot -> Beta migration
+6. `docs/workshop-demo-script.md` -- pilot demo walkthrough (kept for
    ALDI workshop reference)
-6. `README.md` -- public-facing project README
+7. `README.md` -- public-facing project README
 
 ## When in doubt
 
@@ -370,38 +375,31 @@ going live.
 - For OM FQN rules: prefer `metadata.utils.fqn.quote_name()` and the
   per-entity builder in `fqn_build_registry`. Otherwise reuse the
   pure helpers in `connector.fqn`.
-- For Wave 7 contribution conventions: mirror PR #28153 (NATS) file
-  structure exactly. Apply the Collate license header to every Python
-  file under `ingestion/`. Strip every `print`. Run
-  `make py_format_check && make generate` locally before pushing.
 
 ## Next session pickup
 
 The shortest path back into the codebase from a fresh Claude session:
 
-1. Read this file plus `docs/implementation-plan.md`. Waves 0-5 +
-   Wave 4.5 (#49, flag-off) are code-complete. Wave 6 (v1.0 GA) is in
-   progress: the engineering deliverables -- `docs/operations.md`
-   runbook + `docs/migration-from-0.x.md` -- are shipped; the rest of
-   Wave 6 (build/push 0.9.0 images, staging soak, 1.0.0 GA tag, ALDI
-   prod cutover, pilot decommission) is ALDI operational work, not
-   code. Wave 7 (OM upstream contribution) is the only future code
-   wave. No functional carry-overs remain.
+1. Read this file plus `docs/implementation-plan.md`. The project is
+   feature-complete for the **Beta**: Waves 0-5 + Wave 4.5 (#49,
+   flag-off) are code-complete on the `0.9.0` line. The roadmap ends
+   here -- the former Wave 6 (GA + prod cutover) and Wave 7 (OM
+   upstream contribution) are dropped. No functional carry-overs
+   remain; remaining work is the operational Beta release (below).
 2. Glance at `docs/discovery-closure-summary.md` to remember which
    product decisions are locked in vs still negotiable.
 3. Check the project tasks list -- the task IDs in there map to the
    `#NN` references peppered through this document and the
    implementation plan.
-4. `git log --oneline -10` shows the Wave 5 closure commits
-   (`feat(om-connector): Wave 5 ...` for Slice 1 / #41 / #62 / #15 and
-   the docs+version bump).
-5. `pyproject.toml` is at `0.9.0` but the images are NOT built/pushed
-   yet, and `openmetadata-deployment/local-k8s-deps-values.yaml` still
-   pins `0.8.0`. To finish the cutover: run
-   `bash scripts/build-and-push.sh` (ingestion image) +
-   `bash scripts/build-bridge-image.sh` (bridge image), then bump the
-   deps-values tag to `0.9.0` and commit. Requires Docker + push
-   access to `registry.solace.lab`.
+4. `git log --oneline -12` shows the Wave 5 + Wave 4.5 + docs commits
+   (`feat(om-connector): Wave 5 ...`, `... #49`, and the Beta docs).
+5. **Beta release step** (operational; requires Docker + push access
+   to `registry.solace.lab`): `pyproject.toml` is at `0.9.0` but the
+   images are NOT built/pushed yet and
+   `openmetadata-deployment/local-k8s-deps-values.yaml` still pins
+   `0.8.0`. Run `bash scripts/build-and-push.sh` (ingestion) +
+   `bash scripts/build-bridge-image.sh` (bridge), then bump the
+   deps-values tag to `0.9.0` and commit. That publishes the Beta.
 6. Local test env caveat: Python 3.9 + no OM SDK, so connector mapper
    / schema / lineage / handler tests skip locally (Docker-only); pure
    modules (`fqn`, `pii`, `telemetry`, bridge `logging_setup`/`metrics`/

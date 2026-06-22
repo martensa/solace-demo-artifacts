@@ -448,9 +448,15 @@ def _latest(versions: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 
     def rank(v: Dict[str, Any]):
         state = (v.get("stateId") or v.get("state") or "").upper()
-        state_rank = {"RELEASED": 3, "DRAFT": 2, "DEPRECATED": 1, "RETIRED": 0}.get(
-            state, 1
-        )
+        # EP v2 returns a NUMERIC stateId ("1".."4"); older editions send
+        # the state name. Rank both vocabularies (mirrors _STATE_TAG in
+        # mappers.py) so latest-selection honours lifecycle state on v2 --
+        # otherwise every state fell through to the default rank and a
+        # higher-semver Draft could beat a Released version.
+        state_rank = {
+            "1": 2, "2": 3, "3": 1, "4": 0,           # EP v2 numeric stateId
+            "RELEASED": 3, "DRAFT": 2, "DEPRECATED": 1, "RETIRED": 0,
+        }.get(state, 1)
         version = v.get("version") or "0.0.0"
         try:
             parts = tuple(int(p) for p in str(version).split("."))

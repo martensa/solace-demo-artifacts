@@ -15,12 +15,17 @@ from OpenMetadata:
   REST API as the pull connector. The bridge also runs the
   soft-delete drift pass.
 
+**Status: Beta.** The `0.9.0` line (Waves 0-5 + the flag-off Wave 4.5
+write-back) is the Beta release; this is the current scope. The
+formerly-planned v1.0 GA / prod-cutover and OpenMetadata upstream
+contribution are out of scope.
+
 Current image:
 `registry.solace.lab/openmetadata-ingestion-solace:0.9.0`.
 
 See `CLAUDE.md` for the per-wave status grid and the architectural
-overview. See `docs/implementation-plan.md` for the full delivery
-plan including the next wave.
+overview. See `docs/implementation-plan.md` for the delivery record
+and `docs/operations.md` for running the Beta.
 
 ## Why this connector
 
@@ -421,6 +426,8 @@ See `CLAUDE.md` for the full coding conventions and the
   `emitDataProducts` stays default OFF.
 - **PII detection / OTel telemetry / multi-tenant / Helm chart** —
   SHIPPED in Wave 5 / image `0.9.0` (see "Production hardening" above).
-- **OpenMetadata upstream PR** — Wave 7, planned for Q3 2026.
+- **v1.0 GA + ALDI prod cutover, and the OpenMetadata upstream
+  contribution** — DROPPED / out of scope. The `0.9.0` line is the
+  Beta; the roadmap ends here.
 
-Full per-wave breakdown: `docs/implementation-plan.md`.
+Full delivery record: `docs/implementation-plan.md`.
