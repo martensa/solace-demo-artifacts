@@ -2,8 +2,11 @@
 
 **Status**: Waves 0-5 shipped (code-complete; `pyproject.toml` at
 `0.9.0`, image build + `local-k8s-deps-values.yaml` tag bump pending).
-Wave 4.5 (`#49` write-back) is now code-complete (flag-off); no
-functional carry-overs remain. Wave 6 (upstream PR prep / GA) is next.
+Wave 4.5 (`#49` write-back) is code-complete (flag-off). Wave 6
+(v1.0 GA) is in progress: its engineering deliverables -- the
+operations runbook + migration guide -- are shipped; deploy / soak /
+GA tag / prod cutover are ALDI operational steps. Wave 7 (OM upstream
+contribution) is the only remaining code wave.
 
 **Last updated**: 2026-06-21 (post-Wave 5 closure).
 
@@ -31,7 +34,7 @@ contribution) is post-GA and time-boxed to one quarter.
 | 4 | shipped | 0.8.0 | Identity (userIdToEmailMap) + Soft-delete drift pass |
 | 4.5 | code-complete | flag-off | OM to EP write-back (`#49`); off + dry-run by default |
 | 5 | shipped | 0.9.0 | Production hardening (multi-tenant, PII, OTel, metrics, logging, shutdown, Helm) |
-| 6 | next | 1.0.0 | v1.0 GA + ALDI prod cutover |
+| 6 | in progress | 1.0.0 | v1.0 GA + ALDI prod cutover (docs shipped; deploy/cutover = ALDI ops) |
 | 7 | future | upstream | OpenMetadata upstream contribution |
 
 The active deployment tag lives in
@@ -452,9 +455,18 @@ Prometheus dashboards live. Image `0.9.0` deployed.
 
 ---
 
-## Wave 6 (Week 9-10, target image 1.0.0)
+## Wave 6 (Week 9-10, IN PROGRESS, target image 1.0.0)
 
 **Goal**: v1.0.0 GA to ALDI production.
+
+**Progress note**: the engineering deliverables of this wave -- the
+production operations runbook (`docs/operations.md`) and the pilot->GA
+migration guide (`docs/migration-from-0.x.md`) -- are shipped, and the
+GA cutover sequence is documented in the runbook. The remaining items
+(staging deploy, 1-week soak, `1.0.0` GA tag + image push, ALDI prod
+cutover, pilot decommission) are ALDI operational steps that require
+the production cluster + registry; they are not code and are tracked
+in the runbook's "GA cutover sequence" section.
 
 **Work**:
 

@@ -27,8 +27,8 @@ source-of-truth policy lives in `docs/asset-mapping-spec.md`
 | Wave 4 | shipped | 0.8.0 | userIdToEmailMap (#57), AsyncAPI sourceUrl (#56), Sub-Domain hierarchy (#48), Soft-delete drift pass (#61) |
 | Wave 4.5 | code-complete | flag-off | #49 OM -> EP write-back (`bridge/writeback.py`; off + dry-run by default, ships in the next image) |
 | Wave 5 | shipped | 0.9.0 | Production hardening: multi-tenant (#41), PII (#62), OTel (#63), metrics (#10), structured logging (#11), graceful shutdown (#13), Helm chart (#15), Phase 2 docs (#16), Beat-Kafka (#67) |
-| Wave 6 | next | 0.10.0 | OpenMetadata upstream PR prep |
-| Wave 7 | future | 1.0.0 | OpenMetadata upstream contribution + GA |
+| Wave 6 | in progress | 1.0.0 | v1.0 GA + ALDI prod cutover: ops runbook + migration guide shipped; deploy/soak/cutover are ALDI ops |
+| Wave 7 | future | upstream | OpenMetadata upstream contribution (Q3 2026) |
 
 Active image: `registry.solace.lab/openmetadata-ingestion-solace:0.9.0`.
 `pyproject.toml` is bumped to `0.9.0`; the image must still be built +
@@ -109,6 +109,8 @@ docs/
   aldi-discovery-onepager.md  ALDI one-pager (PDF generated alongside)
   demo-seed-data.md           Demo seeding script
   openmetadata-image-flip.md  Helm image flip procedure
+  operations.md               Production runbook (Wave 6 GA)
+  migration-from-0.x.md       Pilot -> GA migration guide (Wave 6)
 scripts/
   build-and-push.sh           Build + push the OM ingestion image
   build-bridge-image.sh       Build + push the standalone bridge image (Wave 5 #15)
@@ -377,12 +379,14 @@ going live.
 
 The shortest path back into the codebase from a fresh Claude session:
 
-1. Read this file plus `docs/implementation-plan.md`. Waves 0-5 are
-   code-complete and Wave 4.5 / #49 (OM -> EP write-back) is now
-   implemented (flag-off). Wave 6 (upstream PR prep / GA) is the next
-   concrete unit of work; no functional carry-overs remain. The pending
-   operational step is building + pushing the 0.9.0 images and flipping
-   the deps-values tag (see below).
+1. Read this file plus `docs/implementation-plan.md`. Waves 0-5 +
+   Wave 4.5 (#49, flag-off) are code-complete. Wave 6 (v1.0 GA) is in
+   progress: the engineering deliverables -- `docs/operations.md`
+   runbook + `docs/migration-from-0.x.md` -- are shipped; the rest of
+   Wave 6 (build/push 0.9.0 images, staging soak, 1.0.0 GA tag, ALDI
+   prod cutover, pilot decommission) is ALDI operational work, not
+   code. Wave 7 (OM upstream contribution) is the only future code
+   wave. No functional carry-overs remain.
 2. Glance at `docs/discovery-closure-summary.md` to remember which
    product decisions are locked in vs still negotiable.
 3. Check the project tasks list -- the task IDs in there map to the
