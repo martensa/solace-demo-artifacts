@@ -35,8 +35,7 @@ source-of-truth policy lives in `docs/asset-mapping-spec.md`
 The roadmap ends here: the `0.9.0` line (Waves 0-5 + the flag-off
 Wave 4.5) is the **Beta**. The former Wave 6 (v1.0 GA + ALDI prod
 cutover) and Wave 7 (OpenMetadata upstream contribution) are dropped /
-out of scope. `docs/operations.md` + `docs/migration-from-0.x.md`
-remain useful for running + upgrading the Beta.
+out of scope. `docs/operations.md` is the runbook for running the Beta.
 
 Active image: `registry.solace.lab/openmetadata-ingestion-solace:0.9.0`.
 `pyproject.toml` is bumped to `0.9.0`; the image must still be built +
@@ -108,13 +107,8 @@ config/
   example-workflow-tenant-b.yaml  Second-tenant example (Wave 5 #41)
 docs/
   asset-mapping-spec.md       Living mapping spec (per-cluster decisions)
-  discovery-closure-summary.md ALDI discovery sign-off envelope
-  implementation-plan.md      7-wave delivery plan + Wave 4.5 carve-out
-  workshop-demo-script.md     Pilot demo walkthrough
-  demo-seed-data.md           Demo seeding script
-  openmetadata-image-flip.md  Helm image flip procedure
+  implementation-plan.md      Delivery plan (Waves 0-5 + 4.5; Beta)
   operations.md               Production runbook (deploy/ops/troubleshoot)
-  migration-from-0.x.md       Pilot -> Beta migration guide
 scripts/
   build-and-push.sh           Build + push the OM ingestion image
   build-bridge-image.sh       Build + push the standalone bridge image (Wave 5 #15)
@@ -349,17 +343,13 @@ going live.
 
 ## Living docs (read in this order)
 
-1. `docs/discovery-closure-summary.md` -- what was decided + open
-   risks (sign-off envelope)
-2. `docs/asset-mapping-spec.md` -- per-cluster mapping rationale
-   (changes as discovery answers shift)
-3. `docs/implementation-plan.md` -- delivery record (Waves 0-5 + 4.5;
+1. `docs/asset-mapping-spec.md` -- per-cluster mapping rationale
+   (the per-field source-of-truth decisions)
+2. `docs/implementation-plan.md` -- delivery record (Waves 0-5 + 4.5;
    Beta). Waves 6-7 dropped.
-4. `docs/operations.md` -- production runbook; `docs/migration-from-0.x.md`
-   -- pilot -> Beta migration
-5. `docs/workshop-demo-script.md` -- pilot demo walkthrough (kept for
-   ALDI workshop reference)
-6. `README.md` -- public-facing project README
+3. `docs/operations.md` -- production runbook (deploy / ops /
+   troubleshoot / Beta release sequence)
+4. `README.md` -- public-facing project README
 
 ## When in doubt
 
@@ -381,8 +371,8 @@ The shortest path back into the codebase from a fresh Claude session:
    here -- the former Wave 6 (GA + prod cutover) and Wave 7 (OM
    upstream contribution) are dropped. No functional carry-overs
    remain; remaining work is the operational Beta release (below).
-2. Glance at `docs/discovery-closure-summary.md` to remember which
-   product decisions are locked in vs still negotiable.
+2. Glance at `docs/asset-mapping-spec.md` for the per-field mapping +
+   source-of-truth decisions.
 3. Check the project tasks list -- the task IDs in there map to the
    `#NN` references peppered through this document and the
    implementation plan.

@@ -1,6 +1,4 @@
 # Workflow for the ALDI workshop demo.
-# Matches the seed data in docs/demo-seed-data.md and the script in
-# docs/workshop-demo-script.md.
 #
 # How to use:
 #   1. Paste the connectionOptions block into the OM UI when adding the

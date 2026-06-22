@@ -65,7 +65,6 @@ if [ "${PUSH}" = "true" ]; then
   echo "Next step: flip the OM ingestion image in"
   echo "  openmetadata-deployment/local-k8s-deps-values.yaml"
   echo "to use this tag, then 'helm upgrade openmetadata-dependencies ...'."
-  echo "See docs/openmetadata-image-flip.md for the exact diff."
   echo "----------------------------------------------------------------"
 else
   echo "PUSH=false set -- skipping push. Image is in the local docker daemon."

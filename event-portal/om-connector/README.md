@@ -388,9 +388,7 @@ surface (OTel sidecar, lab CA mount, CronJob schedules).
 - `docs/operations.md` -- the production runbook: deploy, the full
   configuration reference, metrics to scrape + alert on, the routine
   cron jobs, the write-back shadow-deploy go-live procedure, token
-  rotation, troubleshooting, and the GA cutover sequence.
-- `docs/migration-from-0.x.md` -- moving a pilot (`0.3.x`) site up to
-  the GA line, including the behavioral changes to expect.
+  rotation, troubleshooting, and the Beta release sequence.
 
 ## Development
 

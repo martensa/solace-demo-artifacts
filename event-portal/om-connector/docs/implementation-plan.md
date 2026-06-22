@@ -10,8 +10,7 @@ push the `0.9.0` images and flip the
 
 **Last updated**: 2026-06-22 (Beta scope; Waves 6-7 dropped).
 
-**Companion docs**: `discovery-closure-summary.md`,
-`asset-mapping-spec.md`.
+**Companion doc**: `asset-mapping-spec.md`.
 
 This plan turns the prioritised tickets from discovery into sequential
 **waves** of 1-2 weeks each. Each wave has a clear acceptance goal,
