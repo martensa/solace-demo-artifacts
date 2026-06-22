@@ -25,7 +25,7 @@ source-of-truth policy lives in `docs/asset-mapping-spec.md`
 | Wave 2 | shipped | 0.6.0 | ServiceSpec split (#66), Linked-Apps lineage (#59), cross-system YAML edges (#50), external-CA fallback (#60) |
 | Wave 3 | shipped | 0.7.0 | New entity types: Event API Container (#44), EAPP DataProduct (#45), first-class Schemas (#52), Topic-tree (#53), Consumer-Queue (#55) |
 | Wave 4 | shipped | 0.8.0 | userIdToEmailMap (#57), AsyncAPI sourceUrl (#56), Sub-Domain hierarchy (#48), Soft-delete drift pass (#61) |
-| Wave 4.5 | deferred | 0.8.5 | #49 OM -> EP write-back (split out of Wave 4) |
+| Wave 4.5 | code-complete | flag-off | #49 OM -> EP write-back (`bridge/writeback.py`; off + dry-run by default, ships in the next image) |
 | Wave 5 | shipped | 0.9.0 | Production hardening: multi-tenant (#41), PII (#62), OTel (#63), metrics (#10), structured logging (#11), graceful shutdown (#13), Helm chart (#15), Phase 2 docs (#16), Beat-Kafka (#67) |
 | Wave 6 | next | 0.10.0 | OpenMetadata upstream PR prep |
 | Wave 7 | future | 1.0.0 | OpenMetadata upstream contribution + GA |
@@ -40,7 +40,9 @@ added connector code paths (`connector/pii.py`, tenant-prefix FQNs) and
 the `bridge` got observability (`bridge/logging_setup.py`,
 `bridge/metrics.py`, `bridge/lifecycle.py`, `connector/telemetry.py`)
 plus the Helm chart `charts/solace-eventportal-bridge/`. Wave 4.5
-(#49 write-back) remains the only carry-over.
+(#49 OM -> EP write-back) is now code-complete: `bridge/writeback.py`,
+`EventPortalWriter`, and the `BRIDGE_MODE=writeback` receiver -- OFF +
+dry-run by default (see the write-back design below).
 
 ## Stack (target for v1.0)
 
@@ -90,7 +92,8 @@ bridge/
   metrics.py                 Prometheus metrics + exposition (Wave 5 #10)
   lifecycle.py               Graceful shutdown (Wave 5 #13)
   transport/polling.py       EP polling-mode (no outbound webhooks)
-  writeback.py               (DEFERRED -- Wave 4.5 / #49)
+  writeback.py               OM -> EP governance write-back (Wave 4.5 #49; flag-off)
+  transport/writeback_http.py OM EntityChangeEvent receiver (Wave 4.5 #49)
 charts/
   solace-eventportal-bridge/ Helm chart for the bridge (Wave 5 #15)
 config/
@@ -197,11 +200,16 @@ JSON-Patches every zombie with the `EventPortal.Retired` tag plus the
 `--auto-purge-after-days` hard-deletes once the tombstone ages past
 the cutoff.
 
-OM -> EP write-back (the original Wave 4 #49) is carved out into
-**Wave 4.5** so the high-blast-radius write path can land in its own
-image (`0.8.5`) with shadow-deploy. The hook lives in
-`bridge/writeback.py` (file not yet present; see
-`docs/implementation-plan.md` for the design).
+OM -> EP write-back (Wave 4.5 / #49) is implemented in
+`bridge/writeback.py` (pure per-field policy from Cluster 5 +
+`WritebackProcessor` queue/worker/drain) + `EventPortalWriter` (separate
+write-scoped token) + the `BRIDGE_MODE=writeback` OM-EntityChangeEvent
+receiver. High blast radius, so it is OFF by default
+(`BRIDGE_WB_ENABLED=false`) and DRY-RUN by default even when enabled --
+live EP writes require `enabled` + `dry_run=false` + a non-empty
+`EP_WRITER_TOKEN`. The exact EP v2 write contract is isolated in
+`EventPortalWriter` and must be verified under shadow deploy before
+going live.
 
 ## Coding conventions
 
@@ -369,10 +377,12 @@ image (`0.8.5`) with shadow-deploy. The hook lives in
 
 The shortest path back into the codebase from a fresh Claude session:
 
-1. Read this file plus `docs/implementation-plan.md`. Wave 5 is
-   code-complete (shipped); Wave 6 (upstream PR prep) is the next
-   concrete unit of work, and Wave 4.5 / #49 (OM -> EP write-back) is
-   the only remaining carry-over.
+1. Read this file plus `docs/implementation-plan.md`. Waves 0-5 are
+   code-complete and Wave 4.5 / #49 (OM -> EP write-back) is now
+   implemented (flag-off). Wave 6 (upstream PR prep / GA) is the next
+   concrete unit of work; no functional carry-overs remain. The pending
+   operational step is building + pushing the 0.9.0 images and flipping
+   the deps-values tag (see below).
 2. Glance at `docs/discovery-closure-summary.md` to remember which
    product decisions are locked in vs still negotiable.
 3. Check the project tasks list -- the task IDs in there map to the

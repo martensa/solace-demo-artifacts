@@ -400,9 +400,13 @@ See `CLAUDE.md` for the full coding conventions and the
 - **EP Teams to OM Teams** — BLOCKED. EP v2 Cloud Enterprise
   exposes no team API (smoke-tested 2026-05-27). Tracked as
   ticket `#58`.
-- **OM to EP write-back** — DEFERRED to Wave 4.5 / image `0.8.5`.
-  Ticket `#49`; design in `docs/implementation-plan.md` and
-  `docs/asset-mapping-spec.md` Cluster 5.
+- **OM to EP write-back** — IMPLEMENTED (Wave 4.5 / `#49`), OFF +
+  dry-run by default. `BRIDGE_MODE=writeback` receives OM
+  EntityChangeEvents and pushes OM-owned governance fields back as EP
+  custom attributes per the Cluster 5 per-field policy. Live writes need
+  `BRIDGE_WB_ENABLED=true` + `BRIDGE_WB_DRY_RUN=false` + the separate
+  `EP_WRITER_TOKEN`; the exact EP write contract must be verified under
+  shadow deploy first.
 - **Modeled Event Mesh** — Cloud Enterprise returns 404 for
   `/architecture/modeledEventMeshes` (Cluster 1.3); feature flag
   `emitDataProducts` stays default OFF.

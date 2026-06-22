@@ -2,8 +2,8 @@
 
 **Status**: Waves 0-5 shipped (code-complete; `pyproject.toml` at
 `0.9.0`, image build + `local-k8s-deps-values.yaml` tag bump pending).
-Wave 4.5 (`#49` write-back) carved out from Wave 4 remains the only
-carry-over; Wave 6 (upstream PR prep) is next.
+Wave 4.5 (`#49` write-back) is now code-complete (flag-off); no
+functional carry-overs remain. Wave 6 (upstream PR prep / GA) is next.
 
 **Last updated**: 2026-06-21 (post-Wave 5 closure).
 
@@ -29,7 +29,7 @@ contribution) is post-GA and time-boxed to one quarter.
 | 2 | shipped | 0.6.0 | ServiceSpec split + Linked-Apps + cross-system |
 | 3 | shipped | 0.7.0 | New entity types (Event API / EAPP / Schemas / Tree / Consumer) |
 | 4 | shipped | 0.8.0 | Identity (userIdToEmailMap) + Soft-delete drift pass |
-| 4.5 | deferred | 0.8.5 | OM to EP write-back (`#49`, carved out from Wave 4) |
+| 4.5 | code-complete | flag-off | OM to EP write-back (`#49`); off + dry-run by default |
 | 5 | shipped | 0.9.0 | Production hardening (multi-tenant, PII, OTel, metrics, logging, shutdown, Helm) |
 | 6 | next | 1.0.0 | v1.0 GA + ALDI prod cutover |
 | 7 | future | upstream | OpenMetadata upstream contribution |
@@ -347,11 +347,22 @@ on the EP side get the `EventPortal.Retired` tag within one
 
 ---
 
-## Wave 4.5 (NEXT, target image 0.8.5)
+## Wave 4.5 (CODE-COMPLETE, flag-off; ships in the next image)
 
 **Goal**: OM to EP write-back for governance fields. Sliced out of
 Wave 4 so the write path lands behind its own image + shadow-deploy
 without slowing down the identity + soft-delete improvements.
+
+**Closure note**: implemented in `bridge/writeback.py` (pure Cluster 5
+per-field policy + `WritebackProcessor` queue/worker/drain),
+`EventPortalWriter` (separate write-scoped token), and the
+`BRIDGE_MODE=writeback` OM-EntityChangeEvent receiver. OFF
+(`BRIDGE_WB_ENABLED=false`) + DRY-RUN (`BRIDGE_WB_DRY_RUN=true`) by
+default; live writes require both flags flipped + `EP_WRITER_TOKEN`.
+The EP write wire-contract is isolated in `EventPortalWriter` and must
+be verified under shadow deploy (the drift cron #4 below) before going
+live. Adversarial diff review caught + fixed a drain deadlock, a
+double-metrics exposition, and stale lifecycle docstrings.
 
 **Tickets**: `#49` only.
 

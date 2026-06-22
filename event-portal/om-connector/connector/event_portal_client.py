@@ -459,3 +459,113 @@ def _latest(versions: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         return (state_rank, parts)
 
     return sorted(versions, key=rank, reverse=True)[0]
+
+
+class EventPortalWriter:
+    """Write-scoped EP client for OM -> EP governance write-back (Wave 4.5 /
+    #49).
+
+    Deliberately SEPARATE from ``EventPortalClient`` so the read path can
+    never accidentally write: it takes the ``ep-token-writer`` token, not
+    the reader token. Only ``bridge.writeback`` constructs it, and only
+    when write-back is enabled AND not in dry-run.
+
+    CONTRACT CAVEAT: the exact EP v2 wire shape for setting custom-attribute
+    values on an entity (verb / path / body) must be VERIFIED against a live
+    tenant before enabling live writes -- it is isolated in the two methods
+    below. The whole feature ships dry-run + flag-off precisely so this can
+    be confirmed under shadow deploy first (see the plan exit criterion).
+    """
+
+    def __init__(
+        self,
+        base_url: str = EventPortalClient.DEFAULT_BASE_URL,
+        writer_token: Optional[str] = None,
+        timeout: int = 30,
+    ):
+        if not writer_token:
+            raise EventPortalAuthError(
+                "No writer token configured for EP write-back (ep-token-writer)"
+            )
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+        self.session = requests.Session()
+        retry = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=("GET", "POST", "PATCH", "PUT"),
+            respect_retry_after_header=True,
+        )
+        self.session.mount("https://", HTTPAdapter(max_retries=retry))
+        self.session.headers.update({
+            "Authorization": f"Bearer {writer_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "openmetadata-solace-eventportal-connector/writeback",
+        })
+
+    def set_entity_custom_attributes(
+        self,
+        entity_path: str,
+        entity_id: str,
+        custom_attributes: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """PATCH custom-attribute values onto an EP entity.
+
+        ``entity_path`` is the EP architecture sub-path (e.g.
+        ``applications``, ``events``). ``custom_attributes`` is a list of
+        ``{customAttributeDefinitionId | name, value}``.
+
+        VERIFY against live EP v2 before prod: assumed contract is
+        ``PATCH /architecture/<entity_path>/{id}`` with body
+        ``{"customAttributes": [...]}``.
+        """
+        url = f"{self.base_url}/architecture/{entity_path}/{entity_id}"
+        resp = self.session.patch(
+            url, json={"customAttributes": custom_attributes}, timeout=self.timeout
+        )
+        if resp.status_code == 401:
+            telemetry.record_ep_auth_failure()
+            raise EventPortalAuthError("Event Portal writer token unauthorized")
+        resp.raise_for_status()
+        return resp.json() if resp.content else {}
+
+    def ensure_custom_attribute_definition(
+        self,
+        name: str,
+        associated_entity_types: List[str],
+        value_type: str = "STRING",
+    ) -> Dict[str, Any]:
+        """Create an EP custom-attribute definition if absent (idempotent).
+
+        VERIFY against live EP v2 before prod: assumed contract is
+        ``POST /architecture/customAttributeDefinitions`` with
+        ``{name, valueType, associatedEntityTypes}``.
+        """
+        listing = self.session.get(
+            f"{self.base_url}/architecture/customAttributeDefinitions",
+            params={"pageSize": 100},
+            timeout=self.timeout,
+        )
+        if listing.status_code == 401:
+            telemetry.record_ep_auth_failure()
+            raise EventPortalAuthError("Event Portal writer token unauthorized")
+        listing.raise_for_status()
+        for existing in (listing.json().get("data") or []):
+            if existing.get("name") == name:
+                return existing
+        resp = self.session.post(
+            f"{self.base_url}/architecture/customAttributeDefinitions",
+            json={
+                "name": name,
+                "valueType": value_type,
+                "associatedEntityTypes": associated_entity_types,
+            },
+            timeout=self.timeout,
+        )
+        resp.raise_for_status()
+        return resp.json().get("data") or {}
+
+    def close(self) -> None:
+        self.session.close()

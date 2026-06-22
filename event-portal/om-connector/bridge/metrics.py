@@ -51,18 +51,21 @@ try:
         "eventportal_bridge_events_dispatched_total",
         "Event Portal change events dispatched to at least one handler.",
     )
-    # Wave 4.5 / #49 is deferred: the write-back queue does not exist yet.
-    # Register the gauge at 0 so dashboards are not misled into thinking the
-    # metric is missing; it stays 0 until write-back ships.
+    # Wave 4.5 / #49: OM->EP write-back queue depth + outcomes.
     WRITEBACK_QUEUE_DEPTH = Gauge(
         "eventportal_bridge_writeback_queue_depth",
-        "Pending OM->EP write-back operations (0 until Wave 4.5 ships).",
+        "Pending OM->EP write-back operations on the bridge queue.",
     )
     WRITEBACK_QUEUE_DEPTH.set(0)
+    WRITEBACK_OPS = Counter(
+        "eventportal_bridge_writeback_ops_total",
+        "OM->EP write-back operations by outcome.",
+        labelnames=("outcome",),
+    )
 except ImportError:  # pragma: no cover - exercised only without the dep
     _ENABLED = False
     DISPATCH_LATENCY = POLL_TICKS = EVENTS_SEEN = None
-    EVENTS_DISPATCHED = WRITEBACK_QUEUE_DEPTH = None
+    EVENTS_DISPATCHED = WRITEBACK_QUEUE_DEPTH = WRITEBACK_OPS = None
 
 
 def enabled() -> bool:
@@ -98,6 +101,18 @@ def record_tick(outcome: str, seen: int = 0, dispatched: int = 0) -> None:
         EVENTS_SEEN.inc(seen)
     if dispatched:
         EVENTS_DISPATCHED.inc(dispatched)
+
+
+def set_writeback_queue_depth(depth: int) -> None:
+    """Set the OM->EP write-back queue-depth gauge (#49)."""
+    if _ENABLED:
+        WRITEBACK_QUEUE_DEPTH.set(depth)
+
+
+def record_writeback(outcome: str) -> None:
+    """Count one write-back op: applied | dry_run | error | dropped (#49)."""
+    if _ENABLED:
+        WRITEBACK_OPS.labels(outcome=outcome).inc()
 
 
 def record_ep_auth_failure() -> None:

@@ -223,6 +223,8 @@ def main(argv=None) -> int:
             return _serve_forwarder(settings)
         if mode == "solace":
             return _serve_solace(settings)
+        if mode == "writeback":
+            return _serve_writeback(settings)
 
         logger.error("Unknown BRIDGE_MODE: %s", mode)
         return 1
@@ -341,6 +343,73 @@ def _serve_solace(settings: BridgeSettings) -> int:
             om=om,
             grace_seconds=settings.obs.shutdown_grace_seconds,
         )
+    return 0
+
+
+def _build_ep_writer(settings: BridgeSettings):
+    from connector.event_portal_client import EventPortalWriter
+
+    return EventPortalWriter(
+        base_url=settings.ep.api_url, writer_token=settings.ep.writer_token
+    )
+
+
+def _serve_writeback(settings: BridgeSettings) -> int:
+    """Wave 4.5 (#49): receive OM EntityChangeEvents and write OM-owned
+    governance fields back to EP. OFF + dry-run by default."""
+    try:
+        import uvicorn
+    except ImportError:
+        logger.error("uvicorn is required: pip install '.[bridge]'")
+        return 1
+    from .transport.writeback_http import build_writeback_app
+    from .writeback import WritebackProcessor, register_processor
+
+    wb = settings.writeback
+    writer = None
+    if wb.enabled and not wb.dry_run:
+        if not settings.ep.writer_token:
+            logger.error(
+                "write-back is enabled + live but EP_WRITER_TOKEN is unset; "
+                "refusing to start (set BRIDGE_WB_DRY_RUN=true or provide the "
+                "ep-token-writer)."
+            )
+            return 1
+        writer = _build_ep_writer(settings)
+        logger.warning("write-back LIVE: OM changes will be written to EP")
+    elif wb.enabled:
+        logger.warning(
+            "write-back enabled in DRY-RUN: planned EP writes are logged, "
+            "never sent. Flip BRIDGE_WB_DRY_RUN=false after a green shadow "
+            "deploy to go live."
+        )
+    else:
+        logger.warning(
+            "write-back receiver up but BRIDGE_WB_ENABLED=false; OM events "
+            "are accepted and ignored."
+        )
+
+    # Metrics are exposed via the FastAPI /metrics mount in
+    # build_writeback_app (the http/forwarder convention), NOT the
+    # standalone WSGI server -- avoids double-exposition + port clashes.
+    processor = WritebackProcessor(settings=wb, writer=writer)
+    register_processor(processor)
+    processor.start()
+    app = build_writeback_app(settings=settings, processor=processor)
+    try:
+        uvicorn.run(
+            app,
+            host=settings.transport.bind_host,
+            port=settings.transport.bind_port,
+            log_level="info",
+        )
+    finally:
+        # Drains the registered write-back queue (#13) + closes the writer.
+        lifecycle.shutdown(
+            ep_client=writer,
+            grace_seconds=settings.obs.shutdown_grace_seconds,
+        )
+        register_processor(None)
     return 0
 
 

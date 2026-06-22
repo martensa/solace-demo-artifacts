@@ -1,11 +1,12 @@
 """Graceful shutdown for the bridge (Wave 5 / #13).
 
-The long-running bridge modes (polling, solace) install SIGTERM/SIGINT
-handlers that flip a stop event; once the loop drains, :func:`shutdown`
-runs the ordered teardown: flush the dedupe store, drain the write-back
-queue (deferred to Wave 4.5, hence import-guarded), and close the EP + OM
-clients. Every step is best-effort and isolated -- one failing teardown
-must not skip the others, and shutdown must never raise.
+The long-running bridge modes (polling, solace, writeback) install
+SIGTERM/SIGINT handlers that flip a stop event; once the loop drains,
+:func:`shutdown` runs the ordered teardown: flush the dedupe store, drain
+the write-back queue (Wave 4.5 / #49; import-guarded so the bridge still
+starts when write-back is not installed), and close the EP + OM clients.
+Every step is best-effort and isolated -- one failing teardown must not
+skip the others, and shutdown must never raise.
 """
 from __future__ import annotations
 
@@ -25,8 +26,7 @@ def shutdown(
     """Tear down bridge resources in order. Returns a summary of what ran.
 
     Safe to call from a ``finally`` block. ``grace_seconds`` bounds the
-    (future) write-back queue drain; the other steps are fast and
-    synchronous.
+    write-back queue drain (#49); the other steps are fast and synchronous.
     """
     summary = {
         "dedupe_flushed": False,
@@ -59,9 +59,11 @@ def _flush_dedupe(dedupe: Any) -> bool:
 def _drain_writeback(grace_seconds: int) -> bool:
     """Drain the OM->EP write-back queue if write-back is present.
 
-    Write-back is Wave 4.5 / #49 (deferred); ``bridge.writeback`` does not
-    exist in 0.9.0, so the import guard makes this a clean no-op. When the
-    module lands it only needs to expose ``drain(timeout)``.
+    Write-back is Wave 4.5 / #49. ``bridge.writeback`` exposes
+    ``drain(timeout)`` which flushes the registered WritebackProcessor's
+    queue. The import guard keeps this a clean no-op only when write-back
+    is not installed; ``drain`` itself returns 0 when no processor is
+    registered (write-back not running).
     """
     try:
         from . import writeback  # type: ignore
