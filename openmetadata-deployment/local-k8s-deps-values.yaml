@@ -71,21 +71,16 @@ opensearch:
 # in local-k8s-values.yaml).
 airflow:
   enabled: true
-  # Chart 1.11.x relocated the image config from `airflow.airflow.image`
-  # to `airflow.images.airflow` (and added pod_template for the
-  # KubernetesExecutor worker pods). Both must point at our custom
-  # ingestion image to bake the Solace EP connector into every pod that
-  # might `import connector.*` (api-server, scheduler, dag-processor,
-  # triggerer, AND the per-DAG worker pods spawned by the K8s executor).
-  images:
-    airflow:
-      repository: registry.solace.lab/openmetadata-ingestion-solace
-      tag: "0.8.0"
-      pullPolicy: IfNotPresent
-    pod_template:
-      repository: registry.solace.lab/openmetadata-ingestion-solace
-      tag: "0.8.0"
-      pullPolicy: IfNotPresent
+  # VANILLA OpenMetadata: no image override here, so the chart's DEFAULT
+  # stock ingestion image is used
+  # (docker.getcollate.io/openmetadata/ingestion:<chart version>, i.e.
+  # 1.11.13 for OM_CHART_VERSION 1.11.13). This deploy intentionally does
+  # NOT bake in the Solace EP connector -- the connector is deployed
+  # SEPARATELY. To bake it into Airflow later, re-add an `images:` block
+  # here pointing both `airflow` and `pod_template` at
+  # `registry.solace.lab/openmetadata-ingestion-solace:<tag>` (chart
+  # 1.11.x relocated image config to `airflow.images.{airflow,pod_template}`;
+  # the pod_template image is what the KubernetesExecutor worker pods use).
   airflow:
     executor: "KubernetesExecutor"
     # Default Airflow admin -- demo only. Used by OM server to call
