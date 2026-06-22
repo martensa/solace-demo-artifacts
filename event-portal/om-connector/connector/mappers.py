@@ -788,6 +788,11 @@ def eapp_to_data_product_request(
         description=description or None,
     )
     if container_asset_refs:
+        # OM 1.13 soft-deprecated CreateDataProductRequest.assets in favour
+        # of the bulk PUT /v1/dataProducts/{name}/assets/add API. The inline
+        # field is still ACCEPTED across 1.11-1.13, so this keeps working.
+        # FOLLOW-UP: migrate to the bulkAssets endpoint before a future OM
+        # release enforces the deprecation.
         base_kwargs["assets"] = container_asset_refs
 
     try:

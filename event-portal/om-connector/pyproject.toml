@@ -7,18 +7,21 @@ name = "openmetadata-solace-eventportal-connector"
 version = "0.9.0"
 description = "OpenMetadata custom Messaging connector + webhook bridge for Solace Event Portal"
 readme = "README.md"
-# Bumped to py3.10 in Wave 0 (OM 1.11 dropped py3.9). Aligns with the
-# upstream openmetadata-ingestion 1.11.x target.
+# Bumped to py3.10 in Wave 0 (OM 1.11 dropped py3.9); still correct for
+# OM 1.13 (which requires py3.10+). Supported OM SDK range: 1.11-1.13.
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
     { name = "Solace", email = "noreply@example.org" }
 ]
 dependencies = [
-    # The OM ingestion image already pins openmetadata-ingestion; we only
-    # add runtime deps that aren't part of the base image. SDK version
-    # is enforced via the Docker base image tag (OM_INGESTION_VERSION),
-    # currently pinned to ALDI's exact server version 1.11.0.0.
+    # The OM ingestion image already provides openmetadata-ingestion, so it
+    # is deliberately NOT a hard pip dependency here (would re-resolve the
+    # heavy SDK). The SDK version is enforced via the Docker base image tag
+    # (OM_INGESTION_VERSION), which must match the OM server version.
+    # Supported OM SDK range: >=1.11.5,<1.14 -- 1.13 verified additive
+    # against the connector's SDK call sites (see CLAUDE.md). For py3.9
+    # local dev the SDK is uninstallable, so SDK-bound tests run in Docker.
     "requests>=2.31",
     # We only use urllib3.util.retry.Retry (stable API 1.x <-> 2.x). Don't
     # over-constrain: the OM base image transitively requires urllib3 1.x

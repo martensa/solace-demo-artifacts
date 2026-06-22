@@ -54,8 +54,10 @@ dry-run by default (see the write-back design below).
 ## Stack (current)
 
 - Python 3.10+ (OM 1.11 dropped 3.9)
-- `openmetadata-ingestion >= 1.11.5, < 1.13` (pin upper bound below
-  1.13 until 1.13 GA on PyPI; today's latest stable is 1.12.8.9)
+- `openmetadata-ingestion >= 1.11.5, < 1.14` (1.11 / 1.12 / 1.13 all
+  supported -- 1.13 verified additive against the connector's SDK call
+  sites, no shim needed; one codebase spans all three. 1.13 requires
+  py3.10+, already met. Provided by the base image, not a hard pip dep.)
 - `metadata.parsers.{avro_parser, json_schema_parser, protobuf_parser}` --
   USE OM's built-in schema parsers, don't reimplement
 - `requests` + `urllib3` retry adapter for the REST client
