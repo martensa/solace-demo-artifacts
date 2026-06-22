@@ -1,7 +1,7 @@
 # Operations Runbook
 
-Production operations for the Solace Event Portal to OpenMetadata
-connector + bridge (Wave 6 / GA). Covers deploy, configuration,
+Operations for the Solace Event Portal to OpenMetadata connector +
+bridge (Beta, the `0.9.0` line). Covers deploy, configuration,
 observability, the routine cron jobs, the write-back shadow-deploy
 procedure, token rotation, and troubleshooting.
 
@@ -188,15 +188,21 @@ bridge. A wrong/expired token surfaces as
   false or `BRIDGE_WB_DRY_RUN` is true, or the entity is EP-owned
   (structural) only. Live writes also require `EP_WRITER_TOKEN`.
 
-## GA cutover sequence
+## Beta release sequence
 
-1. Build + push the `0.9.0` ingestion + bridge images; flip
-   `local-k8s-deps-values.yaml` to `0.9.0`.
-2. Deploy to ALDI staging (2 tenants, 1 region). Soak 1 week;
-   compare OM entity + lineage counts vs expected; resolve drift.
-3. Bump `pyproject.toml` to `1.0.0`, rebuild + push the `1.0.0`
-   images, tag the release.
-4. Production cutover; decommission the pilot CustomMessaging setup.
-5. Roll back by pinning the previous image tag in
+The `0.9.0` line is the Beta (Waves 0-5 + the flag-off Wave 4.5). The
+formerly-planned v1.0 GA + prod cutover are out of scope.
+
+1. Build + push the `0.9.0` ingestion + bridge images
+   (`scripts/build-and-push.sh` + `scripts/build-bridge-image.sh`);
+   flip `local-k8s-deps-values.yaml` to `0.9.0`.
+2. Run `EP_API_TOKEN=... python scripts/smoke_ep_api.py` against the
+   target tenant and confirm the two unverified EP v2 contracts noted
+   in `docs/EP-edition-compatibility.md` (Event API version field
+   names; the `updatedTime=gte:` incremental filter).
+3. Deploy + soak; compare OM entity + lineage counts vs expected;
+   resolve drift. Keep write-back off (or dry-run) per its go-live
+   procedure above.
+4. Roll back by pinning the previous image tag in
    `local-k8s-deps-values.yaml` + the Helm `image.tag`; entities are
    additive/idempotent, so a re-ingest on the prior version is safe.
