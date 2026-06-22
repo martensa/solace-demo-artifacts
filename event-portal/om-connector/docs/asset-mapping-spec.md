@@ -1,8 +1,8 @@
 # Asset-Mapping Spec — Solace Event Portal -> OpenMetadata
 
 Living document. Updated cluster-by-cluster as ALDI Nord answers the
-production-discovery one-pager (`aldi-discovery-onepager.md`). Each
-cluster has: decided mapping, alternatives we rejected and why, the
+production-discovery questionnaire. Each cluster has: decided mapping,
+alternatives we rejected and why, the
 status of the implementation ticket(s), and any open follow-ups.
 
 **Reading order.** Start with the entity-mapping table at the top —

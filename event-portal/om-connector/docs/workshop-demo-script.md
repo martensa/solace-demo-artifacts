@@ -218,7 +218,7 @@ Step-by-step:
    ```
 6. **Run the catch-up reconcile** (full-pull since the persisted
    watermark, NOT an audit replay — EP v2 doesn't expose architecture
-   audits, see docs/EP-edition-compatibility.md):
+   audits):
    ```bash
    kubectl exec deploy/solace-eventportal-bridge -- \
      om-eventportal-bridge --reconcile

@@ -197,9 +197,14 @@ formerly-planned v1.0 GA + prod cutover are out of scope.
    (`scripts/build-and-push.sh` + `scripts/build-bridge-image.sh`);
    flip `local-k8s-deps-values.yaml` to `0.9.0`.
 2. Run `EP_API_TOKEN=... python scripts/smoke_ep_api.py` against the
-   target tenant and confirm the two unverified EP v2 contracts noted
-   in `docs/EP-edition-compatibility.md` (Event API version field
-   names; the `updatedTime=gte:` incremental filter).
+   target tenant and confirm the two EP v2 contracts that the code
+   assumes but that are not yet verified against a live tenant:
+   (a) the Event API version field names (`producedEventVersionIds` /
+   `consumedEventVersionIds` -- the App path uses the `declared*`
+   prefix, so they are not guaranteed identical); and (b) the
+   server-side `updatedTime=gte:<since>` incremental filter (if EP
+   ignores it, reconcile safely over-fetches instead of incrementing).
+   Both are guarded (no crash); verify before trusting.
 3. Deploy + soak; compare OM entity + lineage counts vs expected;
    resolve drift. Keep write-back off (or dry-run) per its go-live
    procedure above.

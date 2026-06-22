@@ -240,7 +240,7 @@ includeLineage: "true"
 ingestAllVersions: "false"
 emitDomains: "true"
 # OFF — Solace Cloud EP v2 has no /architecture/modeledEventMeshes
-# endpoint (see docs/EP-edition-compatibility.md).
+# endpoint (404), so there are no modeled meshes to ingest.
 emitDataProducts: "false"
 # OFF — EP v2 returns user-ids on createdBy/changedBy, not e-mails,
 # and exposes no /users/{id} lookup. Static mapping support is planned.

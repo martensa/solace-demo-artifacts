@@ -111,9 +111,6 @@ docs/
   discovery-closure-summary.md ALDI discovery sign-off envelope
   implementation-plan.md      7-wave delivery plan + Wave 4.5 carve-out
   workshop-demo-script.md     Pilot demo walkthrough
-  EP-edition-compatibility.md Per-EP-edition endpoint matrix
-  aldi-signoff-memo.md        ALDI sign-off envelope summary
-  aldi-discovery-onepager.md  ALDI one-pager (PDF generated alongside)
   demo-seed-data.md           Demo seeding script
   openmetadata-image-flip.md  Helm image flip procedure
   operations.md               Production runbook (deploy/ops/troubleshoot)
@@ -358,13 +355,11 @@ going live.
    (changes as discovery answers shift)
 3. `docs/implementation-plan.md` -- delivery record (Waves 0-5 + 4.5;
    Beta). Waves 6-7 dropped.
-4. `docs/EP-edition-compatibility.md` -- per-EP-edition endpoint
-   matrix
-5. `docs/operations.md` -- production runbook; `docs/migration-from-0.x.md`
+4. `docs/operations.md` -- production runbook; `docs/migration-from-0.x.md`
    -- pilot -> Beta migration
-6. `docs/workshop-demo-script.md` -- pilot demo walkthrough (kept for
+5. `docs/workshop-demo-script.md` -- pilot demo walkthrough (kept for
    ALDI workshop reference)
-7. `README.md` -- public-facing project README
+6. `README.md` -- public-facing project README
 
 ## When in doubt
 

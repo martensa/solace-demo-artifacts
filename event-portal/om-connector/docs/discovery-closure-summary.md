@@ -2,8 +2,8 @@
 
 **Customer**: ALDI Nord (Platform Team + IT-Sec)
 **Discovery period**: 2026-05-26 / 2026-05-27 (sprint)
-**Method**: 6-cluster structured discovery (see `aldi-discovery-onepager.md`),
-each cluster smoke-tested against ALDI's reference tenant `seall` (Cloud
+**Method**: 6-cluster structured discovery, each cluster smoke-tested
+against ALDI's reference tenant `seall` (Cloud
 Enterprise) before answers were locked in `asset-mapping-spec.md`.
 **Outcome**: All 6 clusters answered + 2 additional ALDI requirements
 captured + 25 implementation tickets (#41-65) ready for prioritisation.
