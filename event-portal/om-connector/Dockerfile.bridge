@@ -1,31 +1,41 @@
-# Standalone container for the Event Portal -> OpenMetadata webhook bridge.
+# Standalone container for the Event Portal -> OpenMetadata bridge.
 #
-# Build:
-#   docker build -f Dockerfile.bridge -t my-org/om-eventportal-bridge:0.1.0 .
+# The bridge applies governance changes back to OM (handlers.py builds OM
+# entities), so it REQUIRES the OpenMetadata SDK (`metadata` package) at
+# runtime. It therefore bases on the OM ingestion image -- the same SDK the
+# connector + ingestion CronJob use -- and adds the bridge runtime extras
+# (FastAPI receiver, Prometheus metrics, OpenTelemetry tracing). A plain
+# python:slim base is NOT enough: bridge/handlers.py imports
+# metadata.generated.schema... at module load and would ModuleNotFoundError.
 #
-# Run (HTTP mode):
-#   docker run --rm -p 8080:8080 \
-#     -e EP_API_TOKEN=... -e EP_WEBHOOK_SECRET=... \
-#     -e OM_JWT_TOKEN=... -e OM_HOST_PORT=http://openmetadata-server:8585/api \
-#     my-org/om-eventportal-bridge:0.1.0
+# Build (lab): ./scripts/build-bridge-image.sh   (passes OM_INGESTION_VERSION)
+# Build (manual):
+#   docker build -f Dockerfile.bridge \
+#     --build-arg OM_INGESTION_VERSION=1.13.0 \
+#     -t registry.solace.lab/om-eventportal-bridge:0.9.0 .
 #
-# Run (Solace mode):
-#   docker run --rm \
-#     -e BRIDGE_MODE=solace \
-#     -e BRIDGE_SOLACE_HOST=tcp://solace_1:55555 \
-#     -e BRIDGE_SOLACE_PASSWORD=... \
-#     -e EP_API_TOKEN=... -e OM_JWT_TOKEN=... \
-#     my-org/om-eventportal-bridge:0.1.0
+# OM_INGESTION_VERSION must match the OM server version (same SDK).
+ARG OM_INGESTION_VERSION=1.13.0
+FROM docker.getcollate.io/openmetadata/ingestion:${OM_INGESTION_VERSION}
 
-FROM python:3.11-slim
+# The Collate base guards against root-side pip installs and expects the
+# `airflow` user (UID 50000). Mirror the connector ingestion Dockerfile.
+USER airflow
+WORKDIR /home/airflow/bridge-build
 
-WORKDIR /app
+COPY --chown=airflow:airflow pyproject.toml ./
+COPY --chown=airflow:airflow connector ./connector
+COPY --chown=airflow:airflow bridge ./bridge
 
-COPY pyproject.toml ./
-COPY connector ./connector
-COPY bridge ./bridge
-
+# Installs the connector + bridge packages with the bridge runtime extras.
+# The OM SDK is already provided by the base image.
 RUN pip install --no-cache-dir ".[bridge,bridge-solace,otel]"
+
+# Smoke test: the bridge entrypoint imports cleanly WITH the OM SDK present
+# (catches the missing-SDK regression at build time, not at pod start).
+RUN python -c "import bridge.main; \
+               from metadata.generated.schema.entity.data.topic import Topic; \
+               print('bridge import OK')"
 
 # 8080: HTTP/forwarder webhook receiver. 9100: Prometheus /metrics in
 # polling/solace mode (BRIDGE_OBS_METRICS_ENABLED=true). See bridge/config.py.

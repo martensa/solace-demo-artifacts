@@ -103,7 +103,10 @@ bridge/
   writeback.py               OM -> EP governance write-back (Wave 4.5 #49; flag-off)
   transport/writeback_http.py OM EntityChangeEvent receiver (Wave 4.5 #49)
 charts/
-  solace-eventportal-bridge/ Helm chart for the bridge (Wave 5 #15)
+  solace-eventportal-connector/ Helm chart for the FULL connector: bootstrap
+                             Job hook + ingestion CronJob + bridge + ServiceMonitor.
+                             Deploys into an existing OM without touching it.
+                             (Renamed from solace-eventportal-bridge.)
 config/
   example-workflow.yaml      Sample `metadata ingest -c` workflow
   example-workflow-tenant-b.yaml  Second-tenant example (Wave 5 #41)
@@ -112,9 +115,13 @@ docs/
   implementation-plan.md      Delivery plan (Waves 0-5 + 4.5; Beta)
   operations.md               Production runbook (deploy/ops/troubleshoot)
 scripts/
+  start.sh                    Idempotent one-call connector deploy into existing OM
+  stop.sh                     Idempotent one-call connector teardown
+  get-om-bot-token.sh         Fetch the OM ingestion-bot JWT via Keycloak (lab)
   build-and-push.sh           Build + push the OM ingestion image
   build-bridge-image.sh       Build + push the standalone bridge image (Wave 5 #15)
   smoke_ep_api.py             EP-API smoke-test against a live tenant
+.env.example                  Connector deploy config template (EP token etc.)
 Dockerfile                    Bakes the connector into openmetadata/ingestion
 pyproject.toml
 .markdownlint.json

@@ -1,0 +1,70 @@
+{{- if .Values.bootstrap.enabled }}
+{{/*
+One-shot bootstrap of the target OM: classifications + custom properties +
+synthetic services. Runs as a post-install/post-upgrade hook (weight 0) so the
+chart's Secret + workflow ConfigMap already exist, and BEFORE the initial
+ingestion hook (weight 5). Idempotent -- re-runs cleanly on every upgrade.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "solace-eventportal-connector.fullname" . }}-bootstrap
+  labels:
+    {{- include "solace-eventportal-connector.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        {{- include "solace-eventportal-connector.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: bootstrap
+          image: {{ include "solace-eventportal-connector.ingestionImage" . | quote }}
+          imagePullPolicy: {{ .Values.ingestion.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["om-eventportal-bootstrap"]
+          args:
+            - "--host-port"
+            - {{ .Values.openMetadata.hostPort | quote }}
+            - "--jwt-token"
+            - "$(OM_INGESTION_BOT_TOKEN)"
+            - "--service-name"
+            - {{ .Values.openMetadata.serviceName | quote }}
+            {{- if .Values.bootstrap.epCustomAttributeDiscovery }}
+            - "--ep-token"
+            - "$(SOLACE_EVENTPORTAL_TOKEN)"
+            - "--ep-api-url"
+            - {{ .Values.eventPortal.apiUrl | quote }}
+            {{- end }}
+            {{- if .Values.openMetadata.tenantPrefix }}
+            - "--tenant-prefix"
+            - {{ .Values.openMetadata.tenantPrefix | quote }}
+            {{- end }}
+            {{- if .Values.bootstrap.customAttributeExclude }}
+            - "--custom-attribute-exclude"
+            - {{ .Values.bootstrap.customAttributeExclude | quote }}
+            {{- end }}
+          env:
+            {{- include "solace-eventportal-connector.omIngestEnv" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.bootstrap.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

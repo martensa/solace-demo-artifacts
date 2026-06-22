@@ -1,0 +1,61 @@
+{{- if .Values.ingestion.enabled }}
+{{/*
+The `metadata ingest` workflow YAML, rendered from values. Secrets are NOT
+baked in here -- the workflow uses ${ENV} interpolation, and the Job/CronJob
+inject SOLACE_EVENTPORTAL_TOKEN + OM_INGESTION_BOT_TOKEN from the Secret.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "solace-eventportal-connector.fullname" . }}-workflow
+  labels:
+    {{- include "solace-eventportal-connector.labels" . | nindent 4 }}
+data:
+  workflow.yaml: |
+    source:
+      type: customMessaging
+      serviceName: {{ .Values.openMetadata.serviceName }}
+      serviceConnection:
+        config:
+          type: CustomMessaging
+          sourcePythonClass: connector.event_portal_connector.SolaceEventPortalSource
+          connectionOptions:
+            apiUrl: {{ .Values.eventPortal.apiUrl }}
+            apiToken: "${SOLACE_EVENTPORTAL_TOKEN}"
+            mode: rest_api
+            domainFilterPattern: '{{ .Values.ingestion.filters.domain }}'
+            eventFilterPattern: '{{ .Values.ingestion.filters.event }}'
+            schemaFilterPattern: '{{ .Values.ingestion.filters.schema }}'
+            applicationFilterPattern: '{{ .Values.ingestion.filters.application }}'
+            includeLineage: "{{ .Values.ingestion.options.includeLineage }}"
+            ingestAllVersions: "{{ .Values.ingestion.options.ingestAllVersions }}"
+            emitDomains: "{{ .Values.ingestion.options.emitDomains }}"
+            emitDataProducts: "{{ .Values.ingestion.options.emitDataProducts }}"
+            resolveOwners: "{{ .Values.ingestion.options.resolveOwners }}"
+            {{- if .Values.openMetadata.tenantPrefix }}
+            tenantPrefix: {{ .Values.openMetadata.tenantPrefix }}
+            {{- end }}
+            {{- if .Values.ingestion.sampleData.enabled }}
+            sampleDataEnabled: "true"
+            brokerHost: {{ .Values.ingestion.sampleData.brokerHost | quote }}
+            brokerVpn: {{ .Values.ingestion.sampleData.brokerVpn | quote }}
+            brokerUsername: {{ .Values.ingestion.sampleData.brokerUsername | quote }}
+            brokerPassword: "${SOLACE_BROKER_PASSWORD}"
+            {{- else }}
+            sampleDataEnabled: "false"
+            {{- end }}
+      sourceConfig:
+        config:
+          type: MessagingMetadata
+          generateSampleData: {{ .Values.ingestion.sampleData.enabled }}
+    sink:
+      type: metadata-rest
+      config: {}
+    workflowConfig:
+      loggerLevel: {{ .Values.ingestion.loggerLevel }}
+      openMetadataServerConfig:
+        hostPort: {{ .Values.openMetadata.hostPort }}
+        authProvider: openmetadata
+        securityConfig:
+          jwtToken: "${OM_INGESTION_BOT_TOKEN}"
+{{- end }}

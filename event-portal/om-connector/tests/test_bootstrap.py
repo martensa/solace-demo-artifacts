@@ -163,6 +163,10 @@ def test_full_bootstrap_is_idempotent_on_a_populated_om():
         ],
     }
     populated["/metadata/types/name/string"] = {"id": "string-id"}
+    # Main CustomMessaging service that owns the imported Topics.
+    populated["/services/messagingServices/name/solace-event-portal"] = {
+        "name": "solace-event-portal"
+    }
     populated[
         f"/services/pipelineServices/name/{bootstrap.APP_PIPELINE_SERVICE_NAME}"
     ] = {"name": bootstrap.APP_PIPELINE_SERVICE_NAME}

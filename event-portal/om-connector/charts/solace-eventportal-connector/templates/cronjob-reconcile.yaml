@@ -2,9 +2,9 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ include "solace-eventportal-bridge.fullname" . }}-reconcile
+  name: {{ include "solace-eventportal-connector.fullname" . }}-reconcile
   labels:
-    {{- include "solace-eventportal-bridge.labels" . | nindent 4 }}
+    {{- include "solace-eventportal-connector.labels" . | nindent 4 }}
 spec:
   schedule: {{ .Values.cron.reconcile.schedule | quote }}
   concurrencyPolicy: {{ .Values.cron.reconcile.concurrencyPolicy }}
@@ -13,7 +13,7 @@ spec:
       template:
         metadata:
           labels:
-            {{- include "solace-eventportal-bridge.selectorLabels" . | nindent 12 }}
+            {{- include "solace-eventportal-connector.selectorLabels" . | nindent 12 }}
         spec:
           restartPolicy: Never
           {{- with .Values.imagePullSecrets }}
@@ -24,14 +24,14 @@ spec:
             {{- toYaml .Values.podSecurityContext | nindent 12 }}
           containers:
             - name: reconcile
-              image: {{ include "solace-eventportal-bridge.image" . | quote }}
+              image: {{ include "solace-eventportal-connector.image" . | quote }}
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               securityContext:
                 {{- toYaml .Values.securityContext | nindent 16 }}
               args:
                 - --reconcile
               env:
-                {{- include "solace-eventportal-bridge.env" . | nindent 16 }}
+                {{- include "solace-eventportal-connector.env" . | nindent 16 }}
               resources:
                 {{- toYaml .Values.resources | nindent 16 }}
               volumeMounts:

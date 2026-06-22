@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "solace-eventportal-bridge.fullname" . }}
+  name: {{ include "solace-eventportal-connector.fullname" . }}
   labels:
-    {{- include "solace-eventportal-bridge.labels" . | nindent 4 }}
+    {{- include "solace-eventportal-connector.labels" . | nindent 4 }}
   {{- if and .Values.observability.metrics.enabled .Values.observability.metrics.serviceAnnotations }}
   annotations:
     prometheus.io/scrape: "true"
@@ -14,7 +14,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    {{- include "solace-eventportal-bridge.selectorLabels" . | nindent 4 }}
+    {{- include "solace-eventportal-connector.selectorLabels" . | nindent 4 }}
   ports:
     {{- if or (eq .Values.mode "http") (eq .Values.mode "forwarder") }}
     - name: webhook

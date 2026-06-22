@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "solace-eventportal-bridge.fullname" . }}
+  name: {{ include "solace-eventportal-connector.fullname" . }}
   labels:
-    {{- include "solace-eventportal-bridge.labels" . | nindent 4 }}
+    {{- include "solace-eventportal-connector.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "solace-eventportal-bridge.selectorLabels" . | nindent 6 }}
+      {{- include "solace-eventportal-connector.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "solace-eventportal-bridge.selectorLabels" . | nindent 8 }}
+        {{- include "solace-eventportal-connector.selectorLabels" . | nindent 8 }}
       annotations:
         {{- if and .Values.observability.metrics.enabled .Values.observability.metrics.serviceAnnotations }}
         prometheus.io/scrape: "true"
@@ -33,12 +33,12 @@ spec:
       terminationGracePeriodSeconds: {{ max .Values.terminationGracePeriodSeconds (add .Values.bridge.pollingIntervalSeconds 5) }}
       containers:
         - name: bridge
-          image: {{ include "solace-eventportal-bridge.image" . | quote }}
+          image: {{ include "solace-eventportal-connector.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           env:
-            {{- include "solace-eventportal-bridge.env" . | nindent 12 }}
+            {{- include "solace-eventportal-connector.env" . | nindent 12 }}
           ports:
             {{- if or (eq .Values.mode "http") (eq .Values.mode "forwarder") }}
             - name: webhook
@@ -115,7 +115,7 @@ spec:
         {{- if .Values.otelCollector.enabled }}
         - name: otel-config
           configMap:
-            name: {{ include "solace-eventportal-bridge.fullname" . }}-otel
+            name: {{ include "solace-eventportal-connector.fullname" . }}-otel
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

@@ -1,0 +1,57 @@
+{{- if .Values.ingestion.enabled }}
+{{/*
+Recurring full catalog import. Self-contained: runs `metadata ingest` from the
+connector ingestion image against the EXISTING OM via its REST API -- it never
+touches OM's own Airflow. Secrets are injected from the Secret and consumed by
+the workflow YAML via ${ENV} interpolation.
+*/}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "solace-eventportal-connector.fullname" . }}-ingestion
+  labels:
+    {{- include "solace-eventportal-connector.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.ingestion.schedule | quote }}
+  concurrencyPolicy: {{ .Values.ingestion.concurrencyPolicy }}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            {{- include "solace-eventportal-connector.selectorLabels" . | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: ingestion
+              image: {{ include "solace-eventportal-connector.ingestionImage" . | quote }}
+              imagePullPolicy: {{ .Values.ingestion.image.pullPolicy }}
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              command: ["metadata", "ingest", "-c", "/etc/connector/workflow.yaml"]
+              env:
+                {{- include "solace-eventportal-connector.omIngestEnv" . | nindent 16 }}
+              volumeMounts:
+                - name: workflow
+                  mountPath: /etc/connector
+                  readOnly: true
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                {{- toYaml .Values.ingestion.resources | nindent 16 }}
+          volumes:
+            - name: workflow
+              configMap:
+                name: {{ include "solace-eventportal-connector.fullname" . }}-workflow
+            - name: tmp
+              emptyDir: {}
+{{- end }}

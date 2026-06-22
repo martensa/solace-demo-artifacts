@@ -21,6 +21,8 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REGISTRY="${REGISTRY:-registry.solace.lab}"
 IMAGE_NAME="${IMAGE_NAME:-om-eventportal-bridge}"
 PUSH="${PUSH:-true}"
+# OM SDK base version -- must match the OM server (the bridge needs the SDK).
+OM_INGESTION_VERSION="${OM_INGESTION_VERSION:-1.13.0}"
 
 # --- Derive version from pyproject.toml (matches build-and-push.sh) ---------
 CONNECTOR_VERSION=$(
@@ -36,9 +38,10 @@ LATEST_TAG="${REGISTRY}/${IMAGE_NAME}:latest"
 
 command -v docker >/dev/null 2>&1 || { echo "ERROR: docker not found."; exit 1; }
 
-echo "Building ${FULL_TAG} (bridge image) ..."
+echo "Building ${FULL_TAG} (bridge image, OM base ${OM_INGESTION_VERSION}) ..."
 docker build \
   -f "${PROJECT_DIR}/Dockerfile.bridge" \
+  --build-arg "OM_INGESTION_VERSION=${OM_INGESTION_VERSION}" \
   -t "${FULL_TAG}" \
   -t "${LATEST_TAG}" \
   "${PROJECT_DIR}"

@@ -1,0 +1,27 @@
+apiVersion: v2
+name: solace-eventportal-connector
+description: >-
+  Solace Event Portal -> OpenMetadata connector. Deploys the full connector
+  into an EXISTING OpenMetadata install without touching it: a one-shot
+  bootstrap Job (classifications + custom properties + synthetic services),
+  an external ingestion CronJob (metadata ingest, EP -> OM catalog import),
+  and the standalone bridge (polling / http / forwarder / solace) with the
+  Wave 5 observability surfaces -- Prometheus /metrics (#10) via ServiceMonitor,
+  OpenTelemetry tracing to Tempo (#63), graceful shutdown (#13), structured
+  logging (#11). Soft-delete (#61) and reconcile run as CronJobs.
+type: application
+# Chart version is independent of the app; bump on chart changes.
+# 0.2.0: chart promoted from bridge-only to full connector (bootstrap Job +
+# ingestion CronJob + ServiceMonitor) and renamed to -connector.
+version: 0.2.0
+# Tracks the connector image tags (Wave 5 = 0.9.0). Keep in lockstep with
+# pyproject.toml + scripts/build-bridge-image.sh + build-and-push.sh.
+appVersion: "0.9.0"
+keywords:
+  - solace
+  - event-portal
+  - openmetadata
+  - metadata
+home: https://github.com/martensa/solace-demo-artifacts
+maintainers:
+  - name: Solace

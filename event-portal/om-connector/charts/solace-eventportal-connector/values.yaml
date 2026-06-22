@@ -1,0 +1,240 @@
+# Default values for solace-eventportal-connector.
+# Mirrors bridge/config.py: every env var the bridge reads has a value here.
+
+# -- Bridge runtime mode: polling | http | forwarder | solace.
+# polling is the Solace Cloud EP v2 default (no outbound webhooks).
+mode: polling
+
+replicaCount: 1
+
+image:
+  repository: registry.solace.lab/om-eventportal-bridge
+  tag: ""          # defaults to .Chart.AppVersion when empty
+  pullPolicy: IfNotPresent
+
+# Lab convention (agent-mesh-deployment): private registry pull secret.
+imagePullSecrets:
+  - name: registry-pull-secret
+
+nameOverride: ""
+fullnameOverride: ""
+
+# --- Event Portal -----------------------------------------------------------
+eventPortal:
+  apiUrl: https://api.solace.cloud/api/v2
+
+# --- OpenMetadata -----------------------------------------------------------
+openMetadata:
+  # In-cluster address of the EXISTING OM server (its REST API, incl. /api).
+  # Default points at the lab OM install; override for any other OM.
+  hostPort: http://openmetadata.openmetadata-solace-lab.svc.cluster.local:8585/api
+  serviceName: solace-event-portal
+  # Wave 5 (#41): must match the connector workflow's tenantPrefix for a
+  # per-tenant bridge. Empty = single-tenant.
+  tenantPrefix: ""
+
+# --- Ingestion (external CronJob: `metadata ingest`, EP -> OM catalog) -------
+# Runs the source connector against the EXISTING OM through its REST API. It
+# does NOT touch OM's own Airflow -- it is a self-contained CronJob using the
+# OM ingestion image with the connector baked in. This is what imports the EP
+# catalog (Topics/Schemas/Pipelines/Containers/DataProducts/Tables + lineage).
+ingestion:
+  enabled: true
+  image:
+    repository: registry.solace.lab/openmetadata-ingestion-solace
+    tag: ""          # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  schedule: "0 */6 * * *"        # recurring full import, every 6h
+  concurrencyPolicy: Forbid
+  # The initial import is triggered by start.sh (kubectl create job --from the
+  # CronJob) AFTER the chart installs -- decoupled from the Helm lifecycle so a
+  # large/slow catalog never blocks or fails `helm install`. Set to false in
+  # start.sh's logic if you prefer to wait for the first scheduled tick.
+  runOnInstall: true
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  # Allow-list filters rendered into the workflow YAML (OM FilterPattern JSON).
+  filters:
+    domain: '{"includes": [".*"], "excludes": []}'
+    event: '{"includes": [".*"]}'
+    schema: '{"includes": [".*"]}'
+    application: '{"includes": [".*"]}'
+  options:
+    includeLineage: true
+    ingestAllVersions: true
+    emitDomains: true
+    emitDataProducts: false      # Cloud Enterprise EP v2 has no modeledEventMeshes
+    resolveOwners: false         # EP v2 returns user-ids, no /users lookup
+  loggerLevel: INFO
+  # Optional live sample-data (broker subscribe). OFF by default: the lab broker
+  # runs in docker-compose (not k8s), and PII hard-block applies (#62).
+  sampleData:
+    enabled: false
+    brokerHost: "tcp://host.docker.internal:55555"
+    brokerVpn: default
+    brokerUsername: om-sampler
+
+# --- Bootstrap (one-shot Helm pre-install/pre-upgrade hook Job) --------------
+# Creates EP classifications + custom properties + the synthetic services in
+# the target OM. Idempotent: safe to re-run on every helm upgrade.
+bootstrap:
+  enabled: true
+  # Auto-discover EP custom-attribute definitions and register one OM
+  # Classification per CA name (#43). Uses the EP token from the Secret.
+  epCustomAttributeDiscovery: true
+  # Comma-separated EP CA names to NOT register as classifications.
+  customAttributeExclude: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# --- Secrets ----------------------------------------------------------------
+# Plain K8s Secret (v1.0 decision). Provide token values here for the chart
+# to create the Secret, OR set existingSecret to reference your own (e.g. a
+# Vault-synced secret in v1.1). Never commit real tokens into values.yaml.
+secret:
+  # When set, the chart does NOT create a Secret and reads keys from this one.
+  existingSecret: ""
+  # Keys within the Secret (own or chart-created).
+  epApiTokenKey: ep-api-token
+  omJwtTokenKey: om-jwt-token
+  epWebhookSecretKey: ep-webhook-secret
+  solacePasswordKey: solace-password
+  # Values used ONLY when existingSecret is empty (chart creates the Secret).
+  epApiToken: ""
+  omJwtToken: ""
+  epWebhookSecret: ""
+  solacePassword: ""
+
+# --- Transport behaviour (BRIDGE_*) ----------------------------------------
+bridge:
+  pollingIntervalSeconds: 10
+  pollingDomainIds: []        # empty = every domain the token can see
+  dedupe:
+    ttlSeconds: 600
+    maxEntries: 10000
+  acceptEventTypes: []        # empty = accept all
+  bindPort: 8080              # http/forwarder webhook receiver
+  forwarderTopicPrefix: om/sync/eventportal
+
+solace:
+  host: tcp://solace_1:55555
+  vpn: default
+  username: om-bridge
+  queue: om/sync/eventportal
+
+# --- Observability (BRIDGE_OBS_*, Wave 5) ----------------------------------
+observability:
+  logFormat: text             # text | json (#11)
+  logLevel: INFO
+  shutdownGraceSeconds: 10     # #13
+  metrics:
+    enabled: true             # #10 Prometheus /metrics (scraped via ServiceMonitor)
+    port: 9100
+    # prometheus.io annotations are redundant when serviceMonitor.enabled, but
+    # harmless for annotation-based Prometheus setups. Leave on.
+    serviceAnnotations: true
+  otel:
+    enabled: true             # #63 OpenTelemetry tracing -> Tempo
+    # OTLP/HTTP TRACES endpoint of the lab Tempo (monitoring stack). The
+    # bridge passes this straight to OTLPSpanExporter(endpoint=...), which
+    # does NOT auto-append a path, so the full /v1/traces path is required
+    # (Tempo 4318 root returns 404; /v1/traces accepts the POST). For grpc
+    # protocol use host:port WITHOUT the path instead.
+    endpoint: http://tempo.monitoring.svc.cluster.local:4318/v1/traces
+    protocol: http/protobuf   # http/protobuf | grpc
+    serviceName: om-eventportal-bridge
+
+# Optional in-cluster OTel collector sidecar (#63). When enabled, the bridge
+# ships spans to it on localhost:4318 (data-residency: never an external SaaS).
+otelCollector:
+  enabled: false
+  image: otel/opentelemetry-collector:0.103.1
+  # Where the collector forwards (e.g. a Tempo/Jaeger OTLP endpoint). Keep
+  # in-region per ALDI EU data-residency.
+  exporterEndpoint: ""
+
+# --- Prometheus ServiceMonitor (kube-prometheus-stack / Prometheus Operator) -
+# Scrapes the bridge /metrics Service. Requires the ServiceMonitor CRD; the
+# chart only renders it when enabled AND observability.metrics.enabled.
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+  # kube-prometheus-stack's Prometheus selects ServiceMonitors carrying its
+  # release label. The lab release is `kube-prometheus`. Adjust to match your
+  # Prometheus serviceMonitorSelector if different.
+  additionalLabels:
+    release: kube-prometheus
+
+# --- CronJobs ---------------------------------------------------------------
+cron:
+  softDelete:
+    enabled: false
+    schedule: "0 * * * *"     # hourly
+    autoPurgeAfterDays: 0     # 0 = forever-tombstone (no hard delete)
+    concurrencyPolicy: Forbid
+  reconcile:
+    enabled: false
+    schedule: "*/15 * * * *"
+    concurrencyPolicy: Forbid
+
+# --- On-prem OM TLS: mount the lab CA bundle (per local-k8s-values.yaml).
+# EP (api.solace.cloud) uses public CAs; on-prem OM may need the lab CA.
+labCaTrust:
+  enabled: false
+  configMapName: solace-lab-ca-trust-bundle
+  # Mount path + the env the bridge's requests stack honours.
+  mountPath: /etc/ssl/certs/solace-lab-ca.crt
+  subPath: ca.crt
+
+# --- Pod scheduling / security ---------------------------------------------
+# Bridge + reconcile/soft-delete run the OM-SDK-based image; importing the
+# `metadata` package alone needs ~300-400Mi, so the limit must be well above
+# the old slim-image 256Mi (which OOMKilled exit 137).
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+# All connector pods run OM-based images (bridge, ingestion, bootstrap), whose
+# user is `airflow` = UID 50000, GID 0. runAsNonRoot needs the NUMERIC uid
+# (the image declares a non-numeric user, which the kubelet cannot verify).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 50000
+  runAsGroup: 0
+  fsGroup: 0
+  seccompProfile:
+    type: RuntimeDefault
+
+# readOnlyRootFilesystem is OFF: the OM ingestion runtime writes work files
+# outside /tmp. allowPrivilegeEscalation off + drop ALL keeps it restricted-PSS
+# compliant (readOnlyRootFilesystem is not part of the restricted profile).
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+
+# terminationGracePeriodSeconds is computed as max(this, pollingInterval+5)
+# in the template so SIGTERM can drain a poll tick (#13).
+terminationGracePeriodSeconds: 30

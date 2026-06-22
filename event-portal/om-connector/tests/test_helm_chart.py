@@ -12,7 +12,7 @@ import pytest
 if shutil.which("helm") is None:
     pytest.skip("helm not installed", allow_module_level=True)
 
-CHART = str(Path(__file__).resolve().parents[1] / "charts" / "solace-eventportal-bridge")
+CHART = str(Path(__file__).resolve().parents[1] / "charts" / "solace-eventportal-connector")
 SECRET = ["--set", "secret.epApiToken=ep", "--set", "secret.omJwtToken=om"]
 EXISTING = ["--set", "secret.existingSecret=mine"]
 
@@ -33,9 +33,11 @@ def test_helm_lint_passes():
     assert out.returncode == 0, out.stdout + out.stderr
 
 
-def test_polling_default_has_no_probes_or_service():
-    # Polling has no HTTP server; naive probes would crashloop the pod.
-    rendered = _template(*SECRET)
+def test_polling_without_metrics_has_no_probes_or_service():
+    # Polling has no HTTP server; naive probes would crashloop the pod. With
+    # metrics off there is nothing to expose, so no Service either. (Metrics
+    # are default-ON now -> covered by test_metrics_enabled_* below.)
+    rendered = _template(*SECRET, "--set", "observability.metrics.enabled=false")
     assert "Probe:" not in rendered
     assert "kind: Service" not in rendered
 
@@ -74,9 +76,12 @@ def test_cronjobs_render_with_correct_args():
         "--set", "cron.softDelete.enabled=true",
         "--set", "cron.reconcile.enabled=true",
     )
-    assert rendered.count("kind: CronJob") == 2
+    # ingestion CronJob always renders (ingestion.enabled default) + the two
+    # opt-in maintenance CronJobs = 3 total.
+    assert rendered.count("kind: CronJob") == 3
     assert "--soft-delete-missing" in rendered
     assert "--reconcile" in rendered
+    assert '"metadata", "ingest"' in rendered
 
 
 def test_existing_secret_renders_no_chart_secret():

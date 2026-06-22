@@ -302,6 +302,25 @@ def _as_extension(data: Dict[str, Any]):
         return data
 
 
+def _as_source_url(url: str):
+    """Wrap a URL in the OM ``SourceUrl`` RootModel if available.
+
+    OM 1.11+ uses pydantic v2. Assigning a raw ``str`` to
+    ``Pipeline.sourceUrl`` *post-construction* (which bypasses field
+    validation/coercion) makes ``model_dump_json()`` raise "'str' object
+    has no attribute 'root'" on OM 1.13. Wrap it explicitly; fall back to
+    the raw str for older OM / slim test envs.
+    """
+    if not url:
+        return None
+    try:
+        from metadata.generated.schema.type.basic import SourceUrl
+
+        return SourceUrl(root=url)
+    except Exception:
+        return url
+
+
 def domain_fqn(domain_name: str) -> str:
     return sanitize(domain_name)
 
@@ -1414,7 +1433,7 @@ def app_to_pipeline_request(
     # clickable "source" link on the Pipeline page.
     async_api_url = urls.async_api(app_version_id)
     if async_api_url and hasattr(request, "sourceUrl"):
-        request.sourceUrl = async_api_url
+        request.sourceUrl = _as_source_url(async_api_url)
     if extension and hasattr(request, "extension"):
         request.extension = _as_extension(extension)
     if attach_to_domain:

@@ -792,7 +792,7 @@ class SolaceEventPortalSource(Source):
                     # Lineage edges Container <-> Topic.
                     ea_name = ea.get("name") or "EventAPI"
                     for ev_id in version.get("producedEventVersionIds") or []:
-                        fqn = self._event_version_to_topic_fqn.get(ev_id)
+                        fqn = self._event_version_to_topic_fqn.get(_as_event_version_id(ev_id))
                         if not fqn:
                             continue
                         topic_id = self._resolve_id("topic", fqn)
@@ -802,7 +802,7 @@ class SolaceEventPortalSource(Source):
                             container_id, topic_id, "produces", ea_name,
                         )
                     for ev_id in version.get("consumedEventVersionIds") or []:
-                        fqn = self._event_version_to_topic_fqn.get(ev_id)
+                        fqn = self._event_version_to_topic_fqn.get(_as_event_version_id(ev_id))
                         if not fqn:
                             continue
                         topic_id = self._resolve_id("topic", fqn)
@@ -963,7 +963,7 @@ class SolaceEventPortalSource(Source):
                 seen_topic_ids: Set[str] = set()
                 for sub in consumer.get("subscriptions") or []:
                     for ev_id in sub.get("attractedEventVersionIds") or []:
-                        fqn = self._event_version_to_topic_fqn.get(ev_id)
+                        fqn = self._event_version_to_topic_fqn.get(_as_event_version_id(ev_id))
                         if not fqn:
                             continue
                         topic_id = self._resolve_id("topic", fqn)
@@ -1282,7 +1282,7 @@ class SolaceEventPortalSource(Source):
                             )
 
                     for ev_id in version.get("declaredProducedEventVersionIds") or []:
-                        fqn = self._event_version_to_topic_fqn.get(ev_id)
+                        fqn = self._event_version_to_topic_fqn.get(_as_event_version_id(ev_id))
                         if not fqn:
                             continue
                         topic_id = self._resolve_id("topic", fqn)
@@ -1297,7 +1297,7 @@ class SolaceEventPortalSource(Source):
                         if req is not None:
                             self._add_lineage(req)
                     for ev_id in version.get("declaredConsumedEventVersionIds") or []:
-                        fqn = self._event_version_to_topic_fqn.get(ev_id)
+                        fqn = self._event_version_to_topic_fqn.get(_as_event_version_id(ev_id))
                         if not fqn:
                             continue
                         topic_id = self._resolve_id("topic", fqn)
@@ -1671,6 +1671,20 @@ class SolaceEventPortalSource(Source):
                 stackTrace=traceback.format_exc(),
             )
         )
+
+
+def _as_event_version_id(ev: Any) -> Optional[str]:
+    """Normalise an EP event-version-id list entry to a bare id string.
+
+    EP returns these lists (``attractedEventVersionIds``,
+    ``declared{Produced,Consumed}EventVersionIds``, ...) as EITHER bare id
+    strings OR objects like ``{"eventVersionId": ..., "eventMeshIds": [...]}``
+    depending on tenant / API version. Returning the bare id keeps the FQN
+    lookup from being handed a dict (TypeError: unhashable type: 'dict').
+    """
+    if isinstance(ev, dict):
+        return ev.get("eventVersionId") or ev.get("id")
+    return ev
 
 
 def _as_bool(value: Any) -> bool:

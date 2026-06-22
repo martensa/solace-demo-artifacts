@@ -1,0 +1,28 @@
+{{- if and .Values.serviceMonitor.enabled .Values.observability.metrics.enabled }}
+{{/*
+Prometheus Operator scrape config for the bridge /metrics endpoint. Requires
+the kube-prometheus-stack (ServiceMonitor CRD). Only renders when metrics are
+on (the metrics Service must exist for this to target anything).
+*/}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "solace-eventportal-connector.fullname" . }}
+  labels:
+    {{- include "solace-eventportal-connector.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "solace-eventportal-connector.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+{{- end }}

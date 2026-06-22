@@ -1,0 +1,36 @@
+Solace Event Portal -> OpenMetadata connector deployed.
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Target OM: {{ .Values.openMetadata.hostPort }}
+
+Components:
+  bootstrap (Job hook): {{ if .Values.bootstrap.enabled }}ENABLED{{ else }}disabled{{ end }} -- classifications + custom properties + synthetic services
+  ingestion (CronJob):  {{ if .Values.ingestion.enabled }}ENABLED ({{ .Values.ingestion.schedule }}){{ else }}disabled{{ end }} -- {{ include "solace-eventportal-connector.ingestionImage" . }}
+  bridge ({{ .Values.mode }}):       {{ include "solace-eventportal-connector.image" . }}
+
+{{- if .Values.secret.existingSecret }}
+Secrets:   using existing Secret "{{ .Values.secret.existingSecret }}".
+{{- else }}
+Secrets:   chart-created Secret "{{ include "solace-eventportal-connector.fullname" . }}"
+           (keys: {{ .Values.secret.epApiTokenKey }}, {{ .Values.secret.omJwtTokenKey }}).
+{{- end }}
+
+Observability:
+  metrics={{ .Values.observability.metrics.enabled }}{{ if .Values.observability.metrics.enabled }} (/metrics on :{{ .Values.observability.metrics.port }}){{ end }} serviceMonitor={{ .Values.serviceMonitor.enabled }}
+  otel={{ or .Values.observability.otel.enabled .Values.otelCollector.enabled }}{{ if .Values.observability.otel.enabled }} -> {{ .Values.observability.otel.endpoint }}{{ end }}
+
+CronJobs:
+  ingestion:   {{ if .Values.ingestion.enabled }}{{ .Values.ingestion.schedule }}{{ else }}disabled{{ end }}
+  soft-delete: {{ if .Values.cron.softDelete.enabled }}ENABLED ({{ .Values.cron.softDelete.schedule }}){{ else }}disabled{{ end }}
+  reconcile:   {{ if .Values.cron.reconcile.enabled }}ENABLED ({{ .Values.cron.reconcile.schedule }}){{ else }}disabled{{ end }}
+
+The bootstrap Job runs automatically as a post-install hook. To trigger an
+import on demand (instead of waiting for the CronJob):
+  kubectl -n {{ .Release.Namespace }} create job --from=cronjob/{{ include "solace-eventportal-connector.fullname" . }}-ingestion manual-$(date +%s)
+
+{{- if eq .Values.mode "polling" }}
+
+Polling mode has no HTTP server. Tail logs to confirm ticks:
+  kubectl logs -n {{ .Release.Namespace }} deploy/{{ include "solace-eventportal-connector.fullname" . }} -f
+{{- end }}

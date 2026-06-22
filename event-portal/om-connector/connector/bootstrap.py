@@ -156,6 +156,9 @@ DATAPRODUCT_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
         "'true' iff this DataProduct carries the highest semver of its EP "
         "Event API Product (Wave 3 #45).",
     ),
+    # eapp_to_data_product_request stamps the EP lifecycle state; register it
+    # on `dataProduct` so the create does not 400 with the unknown field.
+    (CP_STATE, "string", "Event Portal lifecycle state (Draft, Released, ...)"),
 ]
 
 
@@ -170,6 +173,10 @@ CONTAINER_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
         "'true' iff this Container carries the highest semver of its EP "
         "Event API (Wave 3 #44).",
     ),
+    # event_api_to_container_request stamps the EP lifecycle state on the
+    # Event-API Container too; register it on `container` so the create
+    # does not 400 with "Unknown custom field eventPortalState".
+    (CP_STATE, "string", "Event Portal lifecycle state (Draft, Released, ...)"),
 ]
 
 
@@ -243,6 +250,11 @@ CONSUMER_CUSTOM_PROPERTIES: List[Tuple[str, str, str]] = [
         "rendered from EP consumer.subscriptions[] for at-a-glance reading "
         "on the OM Container page.",
     ),
+    # consumer_to_container_request links the consuming app + its domain on
+    # the Container; register both on `container` so the create does not 400
+    # with "Unknown custom field eventPortalApplication".
+    (CP_EP_APPLICATION, "markdown", "Link to the EP application + version"),
+    (CP_EP_APP_DOMAIN, "markdown", "Link to the EP application domain"),
 ]
 
 
@@ -436,6 +448,51 @@ def ensure_database(
             "POST /databases failed for %s; schema Table emission may be skipped",
             fqn,
         )
+
+
+def ensure_messaging_service(
+    om,
+    name: str = "solace-event-portal",
+    description: str = (
+        "Solace Event Portal -- the messaging service that owns the Topics "
+        "imported from EP event versions."
+    ),
+) -> None:
+    """Idempotently create the CustomMessaging service the connector imports into.
+
+    Topics created by the ingestion workflow reference this service. When the
+    connector runs headlessly (external CronJob, not via the OM UI's
+    add-service flow) nothing else creates it, so the bulk Topic create fails
+    with "messagingService instance for <name> not found". Creating it here
+    makes the headless deploy self-sufficient. serviceType CustomMessaging so
+    it never collides with a real Kafka / Redpanda service.
+    """
+    existing = _get_or_none(om, f"/services/messagingServices/name/{name}")
+    if existing:
+        logger.info("MessagingService %s already exists", name)
+        return
+    body = {
+        "name": name,
+        "displayName": "Solace Event Portal",
+        "description": description,
+        "serviceType": "CustomMessaging",
+        "connection": {
+            "config": {
+                "type": "CustomMessaging",
+                "sourcePythonClass": "connector.event_portal_connector.SolaceEventPortalSource",
+            }
+        },
+    }
+    try:
+        _client(om).post("/services/messagingServices", json=body)
+        logger.info("Created MessagingService %s", name)
+    except Exception:
+        logger.warning(
+            "POST /services/messagingServices failed for %s; retrying via PUT "
+            "without connection", name,
+        )
+        body.pop("connection", None)
+        _client(om).put("/services/messagingServices", data=json.dumps(body))
 
 
 def ensure_pipeline_service(
@@ -656,6 +713,7 @@ def bootstrap(
     ep_client=None,
     ca_exclude: Optional[set] = None,
     tenant_prefix: str = "",
+    service_name: str = "solace-event-portal",
 ) -> None:
     """Run the full idempotent bootstrap against an OM instance.
 
@@ -700,6 +758,10 @@ def bootstrap(
         ensure_custom_property(om, "dataProduct", key, ptype, desc)
     for key, ptype, desc in TABLE_CUSTOM_PROPERTIES:
         ensure_custom_property(om, "table", key, ptype, desc)
+    # Main MessagingService that owns the imported Topics. Created here so a
+    # headless deploy (external CronJob) is self-sufficient -- otherwise the
+    # bulk Topic create 400s with "messagingService instance not found".
+    ensure_messaging_service(om, name=service_name)
     ensure_pipeline_service(om, name=app_pipeline_service)
     # Wave 3 (#44): synthetic StorageService for EventAPI Containers.
     ensure_storage_service(
@@ -854,6 +916,13 @@ def main(argv=None) -> int:
         help="Prefix for the shared synthetic services (apps/event-apis/"
         "consumers/topic-tree/schemas). Empty = single-tenant (default).",
     )
+    parser.add_argument(
+        "--service-name",
+        default="solace-event-portal",
+        help="Name of the CustomMessaging service that owns the imported "
+        "Topics. Must match the ingestion workflow's source.serviceName "
+        "(default: %(default)s).",
+    )
     args = parser.parse_args(argv)
 
     ep_client = None
@@ -873,6 +942,7 @@ def main(argv=None) -> int:
             ep_client=ep_client,
             ca_exclude=ca_exclude or None,
             tenant_prefix=args.tenant_prefix,
+            service_name=args.service_name,
         )
     if args.remove_legacy or args.remove_legacy_only:
         removed = remove_legacy_properties(om, args.host_port, args.jwt_token)

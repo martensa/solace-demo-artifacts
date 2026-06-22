@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "solace-eventportal-bridge.fullname" . }}-otel
+  name: {{ include "solace-eventportal-connector.fullname" . }}-otel
   labels:
-    {{- include "solace-eventportal-bridge.labels" . | nindent 4 }}
+    {{- include "solace-eventportal-connector.labels" . | nindent 4 }}
 data:
   config.yaml: |
     receivers:
