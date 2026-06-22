@@ -18,16 +18,16 @@
 
 # -------------------------------------------------------------------- MySQL
 # Bitnami moved older free images to the `bitnamilegacy/` namespace in
-# August 2025; the chart-pinned tag `8.0.33-debian-11-r0` is no longer
-# present under `bitnami/mysql`. Repoint at the legacy registry path so
-# image pulls succeed. Tag stays identical so initdbScripts behaviour
-# is unchanged.
+# August 2025. The OM 1.13 chart already defaults to
+# `bitnamilegacy/mysql:8.0.37-debian-12-r2`; we keep this explicit block
+# aligned to that tag so the pin can't drift behind the chart. (Fresh
+# deploy = empty PVC, so initdbScripts run from scratch regardless.)
 mysql:
   enabled: true
   image:
     registry: docker.io
     repository: bitnamilegacy/mysql
-    tag: 8.0.33-debian-11-r0
+    tag: 8.0.37-debian-12-r2
     pullPolicy: IfNotPresent
   primary:
     persistence:
@@ -74,7 +74,7 @@ airflow:
   # VANILLA OpenMetadata: no image override here, so the chart's DEFAULT
   # stock ingestion image is used
   # (docker.getcollate.io/openmetadata/ingestion:<chart version>, i.e.
-  # 1.11.13 for OM_CHART_VERSION 1.11.13). This deploy intentionally does
+  # 1.13.0 for OM_CHART_VERSION 1.13.0). This deploy intentionally does
   # NOT bake in the Solace EP connector -- the connector is deployed
   # SEPARATELY. To bake it into Airflow later, re-add an `images:` block
   # here pointing both `airflow` and `pod_template` at

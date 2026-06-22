@@ -9,7 +9,7 @@ OM_NAMESPACE="openmetadata-solace-lab"
 OM_RELEASE_DEPS="openmetadata-dependencies"
 OM_RELEASE_SERVER="openmetadata"
 OM_DNS_NAME="openmetadata.solace.lab"
-OM_CHART_VERSION="${OM_CHART_VERSION:-1.11.13}"
+OM_CHART_VERSION="${OM_CHART_VERSION:-1.13.0}"
 
 # --- CLI prerequisites --------------------------------------------
 command -v kubectl >/dev/null 2>&1 || { echo "ERROR: kubectl not found."; exit 1; }
