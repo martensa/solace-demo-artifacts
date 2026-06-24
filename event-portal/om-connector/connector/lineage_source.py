@@ -457,12 +457,8 @@ def _build_lineage_request(
             "OM Lineage SDK not importable; skipping cross-system edge."
         )
         return None
-    lineage_source_value = None
-    try:
-        from metadata.generated.schema.type.entityLineage import LineageSource
-        lineage_source_value = LineageSource.Manual
-    except Exception:  # pragma: no cover
-        pass
+    from .mappers import lineage_source_manual
+    lineage_source_value = lineage_source_manual()
     details_kwargs = {
         "description": description or "Cross-system lineage (EP connector)",
     }

@@ -24,6 +24,7 @@ from connector.mappers import (  # noqa: E402
     _normalize_schema_format,
     app_to_pipeline_request,
     build_topic_name,
+    lineage_source_manual,
     consumer_container_fqn,
     consumer_to_container_request,
     domain_to_create_request,
@@ -49,6 +50,15 @@ def test_sanitize_replaces_invalid_chars():
 
 def test_build_topic_name_includes_version():
     assert build_topic_name("OrderCreated", "1.2.0") == "OrderCreated_v1.2.0"
+
+
+def test_lineage_source_manual_resolves_across_om_versions():
+    # OM 1.13 renamed the LineageSource enum to Source; the helper must still
+    # resolve the Manual member so container lineage edges carry a source
+    # (a hard import of LineageSource silently dropped all container lineage).
+    val = lineage_source_manual()
+    assert val is not None
+    assert getattr(val, "name", str(val)) == "Manual"
 
 
 def test_normalize_schema_format_maps_ep_vocabulary():

@@ -1474,6 +1474,23 @@ def app_to_pipeline_request(
     return request
 
 
+def lineage_source_manual():
+    """Return the LineageDetails ``Manual`` source enum across OM versions.
+
+    OM <= 1.12 names the enum ``LineageSource``; OM 1.13 renamed it to
+    ``Source`` (both in ``metadata.generated.schema.type.entityLineage``).
+    Returns None if neither is importable (pre-1.11 SDK) so callers omit the
+    field. CLAUDE.md notes LineageDetails.source is effectively required in
+    1.11+, so resolving it across the rename keeps every edge tagged Manual.
+    """
+    try:
+        from metadata.generated.schema.type import entityLineage as _el
+    except Exception:  # pragma: no cover - depends on OM version
+        return None
+    enum = getattr(_el, "LineageSource", None) or getattr(_el, "Source", None)
+    return getattr(enum, "Manual", None) if enum is not None else None
+
+
 def app_topic_lineage_request(
     *,
     topic_id: str,
@@ -1507,12 +1524,7 @@ def app_topic_lineage_request(
     # OM 1.11+ effectively requires LineageDetails.source so the run-report UI
     # can group edges by origin. Tag every edge we emit as Manual (we are the
     # explicit caller, not a query-history parser).
-    lineage_source = None
-    try:
-        from metadata.generated.schema.type.entityLineage import LineageSource
-        lineage_source = LineageSource.Manual
-    except Exception:  # pragma: no cover - pre-1.11 SDK without the enum
-        pass
+    lineage_source = lineage_source_manual()
 
     app_name = app.get("name") or "unknown-app"
 
@@ -1572,12 +1584,7 @@ def pipeline_to_pipeline_lineage_request(
         )
         return None
 
-    lineage_source = None
-    try:
-        from metadata.generated.schema.type.entityLineage import LineageSource
-        lineage_source = LineageSource.Manual
-    except Exception:  # pragma: no cover - pre-1.11 SDK without the enum
-        pass
+    lineage_source = lineage_source_manual()
 
     label = " -> ".join(
         x for x in [source_app_name, dest_app_name] if x

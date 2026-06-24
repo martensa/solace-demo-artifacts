@@ -1012,21 +1012,26 @@ class SolaceEventPortalSource(Source):
             from metadata.generated.schema.type.entityLineage import (
                 EntitiesEdge,
                 LineageDetails,
-                LineageSource,
             )
             from metadata.generated.schema.type.entityReference import (
                 EntityReference,
             )
         except Exception:
             return
+        # OM 1.13 renamed the LineageSource enum to Source; resolve it via the
+        # version-robust helper instead of a hard import (a failed import here
+        # used to silently drop ALL container lineage on 1.13).
+        from .mappers import lineage_source_manual
+
+        details_kwargs = {"description": label}
+        src = lineage_source_manual()
+        if src is not None:
+            details_kwargs["source"] = src
         req = AddLineageRequest(
             edge=EntitiesEdge(
                 fromEntity=EntityReference(id=source_id, type=source_type),
                 toEntity=EntityReference(id=dest_id, type=dest_type),
-                lineageDetails=LineageDetails(
-                    description=label,
-                    source=LineageSource.Manual,
-                ),
+                lineageDetails=LineageDetails(**details_kwargs),
             )
         )
         self._add_lineage(req)
@@ -1046,30 +1051,33 @@ class SolaceEventPortalSource(Source):
             from metadata.generated.schema.type.entityLineage import (
                 EntitiesEdge,
                 LineageDetails,
-                LineageSource,
             )
             from metadata.generated.schema.type.entityReference import (
                 EntityReference,
             )
         except Exception:
             return
+        from .mappers import lineage_source_manual
+
         if direction == "produces":
             from_id, from_type = container_id, "container"
             to_id, to_type = topic_id, "topic"
         else:  # consumes
             from_id, from_type = topic_id, "topic"
             to_id, to_type = container_id, "container"
+        details_kwargs = {
+            "description": (
+                f"Solace Event Portal Event API: {event_api_name} {direction}"
+            ),
+        }
+        src = lineage_source_manual()
+        if src is not None:
+            details_kwargs["source"] = src
         req = AddLineageRequest(
             edge=EntitiesEdge(
                 fromEntity=EntityReference(id=from_id, type=from_type),
                 toEntity=EntityReference(id=to_id, type=to_type),
-                lineageDetails=LineageDetails(
-                    description=(
-                        f"Solace Event Portal Event API: "
-                        f"{event_api_name} {direction}"
-                    ),
-                    source=LineageSource.Manual,
-                ),
+                lineageDetails=LineageDetails(**details_kwargs),
             )
         )
         self._add_lineage(req)
