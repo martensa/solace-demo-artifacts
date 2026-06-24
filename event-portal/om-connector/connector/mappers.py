@@ -87,6 +87,35 @@ _SCHEMA_TYPE_MAP: Dict[str, SchemaType] = {
     "PROTOBUF": SchemaType.Protobuf,
 }
 
+# EP's own schema vocabulary -> the canonical format keys used by
+# _SCHEMA_TYPE_MAP and schema_parsers.parse_fields. EP returns
+# schemaType="jsonSchema" / contentType="json" (not "JSON"), which would
+# upper-case to "JSONSCHEMA", miss both maps, and fall back to
+# SchemaType.Other with zero parsed fields. Normalise before lookup.
+_EP_SCHEMA_FORMAT_ALIASES: Dict[str, str] = {
+    "JSONSCHEMA": "JSON",
+    "JSON": "JSON",
+    "AVRO": "AVRO",
+    "PROTOBUF": "PROTOBUF",
+    "PROTO": "PROTOBUF",
+    "XSD": "XSD",
+    "XML": "XML",
+    "DTD": "XML",
+}
+
+
+def _normalize_schema_format(raw: Optional[str]) -> str:
+    """Map an EP schemaType/contentType value to a canonical format string.
+
+    Empty / unknown -> "JSON" (EP's predominant format and the connector's
+    historical default). Keeps the parser dispatch + SchemaType lookup working
+    against EP's real vocabulary (jsonSchema, avro, protobuf, ...).
+    """
+    key = (raw or "").strip().upper()
+    if not key:
+        return "JSON"
+    return _EP_SCHEMA_FORMAT_ALIASES.get(key, key)
+
 # Re-export for callers that historically imported from connector.mappers.
 from .property_keys import (  # noqa: E402,F401  (re-export)
     CP_CONSUMED_BY,
@@ -424,11 +453,9 @@ def event_to_topic_request(
     if schema_payload:
         schema = schema_payload.get("schema") or {}
         schema_version = schema_payload.get("version") or {}
-        fmt = (
-            schema.get("schemaType")
-            or schema.get("contentType")
-            or "JSON"
-        ).upper()
+        fmt = _normalize_schema_format(
+            schema.get("schemaType") or schema.get("contentType")
+        )
         om_type = _SCHEMA_TYPE_MAP.get(fmt, SchemaType.Other)
         text = schema_version.get("content")
         # Wave 5 (#62): mark x-pii fields only when this Topic is flagged
@@ -1012,11 +1039,9 @@ def schema_version_to_table_request(
 
     schema_name = schema.get("name") or schema.get("id") or "unknown-schema"
     version_str = str(schema_version.get("version") or "1.0.0")
-    fmt = (
-        schema.get("schemaType")
-        or schema.get("contentType")
-        or "JSON"
-    ).upper()
+    fmt = _normalize_schema_format(
+        schema.get("schemaType") or schema.get("contentType")
+    )
     text = schema_version.get("content") or ""
 
     columns = _build_table_columns_from_text(fmt, text, mark_pii=mark_pii)

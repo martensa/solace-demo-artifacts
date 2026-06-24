@@ -21,6 +21,7 @@ from connector.mappers import (  # noqa: E402
     CP_STATE,
     CP_TOPIC_ADDRESS,
     EpUrls,
+    _normalize_schema_format,
     app_to_pipeline_request,
     build_topic_name,
     consumer_container_fqn,
@@ -48,6 +49,60 @@ def test_sanitize_replaces_invalid_chars():
 
 def test_build_topic_name_includes_version():
     assert build_topic_name("OrderCreated", "1.2.0") == "OrderCreated_v1.2.0"
+
+
+def test_normalize_schema_format_maps_ep_vocabulary():
+    # EP returns schemaType="jsonSchema" / contentType="json", not "JSON".
+    assert _normalize_schema_format("jsonSchema") == "JSON"
+    assert _normalize_schema_format("json") == "JSON"
+    assert _normalize_schema_format("AVRO") == "AVRO"
+    assert _normalize_schema_format("protobuf") == "PROTOBUF"
+    assert _normalize_schema_format("xsd") == "XSD"
+    assert _normalize_schema_format(None) == "JSON"
+    assert _normalize_schema_format("") == "JSON"
+
+
+def test_event_to_topic_request_parses_jsonschema_payload():
+    # Regression: EP schemaType "jsonSchema" must parse into structured
+    # SchemaFields. It used to fall back to SchemaType.Other + [] because
+    # "jsonSchema".upper() == "JSONSCHEMA" missed the format map.
+    schema_text = (
+        '{"$schema": "https://json-schema.org/draft/2019-09/schema",'
+        ' "title": "PriceData", "type": "object",'
+        ' "properties": {"price": {"type": "number"},'
+        ' "currency": {"type": "string"}}}'
+    )
+    domain = {"id": "d-1", "name": "orders-domain"}
+    event = {"id": "e-1", "name": "PriceChanged"}
+    version = {
+        "id": "ev-1",
+        "version": "1.0.0",
+        "stateId": "RELEASED",
+        "deliveryDescriptor": {
+            "address": {
+                "addressLevels": [
+                    {"name": "price", "addressLevelType": "LITERAL"},
+                ]
+            }
+        },
+    }
+    schema_payload = {
+        "schema": {"name": "PriceData", "schemaType": "jsonSchema"},
+        "version": {"content": schema_text},
+    }
+    request = event_to_topic_request(
+        service_name="solace-ep",
+        domain=domain,
+        event=event,
+        event_version=version,
+        schema_payload=schema_payload,
+    )
+    ms = request.messageSchema
+    assert ms is not None
+    assert ms.schemaType.value == "JSON"
+    # OM's JSON-Schema parser yields a root RECORD whose children are the EP
+    # properties; either way the field list must be non-empty (was [] pre-fix).
+    assert ms.schemaFields, "schemaFields should be parsed, not empty"
 
 
 def test_topic_fqn_joins_service_and_topic():
