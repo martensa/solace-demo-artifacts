@@ -1,0 +1,36 @@
+# TLS certificate for the SAM ingress (sam.solace.lab).
+#
+# The SAM Helm chart (>= 1.500) validates at install time that the
+# secret referenced by ingress.tls[].secretName already exists in the
+# cluster (solace-agent-mesh.validations.all in templates/_validations.tpl).
+# Earlier charts (1.2.x) relied on cert-manager's ingress-shim to mint
+# the secret asynchronously AFTER the ingress was created, which the new
+# pre-install validation no longer permits.
+#
+# We therefore provision the secret explicitly via cert-manager, matching
+# the established solace-lab convention (keycloak-tls, grafana-tls,
+# registry-tls, openmetadata-tls all use an explicit Certificate issued by
+# the solace-lab-ca-issuer ClusterIssuer). The ingress keeps its
+# cert-manager.io/cluster-issuer annotation for renewals, exactly like the
+# other lab services.
+#
+# Lifecycle: applied by scripts/start.sh before `helm upgrade --install`;
+# removed by scripts/stop.sh via the namespace delete (cascades).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sam-tls
+  namespace: sam-solace-lab
+spec:
+  secretName: sam-tls
+  dnsNames:
+    - sam.solace.lab
+  duration: 2160h    # 90d
+  renewBefore: 720h  # 30d
+  issuerRef:
+    name: solace-lab-ca-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+  usages:
+    - digital signature
+    - key encipherment

@@ -8,6 +8,12 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SAM_NAMESPACE="sam-solace-lab"
 SAM_RELEASE="agent-mesh"
 SAM_DNS_NAME="sam.solace.lab"
+# Pin the chart version for reproducibility. Leaving this unset lets
+# `helm repo update` silently jump to a newer chart line (this is what
+# broke the 1.2.x -> 1.50x transition). 1.501.11 is the latest published
+# chart and its default sam-agent-deployer image (1.8.2) and deployer
+# version (k8s-1.501.11) match local-k8s-values.yaml.
+SAM_CHART_VERSION="1.501.11"
 
 # --- CLI prerequisites --------------------------------------------
 command -v kubectl >/dev/null 2>&1 || {
@@ -90,6 +96,17 @@ helm repo update solace-agent-mesh
 # --- Namespace and pull secret ------------------------------------
 kubectl create namespace "$SAM_NAMESPACE" 2>/dev/null || true
 
+# --- TLS certificate (cert-manager) -------------------------------
+# The SAM chart (>= 1.500) validates at install time that the ingress
+# TLS secret already exists. Provision it explicitly via cert-manager
+# (solace-lab-ca-issuer), matching the lab convention used by keycloak,
+# grafana, registry and openmetadata. The namespace delete in stop.sh
+# cleans up both the Certificate and the generated secret.
+echo "Provisioning sam-tls certificate via cert-manager ..."
+kubectl apply -f "$PROJECT_DIR/manifests/sam-tls-certificate.yaml"
+kubectl wait --for=condition=Ready certificate/sam-tls \
+  --namespace "$SAM_NAMESPACE" --timeout=120s
+
 # --- CoreDNS NodeHosts --------------------------------------------
 # SAM macht interne Self-Calls ueber die externe URL (OAuth2 flow,
 # Platform Service -> WebUI), daher muss sam.solace.lab auch
@@ -107,6 +124,7 @@ fi
 # --- Install / Upgrade --------------------------------------------
 helm upgrade --install "$SAM_RELEASE" \
   solace-agent-mesh/solace-agent-mesh \
+  --version "$SAM_CHART_VERSION" \
   --namespace "$SAM_NAMESPACE" \
   --values "$PROJECT_DIR/local-k8s-values.yaml" \
   --set sam.oauthProvider.oidc.issuer="$KEYCLOAK_ISSUER" \

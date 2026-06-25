@@ -1,5 +1,6 @@
 # SAM Core Configuration
 sam:
+  platform: python
   communityMode: false
 
   # Authentication and authorization configuration
@@ -124,10 +125,10 @@ broker:
 # LLM Service Configuration
 # API key is injected via --set in start.sh
 llmService:
-  planningModel: "openai/claude-sonnet-4-6"
-  generalModel: "openai/claude-sonnet-4-6"
-  reportModel: "openai/claude-sonnet-4-6"
-  imageModel: "openai/azure-dalle-3"
+  planningModel: "openai/claude-opus-4-8"
+  generalModel: "openai/claude-opus-4-8"
+  reportModel: "openai/claude-opus-4-8"
+  imageModel: "openai/imagen-3"
   transcriptionModel: "openai/whisper"
   llmServiceEndpoint: "https://lite-llm.mymaas.net"
   llmServiceApiKey: ""
@@ -168,6 +169,17 @@ ingress:
 
 # Persistence Configuration
 global:
+  # The chart defaults global.imageRegistry to "gcr.io/gcp-maas-prod"
+  # (Solace's public MaaS registry) and PREPENDS it to every image's
+  # repository. Our samDeployment.image.repository values already carry
+  # the full "registry.solace.lab/..." path, so the default would produce
+  # the broken ref "gcr.io/gcp-maas-prod/registry.solace.lab/...".
+  # Set it empty so the full repository paths are used verbatim. SAM
+  # images come from registry.solace.lab; the bundled postgres/seaweedfs
+  # (not mirrored locally) then resolve from Docker Hub.
+  imageRegistry: ""
+  broker:
+    embedded: false
   persistence:
     enabled: true
     namespaceId: "sam-solace-lab"
@@ -189,20 +201,26 @@ samDeployment:
   # Main SAM Image
   image:
     repository: registry.solace.lab/solace-agent-mesh-enterprise
-    tag: 1.97.2
+    tag: 1.543.0
     pullPolicy: Always
+
+  # S3 (SeaweedFS) init container that runs before sam-core when bundled
+  # persistence is enabled. The chart default tag "3.97-compliant" is a
+  # Solace-private rebuild that only exists in gcr.io/gcp-maas-prod and is
+  # NOT published on Docker Hub. With global.imageRegistry="" this image
+  # comes from Docker Hub, so pin the valid upstream tag "3.97".
+  s3Init:
+    image:
+      tag: "3.97"
 
   # Agent Deployer image
   agentDeployer:
     image:
       repository: registry.solace.lab/sam-agent-deployer
-      tag: 1.7.0
+      tag: 1.8.2
       pullPolicy: Always
-    version: "k8s-1.2.4"
-    chartBaseUrl: "https://solaceproducts.github.io/solace-agent-mesh-helm-quickstart"
-    chartVersion: "1.2.4"
-    localCharts:
-      enabled: false
+    version: "k8s-1.501.11"
+    chartVersion: "1.501.6"
 
   rollout:
     rollingUpdate: {}
@@ -212,3 +230,13 @@ dataStores:
   objectStorage:
     workloadIdentity:
       enabled: false
+
+# Bundled persistence (postgresql + seaweedfs) subchart overrides.
+# postgres:18.0-trixie is a valid Docker Hub tag, but the seaweedfs default
+# tag "3.97-compliant" is a Solace-private build absent from Docker Hub.
+# With global.imageRegistry="" seaweedfs resolves from Docker Hub, so pin
+# the valid upstream tag "3.97".
+persistence-layer:
+  seaweedfs:
+    image:
+      tag: "3.97"
