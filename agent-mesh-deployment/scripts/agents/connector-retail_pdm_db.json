@@ -1,0 +1,13 @@
+{
+  "name": "Retail PDM DB",
+  "description": "This connector should be used to generate dynmaic SQL queries for the database of the connected retail PDM (product data management) system. The purpose of the database is to store product and product lifecycle information for supporting production plant operation and catalog management. The data contains product specifications, pricing, inventory levels, categorization, supplier details, and lifecycle management records. Timestamps are in UTC.",
+  "type": "sql",
+  "subtype": "postgres",
+  "values": {
+    "database": "retail_pdm",
+    "hostname": "host.docker.internal",
+    "port": 5432,
+    "username": "postgres",
+    "password": "REPLACE_WITH_DB_PASSWORD"
+  }
+}

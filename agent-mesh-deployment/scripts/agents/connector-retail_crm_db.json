@@ -1,0 +1,13 @@
+{
+  "name": "Retail CRM DB",
+  "description": "This connector is used to generate dynamic SQL queries for the database of the connected retail CRM (customer relationship management) system. The database stores customer relationship management information supporting sales and customer service operations: customer profiles, contact information, sales opportunities, interaction history, and account management records. Timestamps are in UTC.",
+  "type": "sql",
+  "subtype": "postgres",
+  "values": {
+    "database": "retail_crm",
+    "hostname": "host.docker.internal",
+    "port": 5432,
+    "username": "postgres",
+    "password": "REPLACE_WITH_DB_PASSWORD"
+  }
+}
