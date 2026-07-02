@@ -20,6 +20,18 @@ for c in kubectl helm; do
   command -v "$c" >/dev/null 2>&1 || { echo "ERROR: $c not found."; exit 1; }
 done
 
+# --- Cluster reachability precheck -----------------------------------------
+# The status checks below use `>/dev/null 2>&1` and treat ANY non-zero exit as
+# "not present". A transient API outage (e.g. Rancher Desktop after sleep/wake,
+# TLS handshake timeout) would therefore make this script FALSELY report the
+# connector as already removed while it is still running. Fail loud instead.
+if ! kubectl get --raw='/readyz' --request-timeout=10s >/dev/null 2>&1; then
+  echo "ERROR: Kubernetes API not reachable (context '$(kubectl config current-context 2>/dev/null || echo unknown)')."
+  echo "       Aborting so we do NOT falsely report the connector as removed."
+  echo "       Check the cluster (kubectl cluster-info) and re-run."
+  exit 1
+fi
+
 # --- Helm uninstall (graceful release teardown) ----------------------------
 if helm status "$RELEASE" -n "$NAMESPACE" >/dev/null 2>&1; then
   echo "Uninstalling helm release $RELEASE ..."
