@@ -1,0 +1,24 @@
+# Hardened overlay of the Solace DB Designer *services* image for OpenShift.
+#
+# It layers OpenShift "arbitrary UID" support on top of the vendor image so
+# the workload runs under the DEFAULT restricted-v2 SCC -- no cluster-admin
+# and no custom SCC required. It does NOT modify the application or the base
+# runtime; the EOL Node 16 base remains a Solace deliverable (Track 1).
+#
+# What it changes:
+#   - runs as a non-root user (UID 1001) by default
+#   - makes the runtime-writable dirs group-owned by GID 0 and group-writable,
+#     so any assigned arbitrary UID (member of GID 0 on OpenShift) can write
+#   - sets HOME=/tmp (arbitrary UIDs have no home entry)
+ARG BASE=connector_designer_services:latest
+FROM ${BASE}
+
+USER root
+ENV HOME=/tmp
+
+RUN set -eux \
+ && mkdir -p /app/dist/bin/logs /app/tmp/binary/download /app/tmp/entityFolders \
+ && chgrp -R 0 /app/dist/bin/logs /app/tmp \
+ && chmod -R g+rwX /app/dist/bin/logs /app/tmp
+
+USER 1001

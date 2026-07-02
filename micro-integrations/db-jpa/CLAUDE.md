@@ -129,9 +129,36 @@ The repo-root rule is literally `.env`, which does NOT match
 | Component | State | Notes |
 | --- | --- | --- |
 | DB CLI | Builds + runs | Java 17 (pom), Spring Boot 3.4.3; own README |
-| DB Designer | Runs via compose | requires the two image tars loaded |
+| DB Designer | compose + Helm | Helm chart for K8s/OpenShift (see below) |
 | DB Connector | Launchers fixed | needs entity.jar + db-processor per deploy |
 | README / hygiene | Done | .gitignore, README, .markdownlint.json, .gitkeep |
+
+## DB Designer on Kubernetes / OpenShift (Bosch track)
+
+Besides docker-compose, the DB Designer deploys to Kubernetes/OpenShift via
+a Helm chart at `DB Designer/charts/db-designer` (`values-rancher.yaml` for
+the local lab, `values-openshift.yaml` for Bosch OpenShift).
+`DB Designer/scripts/start.sh` / `stop.sh` drive the local install
+(docker-load the image tars, CoreDNS + `/etc/hosts`, `helm upgrade`).
+Enterprise notes:
+
+- **Hardened images** (`DB Designer/hardened-images/`) wrap the vendor
+  images to run non-root + OpenShift arbitrary-UID (verified as UID
+  `26999:0`). With them the OpenShift overlay needs NO custom SCC (the
+  default restricted-v2 works); the un-hardened root images would need
+  `openshift.scc.create=true` (cluster-admin).
+- **Two runtime fixes baked in**: Postgres runs as UID 999 on a FRESH PVC
+  (fsGroup cannot re-own a root-owned data dir); the backend has no
+  `/health`, so probes are `tcpSocket`.
+- **Postgres**: embedded StatefulSet on Rancher; external/operator-managed
+  DB is the OpenShift default (the official postgres UID 999 fails the
+  restricted SCC).
+- **Track 1 (Solace must deliver)**: current-Node-LTS, multi-arch,
+  scan-clean, registry-published images. The amd64 / Node 16 vendor images
+  only run under emulation off-OpenShift and destabilize a single-node
+  cluster under load.
+- Handover docs: `DB Designer/docs/BOSCH-HANDOVER.md`,
+  `OPENSHIFT-DEPLOYMENT.md`, `SECURITY.md`.
 
 ## Wave plan
 

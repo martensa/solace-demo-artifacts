@@ -1,0 +1,15 @@
+# Hardened overlay of the Solace DB Designer *UI* image for OpenShift.
+# See Dockerfile.services for the rationale. The UI is a static React app
+# served by a small Node server; making /app group-0 writable is cheap and
+# covers any runtime scratch writes under an arbitrary UID.
+ARG BASE=connector_designer_ui:latest
+FROM ${BASE}
+
+USER root
+ENV HOME=/tmp
+
+RUN set -eux \
+ && chgrp -R 0 /app \
+ && chmod -R g+rwX /app
+
+USER 1001

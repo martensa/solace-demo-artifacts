@@ -5,15 +5,18 @@
 platform: openshift
 
 image:
+  # Use the HARDENED overlay images (built by hardened-images/build.sh):
+  # non-root + OpenShift arbitrary-UID compatible, so the workload runs under
+  # the default restricted-v2 SCC without cluster-admin. Replace the registry
+  # with the Bosch/OpenShift one once the images are pushed there (e.g.
+  # image-registry.openshift-image-registry.svc:5000/<project>/...).
   services:
-    # Replace with the Bosch/OpenShift registry path once the images are
-    # pushed there (e.g. image-registry.openshift-image-registry.svc:5000/...).
     repository: registry.solace.lab/connector_designer_services
-    tag: "2.0.2"
+    tag: "2.0.2-hardened"
     pullPolicy: Always
   ui:
     repository: registry.solace.lab/connector_designer_ui
-    tag: "2.0.2"
+    tag: "2.0.2-hardened"
     pullPolicy: Always
 
 # Set to the pull secret for the target registry (Kyverno may not be present).
@@ -33,14 +36,19 @@ route:
     insecureEdgeTerminationPolicy: Redirect
 
 postgres:
-  embedded: true            # for a self-contained demo; use false + external
-                            # (operator/managed DB) for production.
+  # Production default on OpenShift: an EXTERNAL / operator-managed Postgres
+  # (set host below). The bundled official postgres image pins UID 999, which
+  # the restricted-v2 SCC rejects -- so running it embedded on OpenShift would
+  # additionally need openshift.scc.create=true (cluster-admin) or swapping to
+  # an arbitrary-UID Postgres (CloudNativePG / Crunchy operator, or
+  # registry.redhat.io/rhel9/postgresql with an adapted StatefulSet).
+  embedded: false
   persistence:
     enabled: true
     size: 5Gi
     storageClass: ""        # set to an RWO StorageClass on the cluster
   external:
-    host: ""
+    host: ""                # REQUIRED when embedded=false
     port: 5432
 
 servicesApp:
@@ -53,26 +61,29 @@ servicesApp:
   javaTruststore:
     enabled: false
 
-# Let OpenShift assign the UID/fsGroup from the project range; the SCC below
-# still permits the root vendor image to run.
+# With the hardened images, OpenShift assigns an arbitrary non-root UID from
+# the project range (GID 0). runAsNonRoot is enforced; no runAsUser/fsGroup is
+# pinned so the restricted-v2 SCC is satisfied out of the box.
 podSecurityContext:
+  runAsNonRoot: true
   seccompProfile:
     type: RuntimeDefault
 
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: false
-  runAsNonRoot: false
+  runAsNonRoot: true
   capabilities:
     drop:
       - ALL
 
-# Ship an SCC (RunAsAny) bound to the release ServiceAccount so the root image
-# starts under OpenShift. Requires cluster-admin to install. The clean fix is
-# hardened non-root images (Track 1), after which set this to false.
+# No SCC needed with the hardened images -- the default restricted-v2 SCC
+# admits them. Set create=true ONLY if you deploy the UN-hardened vendor
+# images directly (they run as root); that SCC permits RunAsAny and requires
+# cluster-admin to install.
 openshift:
   scc:
-    create: true
+    create: false
     name: ""
 
 # Mount the CA bundle explicitly if the cluster has no Kyverno CA injection.

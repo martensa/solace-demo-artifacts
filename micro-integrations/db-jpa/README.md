@@ -203,6 +203,17 @@ Generated connector packages appear on the host under
 connector jar, `Config/`, `dependencies/entity.jar`, and a launcher
 script -- exactly the shape the DB Connector runs.
 
+### Kubernetes / OpenShift deployment
+
+Beyond docker-compose, the Designer ships a Helm chart at
+`DB Designer/charts/db-designer` with a local-lab overlay
+(`values-rancher.yaml`) and a Bosch OpenShift overlay
+(`values-openshift.yaml`), plus hardened non-root images under
+`DB Designer/hardened-images/`. Deploy locally with
+`DB Designer/scripts/start.sh`. See the handover docs in
+`DB Designer/docs/`: `BOSCH-HANDOVER.md`, `OPENSHIFT-DEPLOYMENT.md`,
+and `SECURITY.md`.
+
 ## Component 3 -- DB Connector (runtime)
 
 Runs one Spring Boot JVM per direction from the connector fat-jar via
