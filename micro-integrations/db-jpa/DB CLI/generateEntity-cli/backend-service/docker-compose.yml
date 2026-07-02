@@ -1,0 +1,41 @@
+version: '3.3'
+
+services:
+  postgres_db:
+    image: postgres:13
+    restart: always
+    container_name: connector_designer_postgres_db
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+      POSTGRES_DB: "CONNECTOR_DESIGNER_TEST"
+    volumes:
+      - pgdata:/var/lib/postgresql/data/
+      - ./database/CD_SCHEMA_POSTGRES.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - cd-network
+
+  connector_designer_services:
+    container_name: connector_designer_services
+    restart: always
+    image: connector_designer_services
+    ports:
+      - '6002:6002'
+    volumes:
+      - ./artifacts:/app/dist/bin/artifacts
+      - ./logs/cd:/app/dist/bin/logs/cd
+      - ./env/cd-services.env:/app/dist/bin/.env
+      - ../cli:/app/cli
+    networks:
+      - cd-network
+
+volumes:
+  pgdata: 
+    name: cd_pgdata
+
+networks:
+  cd-network:
+    name: cd-network
+    driver: bridge

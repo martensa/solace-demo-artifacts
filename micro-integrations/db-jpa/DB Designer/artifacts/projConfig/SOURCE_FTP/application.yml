@@ -1,0 +1,132 @@
+spring:
+  cloud:
+    stream:
+      bindings:
+        input-0:
+          destination: # input file location - In case of Static, Directory 1st level and recursive we need to configure file paths in seperate file. In case of dynamic we can configure here directly
+          # Format to configure file location(absolute-source-file-path|absolute-destination-file-path)
+          binder: file
+        output-0:
+          destination: # solace topic to publish
+          binder: solace
+file:
+  source:
+    scheduler:
+      restart_time_sec: # integer value representing number of seconds between each restart
+    general:
+      adapter_id: # unique ID for the connector
+      file_type: # type of file (1 -> static 2 -> Dynamic 3 -> Directory first level 4 -> Directory recursive)
+      state_backup_path: source_connector_state_backup.cfg #Absolute path of Backup file to store the state information on file. Required if file_to_event is enabled
+      multiple_files_flag: 0
+      copy_file_mode_permissions: 1 #(0 -> do not copy 1 -> copy)
+      max_file_transfer_size: 999000
+      max_files_allowed: 99999
+      max_bandwidth_limit: 100000000
+      clear_state_on_eod: 1 #(0 -> doesn't clear state in LVQ 1 -> clears state in LVQ)
+      eod_time_sec: # -1 -> disabled 0 -> midnight time  (Hours to Seconds) - connector will check if configured time has passed number of seconds and exits.
+    ftp_settings:
+      enabled: 0 # 0 -> disabled, 1 -> enabled to fetch files from a remote sftp server
+      ip: # FTP server IP
+      port: 22 # FTP server port
+      user: # FTP username
+      password: # FTP user password
+      secured: true	#true/false. Uses FTPs/TLS to make a remote server connection
+    directory_wildcard:
+      wildcard_type: 0 # 0 -> disabled 1 -> whitelist 2 -> blacklist
+      config_path: # absolute file path location containing regex
+    directory_replication:
+      start_time: -1 # epoch time - used to filter files modified after this time
+    directory_recurring_options:
+      enabled: 0
+      process_since_last_req_time_sec: 0
+    solace_out:
+      lvq: LVQ # LVQ name where source connector checkpoints are stored
+      destination: # lvq solace topic to publish same as output destination
+    command_center:
+      enabled: 0 # 0 -> disabled, 1 -> enabled, sends data to Command Center
+      useOutputDestinationSolaceCredentials: true # true ->  uses output destination solace credentials, false -> use below commented properties to configure
+#      solace_ip:
+#      solace_vpn:
+#      solace_user:
+#      solace_password:
+      solace_base_publish_topic: # base publish topic for command center event
+      solace_messaging_mode: # message mode (DIRECT, PERSISTENT, NON-PERSISTENT)
+      heartbeat_enabled: # 0 -> disabled 1 -> enabled
+      heartbeat_interval: # integer value representing number of seconds between each hearbeat
+      solace_base_publish_topic_heartbeat: # base publish topic for hearbeat event
+solace:
+  connector:
+    error:
+      handle: stop_all
+    workflows:
+      0:
+        enabled: true
+        acknowledgment:
+          publish-async: true
+    management:
+      leader-election:
+        mode: active_standby  # The connector’s leader election mode. (values: standalone, active_active, active_standby)
+        fail-over:
+          max-attempts: 3  # The maximum number of attempts to perform a fail-over.
+          back-off-initial-interval: 1000  # The initial interval (milliseconds) to back-off when retrying a fail-over.
+          back-off-max-interval: 10000  # The maximum interval (milliseconds) to back-off when retrying a fail-over.
+          back-off-multiplier: 2.0  # The multiplier to apply to the back-off interval between each retry of a fail-over.
+      queue:  # The management queue name.
+      session: # The management session. This has the same interface as that used by `solace.java.*`. For more info: https://github.com/SolaceProducts/solace-spring-boot/tree/master/solace-spring-boot-starters/solace-java-spring-boot-starter#updating-your-application-properties
+        host:
+        msg-vpn:
+        client-username:
+        client-password:
+#    security:
+#      enabled: true  # If true, security is enabled. Otherwise, anyone has access to the connector’s endpoints.
+#      csrf-enabled: true  # If true, CSRF protection is enabled. Makes sense only if solace.connector.security.enabled is true.
+#      users:  # User configuration
+#        - name: <user-name>  # The name of this user.
+#          password: <user-password>  # The password for this user.
+#          roles:  # The list of roles which this user has. Has read-only access if no roles are given. (values: admin)
+#            - <role>
+#
+#        - name: user  # Example: Creates a read-only user
+#          password: pass
+#        - name: admin  # Example: Creates a user with admin role
+#          password: admin
+#          roles:
+#            - admin
+  java:
+    host:
+    msgVpn:
+    clientUsername:
+    clientPassword:
+    connectRetries: -1
+    reconnectRetries: -1
+management:
+  metrics:  # Metrics monitoring systems. For more info: https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.metrics
+    export:
+      #      defaults:
+      #        enabled: false
+      simple:
+        enabled: true
+  #      <system>:
+  #        enabled: false
+  endpoint:
+    health:
+      show-components: never
+      show-details: never
+  endpoints:
+    web:  # Actuator web endpoint configuration. For more info: https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.endpoints
+      exposure:
+        include: 'health,leaderelection,metrics'
+logging:  # Logging configuration. For more info: https://docs.spring.io/spring-boot/docs/current/reference/html/features.html#features.logging
+  level:
+    root: warn
+    com.solace.connector.core: TRACE # Enables TRACE logs for connector framework
+    com.solace.spring.cloud.stream.binder: TRACE # Enables TRACE logs for Solace and File binders
+    com.solacecoe.spring.cloud.stream.binders.file: TRACE # Enables TRACE logs for File binders
+  file:
+    name: myapp.log  # base log file name
+  logback:
+    rollingpolicy:  # Logback file rolling policy
+      file-name-pattern: "${LOG_FILE}.%d{yyyy-MM-dd}.%i.gz"  # Pattern for rolled-over log file names. Example: Rolls the log file into an archive once every day. `%i` is reset to `0` at the start of the day.
+      max-file-size: 100MB  # The maximum size of log file before it is archived. Example: Within a given day, when the log file reaches 100 MB, archive it, and increment `%i`.
+      max-history: 7  # The maximum rotation-period's worth of archive log files to keep. Example: Since the `file-name-pattern` is configured to rollover once every day, keep 7 days worth of log archives.
+      total-size-cap: 1GB  # Total size of log backups for a given rotation period. Example: Keep up-to 1 GB of log archives for every day.

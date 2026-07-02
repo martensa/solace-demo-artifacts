@@ -1,0 +1,25 @@
+# --------------------------
+# solace-db SAMPLE CONFIGURATION
+# --------------------------
+solace-db:
+  bindings:
+    output-0:
+      producer:
+        isTest: false
+        dbConnectorBlobEncoding: BASE64
+        dbConnectorTimestampFormat: yyyy/dd/MM HH:mm:ss
+        dbMsgHeaderTimestampFormat: yyyy/dd/MM HH:mm:ss.SSS
+        messageHeaderTrackId:
+        entities:
+          passenger:
+            clazz: com.solacecoe.connectors.database.sink.entity.<TABLE_NAME>
+            jsonNodePrefix:
+            topicOperations:
+              save:
+                topics:
+                  - topic
+              delete:
+                topics:
+                  - topic/delete
+            customMessageHeaders:
+              COL_NAME: <TABLE_NAME_COL>

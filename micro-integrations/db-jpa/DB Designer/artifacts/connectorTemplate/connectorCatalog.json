@@ -1,0 +1,58 @@
+[
+    {
+        "connector_type_id": "COMP_SOURCE_SOLACE",
+        "title": "Solace",
+        "description": "Database pull connector will help to pull the data out of DB and make the table record available as an event in Solace Event Broker",
+        "image": "source_solace.png",
+        "section": "source",
+        "port": "out"
+    },
+    {
+        "connector_type_id": "COMP_SINK_SOLACE",
+        "title": "Solace",
+        "description": "Database pull connector will help to pull the data out of DB and make the table record available as an event in Solace Event Broker",
+        "image": "sink_solace.png",
+        "section": "sink",
+        "port": "in"
+    },
+    {
+        "connector_type_id": "COMP_DATA_TRANSFORMATION",
+        "title": "Source Data Transformation",
+        "description": "Database pull connector will help to... source DB",
+        "image": "source_cm_data_transformation.png",
+        "section": "processors",
+        "port": "both"
+    },
+    {
+        "connector_type_id": "COMP_SOURCE_DATABASE_JPA",
+        "title": "Database JPA",
+        "description": "JPA Database pull connector will help to pull the data out of DB and make the table record available as an event in Solace Event Broker",
+        "image": "source_database.png",
+        "section": "source",
+        "port": "out"
+    },
+    {
+        "connector_type_id": "COMP_SINK_DATABASE_JPA",
+        "title": "Database JPA",
+        "description": "JPA Database pull connector will help to pull the data out of DB and make the table record available as an event in Solace Event Broker",
+        "image": "sink_database.png",
+        "section": "sink",
+        "port": "in"
+    },
+    {
+        "connector_type_id": "COMP_SOURCE_DATABASE_SQL",
+        "title": "Database SQL",
+        "description": "SQL Database pull connector will help to pull the data out of DB and make the table record available as an event in Solace Event Broker",
+        "image": "source_database.png",
+        "section": "source",
+        "port": "out"
+    },
+    {
+        "connector_type_id": "COMP_SINK_DATABASE_SQL",
+        "title": "Database SQL",
+        "description": "SQL Database pull connector will help to pull the data out of DB and make the table record available as an event in Solace Event Broker",
+        "image": "sink_database.png",
+        "section": "sink",
+        "port": "in"
+    }
+]

@@ -1,0 +1,87 @@
+{
+    "NONE" : [],
+    "SOURCE_DATABASE_JPA" : [
+        {
+            "id": "COMP_SOURCE_DATABASE_JPA",
+            "position": 1,
+            "label": "SOURCE_DATABASE_JPA",
+            "connector_type":"SOURCE_DATABASE_JPA"
+        },
+        {
+            "id": "COMP_DATA_TRANSFORMATION",
+            "position": 2,
+            "label": "SOURCE_DATA_TRANSFORMATION",
+            "connector_type":"SOURCE_DATABASE_JPA"
+        },
+        {
+            "id": "COMP_SINK_SOLACE",
+            "position": 3,
+            "label": "SINK_SOLACE",
+            "connector_type":"SOURCE_DATABASE_JPA"
+        }
+    ],
+    "SOURCE_DATABASE_SQL" : [
+        {
+            "id": "COMP_SOURCE_DATABASE_SQL",
+            "position": 1,
+            "label": "SOURCE_DATABASE_SQL",
+            "connector_type":"SOURCE_DATABASE_SQL"
+        },
+        {
+            "id": "COMP_DATA_TRANSFORMATION",
+            "position": 2,
+            "label": "SOURCE_DATA_TRANSFORMATION",
+            "connector_type":"SOURCE_DATABASE_SQL"
+        },
+        {
+            "id": "COMP_SINK_SOLACE",
+            "position": 3,
+            "label": "SINK_SOLACE",
+            "connector_type":"SOURCE_DATABASE_SQL"
+        }
+    ],
+    "SINK_DATABASE_JPA" : [
+        {
+            "id": "COMP_SOURCE_SOLACE",
+            "position": 1,
+            "label": "SOURCE_SOLACE",
+            "connector_type":"SINK_DATABASE_JPA"
+        },
+        {
+            "id": "COMP_DATA_TRANSFORMATION",
+            "position": 2,
+            "label": "SINK_DATA_TRANSFORMATION",
+            "connector_type":"SINK_DATABASE_JPA"
+        },
+        {
+            "id": "COMP_SINK_DATABASE_JPA",
+            "position": 3,
+            "label": "SINK_DATABASE_JPA",
+            "connector_type":"SINK_DATABASE_JPA"
+        }
+    ],
+    "SINK_DATABASE_SQL" : [
+        {
+            "id": "COMP_SOURCE_SOLACE",
+            "position": 1,
+            "label": "SOURCE_SOLACE",
+            "connector_type":"SINK_DATABASE_SQL"
+        },
+        {
+            "id": "COMP_DATA_TRANSFORMATION",
+            "position": 2,
+            "label": "SINK_DATA_TRANSFORMATION",
+            "connector_type":"SINK_DATABASE_SQL"
+        },
+        {
+            "id": "COMP_SINK_DATABASE_SQL",
+            "position": 3,
+            "label": "SINK_DATABASE_SQL",
+            "connector_type":"SINK_DATABASE_SQL"
+        }
+    ]
+}
+
+
+
+

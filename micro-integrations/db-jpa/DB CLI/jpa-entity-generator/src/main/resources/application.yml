@@ -1,0 +1,16 @@
+spring:
+  main:
+    banner-mode: off
+    web-application-type: none
+  # Disable auto-configuration for DataSource since we manage connections manually
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  shell:
+    interactive:
+      enabled: true
+
+logging:
+  level:
+    root: WARN
+    com.solace.jpa.entitygen: INFO

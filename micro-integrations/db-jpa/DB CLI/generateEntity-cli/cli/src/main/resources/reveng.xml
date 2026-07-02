@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-reverse-engineering PUBLIC
+        "-//Hibernate/Hibernate Reverse Engineering DTD 3.0//EN"
+        "http://hibernate.org/dtd/hibernate-reverse-engineering-3.0.dtd">
+<hibernate-reverse-engineering>
+  <type-mapping>
+  <sql-type jdbc-type="VARCHAR" hibernate-type="java.lang.String" />
+  <sql-type jdbc-type="NVARCHAR" hibernate-type="java.lang.String" />
+  <sql-type jdbc-type="CHAR" hibernate-type="java.lang.String" />
+  <sql-type jdbc-type="INTEGER" hibernate-type="java.math.BigDecimal" />
+  <sql-type jdbc-type="FLOAT" hibernate-type="java.math.BigDecimal" />
+  <sql-type jdbc-type="DOUBLE" hibernate-type="java.lang.Double" />
+  <sql-type jdbc-type="BOOLEAN" hibernate-type="java.lang.Boolean" />
+  <sql-type jdbc-type="DATE" hibernate-type="java.util.Date" />
+  <sql-type jdbc-type="TIME" hibernate-type="java.util.Date" />
+  <sql-type jdbc-type="TIMESTAMP" hibernate-type="java.util.Date" />
+  <sql-type jdbc-type="DECIMAL" hibernate-type="java.math.BigDecimal" />
+  <sql-type jdbc-type="BIGINT" hibernate-type="java.math.BigDecimal" />
+  <sql-type jdbc-type="SMALLINT" hibernate-type="java.math.BigDecimal" />
+  <sql-type jdbc-type="TINYINT" hibernate-type="java.lang.Byte" />
+  <sql-type jdbc-type="BLOB" hibernate-type="byte[]" />
+  <sql-type jdbc-type="CLOB" hibernate-type="java.lang.String" />
+  <sql-type jdbc-type="LONGVARCHAR" hibernate-type="java.lang.String" />
+  <sql-type jdbc-type="LONGVARBINARY" hibernate-type="byte[]" />
+  <sql-type jdbc-type="NUMERIC"  hibernate-type="java.math.BigDecimal" />
+  </type-mapping>
+        <schema-selection match-schema="public"/>
+</hibernate-reverse-engineering>

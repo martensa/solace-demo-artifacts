@@ -1,0 +1,32 @@
+solace-db:
+  bindings:
+    input-0:
+      consumer:
+        tableKey: <TABLE_NAME>
+        tableClass: com.solacecoe.connectors.database.source.entity.<TABLE_NAME>
+        childTableKey: <CHILD_TABLE_NAME>
+        childTableClass: com.solacecoe.connectors.database.source.entity.<CHILD_TABLE_NAME>
+        topic: test
+        lvqTopic: lvq/pmacs
+        parentChildRelationKey: <TABLE_NAME_COL>:<CHILD_TABLE_COL>   #,address:city
+        dbParentChildMode: one2many #many2one
+        dbParentCollection: <TABLE_NAME_COL>
+        dbChildTable: <CHILD_TABLE_NAME>
+        dbReadIndicatorColumn: flag
+        dbTrackingId: <TABLE_NAME_COL>
+        dbReadTime: <TABLE_NAME_COL>
+        dbReadIndicatorColumnUpdateValueInProgress: p
+        dbReadIndicatorColumnUpdateValueProcessed: c
+        dbReadIndicatorColumnUpdateDefaultValue: n
+        dbReadIndicatorColumnUpdateFailedValue: f
+        dbReadRecordSequentialIndicator: id.<TABLE_NAME_COL>
+        dbReadRecordSequentialOrder: asc
+        dbReadIndicatorBridgeFailedValue: true
+        dbReadIndicatorBridgeInProgressValue: true
+        #              enableMessageHeaderTrackId: true
+        #              messageHeaderTrackId: dbTrackId
+        propertiesEnabled:
+          dbTrackingId: true
+          dbReadTime: true
+        customMessageHeaders:
+          COL_NAME: <USER_VALUE>

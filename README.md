@@ -11,6 +11,9 @@ Tracing, Kafka Bridge, Event Portal, and Schema Registry.
 solace-demo-artifacts/
   event-mesh-deployment/   Core Solace Event Mesh infrastructure
   agent-mesh-deployment/   Solace Agent Mesh on Kubernetes
+  micro-integrations/      Standalone Solace Micro-Integrations
+    topic-compaction/      Kafka-style log compaction over Solace
+    db-jpa/                Database <-> Solace connector (JPA)
 ```
 
 ## Infrastructure Prerequisites
@@ -61,6 +64,22 @@ LLM service integration.
 See
 [agent-mesh-deployment/README.md](agent-mesh-deployment/README.md)
 for setup instructions and architecture details.
+
+### Micro-Integrations
+
+Standalone Solace Micro-Integrations under `micro-integrations/`,
+each self-contained with its own README:
+
+- **`topic-compaction/`** -- a Solace-native alternative to Kafka
+  log compaction (last-value store, replay, lookup, TTL retention).
+- **`db-jpa/`** -- moves data between a relational database and a
+  Solace broker via JPA; includes a runtime connector, a low-code
+  Connector Designer, and a JPA entity-generator CLI.
+
+See
+[micro-integrations/topic-compaction/README.md](micro-integrations/topic-compaction/README.md)
+and
+[micro-integrations/db-jpa/README.md](micro-integrations/db-jpa/README.md).
 
 ## Prerequisites
 

@@ -1,0 +1,4 @@
+"ID","CREATED_AT","AUTH_TYPE","IS_ACTIVE","DESCRIPTION"
+3,2023-09-22 19:19:28.439,ReadOnly,1,"View-only access, no modifications."
+1,2023-09-22 19:19:31.445,Administrator,1,Full control and system management.
+2,2023-09-22 19:19:34.155,Developer,1,Responsible for Create/Edit flow.

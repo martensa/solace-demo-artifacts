@@ -1,0 +1,28 @@
+# Build output
+target/
+classes/
+
+# Generated entities (runtime output)
+generated-entities/
+generated-source-entities/
+generated-sink-entities/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+spring-shell.log
+
+# Maven wrapper (if added later)
+.mvn/wrapper/maven-wrapper.jar

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-reverse-engineering PUBLIC
+        "-//Hibernate/Hibernate Reverse Engineering DTD 3.0//EN"
+        "http://hibernate.org/dtd/hibernate-reverse-engineering-3.0.dtd">
+<hibernate-reverse-engineering>
+    <type-mapping>
+
+        <sql-type jdbc-type="DATE" hibernate-type="java.util.Date"/>
+        <sql-type jdbc-type="TIMESTAMP" hibernate-type="java.util.Date"/>
+        <!--    <sql-type jdbc-type="NUMERIC" hibernate-type="java.lang.Double"/>-->
+        <sql-type jdbc-type="DECIMAL" hibernate-type="java.lang.Double" />
+        <sql-type jdbc-type="NUMERIC"  hibernate-type="java.lang.Integer" />
+        <sql-type jdbc-type="BLOB"  hibernate-type="java.lang.Byte[]" />
+    </type-mapping>
+    <table-filter
+            match-catalog=".*"
+            match-schema="TEST"
+            match-name= ".*"
+    />
+</hibernate-reverse-engineering>

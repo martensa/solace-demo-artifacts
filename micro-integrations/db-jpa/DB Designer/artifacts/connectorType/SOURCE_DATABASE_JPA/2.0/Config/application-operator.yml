@@ -1,0 +1,156 @@
+spring:
+  config:
+    import: application-db-processor.yml
+  datasource:
+    hikari:
+      minimum-idle: 1
+      maximum-pool-size: 2
+      idle-timeout: 500000
+      max-lifetime: 540000
+      connection-timeout: 5000
+  jpa:
+    hibernate:
+      ddl-auto: none
+  boot:
+    admin:
+      client:
+        instance:
+          prefer-ip: true
+          management-url: 'http://localIP:${server.port}/actuator'
+          service-url: 'http://localIP:${server.port}/'
+        enabled: false
+        url: 'http://50.17.36.43:9500/admin'
+        auto-registration: true
+        prefer-ip: true
+        username: user
+        password: pass
+  application:
+    name: DataBase(Source)
+  cloud:
+    vault:
+      enabled: false
+      uri: 'http://81.70.183.16:8201'
+      token: 00000000-0000-0000-0000-000000000000  
+    stream:
+      bindings:
+        input-0:
+          destination: ULIS-LVQ
+          binder: solace-db
+          group: no
+        output-0:
+          destination: lvq/messages
+          binder: solace
+          content-type: application/x-java-serialized-object
+solace:
+  connector:
+    workflows:
+      '0':
+        enabled: true
+      '1':
+        enabled: false
+    management:
+      leader-election:
+        mode: standalone
+        fail-over:
+          max-attempts: 3
+          back-off-initial-interval: 1000
+          back-off-max-interval: 10000
+          back-off-multiplier: 2
+      queue: ""
+      session:
+        host: 'tcp://81.70.183.16:55555'
+        msgVpn: default
+        clientUsername: admin
+        clientPassword: admin
+        msg-vpn: default
+        client-username: admin
+        client-password: admin
+    security:
+      enabled: false
+  java:
+    host: 'tcp://localhost:55554'
+    #host: 'tcp://host.docker.internal:55554'
+    msgVpn: default
+    clientUsername: default
+    clientPassword: default
+    connect-retries: -1
+    reconnect-retries: -1
+    apiProperties:
+      pub_ack_window_size: 50
+      pub_ack_time: 200
+management:
+  metrics:
+    export:
+      simple:
+        enabled: true
+  endpoint:
+    health:
+      show-components: never
+      show-details: never
+    logfile:
+      external-file: log/connector/runtime.log
+  endpoints:
+    jmx:
+      exposure:
+        exclude: '*'
+    web:
+      exposure:
+        include: 'health,metrics,loggers,logfile,channels,env,workflows,leaderelection,bindings'
+        exclude: 'diskSpace,mappings'
+logging:
+  level:
+    root: INFO
+    com.solace: INFO
+    com.solace.connector.core: ERROR
+    com.solace.spring.cloud.stream.binder: ERROR
+    com.solacesystems.jcsmp: INFO
+    com.solacecoe.spring.cloud.stream.binders.db: INFO
+    com.solace.spring: ERROR
+    org.springframework: ERROR
+    org.springframework.context.support.DefaultLifecycleProcessor: ERROR
+    org.hibernate.SQL: TRACE
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    com.solacecoe.spring.cloud.stream.binders.db.jdbc.DatabaseUtil: TRACE
+server:
+  port: 8392
+jasypt:
+  encryptor:
+    password: test123@!
+    algorithm: PBEWithMD5AndDES
+    iv-generator-classname: org.jasypt.iv.NoIvGenerator
+solace-persistence:
+  datasource:
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+    url: 'jdbc:sqlserver://3.10.117.249:1433;databaseName=MASTERULIS;Encrypt=false'
+    username: sa
+    password: MyPassword123 
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: 'false'
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 100
+        order_updates: 'true'
+        order_inserts: 'true'
+        generate_statistics: 'false'
+    database: sqlserver
+  source:
+    sendPoolSize: 255
+    sendBatchSize: 1
+    queryMax: 100
+    maxDbRetry: 3
+    retryInterval: 10
+    retryCount: 3
+    enableBufferedJpaBatch: 'true'
+    bufferWaitSeconds: 5
+    enableTrackingId: 'true'
+    enableDatabaseTimestamp: 'true'
+    enableConnectorTimestamp: 'true'
+    enableBenchmarkInfo: true
+    skipMismatchError: 'false'
+    triggerInterval: 1000
+    strategy: sequential
+    timestampPolling: 3ms
+    timeWindow: 0

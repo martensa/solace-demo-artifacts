@@ -1,0 +1,259 @@
+spring:
+  cloud:
+    config:
+      import-check:
+        enabled: false
+    function:
+      definition: >-
+        setupWorkflow_0|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_1|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_2|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_3|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_4|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_5|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_6|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_7|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_8|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_9|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_10|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_11|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_12|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_13|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_14|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_15|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_16|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_17|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_18|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck;setupWorkflow_19|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck
+    stream:
+      function:
+        bindings:
+          setupWorkflow_0|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-0
+          setupWorkflow_1|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-1
+          setupWorkflow_2|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-2
+          setupWorkflow_3|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-3
+          setupWorkflow_4|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-4
+          setupWorkflow_5|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-5
+          setupWorkflow_6|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-6
+          setupWorkflow_7|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-7
+          setupWorkflow_8|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-8
+          setupWorkflow_9|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-9
+          setupWorkflow_10|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-10
+          setupWorkflow_11|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-11
+          setupWorkflow_12|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-12
+          setupWorkflow_13|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-13
+          setupWorkflow_14|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-14
+          setupWorkflow_15|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-15
+          setupWorkflow_16|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-16
+          setupWorkflow_17|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-17
+          setupWorkflow_18|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-18
+          setupWorkflow_19|mapPayloads|mapHeaders|transformHeaders|transformPayloads|sendAndResolveAck-in-0: input-19
+          output_0-out-0: output-0
+          output_1-out-0: output-1
+          output_2-out-0: output-2
+          output_3-out-0: output-3
+          output_4-out-0: output-4
+          output_5-out-0: output-5
+          output_6-out-0: output-6
+          output_7-out-0: output-7
+          output_8-out-0: output-8
+          output_9-out-0: output-9
+          output_10-out-0: output-10
+          output_11-out-0: output-11
+          output_12-out-0: output-12
+          output_13-out-0: output-13
+          output_14-out-0: output-14
+          output_15-out-0: output-15
+          output_16-out-0: output-16
+          output_17-out-0: output-17
+          output_18-out-0: output-18
+          output_19-out-0: output-19
+      output-bindings: >-
+        output_0;output_1;output_2;output_3;output_4;output_5;output_6;output_7;output_8;output_9;output_10;output_11;output_12;output_13;output_14;output_15;output_16;output_17;output_18;output_19
+      default-binder: undefined
+      default:
+        consumer:
+          auto-startup: false
+          retryable-exceptions.java.lang.InterruptedException: false
+        producer:
+          auto-startup: false
+          error-channel-enabled: true
+          use-native-encoding: true
+      bindings:
+        input-0:
+          group: group-0
+        input-1:
+          group: group-1
+        input-2:
+          group: group-2
+        input-3:
+          group: group-3
+        input-4:
+          group: group-4
+        input-5:
+          group: group-5
+        input-6:
+          group: group-6
+        input-7:
+          group: group-7
+        input-8:
+          group: group-8
+        input-9:
+          group: group-9
+        input-10:
+          group: group-10
+        input-11:
+          group: group-11
+        input-12:
+          group: group-12
+        input-13:
+          group: group-13
+        input-14:
+          group: group-14
+        input-15:
+          group: group-15
+        input-16:
+          group: group-16
+        input-17:
+          group: group-17
+        input-18:
+          group: group-18
+        input-19:
+          group: group-19
+      solace:
+        default:
+          consumer:
+            add-destination-as-subscription-to-queue: false
+            provision-durable-queue: false
+            provision-error-queue: false
+            queue-name-expression: destination
+          producer:
+            header-exclusions:
+              - id
+solace:
+  connector:
+    management:
+      session:
+        reconnect-retries: -1
+    workflows:
+      '0':
+        input-bindings:
+          - input-0
+        output-bindings:
+          - output-0
+      '1':
+        input-bindings:
+          - input-1
+        output-bindings:
+          - output-1
+      '2':
+        input-bindings:
+          - input-2
+        output-bindings:
+          - output-2
+      '3':
+        input-bindings:
+          - input-3
+        output-bindings:
+          - output-3
+      '4':
+        input-bindings:
+          - input-4
+        output-bindings:
+          - output-4
+      '5':
+        input-bindings:
+          - input-5
+        output-bindings:
+          - output-5
+      '6':
+        input-bindings:
+          - input-6
+        output-bindings:
+          - output-6
+      '7':
+        input-bindings:
+          - input-7
+        output-bindings:
+          - output-7
+      '8':
+        input-bindings:
+          - input-8
+        output-bindings:
+          - output-8
+      '9':
+        input-bindings:
+          - input-9
+        output-bindings:
+          - output-9
+      '10':
+        input-bindings:
+          - input-10
+        output-bindings:
+          - output-10
+      '11':
+        input-bindings:
+          - input-11
+        output-bindings:
+          - output-11
+      '12':
+        input-bindings:
+          - input-12
+        output-bindings:
+          - output-12
+      '13':
+        input-bindings:
+          - input-13
+        output-bindings:
+          - output-13
+      '14':
+        input-bindings:
+          - input-14
+        output-bindings:
+          - output-14
+      '15':
+        input-bindings:
+          - input-15
+        output-bindings:
+          - output-15
+      '16':
+        input-bindings:
+          - input-16
+        output-bindings:
+          - output-16
+      '17':
+        input-bindings:
+          - input-17
+        output-bindings:
+          - output-17
+      '18':
+        input-bindings:
+          - input-18
+        output-bindings:
+          - output-18
+      '19':
+        input-bindings:
+          - input-19
+        output-bindings:
+          - output-19
+    security:
+      endpoint-access:
+        custom-filters:
+          default-admin:
+            matcher:
+              mode: management_request
+              method: POST
+            access:
+              roles:
+                - admin
+logging:
+  level:
+    root: warn
+management:
+  metrics:
+    export:
+      defaults:
+        enabled: false
+  endpoints:
+    jmx:
+      exposure:
+        exclude: '*'
+    web:
+      exposure:
+        include: >-
+          health,metrics,loggers,logfile,channels,env,workflows,leaderelection,bindings
+        exclude: 'diskSpace,mappings'
+  endpoint:
+    prometheus:
+      enabled: false
+    health:
+      status:
+        order:
+          - DOWN
+          - OUT_OF_SERVICE
+          - RECONNECTING
+          - UP
+          - UNKNOWN
+server:
+  port: 8090

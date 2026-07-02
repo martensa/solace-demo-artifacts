@@ -1,0 +1,46 @@
+# ===== db-jpa micro-integration =====
+# Only source, scripts, SQL, small config and docs are versioned here.
+# Large runtime artifacts (Docker images, connector JARs, generated
+# packages) are obtained via docker load / a registry / mvn package.
+# See README.md ("Repository layout").
+
+# --- Docker image exports (~2.4 GB, each over GitHub's 100 MB limit) ---
+*.tar
+
+# --- Release / build fat JARs (connector, meta-api, cli, entity-gen) ---
+# Every *.jar in this tree is a build or release artifact, not source.
+# To force-add a specific small jar: git add -f <path>
+*.jar
+
+# --- Generated download/staging bundles ---
+DB Designer/binary-downloads/
+*.zip
+
+# --- Maven build output ---
+target/
+
+# --- Runtime logs and logback audit sidecars ---
+logs/
+deploy-logs/
+*.log
+*.log.gz
+*-audit.json
+spring-shell.log
+
+# --- IDE / OS cruft ---
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- Host-specific generated entity projects (leak host names/creds) ---
+DB Designer/entityFolders/
+
+# --- Leftover PM2 config (leaks a Solace Cloud API token) ---
+DB Designer/connector-configuration/
+
+# --- Local tooling state and env files (demo values only) ---
+.claude/
+*.env
+!*.env.example
