@@ -1,0 +1,46 @@
+{{- if .Values.ingress.enabled -}}
+{{- $ui := .Values.ingress.uiHost -}}
+{{- $api := .Values.ingress.apiHost -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "db-designer.fullname" . }}
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $ui | quote }}
+      secretName: {{ .Values.ingress.tls.uiSecretName }}
+    - hosts:
+        - {{ $api | quote }}
+      secretName: {{ .Values.ingress.tls.apiSecretName }}
+  {{- end }}
+  rules:
+    - host: {{ $ui | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "db-designer.fullname" . }}-ui
+                port:
+                  number: {{ .Values.service.ui.port }}
+    - host: {{ $api | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "db-designer.fullname" . }}-services
+                port:
+                  number: {{ .Values.service.api.port }}
+{{- end }}

@@ -1,0 +1,81 @@
+# Overlay for Red Hat OpenShift (e.g. the Bosch target).
+# Uses Routes instead of Ingress and ships an SCC because the vendor images
+# currently run as root. Set the registry, hosts and storageClass to the
+# target cluster's values before deploying.
+platform: openshift
+
+image:
+  services:
+    # Replace with the Bosch/OpenShift registry path once the images are
+    # pushed there (e.g. image-registry.openshift-image-registry.svc:5000/...).
+    repository: registry.solace.lab/connector_designer_services
+    tag: "2.0.2"
+    pullPolicy: Always
+  ui:
+    repository: registry.solace.lab/connector_designer_ui
+    tag: "2.0.2"
+    pullPolicy: Always
+
+# Set to the pull secret for the target registry (Kyverno may not be present).
+imagePullSecrets:
+  - name: registry-pull-secret
+
+ingress:
+  enabled: false
+
+route:
+  enabled: true
+  # Set to the cluster's app domain, e.g. db-designer.apps.<cluster>.<domain>.
+  uiHost: ""
+  apiHost: ""
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+postgres:
+  embedded: true            # for a self-contained demo; use false + external
+                            # (operator/managed DB) for production.
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""        # set to an RWO StorageClass on the cluster
+  external:
+    host: ""
+    port: 5432
+
+servicesApp:
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+  # Enable if the in-pod Java (entity generator / meta-api) must trust an
+  # internal CA over TLS. Requires labCaTrust.configMapName to exist.
+  javaTruststore:
+    enabled: false
+
+# Let OpenShift assign the UID/fsGroup from the project range; the SCC below
+# still permits the root vendor image to run.
+podSecurityContext:
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: false
+  capabilities:
+    drop:
+      - ALL
+
+# Ship an SCC (RunAsAny) bound to the release ServiceAccount so the root image
+# starts under OpenShift. Requires cluster-admin to install. The clean fix is
+# hardened non-root images (Track 1), after which set this to false.
+openshift:
+  scc:
+    create: true
+    name: ""
+
+# Mount the CA bundle explicitly if the cluster has no Kyverno CA injection.
+labCaTrust:
+  enabled: false
+  configMapName: solace-lab-ca-trust-bundle

@@ -1,0 +1,23 @@
+apiVersion: v2
+name: db-designer
+description: >-
+  Enterprise Kubernetes / OpenShift deployment of the DB Designer
+  (Connector Control Center) component of the db-jpa Micro-Integration:
+  a Node.js backend (:6002), a React UI (:6003), and a bundled Postgres
+  metadata database. Wraps the Solace-provided container images and adds
+  hardening, config/secret externalization, persistence, Ingress/Route,
+  NetworkPolicy and an optional OpenShift SecurityContextConstraints.
+type: application
+# Chart version is independent of the app image; bump on chart changes.
+version: 0.1.0
+# Tracks the DB Designer / connector image line.
+appVersion: "2.0.2"
+keywords:
+  - solace
+  - micro-integration
+  - database
+  - jpa
+  - connector-designer
+home: https://github.com/martensa/solace-demo-artifacts
+maintainers:
+  - name: Solace

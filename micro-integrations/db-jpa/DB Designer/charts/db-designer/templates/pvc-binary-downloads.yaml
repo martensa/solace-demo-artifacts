@@ -1,0 +1,18 @@
+{{- if .Values.servicesApp.persistence.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "db-designer.fullname" . }}-binary-downloads
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: services
+spec:
+  accessModes:
+    - {{ .Values.servicesApp.persistence.accessMode }}
+  {{- if .Values.servicesApp.persistence.storageClass }}
+  storageClassName: {{ .Values.servicesApp.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.servicesApp.persistence.size | quote }}
+{{- end }}

@@ -1,0 +1,41 @@
+{{- if .Values.route.enabled -}}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "db-designer.fullname" . }}-ui
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  {{- with .Values.route.uiHost }}
+  host: {{ . | quote }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "db-designer.fullname" . }}-ui
+  port:
+    targetPort: http
+  tls:
+    termination: {{ .Values.route.tls.termination }}
+    insecureEdgeTerminationPolicy: {{ .Values.route.tls.insecureEdgeTerminationPolicy }}
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "db-designer.fullname" . }}-api
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: services
+spec:
+  {{- with .Values.route.apiHost }}
+  host: {{ . | quote }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ include "db-designer.fullname" . }}-services
+  port:
+    targetPort: http
+  tls:
+    termination: {{ .Values.route.tls.termination }}
+    insecureEdgeTerminationPolicy: {{ .Values.route.tls.insecureEdgeTerminationPolicy }}
+{{- end }}

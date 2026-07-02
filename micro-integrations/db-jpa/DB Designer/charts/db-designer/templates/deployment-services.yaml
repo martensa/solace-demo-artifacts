@@ -1,0 +1,156 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "db-designer.fullname" . }}-services
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: services
+spec:
+  replicas: {{ .Values.servicesApp.replicas }}
+  # Backend keeps local state (produced packages, tmp) -> single writer.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "db-designer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: services
+  template:
+    metadata:
+      annotations:
+        checksum/env: {{ include (print $.Template.BasePath "/secret-env.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "db-designer.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: services
+    spec:
+      serviceAccountName: {{ include "db-designer.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.servicesApp.javaTruststore.enabled }}
+      initContainers:
+        # Build a Java truststore from the internal CA so the in-pod Java
+        # processes (entity generator / meta-api) trust TLS endpoints signed
+        # by it. SSL_CERT_FILE alone does not affect the JVM.
+        - name: java-truststore
+          image: {{ include "db-designer.image.services" . | quote }}
+          imagePullPolicy: {{ .Values.image.services.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              KT="$(command -v keytool)"
+              SRC="$(dirname "$(dirname "$(readlink -f "$KT")")")/lib/security/cacerts"
+              cp "$SRC" /truststore/cacerts
+              "$KT" -importcert -noprompt -trustcacerts -alias solace-lab-ca \
+                -file /ca/ca.crt -keystore /truststore/cacerts -storepass changeit
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: java-truststore
+              mountPath: /truststore
+            - name: lab-ca
+              mountPath: /ca
+              readOnly: true
+      {{- end }}
+      containers:
+        - name: services
+          image: {{ include "db-designer.image.services" . | quote }}
+          imagePullPolicy: {{ .Values.image.services.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: HOME
+              value: /tmp
+            {{- if .Values.servicesApp.javaTruststore.enabled }}
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Djavax.net.ssl.trustStore=/truststore/cacerts -Djavax.net.ssl.trustStorePassword=changeit"
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.api.port }}
+          # The vendor backend exposes no dedicated health path (/health
+          # returns 404), so we probe that the HTTP server accepts TCP
+          # connections. initialDelaySeconds is generous because first
+          # start under amd64 emulation is slow.
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.servicesApp.resources | nindent 12 }}
+          volumeMounts:
+            - name: env
+              mountPath: /app/dist/bin/.env
+              subPath: .env
+              readOnly: true
+            - name: logs
+              mountPath: /app/dist/bin/logs
+            - name: tmp
+              mountPath: /app/tmp
+            - name: binary-downloads
+              mountPath: /app/tmp/binary/download
+            {{- if .Values.servicesApp.javaTruststore.enabled }}
+            - name: java-truststore
+              mountPath: /truststore
+              readOnly: true
+            {{- end }}
+            {{- if .Values.labCaTrust.enabled }}
+            - name: lab-ca
+              mountPath: {{ .Values.labCaTrust.mountPath }}
+              subPath: {{ .Values.labCaTrust.subPath }}
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: env
+          secret:
+            secretName: {{ include "db-designer.secretName" . }}
+            items:
+              - key: .env
+                path: .env
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: binary-downloads
+          {{- if .Values.servicesApp.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "db-designer.fullname" . }}-binary-downloads
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- if .Values.servicesApp.javaTruststore.enabled }}
+        - name: java-truststore
+          emptyDir: {}
+        {{- end }}
+        {{- if or .Values.labCaTrust.enabled .Values.servicesApp.javaTruststore.enabled }}
+        - name: lab-ca
+          configMap:
+            name: {{ .Values.labCaTrust.configMapName }}
+            defaultMode: 0444
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

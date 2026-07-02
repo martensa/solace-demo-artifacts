@@ -1,0 +1,38 @@
+db-designer ({{ .Chart.AppVersion }}) installed as release "{{ .Release.Name }}"
+in namespace "{{ .Release.Namespace }}".
+
+Components:
+  - UI        {{ include "db-designer.fullname" . }}-ui        (:{{ .Values.service.ui.port }})
+  - Backend   {{ include "db-designer.fullname" . }}-services  (:{{ .Values.service.api.port }})
+{{- if .Values.postgres.embedded }}
+  - Postgres  {{ include "db-designer.postgresServiceName" . }} (:{{ .Values.service.postgres.port }})
+{{- else }}
+  - Postgres  external at {{ .Values.postgres.external.host }}:{{ .Values.postgres.external.port }}
+{{- end }}
+
+Access:
+{{- if .Values.ingress.enabled }}
+  UI :  {{ include "db-designer.uiUrl" . }}
+  API:  {{ include "db-designer.apiUrl" . }}  (health: {{ include "db-designer.apiUrl" . }}/health)
+
+  The React UI calls the API from the browser, so BOTH hosts must resolve to
+  the ingress. On Rancher/k3s register them in CoreDNS NodeHosts (see
+  scripts/start.sh) or add them to /etc/hosts.
+{{- else if .Values.route.enabled }}
+  UI :  https://{{ .Values.route.uiHost }}
+  API:  https://{{ .Values.route.apiHost }}
+{{- else }}
+  No Ingress/Route enabled. Port-forward to try it locally:
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "db-designer.fullname" . }}-ui {{ .Values.service.ui.port }}:{{ .Values.service.ui.port }}
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "db-designer.fullname" . }}-services {{ .Values.service.api.port }}:{{ .Values.service.api.port }}
+{{- end }}
+
+Check rollout:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "db-designer.fullname" . }}-services
+
+{{- if .Values.openshift.scc.create }}
+
+OpenShift: a SecurityContextConstraints was created for the release
+ServiceAccount (vendor images run as root). This requires cluster-admin.
+{{- end }}

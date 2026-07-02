@@ -1,0 +1,247 @@
+# Default values for the db-designer chart.
+# Non-sensitive, safe-to-commit defaults. Secrets are injected at deploy
+# time via --set from .env (see scripts/start.sh and .env.example).
+# Overlay files values-rancher.yaml / values-openshift.yaml tune this
+# base for each target platform.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Target platform: "kubernetes" (nginx Ingress) or "openshift" (Route + SCC).
+platform: kubernetes
+
+# --- Container images -------------------------------------------------------
+# The Solace-provided DB Designer images. For local Rancher the tarballs are
+# docker-loaded (pullPolicy IfNotPresent, no registry). For OpenShift set a
+# registry-qualified repository and pullPolicy Always (see values-openshift).
+image:
+  services:
+    repository: connector_designer_services
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  ui:
+    repository: connector_designer_ui
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+# In the lab the Kyverno policy inject-registry-pull-secret wires this
+# automatically; leave empty there. On Bosch/OpenShift set explicitly.
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# --- Networking -------------------------------------------------------------
+# The React UI calls the backend FROM THE BROWSER, so the API must be reachable
+# under a browser-resolvable URL (apiHost), not the in-cluster service name.
+ingress:
+  enabled: true
+  className: nginx
+  uiHost: db-designer.solace.lab
+  apiHost: db-designer-api.solace.lab
+  annotations:
+    cert-manager.io/cluster-issuer: solace-lab-ca-issuer
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+  tls:
+    enabled: true
+    uiSecretName: db-designer-ui-tls
+    apiSecretName: db-designer-api-tls
+
+# OpenShift Routes (used when platform=openshift; ingress.enabled should be
+# false there).
+route:
+  enabled: false
+  uiHost: ""
+  apiHost: ""
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+
+service:
+  type: ClusterIP
+  ui:
+    port: 6003
+  api:
+    port: 6002
+  postgres:
+    port: 5432
+
+# --- Backend (connector_designer_services) ----------------------------------
+servicesApp:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  # Persistent store for produced connector packages (browser download).
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+  # Optional: route entity generation through the bundled DB CLI jar instead
+  # of the image's built-in Hibernate Tools. Requires the startup-patch +
+  # artifacts/tools overlay; OFF for a clean first run (built-in generation).
+  dbCli:
+    enabled: false
+    jarPath: /app/dist/bin/artifacts/tools/jpa-entity-generator-1.0.0.jar
+    timeoutMs: "120000"
+  # Optional: build a Java truststore from the injected CA bundle for the
+  # in-pod Java processes (entity generator / meta-api) when they hit TLS
+  # endpoints signed by an internal CA. See values-openshift.yaml.
+  javaTruststore:
+    enabled: false
+    caBundlePath: /etc/ssl/certs/ca-certificates.crt
+
+# --- Frontend (connector_designer_ui) ---------------------------------------
+ui:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  # Injected into /app/build/environment-config.js (browser runtime config).
+  config:
+    queueNameTemplate: "lvq.nse.surv.0"
+    connectorManagementUrl: "https://solace.com/"
+    monitoringUrl: ""
+    enableGenerateScripts: "true"
+
+# --- Bundled Postgres metadata DB -------------------------------------------
+postgres:
+  embedded: true
+  image: postgres:13
+  database: CONNECTOR_DESIGNER_TEST
+  user: postgres
+  schema: CM_SCHEMA
+  type: postgres
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  # Used only when embedded=false (external / operator-managed DB).
+  external:
+    host: ""
+    port: 5432
+  # Postgres runs as its own UID with a matching fsGroup so the official
+  # image never needs to chown the data dir (which would require CAP_CHOWN
+  # that we drop). The SCC (RunAsAny) permits this UID on OpenShift.
+  podSecurityContext:
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+        - ALL
+
+# --- Non-secret backend configuration (rendered into the .env Secret) -------
+# Solace endpoints the Designer/meta-api talk to. Demo defaults; override per
+# deployment. Passwords/keys live under `secret` (injected via --set).
+config:
+  solace:
+    host: "solace"
+    vpnName: "default"
+    clientUser: "admin"
+    mgmtUser: "admin"
+    restDataProtocol: "http"
+    restPort: "9000"
+    authTopic: "cm"
+    cdDataProtocol: "http"
+    mgmtPort: "8080"
+  metaApi:
+    protocol: "http"
+    initialPort: "7000"
+    autoPopulate: "true"
+    machineLocalIp: "false"
+  solaceRetries: "3"
+  # License/validation UUID shipped with the Designer (demo value).
+  uuid: "7fdf7ef8-cab6-43ea-9494-a9717a0c7a28"
+  enableAdminUser: "true"
+  logMaxFiles: "30d"
+
+# --- Secrets ----------------------------------------------------------------
+# When existingSecret is set, the chart does NOT create the .env Secret and
+# reads it from there instead. Otherwise the chart assembles the .env from the
+# values below; the sensitive ones are meant to be injected via --set at
+# deploy time (never commit real values). These defaults are demo-only.
+secret:
+  existingSecret: ""
+  postgresPassword: "postgres"
+  solaceClientPassword: "coeadmin"
+  solaceMgmtPassword: "coeadmin"
+  appSecretKey: "TEST"
+  appRefreshTokenKey: "TEST1"
+  passwordEncryptionKey: "solace"
+  adminUserPassword: "admin"
+  solaceApiToken: ""
+
+# --- Security context -------------------------------------------------------
+# The vendor images currently run as root (no USER). On plain Kubernetes this
+# is tolerated; on OpenShift the SCC (values-openshift.yaml) governs the UID.
+# We drop all capabilities and forbid privilege escalation regardless.
+podSecurityContext:
+  fsGroup: 0
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: false
+  capabilities:
+    drop:
+      - ALL
+
+# --- OpenShift SecurityContextConstraints -----------------------------------
+# The vendor images run as root, which the default restricted-v2 SCC forbids.
+# When create=true the chart ships an SCC that permits RunAsAny (so the root
+# image starts) while keeping caps dropped and privilege escalation off, bound
+# to this release's ServiceAccount. Requires cluster-admin to install.
+# The clean long-term fix is hardened non-root images (Track 1).
+openshift:
+  scc:
+    create: false
+    name: ""
+
+# --- NetworkPolicy ----------------------------------------------------------
+networkPolicy:
+  enabled: true
+  # Allow the UI/API to be reached from the ingress/route controller namespace.
+  ingressNamespace: ingress-nginx
+
+# --- CA trust (lab: injected cluster-wide by Kyverno) -----------------------
+labCaTrust:
+  # In the solace-lab the Kyverno policy inject-solace-lab-ca-trust-bundle
+  # mounts the CA at /etc/ssl/certs/ca-certificates.crt and sets SSL_CERT_FILE.
+  # No per-pod config needed there. Enable this only to mount the bundle
+  # explicitly (e.g. on OpenShift/Bosch without that policy).
+  enabled: false
+  configMapName: solace-lab-ca-trust-bundle
+  mountPath: /etc/ssl/certs/solace-lab-ca.crt
+  subPath: ca.crt
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}

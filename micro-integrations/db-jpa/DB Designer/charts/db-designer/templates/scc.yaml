@@ -1,0 +1,44 @@
+{{- if .Values.openshift.scc.create -}}
+{{- $sccName := default (printf "%s-scc" (include "db-designer.fullname" .)) .Values.openshift.scc.name -}}
+# OpenShift SecurityContextConstraints.
+# The vendor images currently run as root; the default restricted-v2 SCC
+# forbids that. This SCC permits RunAsAny (so the root image starts) while
+# still dropping all capabilities and forbidding privilege escalation and
+# host access. Installing it requires cluster-admin. The clean long-term fix
+# is hardened non-root images (Track 1) after which this can be removed.
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: {{ $sccName }}
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+allowPrivilegeEscalation: false
+allowPrivilegedContainer: false
+readOnlyRootFilesystem: false
+requiredDropCapabilities:
+  - ALL
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: MustRunAs
+fsGroup:
+  type: RunAsAny
+supplementalGroups:
+  type: RunAsAny
+seccompProfiles:
+  - runtime/default
+volumes:
+  - configMap
+  - downwardAPI
+  - emptyDir
+  - persistentVolumeClaim
+  - projected
+  - secret
+users:
+  - system:serviceaccount:{{ .Release.Namespace }}:{{ include "db-designer.serviceAccountName" . }}
+{{- end }}

@@ -1,0 +1,64 @@
+# Overlay for the local Rancher Desktop (k3s) lab.
+# k3s uses the docker runtime, so images docker-loaded from the tarballs are
+# visible without a registry (pullPolicy IfNotPresent). Reuses the
+# solace-lab-infrastructure: nginx ingress + cert-manager (solace-lab-ca-issuer)
+# + Kyverno-injected CA trust and registry pull secret.
+platform: kubernetes
+
+image:
+  services:
+    repository: connector_designer_services
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  ui:
+    repository: connector_designer_ui
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+# Kyverno inject-registry-pull-secret wires this automatically in the lab.
+imagePullSecrets: []
+
+ingress:
+  enabled: true
+  className: nginx
+  uiHost: db-designer.solace.lab
+  apiHost: db-designer-api.solace.lab
+  annotations:
+    cert-manager.io/cluster-issuer: solace-lab-ca-issuer
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+  tls:
+    enabled: true
+    uiSecretName: db-designer-ui-tls
+    apiSecretName: db-designer-api-tls
+
+route:
+  enabled: false
+
+postgres:
+  embedded: true
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""   # local-path (Rancher default)
+
+servicesApp:
+  persistence:
+    enabled: true
+    size: 2Gi
+    storageClass: ""   # local-path; RWO (single replica)
+
+# Vendor images run as root; on k3s that is tolerated. fsGroup 0 keeps mounted
+# volumes group-writable.
+podSecurityContext:
+  fsGroup: 0
+  seccompProfile:
+    type: RuntimeDefault
+
+# The lab Kyverno policy already injects the CA bundle + SSL_CERT_FILE.
+labCaTrust:
+  enabled: false
+
+openshift:
+  scc:
+    create: false

@@ -1,0 +1,13 @@
+{{- if .Values.postgres.embedded -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "db-designer.fullname" . }}-postgres-seed
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+data:
+  # Seeds CM_SCHEMA + CD_CONFIGURATION_TEMPLATE (drives the Designer forms).
+  # Mounted into the Postgres initdb directory on first boot.
+  init.sql: |-
+{{ .Files.Get "files/CD_SCHEMA_POSTGRES.sql" | indent 4 }}
+{{- end }}

@@ -1,0 +1,37 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "db-designer.fullname" . }}
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "db-designer.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # From the ingress controller namespace (reaches UI + API).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace }}
+    # Intra-release traffic (UI -> API, API -> Postgres).
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "db-designer.selectorLabels" . | nindent 14 }}
+  egress:
+    # Allow DNS.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow all other egress (broker, target databases, meta-api introspection).
+    - {}
+{{- end }}
