@@ -1,0 +1,18 @@
+{{- if .Values.servicesApp.artifacts.persistence.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "db-designer.fullname" . }}-artifacts
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: services
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.servicesApp.artifacts.persistence.storageClass }}
+  storageClassName: {{ .Values.servicesApp.artifacts.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.servicesApp.artifacts.persistence.size | quote }}
+{{- end }}

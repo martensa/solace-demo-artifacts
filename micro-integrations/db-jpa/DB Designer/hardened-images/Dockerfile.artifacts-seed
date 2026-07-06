@@ -1,0 +1,19 @@
+# Seed image for /app/dist/bin/artifacts.
+#
+# The vendor services image ships WITHOUT its artifacts directory
+# (docker-compose bind-mounts it from the host). This image carries the
+# artifacts tree (connectorTemplate, entityTemplate, metaApi, connectorType,
+# projConfig, connectorConfig, tools, resources) and is used by the chart's
+# seed-artifacts initContainer to populate the artifacts PVC once.
+#
+# Build (context = the "DB Designer/artifacts" directory):
+#   cd "DB Designer"
+#   docker build -t db-designer-artifacts-seed:local \
+#     -f hardened-images/Dockerfile.artifacts-seed artifacts
+#
+# For OpenShift push it to the target registry and set
+# servicesApp.artifacts.seedImage accordingly.
+FROM busybox:1.36
+COPY . /seed/artifacts/
+# Group-0 read for OpenShift arbitrary UIDs.
+RUN chgrp -R 0 /seed/artifacts && chmod -R g+rX /seed/artifacts

@@ -27,6 +27,11 @@ ingress:
     cert-manager.io/cluster-issuer: solace-lab-ca-issuer
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    # ~110 MB connector-binary uploads (nginx default limit 1m -> 413).
+    nginx.ingress.kubernetes.io/proxy-body-size: "512m"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
   tls:
     enabled: true
     uiSecretName: db-designer-ui-tls
@@ -47,6 +52,15 @@ servicesApp:
     enabled: true
     size: 2Gi
     storageClass: ""   # local-path; RWO (single replica)
+  # Writable artifacts PVC only -- the user uploads connector binaries via
+  # the Designer UI (no pre-seeding). Optional seed image documented in
+  # values.yaml / hardened-images/Dockerfile.artifacts-seed.
+  artifacts:
+    seedImage: ""
+    persistence:
+      enabled: true
+      size: 3Gi
+      storageClass: ""
 
 # Vendor images run as root; on k3s that is tolerated. fsGroup 0 keeps mounted
 # volumes group-writable.

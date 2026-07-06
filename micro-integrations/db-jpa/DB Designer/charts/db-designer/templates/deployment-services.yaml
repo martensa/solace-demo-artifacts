@@ -32,8 +32,34 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- if .Values.servicesApp.javaTruststore.enabled }}
+      {{- if or .Values.servicesApp.javaTruststore.enabled .Values.servicesApp.artifacts.seedImage }}
       initContainers:
+        {{- if .Values.servicesApp.artifacts.seedImage }}
+        # One-time seed of /app/dist/bin/artifacts (templates, metaApi,
+        # connectorType) -- the vendor image ships without it and the backend
+        # crashes on upload/packaging when the tree is missing.
+        - name: seed-artifacts
+          image: {{ .Values.servicesApp.artifacts.seedImage | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              if [ ! -e /dest/.seeded ]; then
+                cp -a /seed/artifacts/. /dest/
+                touch /dest/.seeded
+                echo "artifacts seeded"
+              else
+                echo "artifacts already seeded"
+              fi
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: artifacts
+              mountPath: /dest
+        {{- end }}
+      {{- end }}
+      {{- if .Values.servicesApp.javaTruststore.enabled }}
         # Build a Java truststore from the internal CA so the in-pod Java
         # processes (entity generator / meta-api) trust TLS endpoints signed
         # by it. SSL_CERT_FILE alone does not affect the JVM.
@@ -97,6 +123,8 @@ spec:
               mountPath: /app/dist/bin/.env
               subPath: .env
               readOnly: true
+            - name: artifacts
+              mountPath: /app/dist/bin/artifacts
             - name: logs
               mountPath: /app/dist/bin/logs
             - name: tmp
@@ -121,6 +149,13 @@ spec:
             items:
               - key: .env
                 path: .env
+        - name: artifacts
+          {{- if .Values.servicesApp.artifacts.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "db-designer.fullname" . }}-artifacts
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
         - name: logs
           emptyDir: {}
         - name: tmp
