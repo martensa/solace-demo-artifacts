@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "db-designer.fullname" . }}-tmp-templates
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+binaryData:
+  # Maven project templates the backend expects under /app/tmp (compose
+  # bind-mounts them from connector-configuration/). generateEntity.zip is
+  # the legacy Hibernate-Tools entity project (fallback path,
+  # CCC_GENERATE_ENTITY_TEMPLATE_PATH); solace-connector-entity.zip is the
+  # entity.jar build project (CD_CONNECTOR_ENTITY_PATH). Both are tiny and
+  # mounted as single files into the /app/tmp emptyDir.
+  generateEntity.zip: {{ .Files.Get "files/generateEntity.zip" | b64enc }}
+  solace-connector-entity.zip: {{ .Files.Get "files/solace-connector-entity.zip" | b64enc }}

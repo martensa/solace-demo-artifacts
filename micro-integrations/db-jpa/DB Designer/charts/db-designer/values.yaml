@@ -108,9 +108,12 @@ servicesApp:
       enabled: true
       size: 3Gi
       storageClass: ""
-  # Optional: route entity generation through the bundled DB CLI jar instead
-  # of the image's built-in Hibernate Tools. Requires the startup-patch +
-  # artifacts/tools overlay; OFF for a clean first run (built-in generation).
+  # Route entity generation through the DB CLI (jpa-entity-generator) instead
+  # of the image's built-in Hibernate Tools. When enabled the chart (1) loads
+  # additionals/startup-patch.js via an args override, (2) mounts the patch
+  # from a ConfigMap, and (3) expects the tools under artifacts/tools on the
+  # PVC -- provide them via artifacts.seedImage. Unsupported DB vendors fall
+  # back to the built-in flow automatically.
   dbCli:
     enabled: false
     jarPath: /app/dist/bin/artifacts/tools/jpa-entity-generator-1.0.0.jar

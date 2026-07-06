@@ -52,11 +52,17 @@ servicesApp:
     enabled: true
     size: 2Gi
     storageClass: ""   # local-path; RWO (single replica)
-  # Writable artifacts PVC only -- the user uploads connector binaries via
-  # the Designer UI (no pre-seeding). Optional seed image documented in
-  # values.yaml / hardened-images/Dockerfile.artifacts-seed.
+  # Route entity generation through the DB CLI (jpa-entity-generator).
+  # Loads additionals/startup-patch.js via the args override; the tools +
+  # templates come from the seed image below.
+  dbCli:
+    enabled: true
+  # Seed image with runtime templates + tooling (tools/, metaApi/,
+  # entityTemplate/, ... -- built WITHOUT connectorType/, see
+  # artifacts/.dockerignore). Connector binaries stay a user upload via the
+  # Designer UI. k3s reads the image from the docker daemon directly.
   artifacts:
-    seedImage: ""
+    seedImage: db-designer-artifacts-seed:local
     persistence:
       enabled: true
       size: 3Gi

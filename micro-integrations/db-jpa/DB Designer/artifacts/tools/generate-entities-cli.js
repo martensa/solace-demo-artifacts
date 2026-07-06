@@ -147,14 +147,22 @@ function generateEntitiesWithCli(options) {
             ));
         }
 
-        // Build table list: combine main table + child tables
+        // Build table list: combine main table + child tables.
+        // The Designer sends regex-style "all tables" placeholders (".*",
+        // "*") and may separate names with "|". The CLI expects literal
+        // table names or ALL, so normalize: placeholders drop out (empty
+        // list => --tables ALL) and "|" is treated like ",".
+        const isAllTables = (t) => {
+            const v = (t || '').trim();
+            return v === '' || v === '.*' || v === '*' || v.toUpperCase() === 'ALL';
+        };
+        const splitTables = (s) => s.split(/[,|]/).map(t => t.trim()).filter(t => t && !isAllTables(t));
         let allTables = [];
-        if (tableName) {
-            allTables.push(...tableName.split(',').map(t => t.trim()).filter(t => t));
+        if (tableName && !isAllTables(tableName)) {
+            allTables.push(...splitTables(tableName));
         }
         if (childTables) {
-            const children = childTables.split(',').map(t => t.trim()).filter(t => t);
-            children.forEach(child => {
+            splitTables(childTables).forEach(child => {
                 if (!allTables.includes(child)) {
                     allTables.push(child);
                 }

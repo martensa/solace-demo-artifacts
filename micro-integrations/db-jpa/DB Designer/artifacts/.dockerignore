@@ -1,0 +1,4 @@
+# Seed image content (Dockerfile.artifacts-seed): runtime templates and
+# tooling only. Connector binaries under connectorType/ are uploaded by the
+# user through the Designer UI and must NOT be baked into the seed.
+connectorType

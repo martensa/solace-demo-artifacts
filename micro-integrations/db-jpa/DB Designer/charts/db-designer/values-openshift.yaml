@@ -56,6 +56,20 @@ servicesApp:
     enabled: true
     size: 5Gi
     storageClass: ""
+  # Entity generation via the DB CLI (loads the startup patch). Requires the
+  # artifacts seed image below for the tools/templates.
+  dbCli:
+    enabled: true
+  # Push the seed image (runtime templates + tooling, no connectorType) to
+  # the target registry:
+  #   cd "DB Designer" && docker build -t <registry>/db-designer-artifacts-seed:2.0.2 \
+  #     -f hardened-images/Dockerfile.artifacts-seed artifacts && docker push ...
+  artifacts:
+    seedImage: ""   # REQUIRED when dbCli.enabled: <registry>/db-designer-artifacts-seed:2.0.2
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: ""
   # Enable if the in-pod Java (entity generator / meta-api) must trust an
   # internal CA over TLS. Requires labCaTrust.configMapName to exist.
   javaTruststore:

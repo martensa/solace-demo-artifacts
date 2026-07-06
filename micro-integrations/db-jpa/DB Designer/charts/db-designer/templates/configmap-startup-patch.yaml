@@ -1,0 +1,16 @@
+{{- if .Values.servicesApp.dbCli.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "db-designer.fullname" . }}-startup-patch
+  labels:
+    {{- include "db-designer.labels" . | nindent 4 }}
+data:
+  # Loaded via `node --require ./additionals/startup-patch.js` (compose
+  # parity). Resolves the DB CLI patch at ../artifacts/tools relative to the
+  # additionals dir, so it must be mounted at
+  # /app/dist/bin/additionals/startup-patch.js (single-file subPath mount --
+  # the image's own additionals files stay visible).
+  startup-patch.js: |-
+{{ .Files.Get "files/startup-patch.js" | indent 4 }}
+{{- end }}
