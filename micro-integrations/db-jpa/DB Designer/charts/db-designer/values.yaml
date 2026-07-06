@@ -110,6 +110,16 @@ servicesApp:
       enabled: true
       size: 3Gi
       storageClass: ""
+  # Generated entity working directories (/app/tmp/entityFolders). The flow
+  # lifecycle spans generate -> configure -> package, potentially across pod
+  # restarts, and flow configs in the metadata DB reference these paths --
+  # so they must persist (compose parity: host bind mount). Without this,
+  # table selection fails with "Entity files not found" after any restart.
+  entityFolders:
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
   # Route entity generation through the DB CLI (jpa-entity-generator) instead
   # of the image's built-in Hibernate Tools. When enabled the chart (1) loads
   # additionals/startup-patch.js via an args override, (2) mounts the patch

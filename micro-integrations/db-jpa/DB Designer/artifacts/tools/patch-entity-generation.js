@@ -26,6 +26,12 @@ const fs = require('fs');
 const TOOLS_DIR = path.join(process.cwd(), 'artifacts', 'tools');
 const { sanitizeEntityRelationships } = require(path.join(TOOLS_DIR, 'sanitize-entity-relationships'));
 
+// Per-schema cache of the last generateEntity request (dbInfo + table/
+// strategy). The vendor's generateConnectorEntity(schemaId, type) receives
+// no DB info, so this cache lets the packaging step rebuild the entity.jar
+// via the DB CLI instead of the fragile in-pod Maven build.
+const generationCache = new Map();
+
 /**
  * Wraps the original generateConnectorEntity to sanitize entity files
  * before Maven compilation. This fixes compilation errors caused by
@@ -152,6 +158,31 @@ function applyPatch() {
 
                     const result = await generateEntityWithDbCli(data, schemaDestPath, schemaId);
 
+                    // Remember the request so the packaging step can rebuild
+                    // the connector entity.jar via the CLI.
+                    generationCache.set(schemaId, data);
+
+                    // Eagerly build the connector entity.jar when the
+                    // connector type is detectable from the request -- it
+                    // lands on the persistent entityFolders volume, so the
+                    // packaging step finds it even after a pod restart.
+                    // Non-fatal: entity generation itself already succeeded.
+                    const connType = String(data.CONNECTOR_TYPE || data.COMPONENT_TYPE || '');
+                    if (connType.includes('SOURCE') || connType.includes('SINK')) {
+                        try {
+                            const strat = data.STRATEGY || 'sequential';
+                            const stratCol = data[`DB_READ_RECORD_${strat.toUpperCase()}_INDICATOR`] || '';
+                            await generateConnectorEntityWithDbCli(
+                                schemaId, connType, data,
+                                data.TABLE_NAME || '', data.DB_CHILD_TABLE || '',
+                                strat, stratCol
+                            );
+                            console.log(`[DB CLI Patch] Connector entity.jar prepared for schema: ${schemaId}`);
+                        } catch (jarError) {
+                            console.error(`[DB CLI Patch] entity.jar preparation failed (packaging will retry via CLI/Maven): ${jarError.message}`);
+                        }
+                    }
+
                     // Update entity info in DB (same as original does)
                     if (this.updateEntityInfoInDb && schemaId) {
                         try {
@@ -204,6 +235,27 @@ function applyPatch() {
             if (fs.existsSync(cliJarPath)) {
                 console.log(`[DB CLI Patch] Found CLI-generated entity.jar at: ${cliJarPath}`);
                 return cliJarPath;
+            }
+
+            // No prebuilt jar: rebuild it via the DB CLI using the cached
+            // generation request (correct mode/package comes from the REAL
+            // splitConnectorType this wrapper receives).
+            const cached = generationCache.get(schemaId);
+            if (cached) {
+                try {
+                    console.log(`[DB CLI Patch] Building entity.jar via DB CLI for schema: ${schemaId}`);
+                    const strat = cached.STRATEGY || 'sequential';
+                    const stratCol = cached[`DB_READ_RECORD_${strat.toUpperCase()}_INDICATOR`] || '';
+                    return await generateConnectorEntityWithDbCli(
+                        schemaId, splitConnectorType, cached,
+                        cached.TABLE_NAME || '', cached.DB_CHILD_TABLE || '',
+                        strat, stratCol
+                    );
+                } catch (cliError) {
+                    console.error(`[DB CLI Patch] CLI entity.jar build failed: ${cliError.message}`);
+                }
+            } else {
+                console.log(`[DB CLI Patch] No cached generation request for schema: ${schemaId} (pod restarted?)`);
             }
 
             // Fallback: use original Maven-based approach with relationship sanitization

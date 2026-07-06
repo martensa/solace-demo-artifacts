@@ -14,8 +14,40 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-// Path to the DB CLI JAR (inside the Docker container)
-const CLI_JAR_PATH = process.env.DB_CLI_JAR_PATH || path.join(process.cwd(), 'artifacts', 'tools', 'jpa-entity-generator-1.0.0.jar');
+// Directory holding the DB CLI JAR (inside the container).
+const CLI_TOOLS_DIR = path.join(process.cwd(), 'artifacts', 'tools');
+
+/**
+ * Resolve the DB CLI jar path LAZILY (at call time, not module load).
+ * This module is required via `node --require` BEFORE dotenv populates
+ * process.env, so reading DB_CLI_JAR_PATH at load time silently falls
+ * back to a hardcoded default. Resolution order:
+ *   1. DB_CLI_JAR_PATH (if set and the file exists)
+ *   2. the versionless artifacts/tools/jpa-entity-generator.jar
+ *   3. any jpa-entity-generator*.jar in artifacts/tools (newest name last)
+ */
+function resolveCliJarPath() {
+    const envPath = process.env.DB_CLI_JAR_PATH;
+    if (envPath && fs.existsSync(envPath)) {
+        return envPath;
+    }
+    const versionless = path.join(CLI_TOOLS_DIR, 'jpa-entity-generator.jar');
+    if (fs.existsSync(versionless)) {
+        return versionless;
+    }
+    try {
+        const candidate = fs.readdirSync(CLI_TOOLS_DIR)
+            .filter((f) => /^jpa-entity-generator.*\.jar$/.test(f))
+            .sort()
+            .pop();
+        if (candidate) {
+            return path.join(CLI_TOOLS_DIR, candidate);
+        }
+    } catch (e) {
+        // fall through to the versionless default for a clear error message
+    }
+    return versionless;
+}
 
 // Timeout for CLI generation process
 const GENERATION_TIMEOUT_MS = parseInt(process.env.DB_CLI_TIMEOUT_MS || '120000', 10);
@@ -172,9 +204,10 @@ function generateEntitiesWithCli(options) {
         // Resolve the mode
         const mode = (connectorMode || 'SOURCE').toUpperCase().includes('SINK') ? 'SINK' : 'SOURCE';
 
-        // Build CLI arguments
+        // Build CLI arguments (jar resolved lazily -- see resolveCliJarPath)
+        const cliJarPath = resolveCliJarPath();
         const cliArgs = [
-            '-jar', CLI_JAR_PATH,
+            '-jar', cliJarPath,
             'generate',
             '--vendor', vendor,
             '--url', jdbcUrl,
@@ -318,5 +351,5 @@ module.exports = {
     resolveVendor,
     resolveStrategy,
     isCliSupported,
-    CLI_JAR_PATH,
+    resolveCliJarPath,
 };

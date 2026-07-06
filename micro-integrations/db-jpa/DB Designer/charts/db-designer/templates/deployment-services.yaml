@@ -152,6 +152,8 @@ spec:
               readOnly: true
             - name: binary-downloads
               mountPath: /app/tmp/binary/download
+            - name: entity-folders
+              mountPath: /app/tmp/entityFolders
             {{- if .Values.servicesApp.javaTruststore.enabled }}
             - name: java-truststore
               mountPath: /truststore
@@ -193,6 +195,13 @@ spec:
           {{- if .Values.servicesApp.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ include "db-designer.fullname" . }}-binary-downloads
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: entity-folders
+          {{- if .Values.servicesApp.entityFolders.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "db-designer.fullname" . }}-entity-folders
           {{- else }}
           emptyDir: {}
           {{- end }}
