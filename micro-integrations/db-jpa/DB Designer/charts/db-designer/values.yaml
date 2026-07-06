@@ -85,7 +85,16 @@ servicesApp:
       memory: 512Mi
     limits:
       cpu: "2"
-      memory: 2Gi
+      # The WEB connector-package download base64-encodes the whole package
+      # (incl. the ~108MB connector jar) into a JSON response in memory, so
+      # the full-package download needs headroom (2Gi OOM-kills the pod).
+      # Lower to 2Gi if you only download configs+entity (uncheck the core
+      # connector binary -- it is static and ships in the distribution
+      # bundle).
+      memory: 4Gi
+  # Cap the Node heap below the container limit so the large in-memory
+  # base64 strings during package download do not push RSS past the limit.
+  nodeOptions: "--max-old-space-size=3072"
   # Persistent store for produced connector packages (browser download).
   persistence:
     enabled: true

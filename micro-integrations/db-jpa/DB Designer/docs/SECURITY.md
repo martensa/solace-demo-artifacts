@@ -242,6 +242,8 @@ Owner indicates who must act to close the risk.
 | R7 | No HA: single backend replica with `Recreate` and an RWO package PVC; a node/pod failure means downtime until reschedule. | Low | Acceptable for a design-time tool (not a data-plane runtime). Owner: **Bosch** if HA is required. |
 | R8 | Open egress by NetworkPolicy: `egress: - {}` permits the backend to reach any host (required to introspect operator-chosen DBs/brokers). | Low | Scope egress to known broker/DB CIDRs if Bosch policy requires. Owner: **Bosch**. |
 | R9 | Edge-only TLS: in-cluster hops (edge -> Service, UI -> API -> Postgres) are unencrypted, relying on NetworkPolicy and the cluster network. | Low | Add a service mesh / in-cluster TLS if required by Bosch. Owner: **Bosch**. |
+| R10 | Inefficient package download: the WEB download base64-encodes the whole connector package (incl. the ~108MB static connector jar) into an in-memory JSON response, spiking to ~600-800MB and OOM-killing a 2Gi backend. | Medium | Mitigated: backend memory raised to 4Gi + `NODE_OPTIONS` heap cap; and download configs+entity only (uncheck the static core jar, which ships in the bundle). Owner: **Solace (Track 1)** -- stream the zip as `application/zip` with `Content-Disposition` instead of base64-in-JSON. |
+| R11 | Runtime Maven fetch: the connector `entity.jar` build pulls its deps from Maven Central at request time (`/root/.m2` is empty on a fresh pod), which fails on air-gapped clusters and on OpenShift arbitrary UID (`user.home=/` not writable). | Medium | Bundle the `.m2` into the seed image and pin `maven.repo.local` for offline builds. Owner: **us (next increment)**. |
 
 <!-- markdownlint-enable MD013 -->
 

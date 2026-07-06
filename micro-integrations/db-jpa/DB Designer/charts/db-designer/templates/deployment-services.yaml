@@ -100,6 +100,10 @@ spec:
           env:
             - name: HOME
               value: /tmp
+            {{- with .Values.servicesApp.nodeOptions }}
+            - name: NODE_OPTIONS
+              value: {{ . | quote }}
+            {{- end }}
             {{- if .Values.servicesApp.javaTruststore.enabled }}
             - name: JAVA_TOOL_OPTIONS
               value: "-Djavax.net.ssl.trustStore=/truststore/cacerts -Djavax.net.ssl.trustStorePassword=changeit"

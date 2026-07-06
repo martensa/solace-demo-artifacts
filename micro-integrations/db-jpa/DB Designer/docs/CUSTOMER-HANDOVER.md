@@ -174,6 +174,13 @@ The full register, including severities, is in `docs/SECURITY.md`.
   scalable as shipped.
 - **Demo values in some templates.** Connector config templates need
   sanitization/parameterization for a Bosch environment.
+- **Package download is memory-heavy.** The WEB download base64-encodes
+  the whole package (incl. the ~108MB static connector jar) into an
+  in-memory JSON response. The backend memory limit is raised to 4Gi to
+  absorb this; for the smoothest path, download configs + `entity.jar`
+  only (uncheck the core connector binary in the dialog -- that jar is
+  static and already provided in the bundle's `connector/` folder). The
+  proper fix (stream the zip) is a Solace Track-1 item.
 
 ## Verification evidence
 
