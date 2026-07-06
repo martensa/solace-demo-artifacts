@@ -133,13 +133,24 @@ The repo-root rule is literally `.env`, which does NOT match
 | DB Connector | Launchers fixed | needs entity.jar + db-processor per deploy |
 | README / hygiene | Done | .gitignore, README, .markdownlint.json, .gitkeep |
 
-## DB Designer on Kubernetes / OpenShift (Bosch track)
+## DB Designer on Kubernetes / OpenShift (customer track)
 
 Besides docker-compose, the DB Designer deploys to Kubernetes/OpenShift via
 a Helm chart at `DB Designer/charts/db-designer` (`values-rancher.yaml` for
-the local lab, `values-openshift.yaml` for Bosch OpenShift).
-`DB Designer/scripts/start.sh` / `stop.sh` drive the local install
-(docker-load the image tars, CoreDNS + `/etc/hosts`, `helm upgrade`).
+the local lab, `values-openshift.yaml` for customer OpenShift; anchor
+customer: Bosch). `DB Designer/scripts/start.sh` / `stop.sh` drive the
+local install (docker-load the image tars, CoreDNS + `/etc/hosts`,
+`helm upgrade`).
+
+Delivery model: NO vendor-managed registry. `release/package-release.sh`
+builds a versioned, self-contained bundle (chart tgz + the three images
+as tars + connector binaries + docs + MANIFEST with git SHA/sha256).
+The customer pushes the images into THEIR registry via the bundled
+`scripts/load-and-push.sh` (prints the exact Helm values) and deploys.
+The seed image builds the DB CLI FROM SOURCE (multi-stage, `mvn verify`
+gate, versionless `jpa-entity-generator.jar`, context = the db-jpa dir
+with its `.dockerignore`) -- a bundle can never carry a stale CLI.
+
 Enterprise notes:
 
 - **Hardened images** (`DB Designer/hardened-images/`) wrap the vendor
@@ -157,7 +168,7 @@ Enterprise notes:
   scan-clean, registry-published images. The amd64 / Node 16 vendor images
   only run under emulation off-OpenShift and destabilize a single-node
   cluster under load.
-- Handover docs: `DB Designer/docs/BOSCH-HANDOVER.md`,
+- Handover docs: `DB Designer/docs/CUSTOMER-HANDOVER.md`,
   `OPENSHIFT-DEPLOYMENT.md`, `SECURITY.md`.
 
 ## Wave plan

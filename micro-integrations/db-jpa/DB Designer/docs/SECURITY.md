@@ -170,6 +170,15 @@ contents. We control only a thin overlay on top of them.
   application or the base runtime.
 - `hardened-images/build.sh` -- builds and optionally pushes the
   overlays with tag `2.0.2-hardened`.
+- `hardened-images/Dockerfile.artifacts-seed` -- multi-stage seed
+  image that builds the DB CLI **from source** (`mvn verify` as a
+  gate) at image-build time, so a distribution can never carry a
+  stale CLI jar. The seed initContainer logs the jar's sha256 at pod
+  start (runtime provenance).
+- `release/package-release.sh` -- produces the versioned customer
+  distribution bundle. Its `MANIFEST.txt` records bundle version, git
+  SHA, build date, image IDs, and sha256 sums of every file --
+  verifiable provenance without any registry infrastructure.
 - The Helm chart: security contexts, NetworkPolicy, TLS, Secret
   assembly, probes, and resource limits.
 
@@ -187,14 +196,15 @@ and **no custom SCC** are required on OpenShift. By contrast, the
 un-hardened vendor images run as root and would require
 `openshift.scc.create=true`, which ships a `RunAsAny` SCC bound to the
 release ServiceAccount and needs cluster-admin to install. That path is
-off by default and should not be used at Bosch.
+off by default and should not be used in customer production.
 
-**Bosch action:** re-tag and push the hardened images to the Bosch
-OpenShift registry, set `image.services.repository` /
-`image.ui.repository` and a matching `imagePullSecrets`, and run the
-Bosch image scanner against them. Note the scanner will flag the
-underlying vendor base (see EOL Node below), which the overlay cannot
-fix.
+**Customer action:** verify the bundle against `MANIFEST.txt`
+(sha256), push the images into the customer registry with
+`scripts/load-and-push.sh`, set the printed `image.*` /
+`servicesApp.artifacts.seedImage` values plus a matching
+`imagePullSecrets`, and run the customer's image scanner against
+them. Note the scanner will flag the underlying vendor base (see EOL
+Node below), which the overlay cannot fix.
 
 ## Persistence
 

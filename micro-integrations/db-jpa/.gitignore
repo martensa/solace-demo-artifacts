@@ -16,6 +16,9 @@
 DB Designer/binary-downloads/
 *.zip
 
+# --- Release distribution bundles (built by release/package-release.sh) ---
+dist/
+
 # --- Maven build output ---
 target/
 

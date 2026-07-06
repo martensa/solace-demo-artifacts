@@ -1,23 +1,24 @@
-# Overlay for Red Hat OpenShift (e.g. the Bosch target).
-# Uses Routes instead of Ingress and ships an SCC because the vendor images
-# currently run as root. Set the registry, hosts and storageClass to the
-# target cluster's values before deploying.
+# Overlay for Red Hat OpenShift (enterprise customer target).
+# Uses Routes instead of Ingress. Images come from the DISTRIBUTION BUNDLE
+# (release/package-release.sh): the customer pushes them into their own
+# registry with scripts/load-and-push.sh, which prints the exact values to
+# set below. Set registry, hosts and storageClass before deploying.
 platform: openshift
 
 image:
-  # Use the HARDENED overlay images (built by hardened-images/build.sh):
-  # non-root + OpenShift arbitrary-UID compatible, so the workload runs under
-  # the default restricted-v2 SCC without cluster-admin. Replace the registry
-  # with the Bosch/OpenShift one once the images are pushed there (e.g.
-  # image-registry.openshift-image-registry.svc:5000/<project>/...).
+  # HARDENED overlay images: non-root + OpenShift arbitrary-UID compatible,
+  # so the workload runs under the default restricted-v2 SCC without
+  # cluster-admin. Replace REGISTRY/tag with the output of
+  # scripts/load-and-push.sh (any internal registry works, e.g.
+  # image-registry.openshift-image-registry.svc:5000/<project>).
   services:
-    repository: registry.solace.lab/connector_designer_services
-    tag: "2.0.2-hardened"
-    pullPolicy: Always
+    repository: REGISTRY/connector-designer-services
+    tag: "BUNDLE-VERSION"
+    pullPolicy: IfNotPresent
   ui:
-    repository: registry.solace.lab/connector_designer_ui
-    tag: "2.0.2-hardened"
-    pullPolicy: Always
+    repository: REGISTRY/connector-designer-ui
+    tag: "BUNDLE-VERSION"
+    pullPolicy: IfNotPresent
 
 # Set to the pull secret for the target registry (Kyverno may not be present).
 imagePullSecrets:
@@ -60,12 +61,11 @@ servicesApp:
   # artifacts seed image below for the tools/templates.
   dbCli:
     enabled: true
-  # Push the seed image (runtime templates + tooling, no connectorType) to
-  # the target registry:
-  #   cd "DB Designer" && docker build -t <registry>/db-designer-artifacts-seed:2.0.2 \
-  #     -f hardened-images/Dockerfile.artifacts-seed artifacts && docker push ...
+  # The seed image ships in the distribution bundle (release/
+  # package-release.sh) and is pushed into the CUSTOMER registry by
+  # scripts/load-and-push.sh, which prints the exact value to set here.
   artifacts:
-    seedImage: ""   # REQUIRED when dbCli.enabled: <registry>/db-designer-artifacts-seed:2.0.2
+    seedImage: ""   # REQUIRED when dbCli.enabled: <customer-registry>/db-designer-artifacts-seed:<bundle-version>
     persistence:
       enabled: true
       size: 5Gi

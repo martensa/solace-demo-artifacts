@@ -9,7 +9,9 @@ description: >-
   NetworkPolicy and an optional OpenShift SecurityContextConstraints.
 type: application
 # Chart version is independent of the app image; bump on chart changes.
-version: 0.1.0
+# 0.2.0: artifacts PVC + DB CLI wiring + upload limits + from-source seed.
+# Release bundles override this via `helm package --version <bundle-ver>`.
+version: 0.2.0
 # Tracks the DB Designer / connector image line.
 appVersion: "2.0.2"
 keywords:

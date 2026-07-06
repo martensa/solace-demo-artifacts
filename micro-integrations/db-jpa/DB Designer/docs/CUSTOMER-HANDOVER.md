@@ -1,18 +1,34 @@
-# DB Designer -- Bosch Handover
+# DB Designer -- Customer Handover
 
 ## Executive summary
 
 This package hardens and productionizes the **DB Designer** (Connector
 Control Center) component of the Solace `db-jpa` Micro-Integration for
-deployment on Bosch OpenShift. It wraps the Solace-provided container
-images in a single Helm chart that adds non-root execution, TLS, network
-isolation, secret externalization, and support for an external
-(operator-managed) Postgres. The chart has been verified end to end on a
-local Kubernetes lab and is structured to deploy on OpenShift under the
-**default** restricted-v2 Security Context Constraint -- no cluster-admin
-and no custom SCC required. What remains outside our control is a short,
+deployment on a customer's OpenShift or Kubernetes cluster (anchor
+customer: Bosch). It wraps the Solace-provided container images in a
+single Helm chart that adds non-root execution, TLS, network isolation,
+secret externalization, and support for an external (operator-managed)
+Postgres. The chart has been verified end to end on a local Kubernetes
+lab and is structured to deploy on OpenShift under the **default**
+restricted-v2 Security Context Constraint -- no cluster-admin and no
+custom SCC required. What remains outside our control is a short,
 explicit list of image-level deliverables that only Solace can ship
 ("Track 1"), summarized below and detailed in `SECURITY.md`.
+
+## Distribution model
+
+There is **no vendor-managed registry**: the customer receives a
+versioned, self-contained distribution bundle (zip) built by
+`release/package-release.sh`. Assumptions: the customer has their own
+container registry and a cluster that can pull public Docker Hub images
+(`postgres`, `busybox`). The customer loads the bundled images into
+their registry (`scripts/load-and-push.sh` prints the exact Helm
+values), deploys the chart, and then produces the final connector
+deployment package for download through the Designer UI. The bundle's
+`MANIFEST.txt` records version, git SHA, image IDs, and sha256 sums of
+every file -- provenance without any registry infrastructure. The DB
+CLI inside the seed image is built **from source at packaging time**,
+so a bundle can never carry a stale CLI ("freshness by construction").
 
 ## What this is
 
@@ -39,6 +55,8 @@ the runtime data path.
 | Hardened image overlays | `hardened-images/Dockerfile.services`, `Dockerfile.ui` | Add non-root + arbitrary-UID support on top of vendor images |
 | Image build script | `hardened-images/build.sh` | Builds and pushes the `2.0.2-hardened` images |
 | Deploy scripts | `scripts/start.sh`, `scripts/stop.sh` | One-command lab install and teardown |
+| Release packager | `../release/package-release.sh` | Builds the versioned customer bundle (images from source, chart, manifest) |
+| Customer loader | `../release/load-and-push.sh` | Ships inside the bundle; loads/pushes images into the customer registry |
 | Secret template | `.env.example` | Deploy-time secret overrides injected via `helm --set` |
 | Security posture | `docs/SECURITY.md` | Controls, image supply chain, residual-risk register |
 | OpenShift runbook | `docs/OPENSHIFT-DEPLOYMENT.md` | Step-by-step OpenShift deployment procedure |
@@ -89,10 +107,10 @@ Both modes are the same chart with a different values overlay.
   cert-manager issuer `solace-lab-ca-issuer`, Kyverno-injected CA trust
   and registry pull secret, and an embedded Postgres StatefulSet. Deploy
   with `scripts/start.sh`.
-- **Bosch OpenShift** (`values-openshift.yaml`) -- OpenShift Routes
-  (edge-terminated TLS), the hardened `2.0.2-hardened` images, and an
-  external / operator-managed Postgres. Runs under the default
-  restricted-v2 SCC; see `docs/OPENSHIFT-DEPLOYMENT.md`.
+- **Customer OpenShift** (`values-openshift.yaml`) -- OpenShift Routes
+  (edge-terminated TLS), the hardened bundle images from the customer's
+  own registry, and an external / operator-managed Postgres. Runs under
+  the default restricted-v2 SCC; see `docs/OPENSHIFT-DEPLOYMENT.md`.
 
 ## Enterprise readiness (production-ready now)
 
@@ -175,14 +193,20 @@ entirely.
 
 ## Next steps
 
-1. Provide the Bosch OpenShift registry and app domain; push the hardened
-   `2.0.2-hardened` images with `hardened-images/build.sh` and set the
-   `image.*.repository`, `route.uiHost`, `route.apiHost`, and external
-   Postgres host in `values-openshift.yaml`.
-2. Deploy on a native amd64 OpenShift cluster following
+1. Build the distribution bundle:
+   `release/package-release.sh <version>` (builds the DB CLI from
+   source, the hardened images, packages the chart, writes the
+   manifest) and hand the zip to the customer.
+2. Customer: unzip, `./scripts/load-and-push.sh <their-registry>`,
+   set the printed image values plus `route.uiHost`/`route.apiHost`,
+   external Postgres host, and storageClass in `values-openshift.yaml`.
+3. Deploy on a native amd64 OpenShift cluster following
    `docs/OPENSHIFT-DEPLOYMENT.md`, injecting real secrets via
    `helm --set` from an untracked `.env`.
-3. Confirm the Track 1 image deliverables with the Solace account team as
+4. In the Designer UI: upload the bundled connector binaries
+   (`connector/`), model the flow, generate entities (DB CLI), and
+   download the final connector deployment package.
+5. Confirm the Track 1 image deliverables with the Solace account team as
    the gate for production sign-off (see `docs/SECURITY.md`).
 
 ## Related documents

@@ -1,0 +1,12 @@
+# Build-context filter for Dockerfile.artifacts-seed
+# (context root = this micro-integrations/db-jpa directory).
+# Whitelist: only the DB CLI source and the Designer artifacts payload --
+# keeps the multi-GB image tars / jars out of the build context.
+*
+!DB CLI/jpa-entity-generator/pom.xml
+!DB CLI/jpa-entity-generator/src/**
+!DB Designer/artifacts/**
+# Connector binaries are a user upload via the Designer UI -- never seeded.
+DB Designer/artifacts/connectorType/**
+# Prebuilt CLI jars are ignored: stage 1 builds the CLI from source.
+DB Designer/artifacts/tools/jpa-entity-generator*.jar

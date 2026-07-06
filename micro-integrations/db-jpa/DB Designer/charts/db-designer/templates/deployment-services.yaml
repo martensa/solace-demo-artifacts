@@ -49,6 +49,10 @@ spec:
               # templates, metaApi) track the seed image so fixes propagate;
               # user-uploaded content (connectorType/) is never deleted.
               cp -a /seed/artifacts/. /dest/
+              # Runtime provenance: log which DB CLI build is active.
+              if [ -f /dest/tools/jpa-entity-generator.jar ]; then
+                echo "DB CLI jar: $(sha256sum /dest/tools/jpa-entity-generator.jar)"
+              fi
               echo "artifacts synced from seed image"
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}

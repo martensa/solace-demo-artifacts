@@ -207,12 +207,15 @@ script -- exactly the shape the DB Connector runs.
 
 Beyond docker-compose, the Designer ships a Helm chart at
 `DB Designer/charts/db-designer` with a local-lab overlay
-(`values-rancher.yaml`) and a Bosch OpenShift overlay
+(`values-rancher.yaml`) and a customer OpenShift overlay
 (`values-openshift.yaml`), plus hardened non-root images under
 `DB Designer/hardened-images/`. Deploy locally with
-`DB Designer/scripts/start.sh`. See the handover docs in
-`DB Designer/docs/`: `BOSCH-HANDOVER.md`, `OPENSHIFT-DEPLOYMENT.md`,
-and `SECURITY.md`.
+`DB Designer/scripts/start.sh`. For customers,
+`release/package-release.sh` builds a self-contained distribution
+bundle (chart + images + connector binaries + manifest); the bundled
+`scripts/load-and-push.sh` pushes the images into the customer's own
+registry. See the handover docs in `DB Designer/docs/`:
+`CUSTOMER-HANDOVER.md`, `OPENSHIFT-DEPLOYMENT.md`, and `SECURITY.md`.
 
 ## Component 3 -- DB Connector (runtime)
 

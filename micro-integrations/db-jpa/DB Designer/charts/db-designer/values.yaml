@@ -99,9 +99,11 @@ servicesApp:
   # Node process (unhandled promise rejection). The chart therefore mounts a
   # writable PVC there; the user populates it through the Designer UI
   # (upload connector binary etc.).
-  # OPTIONAL: set seedImage to pre-populate the tree from an image built with
-  # hardened-images/Dockerfile.artifacts-seed (off by default -- uploads are
-  # a user action).
+  # The seed image is built FROM SOURCE with
+  # hardened-images/Dockerfile.artifacts-seed (multi-stage: builds the DB CLI
+  # from "DB CLI/jpa-entity-generator", context = the db-jpa directory) --
+  # see the Dockerfile header for the build command. Required when
+  # dbCli.enabled; empty mounts just a writable dir.
   artifacts:
     seedImage: ""
     persistence:
@@ -116,7 +118,10 @@ servicesApp:
   # back to the built-in flow automatically.
   dbCli:
     enabled: false
-    jarPath: /app/dist/bin/artifacts/tools/jpa-entity-generator-1.0.0.jar
+    # Versionless name: the seed image builds the CLI from source and ships
+    # it as jpa-entity-generator.jar, so pom version bumps never break this
+    # path.
+    jarPath: /app/dist/bin/artifacts/tools/jpa-entity-generator.jar
     timeoutMs: "120000"
   # Optional: build a Java truststore from the injected CA bundle for the
   # in-pod Java processes (entity generator / meta-api) when they hit TLS

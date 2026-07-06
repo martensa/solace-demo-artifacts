@@ -54,11 +54,11 @@ resolved by this chart:
   `/health` returns 404); the chart uses a `tcpSocket` probe instead.
 - Some connector config templates under `artifacts/` carry demo
   external IPs and passwords that must be sanitized / parameterized
-  for Bosch before use.
+  for the customer before use.
 
-For a full Bosch production sign-off, Solace must ship
+For a full production sign-off, Solace must ship
 current-Node-LTS, multi-arch, security-scanned, registry-published
-images. See `docs/SECURITY.md` and `docs/BOSCH-HANDOVER.md`.
+images. See `docs/SECURITY.md` and `docs/CUSTOMER-HANDOVER.md`.
 
 Native amd64 on OpenShift avoids the emulation instability seen on the
 single-node lab laptop, but does not address the EOL-Node / single-arch
@@ -109,40 +109,45 @@ Confirm all of the following before starting.
 Because the hardened images satisfy `restricted-v2`, you do **not**
 need cluster-admin to install this chart.
 
-## 2. Build and push the hardened images
+## 2. Load and push the images from the distribution bundle
 
-The hardened images are thin overlays built FROM the Solace vendor
-images. They add `USER 1001`, make the runtime-writable directories
-group-owned by GID 0 and group-writable, and set `HOME=/tmp` so any
-arbitrary UID assigned by OpenShift can run and write. Verified: they
-run as an arbitrary UID (for example `26999:0`) with writable runtime
-dirs and satisfy the default `restricted-v2` SCC.
+The deployment uses three images, all shipped in the distribution
+bundle (`db-designer-dist-<version>.zip`, built by
+`release/package-release.sh`):
 
-Build and push with `hardened-images/build.sh <REGISTRY> [TAG]`. The
-default tag is `2.0.2-hardened`.
+- `connector-designer-services` -- hardened backend overlay
+- `connector-designer-ui` -- hardened UI overlay
+- `db-designer-artifacts-seed` -- runtime templates plus the DB CLI,
+  built **from source** at packaging time
+
+The hardened overlays add `USER 1001`, group-0 ownership and
+group-write on the runtime-writable directories, and `HOME=/tmp`, so
+any arbitrary UID assigned by OpenShift can run and write. Verified:
+they run as an arbitrary UID (for example `26999:0`) and satisfy the
+default `restricted-v2` SCC. `MANIFEST.txt` in the bundle carries the
+image IDs and sha256 sums for verification.
+
+From the unpacked bundle, on a docker host that is logged in to your
+registry:
 
 ```bash
-cd "micro-integrations/db-jpa/DB Designer"
-
-# Ensure the vendor base images are present on the amd64 build host:
-docker load -i connector_designer_services.tar
-docker load -i connector_designer_ui.tar
-
-# Build + push both hardened images to your registry:
-./hardened-images/build.sh <REGISTRY> 2.0.2-hardened
+./scripts/load-and-push.sh <REGISTRY>
+# e.g. ./scripts/load-and-push.sh \
+#   image-registry.apps.<cluster>.<domain>/db-designer
 ```
 
-Replace `<REGISTRY>` with the registry the cluster pulls from, for
-example `image-registry.apps.<cluster>.<domain>/db-designer` or your
-Bosch/Harbor path. The script builds `linux/amd64` by default
-(override with `PLATFORM=`), tags each image
-`<REGISTRY>/connector_designer_services:2.0.2-hardened` and
-`<REGISTRY>/connector_designer_ui:2.0.2-hardened`, and pushes them.
+The script loads the three image tars, retags them for `<REGISTRY>`,
+pushes them, and prints the exact `image:` and
+`servicesApp.artifacts.seedImage` values for step 3.
 
-If your base images are named differently, override with the
-`SERVICES_BASE` and `UI_BASE` environment variables.
+Alternative (building from repo source instead of a bundle):
+`hardened-images/build.sh <REGISTRY> [TAG]` builds and pushes the two
+hardened overlays; the seed image builds from
+`hardened-images/Dockerfile.artifacts-seed` with the
+`micro-integrations/db-jpa` directory as context (it compiles the DB
+CLI from source in stage 1).
 
-Verify both tags exist in the registry before continuing.
+Verify all three tags exist in the registry before continuing.
 
 ## 3. Configure `values-openshift.yaml`
 
@@ -415,8 +420,9 @@ browser-to-API-host path that the two-Route design exists to serve.
 
 - If a pod fails admission with a `runAsNonRoot` / UID error, you are
   almost certainly on the **un-hardened** vendor images (they run as
-  root). Rebuild with `hardened-images/build.sh` and point the image
-  repositories at the `2.0.2-hardened` tags.
+  root). Use the bundle images pushed by `scripts/load-and-push.sh`
+  (or rebuild with `hardened-images/build.sh`) and point the image
+  repositories at those tags.
 - Do **not** set `openshift.scc.create=true` for the hardened images;
   they need no custom SCC. That flag exists only for the un-hardened
   images and requires cluster-admin to install.
@@ -492,9 +498,9 @@ the detailed docs:
 - [ ] **Track 1 items acknowledged with Solace**: current-Node-LTS,
       multi-arch, security-scanned, registry-published images; source
       transparency; a real backend health endpoint. See
-      `docs/SECURITY.md` and `docs/BOSCH-HANDOVER.md`.
+      `docs/SECURITY.md` and `docs/CUSTOMER-HANDOVER.md`.
 
 For the full security posture (securityContext, NetworkPolicy, secret
 handling, residual CVE surface) see `docs/SECURITY.md`. For the
 overall handover scope, ownership split, and open Solace deliverables
-see `docs/BOSCH-HANDOVER.md`.
+see `docs/CUSTOMER-HANDOVER.md`.
