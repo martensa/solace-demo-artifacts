@@ -215,7 +215,11 @@ Enterprise notes:
 - **Wave 3 (done)** - K8s/OpenShift Helm chart, hardened non-root images,
   registry-free distribution bundle, DB CLI wiring, offline Maven, and the
   full Designer E2E (upload -> flow -> entities -> compiled package) verified
-  on Rancher.
+  on Rancher. The distribution bundle was also built end to end
+  (`release/package-release.sh 1.0.0` -> a 673MB zip: amd64 image tars +
+  chart tgz + connector jar/configs + MANIFEST with sha256; the
+  `load-and-push.sh` load+retag path and the packaged chart render were
+  verified; only the external `docker push` is customer-side).
 - **Wave 4 (in progress -- user-driven)** - start the generated connector
   for real (source/sink via the `.sh` scripts) against `solace-2`
   (SMF `localhost:55558`, SEMP `8090`) and the `order_management` Postgres.
