@@ -245,6 +245,95 @@ function applyPatch() {
             return jarPath;
         };
 
+        // Fix the vendor getEntityColumns(): its resolve()/reject() fire ONLY
+        // from inside a forEach over the entity directory, so when no file in
+        // that directory directly matches the table name the Promise NEVER
+        // settles -- the package download then hangs forever for any flow that
+        // has a data-transformation mapper (the mapper build calls this per
+        // table). The DB CLI writes entities package-nested under
+        // .../pull/entity (e.g. .../pull/entity/com/.../entity/Customers.java),
+        // so the vendor's flat readdir finds only a `com` dir, never matches,
+        // and hangs. Replace it with a version that reads the flattened
+        // _updated tree first, searches recursively as a fallback, mirrors the
+        // vendor's column parsing exactly, and ALWAYS resolves.
+        try {
+            const parseColumns = (data) => {
+                const columns = [];
+                if (!data || data.length === 0) return columns;
+                data.split('\n').forEach((line) => {
+                    if (line && line.includes('private ')) {
+                        let columnSplit;
+                        if (line.includes('HashSet') || line.includes('ArrayList')) {
+                            const lineString = line.split('=').map((v) => v.trim())[0];
+                            columnSplit = lineString.split(' ').filter((v) => v !== '');
+                        } else {
+                            columnSplit = line.split(' ').filter((v) => v !== '');
+                        }
+                        const columnName = (columnSplit[columnSplit.length - 1] || '').replace(/;/g, '');
+                        if (columnName) columns.push({ value: columnName, label: columnName });
+                    }
+                });
+                return columns;
+            };
+            const findEntityFile = (root, tableName) => {
+                const norm = (s) => (s || '').toLowerCase();
+                const want = norm(tableName).replace(/_/g, '');
+                let idMatch = null;
+                let exactMatch = null;
+                const stack = [root];
+                while (stack.length) {
+                    const dir = stack.pop();
+                    let entries;
+                    try {
+                        entries = fs.readdirSync(dir, { withFileTypes: true });
+                    } catch (e) { continue; }
+                    for (const ent of entries) {
+                        const full = path.join(dir, ent.name);
+                        if (ent.isDirectory()) { stack.push(full); continue; }
+                        if (!ent.name.endsWith('.java')) continue;
+                        const tName = ent.name.split('.')[0];
+                        if (tName.includes('Id') && norm(tName.replace(/Id/g, '')) === want) {
+                            idMatch = idMatch || full;
+                        } else if (norm(tName) === want) {
+                            exactMatch = exactMatch || full;
+                        }
+                    }
+                }
+                // Vendor prefers the Id file, then the plain entity class.
+                return idMatch || exactMatch;
+            };
+            const OrigGetEntityColumns = ConnectorsController.prototype.getEntityColumns;
+            ConnectorsController.prototype.getEntityColumns = function (schemaId, tableName, entityPath) {
+                return new Promise((resolve) => {
+                    try {
+                        const entityStorePath = process.env.CCC_DOWNLOAD_GENERATE_ENTITY_PATH || '';
+                        const tmplZip = process.env.CCC_GENERATE_ENTITY_TEMPLATE_PATH || '';
+                        const zipName = (tmplZip.split('/').pop() || 'generateEntity').split('.')[0] || 'generateEntity';
+                        const rel = path.join('src', 'main', 'java', 'com', 'solace', 'connector', 'db', 'pull', 'entity');
+                        const baseDir = path.join(entityStorePath, schemaId, zipName);
+                        const updatedRoot = path.join(baseDir + '_updated', rel);
+                        const plainRoot = path.join(baseDir, rel);
+                        const root = fs.existsSync(updatedRoot) ? updatedRoot : plainRoot;
+                        const file = fs.existsSync(root) ? findEntityFile(root, tableName) : null;
+                        if (file) {
+                            const columns = parseColumns(fs.readFileSync(file, 'utf8'));
+                            console.log(`[DB CLI Patch] getEntityColumns(${tableName}) -> ${columns.length} columns from ${path.basename(file)}`);
+                            return resolve({ table: path.basename(file).split('.')[0], columns: columns });
+                        }
+                        console.log(`[DB CLI Patch] getEntityColumns(${tableName}): no entity file under ${root} -> resolving empty (prevents the vendor hang)`);
+                        return resolve({ table: tableName, columns: [] });
+                    } catch (err) {
+                        console.error(`[DB CLI Patch] getEntityColumns(${tableName}) error, resolving empty: ${err.message}`);
+                        return resolve({ table: tableName, columns: [] });
+                    }
+                });
+            };
+            void OrigGetEntityColumns;
+            console.log('[DB CLI Patch] getEntityColumns hang-fix installed');
+        } catch (gecErr) {
+            console.error(`[DB CLI Patch] could not install getEntityColumns hang-fix: ${gecErr.message}`);
+        }
+
         // Keep the WEB (browser) package download reliable. The vendor builds
         // the zip synchronously in-request and returns it base64-in-JSON. The
         // only heavy item is the static ~108MB core connector jar: zipping +
