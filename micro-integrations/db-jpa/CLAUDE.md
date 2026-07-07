@@ -129,8 +129,8 @@ The repo-root rule is literally `.env`, which does NOT match
 | Component | State | Notes |
 | --- | --- | --- |
 | DB CLI | Builds + runs | Java 17 (pom), Spring Boot 3.4.3; own README |
-| DB Designer | compose + Helm | Helm chart for K8s/OpenShift (see below) |
-| DB Connector | Launchers fixed | needs entity.jar + db-processor per deploy |
+| DB Designer | compose + Helm; E2E verified | upload -> flow -> DB CLI entities -> compiled entity.jar -> package all work on Rancher; see below |
+| DB Connector | Launchers fixed + example config | ships a runnable `application-db-processor.yml`(+mapper) example; sink dialect fixed to Postgres; runtime start still user-verified (Wave 4) |
 | README / hygiene | Done | .gitignore, README, .markdownlint.json, .gitkeep |
 
 ## DB Designer on Kubernetes / OpenShift (customer track)
@@ -164,24 +164,45 @@ Enterprise notes:
 - **Postgres**: embedded StatefulSet on Rancher; external/operator-managed
   DB is the OpenShift default (the official postgres UID 999 fails the
   restricted SCC).
+- **DB CLI wiring**: `servicesApp.dbCli.enabled` loads the startup patch
+  (args override + ConfigMap) so entity generation runs via the DB CLI; the
+  seed image supplies the tools. Entity SOURCES come from the CLI; the
+  connector `entity.jar` is COMPILED via the vendor Maven project (the CLI
+  packager emits source-only jars the connector cannot load at runtime).
+- **Offline Maven**: the seed bakes a complete `m2-repository` (pinned to
+  the runtime Maven 3.9.2 so plugin versions match); the chart pins
+  `maven.repo.local` (MAVEN_OPTS) and forces `--offline` (MAVEN_ARGS) -> the
+  entity.jar build works air-gapped and on OpenShift arbitrary UID. The
+  compiled entity.jar is cached per schema so repeat downloads skip Maven.
+- **Download button (lab)**: the vendor WEB download serializes the whole
+  package as base64-in-JSON synchronously; under QEMU emulation this exceeds
+  the UI's ~20s axios timeout (HTTP 499). Server + CORS are fine (proven via
+  HAR); it works on native amd64. Lab workaround:
+  `DB Designer/scripts/extract-connector-package.sh`.
 - **Track 1 (Solace must deliver)**: current-Node-LTS, multi-arch,
-  scan-clean, registry-published images. The amd64 / Node 16 vendor images
-  only run under emulation off-OpenShift and destabilize a single-node
-  cluster under load.
+  scan-clean, registry-published images; a real `/health` endpoint; stream
+  the package download (R10) instead of base64-in-JSON; sanitize the demo
+  IPs/creds in `artifacts/connectorType/**`.
 - Handover docs: `DB Designer/docs/CUSTOMER-HANDOVER.md`,
-  `OPENSHIFT-DEPLOYMENT.md`, `SECURITY.md`.
+  `OPENSHIFT-DEPLOYMENT.md`, `SECURITY.md` (residual-risk register R1-R11).
 
 ## Wave plan
 
 - **Wave 1 (done)** - repo hygiene: `.gitignore`, fixed launcher
   scripts, comprehensive `README.md`, `.gitkeep`, first commit.
-- **Wave 2** - close config gaps: ship a runnable
-  `application-db-processor.yml` example; decide per-direction
-  `dependencies/`; reconcile the sink dialect.
-- **Wave 3** - document/automate binary provisioning (registry pull
-  or `docker load`); consider a `Makefile` like `topic-compaction`.
-- **Wave 4** - end-to-end smoke test against a broker plus the
-  `order_management` sample schema.
+- **Wave 2 (done)** - config gaps: shipped a runnable
+  `application-db-processor.yml`(+mapper) example; reconciled the sink
+  dialect (SQL Server/oracle mix -> Postgres). Per-direction
+  `dependencies/` kept single by design (run one direction at a time).
+- **Wave 3 (done)** - K8s/OpenShift Helm chart, hardened non-root images,
+  registry-free distribution bundle, DB CLI wiring, offline Maven, and the
+  full Designer E2E (upload -> flow -> entities -> compiled package) verified
+  on Rancher.
+- **Wave 4 (in progress -- user-driven)** - start the generated connector
+  for real (source/sink via the `.sh` scripts) against `solace-2`
+  (SMF `localhost:55558`, SEMP `8090`) and the `order_management` Postgres.
+- **Wave 5 (open, not ours)** - the Track-1 Solace deliverables above; a
+  real OpenShift-cluster deploy test (lab only has k3s).
 
 ## Code Style
 
