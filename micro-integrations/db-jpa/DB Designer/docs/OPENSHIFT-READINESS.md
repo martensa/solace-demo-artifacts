@@ -18,8 +18,8 @@ items in [Residual conditions](#residual-conditions-for-production-sign-off).
 
 Verdict: **CONDITIONAL GO** -- the chart and hardened images are
 OpenShift-`restricted-v2`-ready by construction and pass every check that
-can be evaluated off-cluster. Remaining gates are environment- and
-vendor-owned, not chart defects.
+can be evaluated off-cluster. Remaining gates are environment-owned, not
+chart defects.
 
 ## Environment simulated
 
@@ -62,27 +62,28 @@ vendor-owned, not chart defects.
 
 ## Residual conditions for production sign-off
 
-These require the actual target cluster or the vendor and are out of scope
-for an off-cluster simulation:
+These require the actual target cluster or a future image update and are out
+of scope for an off-cluster simulation:
 
 - **Real `restricted-v2` admission on the target cluster.** PodSecurity
   `restricted` is the pod-spec-level equivalent; the OpenShift SCC also
   assigns the UID from the project's `uid-range`. Our app pods do not pin a
   UID, so they accept the assigned range (expected pass) -- confirm on the
-  cluster. Owner: **customer platform team**.
+  cluster. Owner: **platform team**.
 - **Image supply chain.** Push the bundle images to the customer registry
   (`scripts/load-and-push.sh`), wire `imagePullSecrets`, and run the
-  customer's CVE/compliance scanner. The scanner WILL flag the vendor base
-  (Node 16 EOL). Owner: **customer + Solace (Track 1)**.
+  CVE/compliance scanner. As a known limitation, the current base image
+  ships Node 16 (EOL), which a scanner will flag; a future image update
+  moves to a current Node LTS. Owner: **operator / future image update**.
 - **External database.** Provision the Postgres (operator/managed) and
-  confirm connectivity + credentials. Owner: **customer DB ops**.
+  confirm connectivity + credentials. Owner: **DB ops**.
 - **Route DNS + TLS.** Set `route.uiHost` / `route.apiHost` to the cluster
   app domain and confirm the Router serves browser-trusted certificates
   (the UI calls the API from the browser, so BOTH must resolve). Owner:
-  **customer platform team**.
+  **platform team**.
 - **Full application smoke on OpenShift.** The images run as an arbitrary
   UID (proven) and the full app ran 1/1 on k3s; a final end-to-end smoke on
-  the target cluster closes the loop. Owner: **customer + us**.
+  the target cluster closes the loop. Owner: **customer at deploy**.
 
 ## How to reproduce
 

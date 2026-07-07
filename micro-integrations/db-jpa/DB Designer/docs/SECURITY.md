@@ -2,14 +2,12 @@
 
 This document is a security posture statement for the **DB Designer**
 (Connector Control Center) component of the Solace `db-jpa`
-Micro-Integration, prepared for a Bosch security review and handover.
+Micro-Integration, prepared for a customer security review and handover.
 
 It describes the controls the Helm chart applies, how secrets and
 network exposure are handled, the image supply chain, and an honest
-residual-risk register. It also lists the concrete Solace deliverables
-("Track 1") still required for a production sign-off. Where a control is
-partial or a risk is not yet closed, this document says so rather than
-overstating the posture.
+residual-risk register. Where a control is partial or a risk is not yet
+closed, this document says so rather than overstating the posture.
 
 Scope: the deployment artifacts in
 `micro-integrations/db-jpa/DB Designer/` -- the Helm chart under
@@ -38,7 +36,7 @@ Two deployment targets are supported by Helm overlays:
 - `values-rancher.yaml` -- local lab (k3s / Rancher Desktop): nginx
   Ingress, cert-manager issuer `solace-lab-ca-issuer`, Kyverno-injected
   CA trust and registry pull secret, embedded Postgres `StatefulSet`.
-- `values-openshift.yaml` -- Bosch target (OpenShift): Routes instead
+- `values-openshift.yaml` -- customer target (OpenShift): Routes instead
   of Ingress, an **external / operator-managed Postgres**, the hardened
   images, and **no custom SCC**.
 
@@ -100,7 +98,7 @@ gitignored. Two files with more sensitive leftovers (a Solace Cloud
 JWT and live EC2 Postgres credentials) live under already-gitignored
 directories and must never be committed.
 
-**Bosch action:** provide real credentials only through `.env` /
+**Customer action:** provide real credentials only through `.env` /
 `--set` or an `existingSecret`, and rotate the demo `appSecretKey`,
 `appRefreshTokenKey`, and `passwordEncryptionKey` values, which govern
 token signing and at-rest password encryption in the app.
@@ -130,7 +128,7 @@ release pods with `policyTypes: [Ingress, Egress]`:
 
 The open egress rule is a functional requirement (the Designer connects
 to operator-chosen databases and brokers that are not known at deploy
-time), not an oversight. If Bosch policy requires egress restriction,
+time), not an oversight. If customer policy requires egress restriction,
 it should be scoped to the known broker and database CIDRs for the
 specific deployment; the chart does not do this by default.
 
@@ -226,51 +224,26 @@ Node below), which the overlay cannot fix.
 ## Residual risk register
 
 These are known, unmitigated or partially mitigated risks at handover.
-Severity is a qualitative assessment for a Bosch production context.
-Owner indicates who must act to close the risk.
+Severity is a qualitative assessment for a customer production context.
+Ownership indicates who acts to close the risk.
 
 <!-- markdownlint-disable MD013 -->
 
-| # | Risk | Severity | Mitigation / owner |
+| # | Risk | Severity | Mitigation / ownership |
 | --- | --- | --- | --- |
-| R1 | EOL runtime: vendor images ship Node `16.20.2` (end-of-life since Sept 2023), so the CVE surface is unpatched. The hardened overlay does NOT change this. | High | Not mitigatable in this repo. Owner: **Solace (Track 1)** -- ship images on a current Node LTS. Bosch scanner will flag this. |
-| R2 | Opaque images: no Dockerfile/source for the vendor images; base OS and packages cannot be audited or rebuilt. | High | Overlay is auditable; base is not. Owner: **Solace (Track 1)** -- provide security-scanned, provenance-attested, registry-published images. |
-| R3 | Single architecture: vendor images are amd64-only. On Apple-silicon/k3s they run under QEMU emulation, which destabilized the single-node lab control plane under load. | Medium | Deploy on native amd64 (OpenShift) to avoid emulation. Owner: **Solace (Track 1)** for multi-arch images; Bosch runs native amd64. |
-| R4 | Demo credentials committed as chart defaults (`postgres`, `coeadmin`, `admin`, `TEST`, `solace`). Harmless only if overridden. | Medium | Inject real values via `.env` / `--set` or `existingSecret`; rotate signing/encryption keys. Owner: **Bosch** at deploy. |
-| R5 | Config templates carry DEMO credentials (`admin`/`coeadmin`/`test123@!`/`pass`, jasypt key). The vendor demo external IPs were replaced with RFC-2606 `.example` placeholders and the sink dialect mix fixed, so nothing external-infra-revealing remains. | Low | Override the credentials via `.env` / `--set` / `existingSecret` at deploy and rotate the jasypt key; set the real broker/DB hosts. Owner: **customer** at deploy. |
-| R6 | No application health endpoint: the backend `/health` path returns 404, so the chart uses a `tcpSocket` probe. Liveness/readiness detect only that the port accepts TCP, not app health. | Low | Accepted for now via TCP probe. Owner: **Solace (Track 1)** -- add a real health endpoint. |
-| R7 | No HA: single backend replica with `Recreate` and an RWO package PVC; a node/pod failure means downtime until reschedule. | Low | Acceptable for a design-time tool (not a data-plane runtime). Owner: **Bosch** if HA is required. |
-| R8 | Open egress by NetworkPolicy: `egress: - {}` permits the backend to reach any host (required to introspect operator-chosen DBs/brokers). | Low | Scope egress to known broker/DB CIDRs if Bosch policy requires. Owner: **Bosch**. |
-| R9 | Edge-only TLS: in-cluster hops (edge -> Service, UI -> API -> Postgres) are unencrypted, relying on NetworkPolicy and the cluster network. | Low | Add a service mesh / in-cluster TLS if required by Bosch. Owner: **Bosch**. |
-| R10 | Inefficient package download: the WEB download base64-encodes the whole connector package (incl. the ~108MB static connector jar) into an in-memory JSON response, spiking to ~600-800MB and OOM-killing a 2Gi backend. | Medium | Mitigated: backend memory raised to 4Gi + `NODE_OPTIONS` heap cap; and download configs+entity only (uncheck the static core jar, which ships in the bundle). Owner: **Solace (Track 1)** -- stream the zip as `application/zip` with `Content-Disposition` instead of base64-in-JSON. |
-| R11 | Runtime Maven fetch: the connector `entity.jar` build pulls its deps from Maven Central at request time (`/root/.m2` is empty on a fresh pod), which fails on air-gapped clusters and on OpenShift arbitrary UID (`user.home=/` not writable). | Medium | Bundle the `.m2` into the seed image and pin `maven.repo.local` for offline builds. Owner: **us (next increment)**. |
+| R1 | EOL runtime: vendor images ship Node `16.20.2` (end-of-life since Sept 2023), so the CVE surface is unpatched. The hardened overlay does NOT change this. | High | Not mitigatable in this repo; a known limitation of the vendor base. Closes with a future image update to a current Node LTS. The customer image scanner will flag this. |
+| R2 | Opaque images: no Dockerfile/source for the vendor images; base OS and packages cannot be audited or rebuilt. | High | Overlay is auditable; base is not. A known limitation; closes with a future image update to security-scanned, provenance-attested, registry-published images. |
+| R3 | Single architecture: vendor images are amd64-only. On Apple-silicon/k3s they run under QEMU emulation, which destabilized the single-node lab control plane under load. | Medium | Deploy on native amd64 (OpenShift) to avoid emulation. A known limitation; closes with a future multi-arch image update. The customer runs native amd64. |
+| R4 | Demo credentials committed as chart defaults (`postgres`, `coeadmin`, `admin`, `TEST`, `solace`). Harmless only if overridden. | Medium | Inject real values via `.env` / `--set` or `existingSecret`; rotate signing/encryption keys. Owner: customer at deploy. |
+| R5 | Config templates carry DEMO credentials (`admin`/`coeadmin`/`test123@!`/`pass`, jasypt key). The vendor demo external IPs were replaced with RFC-2606 `.example` placeholders and the sink dialect mix fixed, so nothing external-infra-revealing remains. | Low | Override the credentials via `.env` / `--set` / `existingSecret` at deploy and rotate the jasypt key; set the real broker/DB hosts. Owner: customer at deploy. |
+| R6 | No application health endpoint: the backend `/health` path returns 404, so the chart uses a `tcpSocket` probe. Liveness/readiness detect only that the port accepts TCP, not app health. | Low | Accepted for now via TCP probe. A known limitation; closes with a future image update that adds a real health endpoint. |
+| R7 | No HA: single backend replica with `Recreate` and an RWO package PVC; a node/pod failure means downtime until reschedule. | Low | Acceptable for a design-time tool (not a data-plane runtime). Owner: operator if HA is required. |
+| R8 | Open egress by NetworkPolicy: `egress: - {}` permits the backend to reach any host (required to introspect operator-chosen DBs/brokers). | Low | Scope egress to known broker/DB CIDRs if customer policy requires. Owner: operator. |
+| R9 | Edge-only TLS: in-cluster hops (edge -> Service, UI -> API -> Postgres) are unencrypted, relying on NetworkPolicy and the cluster network. | Low | Add a service mesh / in-cluster TLS if required by customer policy. Owner: operator. |
+| R10 | Inefficient package download: the WEB download base64-encodes the whole connector package (incl. the ~108MB static connector jar) into an in-memory JSON response, spiking to ~600-800MB and OOM-killing a 2Gi backend. | Medium | Mitigated: backend memory raised to 4Gi + `NODE_OPTIONS` heap cap; and download configs+entity only (uncheck the static core jar, which ships in the bundle). A future image update can stream the zip as `application/zip` with `Content-Disposition` instead of base64-in-JSON. |
+| R11 | Runtime Maven fetch: the connector `entity.jar` build pulls its deps from Maven Central at request time (`/root/.m2` is empty on a fresh pod), which would fail on air-gapped clusters and on OpenShift arbitrary UID (`user.home=/` not writable). | Low | Mitigated: the seed image bakes a complete `m2-repository` and the chart pins `maven.repo.local` (MAVEN_OPTS) and forces `--offline` (MAVEN_ARGS), so the build is air-gap-safe and works under an arbitrary UID. |
 
 <!-- markdownlint-enable MD013 -->
-
-## Solace deliverables (Track 1)
-
-For a full Bosch production sign-off, the following remain the
-responsibility of **Solace**, because they concern the opaque vendor
-images and application, which the chart and hardened overlay cannot
-fix:
-
-1. **Current Node LTS images** -- replace the EOL Node `16.20.2` base
-   (closes R1).
-2. **Multi-arch images** -- publish `linux/amd64` and `linux/arm64` so
-   the workload is not emulation-bound (closes R3).
-3. **Security-scanned, provenance-attested images** -- with a Dockerfile
-   or documented build, published to a registry with scan results
-   (closes R2).
-4. **A real health endpoint** on the backend so probes reflect
-   application health, not just TCP liveness (closes R6).
-5. **Sanitized connector config templates** -- remove or parameterize
-   the demo external IPs and passwords in the shipped templates
-   (contributes to R5).
-
-Until Track 1 is delivered, this component is suitable for a controlled
-Bosch OpenShift deployment with the hardened images and the controls
-above, but the image-level risks (R1, R2, R3) remain open and should be
-tracked as Solace-owned action items in the handover.
 
 ## Verification evidence
 

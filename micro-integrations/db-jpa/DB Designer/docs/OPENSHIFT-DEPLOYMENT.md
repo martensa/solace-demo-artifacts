@@ -2,10 +2,10 @@
 
 This runbook deploys the **DB Designer** (Connector Control Center)
 component of the Solace `db-jpa` Micro-Integration to a Red Hat
-OpenShift cluster. It targets a Bosch OpenShift platform engineer and
-is a precise, step-by-step procedure: build and push the hardened
-images, configure the OpenShift Helm overlay, install the chart, and
-verify the result.
+OpenShift cluster. It targets the customer's OpenShift platform
+engineer and is a precise, step-by-step procedure: build and push the
+hardened images, configure the OpenShift Helm overlay, install the
+chart, and verify the result.
 
 The Helm chart lives at
 `micro-integrations/db-jpa/DB Designer/charts/db-designer`. All paths
@@ -40,29 +40,26 @@ Key deployment facts for OpenShift:
   produced connector packages on an RWO PVC (`binary-downloads`);
   logs, tmp and entity folders use `emptyDir`.
 
-## Residual risks (read before production sign-off)
+## Known limitations (read before production sign-off)
 
-The hardened overlay fixes only the root / arbitrary-UID problem. The
-following remain **Solace deliverables ("Track 1")** and are not
-resolved by this chart:
+The hardened overlay fixes the root / arbitrary-UID problem. The
+following are known limitations of the current images and are not
+changed by this chart:
 
-- The vendor images are **amd64-only** (single-arch) and run
+- The images are **amd64-only** (single-arch) and run
   **Node 16.20.2**, which reached end-of-life in September 2023. The
   overlay does not change the Node runtime or the CVE surface.
-- The vendor images are opaque (no Dockerfile / source is provided).
+- The images are opaque (no Dockerfile / source is provided).
 - The backend exposes **no `/health` endpoint** (a request to
   `/health` returns 404); the chart uses a `tcpSocket` probe instead.
 - Some connector config templates under `artifacts/` carry demo
   external IPs and passwords that must be sanitized / parameterized
-  for the customer before use.
-
-For a full production sign-off, Solace must ship
-current-Node-LTS, multi-arch, security-scanned, registry-published
-images. See `docs/SECURITY.md` and `docs/CUSTOMER-HANDOVER.md`.
+  before use by the customer.
 
 Native amd64 on OpenShift avoids the emulation instability seen on the
 single-node lab laptop, but does not address the EOL-Node / single-arch
-items above.
+items above. For the full security posture and residual-risk register,
+see `docs/SECURITY.md` and `docs/CUSTOMER-HANDOVER.md`.
 
 ## 1. Prerequisites
 
@@ -74,12 +71,11 @@ Confirm all of the following before starting.
   `oc whoami` returns your user.
 - `helm` v3 (`helm version`).
 - `docker` (or a compatible builder) on an **amd64** host or CI
-  runner, to build and push the hardened images. The vendor base
-  images are amd64-only; do not build them under emulation for
-  production.
-- The vendor image tarballs `connector_designer_services.tar` and
-  `connector_designer_ui.tar` (obtained from Solace), or the vendor
-  base images already present in your builder's local Docker.
+  runner, to build and push the hardened images. The base images are
+  amd64-only; do not build them under emulation for production.
+- The image tarballs `connector_designer_services.tar` and
+  `connector_designer_ui.tar` (obtained from Solace), or the base
+  images already present in your builder's local Docker.
 
 ### Cluster resources
 
@@ -89,8 +85,8 @@ Confirm all of the following before starting.
 - An **image registry reachable by the cluster**. The OpenShift
   internal registry
   (`image-registry.openshift-image-registry.svc:5000/<project>/...`)
-  or a Bosch/Harbor registry both work. You need push access from the
-  build host and pull access from the cluster.
+  or a customer / Harbor registry both work. You need push access from
+  the build host and pull access from the cluster.
 - An **image pull secret** in the target namespace if the registry is
   not the cluster-internal one. Reference it by name via
   `imagePullSecrets` (see step 3).
@@ -258,7 +254,7 @@ cp .env.example .env
 
 `.env` keys (all optional; each has a demo default baked into the
 chart, so leaving one unset keeps the demo value -- override every
-sensitive one for Bosch):
+sensitive one for production):
 
 | `.env` variable | Chart value key | Purpose |
 | --- | --- | --- |
@@ -481,8 +477,8 @@ managed by the chart and is left untouched.
 
 ## Production hardening checklist
 
-Before a Bosch production sign-off, confirm each item and cross-check
-the detailed docs:
+Before a production sign-off, confirm each item and cross-check the
+detailed docs:
 
 - [ ] Running the **hardened images** (`2.0.2-hardened`), non-root,
       under `restricted-v2`; no custom SCC; not cluster-admin.
@@ -495,12 +491,11 @@ the detailed docs:
       browser-trusted certificates.
 - [ ] Connector config templates under `artifacts/` sanitized --
       no demo external IPs or passwords.
-- [ ] **Track 1 items acknowledged with Solace**: current-Node-LTS,
-      multi-arch, security-scanned, registry-published images; source
-      transparency; a real backend health endpoint. See
-      `docs/SECURITY.md` and `docs/CUSTOMER-HANDOVER.md`.
+- [ ] Known image limitations acknowledged: EOL Node base,
+      single-arch, no source transparency, and no backend health
+      endpoint. See `docs/SECURITY.md` and `docs/CUSTOMER-HANDOVER.md`.
 
 For the full security posture (securityContext, NetworkPolicy, secret
 handling, residual CVE surface) see `docs/SECURITY.md`. For the
-overall handover scope, ownership split, and open Solace deliverables
-see `docs/CUSTOMER-HANDOVER.md`.
+overall handover scope and ownership split see
+`docs/CUSTOMER-HANDOVER.md`.

@@ -4,8 +4,9 @@
 # The vendor images currently run as root; the default restricted-v2 SCC
 # forbids that. This SCC permits RunAsAny (so the root image starts) while
 # still dropping all capabilities and forbidding privilege escalation and
-# host access. Installing it requires cluster-admin. The clean long-term fix
-# is hardened non-root images (Track 1) after which this can be removed.
+# host access. Installing it requires cluster-admin. The clean fix is the
+# hardened non-root images (this repo's hardened-images overlay); with them
+# the default restricted-v2 SCC works and this object can be removed.
 apiVersion: security.openshift.io/v1
 kind: SecurityContextConstraints
 metadata:

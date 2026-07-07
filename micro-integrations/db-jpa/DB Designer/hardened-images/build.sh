@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # Usage:
 #   ./build.sh [REGISTRY] [TAG]
-#     REGISTRY  target registry, e.g. registry.solace.lab or the Bosch
+#     REGISTRY  target registry, e.g. registry.solace.lab or the customer's
 #               OpenShift registry. Omit to build locally without pushing.
 #     TAG       image tag (default: 2.0.2-hardened)
 #

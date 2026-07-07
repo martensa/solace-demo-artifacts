@@ -26,6 +26,15 @@ const fs = require('fs');
 const TOOLS_DIR = path.join(process.cwd(), 'artifacts', 'tools');
 const { sanitizeEntityRelationships } = require(path.join(TOOLS_DIR, 'sanitize-entity-relationships'));
 
+// Cache of the /generate/connector/binary JSON response, keyed by the full
+// request URL (flow + version + env + download options). The vendor builds
+// the package synchronously inside the request; under QEMU emulation that
+// exceeds the UI's ~20s axios timeout (HTTP 499) even though the package is
+// built correctly. Caching the response lets a repeat click return instantly
+// (well under the timeout). Cleared whenever entities are regenerated.
+const downloadRespCache = new Map();
+const DOWNLOAD_CACHE_TTL_MS = 10 * 60 * 1000;
+
 /**
  * Wraps the original generateConnectorEntity to sanitize entity files
  * before Maven compilation. This fixes compilation errors caused by
@@ -163,6 +172,8 @@ function applyPatch() {
                         fs.unlinkSync(path.join(schemaDestPath, '.entity-compiled.cache.jar'));
                         console.log(`[DB CLI Patch] Invalidated compiled entity.jar cache for ${schemaId}`);
                     } catch (e) { /* no cache yet */ }
+                    // Entities changed -> any cached download is stale.
+                    downloadRespCache.clear();
 
                     // Update entity info in DB (same as original does)
                     if (this.updateEntityInfoInDb && schemaId) {
@@ -234,6 +245,52 @@ function applyPatch() {
             } catch (e) { /* non-fatal caching failure */ }
             return jarPath;
         };
+
+        // Wrap the connector-binary download route with a response cache so a
+        // repeat click returns instantly (beating the UI's ~20s timeout).
+        try {
+            const routePath = path.join(process.cwd(), '..', 'src', 'routes', 'route-cd-connectors');
+            const routeModule = require(routePath);
+            const router = routeModule.default || routeModule;
+            let wrapped = 0;
+            (router.stack || []).forEach((layer) => {
+                const r = layer && layer.route;
+                if (!r || r.path !== '/generate/connector/binary' || !(r.methods && r.methods.get)) return;
+                r.stack.forEach((h) => {
+                    const orig = h.handle;
+                    h.handle = function (req, res, next) {
+                        const key = req.originalUrl || req.url;
+                        const hit = downloadRespCache.get(key);
+                        if (hit && (Date.now() - hit.ts) < DOWNLOAD_CACHE_TTL_MS) {
+                            console.log('[DB CLI Patch] download response cache HIT');
+                            if (hit.headers) Object.keys(hit.headers).forEach((k) => res.set(k, hit.headers[k]));
+                            return res.send(hit.body);
+                        }
+                        const origSend = res.send.bind(res);
+                        res.send = function (body) {
+                            try {
+                                if (res.statusCode < 400 && body && (typeof body === 'object' ? body.zip : true)) {
+                                    downloadRespCache.set(key, {
+                                        body: body, ts: Date.now(),
+                                        headers: {
+                                            'Content-Type': res.get('Content-Type'),
+                                            'Content-Disposition': res.get('Content-Disposition'),
+                                        },
+                                    });
+                                    console.log('[DB CLI Patch] download response cached');
+                                }
+                            } catch (e) { /* non-fatal */ }
+                            return origSend(body);
+                        };
+                        return orig.call(this, req, res, next);
+                    };
+                    wrapped += 1;
+                });
+            });
+            console.log(`[DB CLI Patch] download route response cache installed (handlers wrapped: ${wrapped})`);
+        } catch (routeErr) {
+            console.error(`[DB CLI Patch] could not install download response cache: ${routeErr.message}`);
+        }
 
         console.log('[DB CLI Patch] Entity generation patch applied successfully!');
         console.log('[DB CLI Patch] Supported vendors: PostgreSQL, MySQL/MariaDB, Oracle');

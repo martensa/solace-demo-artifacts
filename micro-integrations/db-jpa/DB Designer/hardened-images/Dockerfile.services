@@ -3,7 +3,8 @@
 # It layers OpenShift "arbitrary UID" support on top of the vendor image so
 # the workload runs under the DEFAULT restricted-v2 SCC -- no cluster-admin
 # and no custom SCC required. It does NOT modify the application or the base
-# runtime; the EOL Node 16 base remains a Solace deliverable (Track 1).
+# runtime; the EOL Node 16 base is a known limitation that a future vendor
+# image update resolves (see SECURITY.md).
 #
 # What it changes:
 #   - runs as a non-root user (UID 1001) by default

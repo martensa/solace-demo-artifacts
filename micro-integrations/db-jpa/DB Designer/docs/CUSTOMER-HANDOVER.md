@@ -4,16 +4,15 @@
 
 This package hardens and productionizes the **DB Designer** (Connector
 Control Center) component of the Solace `db-jpa` Micro-Integration for
-deployment on a customer's OpenShift or Kubernetes cluster (anchor
-customer: Bosch). It wraps the Solace-provided container images in a
-single Helm chart that adds non-root execution, TLS, network isolation,
-secret externalization, and support for an external (operator-managed)
-Postgres. The chart has been verified end to end on a local Kubernetes
-lab and is structured to deploy on OpenShift under the **default**
-restricted-v2 Security Context Constraint -- no cluster-admin and no
-custom SCC required. What remains outside our control is a short,
-explicit list of image-level deliverables that only Solace can ship
-("Track 1"), summarized below and detailed in `SECURITY.md`.
+deployment on a customer's OpenShift or Kubernetes cluster. It wraps the
+Solace-provided container images in a single Helm chart that adds
+non-root execution, TLS, network isolation, secret externalization, and
+support for an external (operator-managed) Postgres. The chart has been
+verified end to end on a local Kubernetes lab and is structured to deploy
+on OpenShift under the **default** restricted-v2 Security Context
+Constraint -- no cluster-admin and no custom SCC required. A short set of
+image-level known limitations remains, summarized below and detailed in
+`SECURITY.md`.
 
 ## Distribution model
 
@@ -51,7 +50,7 @@ the runtime data path.
 | Helm chart | `charts/db-designer/` | Deploys the 3 workloads plus Ingress/Route, NetworkPolicy, Secret, PVC, ServiceAccount |
 | Base values | `charts/db-designer/values.yaml` | Non-sensitive, safe-to-commit defaults (ports, resources, hosts) |
 | Rancher overlay | `charts/db-designer/values-rancher.yaml` | Local lab: nginx Ingress, cert-manager, embedded Postgres |
-| OpenShift overlay | `charts/db-designer/values-openshift.yaml` | Bosch: Routes, hardened images, external Postgres, no SCC |
+| OpenShift overlay | `charts/db-designer/values-openshift.yaml` | Target cluster: Routes, hardened images, external Postgres, no SCC |
 | Hardened image overlays | `hardened-images/Dockerfile.services`, `Dockerfile.ui` | Add non-root + arbitrary-UID support on top of vendor images |
 | Image build script | `hardened-images/build.sh` | Builds and pushes the `2.0.2-hardened` images |
 | Deploy scripts | `scripts/start.sh`, `scripts/stop.sh` | One-command lab install and teardown |
@@ -138,37 +137,28 @@ The following controls are implemented and verified in this package:
   logs are gitignored.
 - **External database.** On OpenShift the chart targets an external /
   operator-managed Postgres, keeping stateful data off the app pods and
-  under Bosch database operations.
-
-## What Solace must still deliver (Track 1)
-
-The hardened overlay fixes root and arbitrary-UID execution, but it does
-**not** modify the vendor application or its base runtime. For a full
-Bosch production sign-off, Solace must ship:
-
-- **Current-Node, multi-arch, scanned images.** The vendor images are
-  amd64-only and run Node `16.20.2` (EOL September 2023). Solace must
-  provide current-Node-LTS, multi-architecture, security-scanned, and
-  registry-published images.
-- **Image transparency.** The vendor images are opaque (no Dockerfile or
-  source provided); Solace must supply the build source / Dockerfiles for
-  supply-chain review.
-- **A real health endpoint.** The backend exposes no `/health` path, so
-  the chart falls back to a `tcpSocket` probe. A proper health/readiness
-  endpoint is needed for robust OpenShift probes.
-- **Sanitized config templates.** Some connector config templates carry
-  demo external IPs and passwords that must be sanitized and parameterized
-  before Bosch use.
-
-The full register, including severities, is in `docs/SECURITY.md`.
+  under the customer's database operations.
 
 ## Known limitations
 
+The hardened overlay fixes root and arbitrary-UID execution, but it does
+**not** modify the vendor application or its base runtime. The following
+image-level limitations therefore remain; the full register, including
+severities and mitigations, is in `docs/SECURITY.md`.
+
 - **Single-arch runtime.** The images run natively only on amd64; there is
-  no arm64 build (relevant for Apple Silicon laptops and arm nodes).
-- **EOL Node base.** Node `16.20.2` carries an unpatched CVE surface that
-  the overlay cannot fix; it is a base-image change owned by Solace.
-- **No `/health` endpoint.** Probes are TCP-socket based (see above).
+  no arm64 build (relevant for Apple Silicon laptops and arm nodes). A
+  future image update can add multi-architecture builds.
+- **EOL Node base.** The vendor images run Node `16.20.2` (EOL September
+  2023), which carries an unpatched CVE surface that the overlay cannot
+  fix; it is a base-image change addressed by a future image update.
+- **Opaque image build.** The vendor images ship without a Dockerfile or
+  build source, so a full supply-chain review depends on the build source
+  becoming available in a future image update.
+- **No `/health` endpoint.** The backend exposes no `/health` path, so the
+  chart falls back to a `tcpSocket` probe. A proper health/readiness
+  endpoint (a future image update) would enable more robust OpenShift
+  probes.
 - **Single-replica backend.** The backend keeps local state, so it runs as
   one replica with a `Recreate` rollout strategy; it is not horizontally
   scalable as shipped.
@@ -182,8 +172,8 @@ The full register, including severities, is in `docs/SECURITY.md`.
   in-memory JSON response. The backend memory limit is raised to 4Gi to
   absorb this; for the smoothest path, download configs + `entity.jar`
   only (uncheck the core connector binary in the dialog -- that jar is
-  static and already provided in the bundle's `connector/` folder). The
-  proper fix (stream the zip) is a Solace Track-1 item.
+  static and already provided in the bundle's `connector/` folder).
+  Streaming the zip instead of base64-in-JSON is a future image update.
 
 ## Verification evidence
 
@@ -216,8 +206,8 @@ entirely.
 4. In the Designer UI: upload the bundled connector binaries
    (`connector/`), model the flow, generate entities (DB CLI), and
    download the final connector deployment package.
-5. Confirm the Track 1 image deliverables with the Solace account team as
-   the gate for production sign-off (see `docs/SECURITY.md`).
+5. Review the image-level known limitations against production
+   requirements before sign-off (see `docs/SECURITY.md`).
 
 ## Related documents
 

@@ -25,7 +25,7 @@ image:
     pullPolicy: IfNotPresent
 
 # In the lab the Kyverno policy inject-registry-pull-secret wires this
-# automatically; leave empty there. On Bosch/OpenShift set explicitly.
+# automatically; leave empty there. On the customer OpenShift set explicitly.
 imagePullSecrets: []
 
 serviceAccount:
@@ -279,7 +279,8 @@ securityContext:
 # When create=true the chart ships an SCC that permits RunAsAny (so the root
 # image starts) while keeping caps dropped and privilege escalation off, bound
 # to this release's ServiceAccount. Requires cluster-admin to install.
-# The clean long-term fix is hardened non-root images (Track 1).
+# The clean fix is the hardened non-root images (hardened-images overlay),
+# with which the default restricted-v2 SCC works and this can stay false.
 openshift:
   scc:
     create: false
@@ -296,7 +297,7 @@ labCaTrust:
   # In the solace-lab the Kyverno policy inject-solace-lab-ca-trust-bundle
   # mounts the CA at /etc/ssl/certs/ca-certificates.crt and sets SSL_CERT_FILE.
   # No per-pod config needed there. Enable this only to mount the bundle
-  # explicitly (e.g. on OpenShift/Bosch without that policy).
+  # explicitly (e.g. on a customer OpenShift without that policy).
   enabled: false
   configMapName: solace-lab-ca-trust-bundle
   mountPath: /etc/ssl/certs/solace-lab-ca.crt

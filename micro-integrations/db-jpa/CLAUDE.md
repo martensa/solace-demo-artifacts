@@ -137,8 +137,8 @@ The repo-root rule is literally `.env`, which does NOT match
 
 Besides docker-compose, the DB Designer deploys to Kubernetes/OpenShift via
 a Helm chart at `DB Designer/charts/db-designer` (`values-rancher.yaml` for
-the local lab, `values-openshift.yaml` for customer OpenShift; anchor
-customer: Bosch). `DB Designer/scripts/start.sh` / `stop.sh` drive the
+the local lab, `values-openshift.yaml` for customer OpenShift).
+`DB Designer/scripts/start.sh` / `stop.sh` drive the
 local install (docker-load the image tars, CoreDNS + `/etc/hosts`,
 `helm upgrade`).
 
@@ -177,14 +177,24 @@ Enterprise notes:
 - **Download button (lab)**: the vendor WEB download serializes the whole
   package as base64-in-JSON synchronously; under QEMU emulation this exceeds
   the UI's ~20s axios timeout (HTTP 499). Server + CORS are fine (proven via
-  HAR); it works on native amd64. Lab workaround:
-  `DB Designer/scripts/extract-connector-package.sh`.
-- **Track 1 (Solace must deliver)**: current-Node-LTS, multi-arch,
-  scan-clean, registry-published images; a real `/health` endpoint; stream
-  the package download (R10) instead of base64-in-JSON; sanitize the demo
-  IPs/creds in `artifacts/connectorType/**`.
+  HAR); it works natively on amd64. Two lab mitigations are baked in: the
+  startup patch installs a 10-min response cache on
+  `/generate/connector/binary` (first click builds + caches in the
+  background, a repeat click serves instantly, beating the timeout; the
+  cache clears on entity regeneration), and
+  `DB Designer/scripts/extract-connector-package.sh` pulls the built
+  package straight from the pod as a fallback. Downloading configs +
+  `entity.jar` only (unchecking the static core connector jar) is the
+  smoothest path.
+- **Known image-level limitations** (out of scope for this chart; each
+  closes with a future vendor image update, tracked as R1-R11 in
+  `SECURITY.md`): current-Node-LTS + multi-arch + scan-clean images, a real
+  `/health` endpoint, and streaming the package download (R10) instead of
+  base64-in-JSON. The demo IPs/creds in `artifacts/connectorType/**` have
+  already been replaced with `.example` placeholders.
 - Handover docs: `DB Designer/docs/CUSTOMER-HANDOVER.md`,
-  `OPENSHIFT-DEPLOYMENT.md`, `SECURITY.md` (residual-risk register R1-R11).
+  `OPENSHIFT-DEPLOYMENT.md`, `OPENSHIFT-READINESS.md`, `SECURITY.md`
+  (residual-risk register R1-R11).
 
 ## Wave plan
 
@@ -201,8 +211,9 @@ Enterprise notes:
 - **Wave 4 (in progress -- user-driven)** - start the generated connector
   for real (source/sink via the `.sh` scripts) against `solace-2`
   (SMF `localhost:55558`, SEMP `8090`) and the `order_management` Postgres.
-- **Wave 5 (open, not ours)** - the Track-1 Solace deliverables above; a
-  real OpenShift-cluster deploy test (lab only has k3s).
+- **Wave 5 (open, environment-owned)** - the image-level limitations above
+  (each closes with a future vendor image update) and a real
+  OpenShift-cluster deploy test (lab only has k3s).
 
 ## Code Style
 
