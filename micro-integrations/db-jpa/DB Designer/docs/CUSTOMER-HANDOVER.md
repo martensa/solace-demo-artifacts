@@ -167,18 +167,18 @@ severities and mitigations, is in `docs/SECURITY.md`.
   vendor demo external IPs have been replaced with `.example`
   placeholders and the sink dialect fixed; only generic demo passwords
   remain, to be set per deployment.
-- **Package download.** Two vendor issues that could hang the browser
-  download under emulation are patched, so downloads complete in about a
-  second (verified end-to-end at HTTP 200 / 633 ms). First, a vendor entity
-  helper could leave its Promise unsettled for flows with a data
-  transformation mapper; the startup patch replaces it with a version that
-  always resolves. Second, the ~108MB static core connector jar makes the
-  base64-in-JSON response large; that jar is identical for every install and
-  ships in the bundle's `connector/` folder, so the download excludes it by
-  default and delivers Config + `entity.jar`. On native amd64 you may set
-  `servicesApp.webDownloadIncludeCoreJar=true` to include it. The backend
-  memory limit is also raised to 4Gi. Streaming the zip instead of
-  base64-in-JSON is a future image update.
+- **Package download.** The download is fully open: choose any combination
+  of the core connector binary, configs, and entity jar in the UI. A vendor
+  hang (an entity helper that left its Promise unsettled for flows with a
+  data-transformation mapper) is patched in the startup patch so it always
+  resolves; with that fixed every combination completes within the UI client
+  timeout -- verified end to end at HTTP 200 (Config + `entity.jar` in about a
+  second; the full package with the ~108MB core jar in about 15 seconds under
+  the emulated lab, faster on native amd64). The core jar is also identical
+  for every install and ships in the bundle's `connector/` folder if you
+  prefer not to download it each time. The backend memory limit is raised to
+  4Gi. The vendor returns the package base64-in-JSON; streaming the zip
+  instead is a future image update.
 
 ## Verification evidence
 

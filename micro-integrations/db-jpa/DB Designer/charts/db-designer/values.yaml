@@ -106,16 +106,6 @@ servicesApp:
   # m2-repository is proven complete for the connector-entity build. Empty to
   # allow online fallback (e.g. if you customize the connector-entity pom).
   mavenArgs: "--offline"
-  # Browser package download tuning. The vendor returns the whole package
-  # base64-in-JSON synchronously; the only heavy item is the static ~108MB
-  # core connector jar (~15s to zip + a ~150MB response), which exceeds the
-  # UI client timeout under QEMU emulation and hangs the download. That jar
-  # is identical for every install and already ships in the distribution
-  # bundle's connector/ folder, so by default the startup patch drops it from
-  # the browser download -- Config + entity.jar then return in well under a
-  # second. Set true only on native amd64, where the full payload fits the
-  # timeout. Requires dbCli.enabled (the patch installs the guard).
-  webDownloadIncludeCoreJar: false
   # Persistent store for produced connector packages (browser download).
   persistence:
     enabled: true

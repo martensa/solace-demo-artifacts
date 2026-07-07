@@ -174,26 +174,24 @@ Enterprise notes:
   `maven.repo.local` (MAVEN_OPTS) and forces `--offline` (MAVEN_ARGS) -> the
   entity.jar build works air-gapped and on OpenShift arbitrary UID. The
   compiled entity.jar is cached per schema so repeat downloads skip Maven.
-- **Download button (lab)**: two independent causes were root-caused in-pod
-  (not guessed) and both fixed in the startup patch. (1) PRIMARY -- the
-  vendor `ConnectorsController.getEntityColumns()` calls resolve()/reject()
-  only from inside a `forEach` over the entity dir, so if no file directly
-  matches the table its Promise never settles and the whole download hangs
-  (any flow with a data-transformation mapper). The DB CLI writes entities
-  package-nested under `.../pull/entity/com/.../entity/`, so the vendor's flat
-  readdir sees only a `com` dir and hangs (~3min then the UI's ~20s timeout
-  gives up). The patch replaces `getEntityColumns` with a version that reads
-  the flat `_updated` tree first, searches recursively, mirrors the vendor
-  column parsing, and ALWAYS resolves. Verified end-to-end: GET
-  `/generate/connector/binary` -> 200, 33KB, 633ms (was infinite hang);
-  `getEntityColumns(customers) -> 14 columns`. (2) SECONDARY -- the vendor
-  returns the zip base64-in-JSON; the ~108MB static core jar alone is ~15s +
-  a ~150MB response (measured: config+entity-only = 82ms/32KB). That jar is
-  identical everywhere and ships in the bundle `connector/` folder, so the
-  patch's route guard drops it from the browser download by default. Toggle
-  via `servicesApp.webDownloadIncludeCoreJar` (env
-  `DB_DESIGNER_WEB_DOWNLOAD_INCLUDE_CORE_JAR`; true only on native amd64).
-  NOTE: the winston request/response log is in-pod at
+- **Download button**: the download is fully open -- the UI selection (any
+  combination of core connector binary / configs / entity jar) is honoured
+  as-is; there is NO server-side override. The real bug was a vendor hang,
+  root-caused in-pod (not guessed): `ConnectorsController.getEntityColumns()`
+  calls resolve()/reject() only from inside a `forEach` over the entity dir,
+  so if no file directly matches the table its Promise never settles and the
+  whole download hangs (any flow with a data-transformation mapper). The DB
+  CLI writes entities package-nested under `.../pull/entity/com/.../entity/`,
+  so the vendor's flat readdir sees only a `com` dir and hangs (~3min, then
+  the UI's ~20s timeout aborts). The startup patch replaces `getEntityColumns`
+  with a version that reads the flat `_updated` tree first, searches
+  recursively, mirrors the vendor column parsing, and ALWAYS resolves. With
+  that fixed, EVERY combination completes within the client timeout, verified
+  end-to-end on real clicks: config+entity -> 200/33KB/633ms; full package
+  incl. the ~108MB core jar -> 200/~150MB/~14.9s (measured in the emulated
+  lab; faster on native amd64). The vendor's base64-in-JSON download is a
+  size/perf characteristic (R10, future streaming image update), not a
+  blocker. NOTE: the winston request/response log is in-pod at
   `logs/cd/info_*.log` (morgan is skipped on stdout), not `kubectl logs`.
   Fallback: `DB Designer/scripts/extract-connector-package.sh`.
 - **Known image-level limitations** (out of scope for this chart; each

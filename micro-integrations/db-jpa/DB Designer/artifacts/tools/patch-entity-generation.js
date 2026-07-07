@@ -26,16 +26,6 @@ const fs = require('fs');
 const TOOLS_DIR = path.join(process.cwd(), 'artifacts', 'tools');
 const { sanitizeEntityRelationships } = require(path.join(TOOLS_DIR, 'sanitize-entity-relationships'));
 
-// When true, the WEB (browser) package download includes the static ~108MB
-// core connector jar. That jar is identical for every install and already
-// ships in the distribution bundle's connector/ folder; zipping + base64ing
-// it takes ~15s and produces a ~150MB response that exceeds the UI's ~20s
-// client timeout under QEMU emulation, so we exclude it by default and let
-// Config + entity.jar download in well under a second. Opt back in with
-// DB_DESIGNER_WEB_DOWNLOAD_INCLUDE_CORE_JAR=true (only sensible on native amd64).
-const WEB_DOWNLOAD_INCLUDE_CORE_JAR =
-    String(process.env.DB_DESIGNER_WEB_DOWNLOAD_INCLUDE_CORE_JAR || 'false') === 'true';
-
 /**
  * Wraps the original generateConnectorEntity to sanitize entity files
  * before Maven compilation. This fixes compilation errors caused by
@@ -334,54 +324,13 @@ function applyPatch() {
             console.error(`[DB CLI Patch] could not install getEntityColumns hang-fix: ${gecErr.message}`);
         }
 
-        // Keep the WEB (browser) package download reliable. The vendor builds
-        // the zip synchronously in-request and returns it base64-in-JSON. The
-        // only heavy item is the static ~108MB core connector jar: zipping +
-        // base64ing it takes ~15s and yields a ~150MB payload that exceeds the
-        // UI's ~20s client timeout under QEMU emulation, so the download hangs.
-        // That jar is identical for every install and already ships in the
-        // bundle's connector/ folder, so for a WEB download that also asks for
-        // configs or the entity jar we drop the core jar from the zip -- the
-        // download then completes in well under a second with Config +
-        // entity.jar. (An explicit core-only WEB download is left untouched;
-        // use the bundle jar or scripts/extract-connector-package.sh instead.)
-        try {
-            const routePath = path.join(process.cwd(), '..', 'src', 'routes', 'route-cd-connectors');
-            const routeModule = require(routePath);
-            const router = routeModule.default || routeModule;
-            let wrapped = 0;
-            (router.stack || []).forEach((layer) => {
-                const r = layer && layer.route;
-                if (!r || r.path !== '/generate/connector/binary' || !(r.methods && r.methods.get)) return;
-                r.stack.forEach((h) => {
-                    const orig = h.handle;
-                    h.handle = function (req, res, next) {
-                        try {
-                            if (!WEB_DOWNLOAD_INCLUDE_CORE_JAR) {
-                                const q = req.query || {};
-                                // The vendor returns the zip base64-in-JSON (the
-                                // slow/heavy path) for every downloadType except
-                                // 'LOCAL' (which writes to a server path). Guard
-                                // that whole in-memory branch, not just 'WEB'.
-                                const isInMemoryDownload = String(q.downloadType) !== 'LOCAL';
-                                const wantsCore = String(q.coreConnectorBinary) === 'true';
-                                const wantsConfigOrEntity =
-                                    String(q.configs) === 'true' || String(q.entity) === 'true';
-                                if (isInMemoryDownload && wantsCore && wantsConfigOrEntity) {
-                                    req.query.coreConnectorBinary = 'false';
-                                    console.log('[DB CLI Patch] browser download: excluding the static ~108MB core connector jar (it ships in the bundle connector/ folder) so Config + entity.jar download stays fast; set DB_DESIGNER_WEB_DOWNLOAD_INCLUDE_CORE_JAR=true to include it');
-                                }
-                            }
-                        } catch (e) { /* non-fatal: fall through to vendor handler */ }
-                        return orig.call(this, req, res, next);
-                    };
-                    wrapped += 1;
-                });
-            });
-            console.log(`[DB CLI Patch] WEB download core-jar guard installed (handlers wrapped: ${wrapped})`);
-        } catch (routeErr) {
-            console.error(`[DB CLI Patch] could not install WEB download core-jar guard: ${routeErr.message}`);
-        }
+        // Note: the browser package download is left fully open -- the user's
+        // UI selection (any combination of core connector binary / configs /
+        // entity jar) is honoured as-is. Once the getEntityColumns hang above
+        // is fixed, every combination completes within the UI client timeout,
+        // including the full package with the ~108MB core jar (measured in the
+        // emulated lab: HTTP 200, ~150MB, ~15s; faster on native amd64). No
+        // server-side override of the download selection is needed.
 
         console.log('[DB CLI Patch] Entity generation patch applied successfully!');
         console.log('[DB CLI Patch] Supported vendors: PostgreSQL, MySQL/MariaDB, Oracle');

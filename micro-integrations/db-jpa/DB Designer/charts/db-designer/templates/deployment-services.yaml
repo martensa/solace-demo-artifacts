@@ -113,16 +113,6 @@ spec:
             - name: MAVEN_ARGS
               value: {{ . | quote }}
             {{- end }}
-            {{- if .Values.servicesApp.dbCli.enabled }}
-            # Browser package download: when false (default), the startup
-            # patch drops the static ~108MB core connector jar from the
-            # in-memory base64 download so Config + entity.jar return in well
-            # under a second (the core jar ships in the bundle connector/
-            # folder). Set true only on native amd64, where zipping the full
-            # ~108MB payload stays within the UI client timeout.
-            - name: DB_DESIGNER_WEB_DOWNLOAD_INCLUDE_CORE_JAR
-              value: {{ .Values.servicesApp.webDownloadIncludeCoreJar | default false | quote }}
-            {{- end }}
             {{- if .Values.servicesApp.javaTruststore.enabled }}
             - name: JAVA_TOOL_OPTIONS
               value: "-Djavax.net.ssl.trustStore=/truststore/cacerts -Djavax.net.ssl.trustStorePassword=changeit"
