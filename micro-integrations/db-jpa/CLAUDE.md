@@ -190,19 +190,19 @@ Enterprise notes:
   end-to-end on real clicks: config+entity -> 200/33KB/633ms; full package
   incl. the ~108MB core jar -> 200/~150MB/~14.9s (measured in the emulated
   lab; faster on native amd64). The vendor's base64-in-JSON download is a
-  size/perf characteristic (R10, future streaming image update), not a
+  size/perf characteristic (R6 in `SECURITY.md`), accepted as-is, not a
   blocker. NOTE: the winston request/response log is in-pod at
   `logs/cd/info_*.log` (morgan is skipped on stdout), not `kubectl logs`.
   Fallback: `DB Designer/scripts/extract-connector-package.sh`.
-- **Known image-level limitations** (out of scope for this chart; each
-  closes with a future vendor image update, tracked as R1-R11 in
-  `SECURITY.md`): current-Node-LTS + multi-arch + scan-clean images, a real
-  `/health` endpoint, and streaming the package download (R10) instead of
-  base64-in-JSON. The demo IPs/creds in `artifacts/connectorType/**` have
-  already been replaced with `.example` placeholders.
+- **Vendor images shipped as-is**: opaque (no Dockerfile/source), Node
+  `16.20.2`, amd64-only. There is no expected vendor image update, so these
+  are accepted constraints, not tracked open items -- run the customer image
+  scanner and deploy on native amd64. The demo IPs/creds in
+  `artifacts/connectorType/**` were already replaced with `.example`
+  placeholders.
 - Handover docs: `DB Designer/docs/CUSTOMER-HANDOVER.md`,
   `OPENSHIFT-DEPLOYMENT.md`, `OPENSHIFT-READINESS.md`, `SECURITY.md`
-  (residual-risk register R1-R11).
+  (residual-risk register R1-R7, deployment-focused).
 
 ## Wave plan
 
@@ -223,9 +223,9 @@ Enterprise notes:
 - **Wave 4 (in progress -- user-driven)** - start the generated connector
   for real (source/sink via the `.sh` scripts) against `solace-2`
   (SMF `localhost:55558`, SEMP `8090`) and the `order_management` Postgres.
-- **Wave 5 (open, environment-owned)** - the image-level limitations above
-  (each closes with a future vendor image update) and a real
-  OpenShift-cluster deploy test (lab only has k3s).
+- **Wave 5 (open, environment-owned)** - a real OpenShift-cluster deploy
+  test (lab only has k3s). The vendor-image constraints above are accepted
+  as-is (no vendor image update expected), not tracked open items.
 
 ## Code Style
 

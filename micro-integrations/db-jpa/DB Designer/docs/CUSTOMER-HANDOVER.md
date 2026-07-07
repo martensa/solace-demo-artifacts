@@ -10,9 +10,9 @@ non-root execution, TLS, network isolation, secret externalization, and
 support for an external (operator-managed) Postgres. The chart has been
 verified end to end on a local Kubernetes lab and is structured to deploy
 on OpenShift under the **default** restricted-v2 Security Context
-Constraint -- no cluster-admin and no custom SCC required. A short set of
-image-level known limitations remains, summarized below and detailed in
-`SECURITY.md`.
+Constraint -- no cluster-admin and no custom SCC required. The opaque
+vendor images are accepted as-is; a short residual-risk register of
+deployment-level items is summarized below and detailed in `SECURITY.md`.
 
 ## Distribution model
 
@@ -141,24 +141,14 @@ The following controls are implemented and verified in this package:
 
 ## Known limitations
 
-The hardened overlay fixes root and arbitrary-UID execution, but it does
-**not** modify the vendor application or its base runtime. The following
-image-level limitations therefore remain; the full register, including
-severities and mitigations, is in `docs/SECURITY.md`.
+The hardened overlay fixes root and arbitrary-UID execution but does
+**not** modify the vendor application or its base runtime. The vendor
+images are shipped as-is -- opaque (no Dockerfile/source), Node `16.20.2`,
+amd64-only -- and are accepted as such: run the customer image scanner
+against them and deploy on native amd64. The remaining deployment-level
+limitations, with severities and mitigations, are in the residual-risk
+register in `docs/SECURITY.md`:
 
-- **Single-arch runtime.** The images run natively only on amd64; there is
-  no arm64 build (relevant for Apple Silicon laptops and arm nodes). A
-  future image update can add multi-architecture builds.
-- **EOL Node base.** The vendor images run Node `16.20.2` (EOL September
-  2023), which carries an unpatched CVE surface that the overlay cannot
-  fix; it is a base-image change addressed by a future image update.
-- **Opaque image build.** The vendor images ship without a Dockerfile or
-  build source, so a full supply-chain review depends on the build source
-  becoming available in a future image update.
-- **No `/health` endpoint.** The backend exposes no `/health` path, so the
-  chart falls back to a `tcpSocket` probe. A proper health/readiness
-  endpoint (a future image update) would enable more robust OpenShift
-  probes.
 - **Single-replica backend.** The backend keeps local state, so it runs as
   one replica with a `Recreate` rollout strategy; it is not horizontally
   scalable as shipped.
@@ -177,8 +167,8 @@ severities and mitigations, is in `docs/SECURITY.md`.
   the emulated lab, faster on native amd64). The core jar is also identical
   for every install and ships in the bundle's `connector/` folder if you
   prefer not to download it each time. The backend memory limit is raised to
-  4Gi. The vendor returns the package base64-in-JSON; streaming the zip
-  instead is a future image update.
+  4Gi. The vendor returns the package base64-in-JSON by design; that is
+  accepted as-is.
 
 ## Verification evidence
 
@@ -211,8 +201,8 @@ entirely.
 4. In the Designer UI: upload the bundled connector binaries
    (`connector/`), model the flow, generate entities (DB CLI), and
    download the final connector deployment package.
-5. Review the image-level known limitations against production
-   requirements before sign-off (see `docs/SECURITY.md`).
+5. Review the residual-risk register against production requirements
+   before sign-off (see `docs/SECURITY.md`).
 
 ## Related documents
 

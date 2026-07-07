@@ -184,8 +184,9 @@ contents. We control only a thin overlay on top of them.
 
 - The base OS, package set, and application code inside the vendor
   images -- opaque, unscanned by us, and not reproducible from source.
-- The runtime version and architecture baked into those images (see
-  the residual-risk register).
+- The runtime version (Node `16.20.2`) and architecture (amd64-only)
+  baked into those images -- fixed by the vendor and accepted as-is;
+  the customer image scanner should be run against them.
 
 Verified: running the hardened images as an arbitrary UID (`26999:0`)
 starts cleanly with Node `v16.20.2` and writable runtime dirs, and they
@@ -201,8 +202,8 @@ off by default and should not be used in customer production.
 `scripts/load-and-push.sh`, set the printed `image.*` /
 `servicesApp.artifacts.seedImage` values plus a matching
 `imagePullSecrets`, and run the customer's image scanner against
-them. Note the scanner will flag the underlying vendor base (see EOL
-Node below), which the overlay cannot fix.
+them. Note the scanner may flag the underlying vendor base image,
+which the thin overlay cannot change.
 
 ## Persistence
 
@@ -231,17 +232,13 @@ Ownership indicates who acts to close the risk.
 
 | # | Risk | Severity | Mitigation / ownership |
 | --- | --- | --- | --- |
-| R1 | EOL runtime: vendor images ship Node `16.20.2` (end-of-life since Sept 2023), so the CVE surface is unpatched. The hardened overlay does NOT change this. | High | Not mitigatable in this repo; a known limitation of the vendor base. Closes with a future image update to a current Node LTS. The customer image scanner will flag this. |
-| R2 | Opaque images: no Dockerfile/source for the vendor images; base OS and packages cannot be audited or rebuilt. | High | Overlay is auditable; base is not. A known limitation; closes with a future image update to security-scanned, provenance-attested, registry-published images. |
-| R3 | Single architecture: vendor images are amd64-only. On Apple-silicon/k3s they run under QEMU emulation, which destabilized the single-node lab control plane under load. | Medium | Deploy on native amd64 (OpenShift) to avoid emulation. A known limitation; closes with a future multi-arch image update. The customer runs native amd64. |
-| R4 | Demo credentials committed as chart defaults (`postgres`, `coeadmin`, `admin`, `TEST`, `solace`). Harmless only if overridden. | Medium | Inject real values via `.env` / `--set` or `existingSecret`; rotate signing/encryption keys. Owner: customer at deploy. |
-| R5 | Config templates carry DEMO credentials (`admin`/`coeadmin`/`test123@!`/`pass`, jasypt key). The vendor demo external IPs were replaced with RFC-2606 `.example` placeholders and the sink dialect mix fixed, so nothing external-infra-revealing remains. | Low | Override the credentials via `.env` / `--set` / `existingSecret` at deploy and rotate the jasypt key; set the real broker/DB hosts. Owner: customer at deploy. |
-| R6 | No application health endpoint: the backend `/health` path returns 404, so the chart uses a `tcpSocket` probe. Liveness/readiness detect only that the port accepts TCP, not app health. | Low | Accepted for now via TCP probe. A known limitation; closes with a future image update that adds a real health endpoint. |
-| R7 | No HA: single backend replica with `Recreate` and an RWO package PVC; a node/pod failure means downtime until reschedule. | Low | Acceptable for a design-time tool (not a data-plane runtime). Owner: operator if HA is required. |
-| R8 | Open egress by NetworkPolicy: `egress: - {}` permits the backend to reach any host (required to introspect operator-chosen DBs/brokers). | Low | Scope egress to known broker/DB CIDRs if customer policy requires. Owner: operator. |
-| R9 | Edge-only TLS: in-cluster hops (edge -> Service, UI -> API -> Postgres) are unencrypted, relying on NetworkPolicy and the cluster network. | Low | Add a service mesh / in-cluster TLS if required by customer policy. Owner: operator. |
-| R10 | Package download: a vendor hang made the browser download unreliable. `getEntityColumns()` settles its Promise only from inside a `forEach`, so for a flow with a data-transformation mapper it never resolves when the entity file is not at the expected flat path -- the whole download hangs indefinitely. Separately, the download returns the whole package base64-in-JSON, so the ~108MB static core jar makes a ~150MB / ~15s response. | Low | Fixed in the startup patch: `getEntityColumns` is replaced with a version that reads the flat entity tree, searches recursively, and always resolves. With that fixed the download is left fully open (the UI selection is honoured as-is) and every combination completes within the client timeout -- verified end-to-end: config+entity 200/633ms, full package incl. core jar 200/~150MB/~14.9s (emulated lab; faster on native amd64). Backend memory is 4Gi with a `NODE_OPTIONS` heap cap. The base64-in-JSON size remains a perf characteristic; streaming the zip as `application/zip` is a future image update. |
-| R11 | Runtime Maven fetch: the connector `entity.jar` build pulls its deps from Maven Central at request time (`/root/.m2` is empty on a fresh pod), which would fail on air-gapped clusters and on OpenShift arbitrary UID (`user.home=/` not writable). | Low | Mitigated: the seed image bakes a complete `m2-repository` and the chart pins `maven.repo.local` (MAVEN_OPTS) and forces `--offline` (MAVEN_ARGS), so the build is air-gap-safe and works under an arbitrary UID. |
+| R1 | Demo credentials committed as chart defaults (`postgres`, `coeadmin`, `admin`, `TEST`, `solace`). Harmless only if overridden. | Medium | Inject real values via `.env` / `--set` or `existingSecret`; rotate signing/encryption keys. Owner: customer at deploy. |
+| R2 | Config templates carry DEMO credentials (`admin`/`coeadmin`/`test123@!`/`pass`, jasypt key). The vendor demo external IPs were replaced with RFC-2606 `.example` placeholders and the sink dialect mix fixed, so nothing external-infra-revealing remains. | Low | Override the credentials via `.env` / `--set` / `existingSecret` at deploy and rotate the jasypt key; set the real broker/DB hosts. Owner: customer at deploy. |
+| R3 | No HA: single backend replica with `Recreate` and an RWO package PVC; a node/pod failure means downtime until reschedule. | Low | Acceptable for a design-time tool (not a data-plane runtime). Owner: operator if HA is required. |
+| R4 | Open egress by NetworkPolicy: `egress: - {}` permits the backend to reach any host (required to introspect operator-chosen DBs/brokers). | Low | Scope egress to known broker/DB CIDRs if customer policy requires. Owner: operator. |
+| R5 | Edge-only TLS: in-cluster hops (edge -> Service, UI -> API -> Postgres) are unencrypted, relying on NetworkPolicy and the cluster network. | Low | Add a service mesh / in-cluster TLS if required by customer policy. Owner: operator. |
+| R6 | Package download: a vendor hang made the browser download unreliable. `getEntityColumns()` settles its Promise only from inside a `forEach`, so for a flow with a data-transformation mapper it never resolves when the entity file is not at the expected flat path -- the whole download hangs indefinitely. Separately, the download returns the whole package base64-in-JSON, so the ~108MB static core jar makes a ~150MB / ~15s response. | Low | Fixed in the startup patch: `getEntityColumns` is replaced with a version that reads the flat entity tree, searches recursively, and always resolves. With that fixed the download is left fully open (the UI selection is honoured as-is) and every combination completes within the client timeout -- verified end-to-end: config+entity 200/633ms, full package incl. core jar 200/~150MB/~14.9s (emulated lab; faster on native amd64). Backend memory is 4Gi with a `NODE_OPTIONS` heap cap. The base64-in-JSON size is the vendor's current download design and is accepted as-is. |
+| R7 | Runtime Maven fetch: the connector `entity.jar` build pulls its deps from Maven Central at request time (`/root/.m2` is empty on a fresh pod), which would fail on air-gapped clusters and on OpenShift arbitrary UID (`user.home=/` not writable). | Low | Mitigated: the seed image bakes a complete `m2-repository` and the chart pins `maven.repo.local` (MAVEN_OPTS) and forces `--offline` (MAVEN_ARGS), so the build is air-gap-safe and works under an arbitrary UID. |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -259,5 +256,5 @@ Verified on Rancher Desktop (k3s):
 
 Caveat: the amd64 images under QEMU emulation on the single-node laptop
 cluster destabilized the control plane under sustained load. A stable
-interactive deployment needs native/multi-arch images or more cluster
+interactive deployment needs to run on native amd64 or with more cluster
 CPU; native amd64 on OpenShift avoids the emulation issue entirely.

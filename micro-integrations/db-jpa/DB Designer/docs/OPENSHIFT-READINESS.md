@@ -62,8 +62,8 @@ chart defects.
 
 ## Residual conditions for production sign-off
 
-These require the actual target cluster or a future image update and are out
-of scope for an off-cluster simulation:
+These require the actual target cluster and are out of scope for an
+off-cluster simulation:
 
 - **Real `restricted-v2` admission on the target cluster.** PodSecurity
   `restricted` is the pod-spec-level equivalent; the OpenShift SCC also
@@ -72,9 +72,9 @@ of scope for an off-cluster simulation:
   cluster. Owner: **platform team**.
 - **Image supply chain.** Push the bundle images to the customer registry
   (`scripts/load-and-push.sh`), wire `imagePullSecrets`, and run the
-  CVE/compliance scanner. As a known limitation, the current base image
-  ships Node 16 (EOL), which a scanner will flag; a future image update
-  moves to a current Node LTS. Owner: **operator / future image update**.
+  CVE/compliance scanner. The opaque vendor base image (Node 16, amd64) is
+  accepted as-is and a scanner will flag it; assess the findings against
+  production policy. Owner: **operator**.
 - **External database.** Provision the Postgres (operator/managed) and
   confirm connectivity + credentials. Owner: **DB ops**.
 - **Route DNS + TLS.** Set `route.uiHost` / `route.apiHost` to the cluster

@@ -42,24 +42,22 @@ Key deployment facts for OpenShift:
 
 ## Known limitations (read before production sign-off)
 
-The hardened overlay fixes the root / arbitrary-UID problem. The
-following are known limitations of the current images and are not
-changed by this chart:
+The hardened overlay fixes the root / arbitrary-UID problem. The vendor
+images are otherwise shipped as-is and accepted as such:
 
-- The images are **amd64-only** (single-arch) and run
-  **Node 16.20.2**, which reached end-of-life in September 2023. The
-  overlay does not change the Node runtime or the CVE surface.
-- The images are opaque (no Dockerfile / source is provided).
+- They are **amd64-only** and run **Node 16.20.2**; the overlay does not
+  change the Node runtime or the CVE surface. Run the customer image
+  scanner and assess the findings against production policy.
+- They are opaque (no Dockerfile / source is provided).
 - The backend exposes **no `/health` endpoint** (a request to
   `/health` returns 404); the chart uses a `tcpSocket` probe instead.
-- Some connector config templates under `artifacts/` carry demo
-  external IPs and passwords that must be sanitized / parameterized
-  before use by the customer.
+- Some connector config templates under `artifacts/` carry `.example`
+  placeholder hosts and demo passwords that must be set before use by
+  the customer.
 
 Native amd64 on OpenShift avoids the emulation instability seen on the
-single-node lab laptop, but does not address the EOL-Node / single-arch
-items above. For the full security posture and residual-risk register,
-see `docs/SECURITY.md` and `docs/CUSTOMER-HANDOVER.md`.
+single-node lab laptop. For the full security posture and residual-risk
+register, see `docs/SECURITY.md` and `docs/CUSTOMER-HANDOVER.md`.
 
 ## 1. Prerequisites
 
@@ -491,9 +489,9 @@ detailed docs:
       browser-trusted certificates.
 - [ ] Connector config templates under `artifacts/` sanitized --
       no demo external IPs or passwords.
-- [ ] Known image limitations acknowledged: EOL Node base,
-      single-arch, no source transparency, and no backend health
-      endpoint. See `docs/SECURITY.md` and `docs/CUSTOMER-HANDOVER.md`.
+- [ ] Vendor images accepted as-is (opaque, Node 16, amd64, no backend
+      health endpoint) and scanner findings assessed against policy. See
+      `docs/SECURITY.md` and `docs/CUSTOMER-HANDOVER.md`.
 
 For the full security posture (securityContext, NetworkPolicy, secret
 handling, residual CVE surface) see `docs/SECURITY.md`. For the
