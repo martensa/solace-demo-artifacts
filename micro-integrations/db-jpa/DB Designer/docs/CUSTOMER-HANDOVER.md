@@ -172,8 +172,11 @@ The full register, including severities, is in `docs/SECURITY.md`.
 - **Single-replica backend.** The backend keeps local state, so it runs as
   one replica with a `Recreate` rollout strategy; it is not horizontally
   scalable as shipped.
-- **Demo values in some templates.** Connector config templates need
-  sanitization/parameterization for a Bosch environment.
+- **Demo credentials in templates.** Config templates carry demo
+  credentials (override via `.env` / `--set` / `existingSecret`). The
+  vendor demo external IPs have been replaced with `.example`
+  placeholders and the sink dialect fixed; only generic demo passwords
+  remain, to be set per deployment.
 - **Package download is memory-heavy.** The WEB download base64-encodes
   the whole package (incl. the ~108MB static connector jar) into an
   in-memory JSON response. The backend memory limit is raised to 4Gi to

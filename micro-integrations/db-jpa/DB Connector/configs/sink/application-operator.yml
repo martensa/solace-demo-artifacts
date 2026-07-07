@@ -24,7 +24,7 @@ spring:
   cloud:
     vault:
       enabled: false
-      #uri: 'http://81.70.183.16:8201'
+      #uri: 'http://solace.example:8201'
       token: 00000000-0000-0000-0000-000000000000
     stream:
       bindings:
@@ -98,7 +98,7 @@ solace:
           back-off-multiplier: 2
       queue: ""
       session:
-        #host: 'tcp://81.70.183.16:55555'
+        #host: 'tcp://solace.example:55555'
         msgVpn: default
         clientUsername: admin
         clientPassword: admin
