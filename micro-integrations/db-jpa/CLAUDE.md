@@ -174,18 +174,20 @@ Enterprise notes:
   `maven.repo.local` (MAVEN_OPTS) and forces `--offline` (MAVEN_ARGS) -> the
   entity.jar build works air-gapped and on OpenShift arbitrary UID. The
   compiled entity.jar is cached per schema so repeat downloads skip Maven.
-- **Download button (lab)**: the vendor WEB download serializes the whole
-  package as base64-in-JSON synchronously; under QEMU emulation this exceeds
-  the UI's ~20s axios timeout (HTTP 499). Server + CORS are fine (proven via
-  HAR); it works natively on amd64. Two lab mitigations are baked in: the
-  startup patch installs a 10-min response cache on
-  `/generate/connector/binary` (first click builds + caches in the
-  background, a repeat click serves instantly, beating the timeout; the
-  cache clears on entity regeneration), and
-  `DB Designer/scripts/extract-connector-package.sh` pulls the built
-  package straight from the pod as a fallback. Downloading configs +
-  `entity.jar` only (unchecking the static core connector jar) is the
-  smoothest path.
+- **Download button (lab)**: the vendor browser download zips the package
+  and returns it base64-in-JSON synchronously. The only heavy item is the
+  static ~108MB core connector jar -- zipping it takes ~15s and yields a
+  ~150MB response that exceeds the UI's ~20s client timeout under QEMU
+  emulation, so the download hangs (measured in-pod: config+entity-only zip =
+  82ms / 32KB vs +core jar = ~15s / ~150MB; server + CORS are fine, works
+  natively on amd64). That jar is identical for every install and already
+  ships in the bundle's `connector/` folder, so the startup patch's route
+  guard (`route-cd-connectors` GET `/generate/connector/binary`) drops it
+  from the browser download by default -- Config + `entity.jar` then return
+  in well under a second. Toggle via `servicesApp.webDownloadIncludeCoreJar`
+  (env `DB_DESIGNER_WEB_DOWNLOAD_INCLUDE_CORE_JAR`; set true only on native
+  amd64). Fallback: `DB Designer/scripts/extract-connector-package.sh` pulls
+  the built package straight from the pod.
 - **Known image-level limitations** (out of scope for this chart; each
   closes with a future vendor image update, tracked as R1-R11 in
   `SECURITY.md`): current-Node-LTS + multi-arch + scan-clean images, a real

@@ -167,13 +167,16 @@ severities and mitigations, is in `docs/SECURITY.md`.
   vendor demo external IPs have been replaced with `.example`
   placeholders and the sink dialect fixed; only generic demo passwords
   remain, to be set per deployment.
-- **Package download is memory-heavy.** The WEB download base64-encodes
-  the whole package (incl. the ~108MB static connector jar) into an
-  in-memory JSON response. The backend memory limit is raised to 4Gi to
-  absorb this; for the smoothest path, download configs + `entity.jar`
-  only (uncheck the core connector binary in the dialog -- that jar is
-  static and already provided in the bundle's `connector/` folder).
-  Streaming the zip instead of base64-in-JSON is a future image update.
+- **Package download excludes the core jar by default.** The browser
+  download base64-encodes the package into an in-memory JSON response; the
+  only heavy item is the ~108MB static core connector jar (~15s to zip, a
+  ~150MB payload) which exceeds the UI client timeout under emulation. That
+  jar is identical for every install and already ships in the bundle's
+  `connector/` folder, so the download excludes it by default and delivers
+  Config + `entity.jar` in well under a second. On native amd64 you may set
+  `servicesApp.webDownloadIncludeCoreJar=true` to include it. The backend
+  memory limit is also raised to 4Gi. Streaming the zip instead of
+  base64-in-JSON is a future image update.
 
 ## Verification evidence
 

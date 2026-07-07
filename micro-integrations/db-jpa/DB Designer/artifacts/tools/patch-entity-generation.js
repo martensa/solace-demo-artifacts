@@ -26,14 +26,15 @@ const fs = require('fs');
 const TOOLS_DIR = path.join(process.cwd(), 'artifacts', 'tools');
 const { sanitizeEntityRelationships } = require(path.join(TOOLS_DIR, 'sanitize-entity-relationships'));
 
-// Cache of the /generate/connector/binary JSON response, keyed by the full
-// request URL (flow + version + env + download options). The vendor builds
-// the package synchronously inside the request; under QEMU emulation that
-// exceeds the UI's ~20s axios timeout (HTTP 499) even though the package is
-// built correctly. Caching the response lets a repeat click return instantly
-// (well under the timeout). Cleared whenever entities are regenerated.
-const downloadRespCache = new Map();
-const DOWNLOAD_CACHE_TTL_MS = 10 * 60 * 1000;
+// When true, the WEB (browser) package download includes the static ~108MB
+// core connector jar. That jar is identical for every install and already
+// ships in the distribution bundle's connector/ folder; zipping + base64ing
+// it takes ~15s and produces a ~150MB response that exceeds the UI's ~20s
+// client timeout under QEMU emulation, so we exclude it by default and let
+// Config + entity.jar download in well under a second. Opt back in with
+// DB_DESIGNER_WEB_DOWNLOAD_INCLUDE_CORE_JAR=true (only sensible on native amd64).
+const WEB_DOWNLOAD_INCLUDE_CORE_JAR =
+    String(process.env.DB_DESIGNER_WEB_DOWNLOAD_INCLUDE_CORE_JAR || 'false') === 'true';
 
 /**
  * Wraps the original generateConnectorEntity to sanitize entity files
@@ -172,8 +173,6 @@ function applyPatch() {
                         fs.unlinkSync(path.join(schemaDestPath, '.entity-compiled.cache.jar'));
                         console.log(`[DB CLI Patch] Invalidated compiled entity.jar cache for ${schemaId}`);
                     } catch (e) { /* no cache yet */ }
-                    // Entities changed -> any cached download is stale.
-                    downloadRespCache.clear();
 
                     // Update entity info in DB (same as original does)
                     if (this.updateEntityInfoInDb && schemaId) {
@@ -246,8 +245,17 @@ function applyPatch() {
             return jarPath;
         };
 
-        // Wrap the connector-binary download route with a response cache so a
-        // repeat click returns instantly (beating the UI's ~20s timeout).
+        // Keep the WEB (browser) package download reliable. The vendor builds
+        // the zip synchronously in-request and returns it base64-in-JSON. The
+        // only heavy item is the static ~108MB core connector jar: zipping +
+        // base64ing it takes ~15s and yields a ~150MB payload that exceeds the
+        // UI's ~20s client timeout under QEMU emulation, so the download hangs.
+        // That jar is identical for every install and already ships in the
+        // bundle's connector/ folder, so for a WEB download that also asks for
+        // configs or the entity jar we drop the core jar from the zip -- the
+        // download then completes in well under a second with Config +
+        // entity.jar. (An explicit core-only WEB download is left untouched;
+        // use the bundle jar or scripts/extract-connector-package.sh instead.)
         try {
             const routePath = path.join(process.cwd(), '..', 'src', 'routes', 'route-cd-connectors');
             const routeModule = require(routePath);
@@ -259,37 +267,31 @@ function applyPatch() {
                 r.stack.forEach((h) => {
                     const orig = h.handle;
                     h.handle = function (req, res, next) {
-                        const key = req.originalUrl || req.url;
-                        const hit = downloadRespCache.get(key);
-                        if (hit && (Date.now() - hit.ts) < DOWNLOAD_CACHE_TTL_MS) {
-                            console.log('[DB CLI Patch] download response cache HIT');
-                            if (hit.headers) Object.keys(hit.headers).forEach((k) => res.set(k, hit.headers[k]));
-                            return res.send(hit.body);
-                        }
-                        const origSend = res.send.bind(res);
-                        res.send = function (body) {
-                            try {
-                                if (res.statusCode < 400 && body && (typeof body === 'object' ? body.zip : true)) {
-                                    downloadRespCache.set(key, {
-                                        body: body, ts: Date.now(),
-                                        headers: {
-                                            'Content-Type': res.get('Content-Type'),
-                                            'Content-Disposition': res.get('Content-Disposition'),
-                                        },
-                                    });
-                                    console.log('[DB CLI Patch] download response cached');
+                        try {
+                            if (!WEB_DOWNLOAD_INCLUDE_CORE_JAR) {
+                                const q = req.query || {};
+                                // The vendor returns the zip base64-in-JSON (the
+                                // slow/heavy path) for every downloadType except
+                                // 'LOCAL' (which writes to a server path). Guard
+                                // that whole in-memory branch, not just 'WEB'.
+                                const isInMemoryDownload = String(q.downloadType) !== 'LOCAL';
+                                const wantsCore = String(q.coreConnectorBinary) === 'true';
+                                const wantsConfigOrEntity =
+                                    String(q.configs) === 'true' || String(q.entity) === 'true';
+                                if (isInMemoryDownload && wantsCore && wantsConfigOrEntity) {
+                                    req.query.coreConnectorBinary = 'false';
+                                    console.log('[DB CLI Patch] browser download: excluding the static ~108MB core connector jar (it ships in the bundle connector/ folder) so Config + entity.jar download stays fast; set DB_DESIGNER_WEB_DOWNLOAD_INCLUDE_CORE_JAR=true to include it');
                                 }
-                            } catch (e) { /* non-fatal */ }
-                            return origSend(body);
-                        };
+                            }
+                        } catch (e) { /* non-fatal: fall through to vendor handler */ }
                         return orig.call(this, req, res, next);
                     };
                     wrapped += 1;
                 });
             });
-            console.log(`[DB CLI Patch] download route response cache installed (handlers wrapped: ${wrapped})`);
+            console.log(`[DB CLI Patch] WEB download core-jar guard installed (handlers wrapped: ${wrapped})`);
         } catch (routeErr) {
-            console.error(`[DB CLI Patch] could not install download response cache: ${routeErr.message}`);
+            console.error(`[DB CLI Patch] could not install WEB download core-jar guard: ${routeErr.message}`);
         }
 
         console.log('[DB CLI Patch] Entity generation patch applied successfully!');
