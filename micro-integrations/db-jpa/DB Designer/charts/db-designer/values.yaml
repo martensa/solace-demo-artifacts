@@ -95,6 +95,17 @@ servicesApp:
   # Cap the Node heap below the container limit so the large in-memory
   # base64 strings during package download do not push RSS past the limit.
   nodeOptions: "--max-old-space-size=3072"
+  # Pin Maven's local repository onto the artifacts PVC. The seed image ships
+  # a pre-warmed repo (m2-repository/) covering the full `mvn clean install`
+  # of the connector-entity template, so the runtime entity.jar build works
+  # OFFLINE (air-gapped clusters, OpenShift arbitrary UID where user.home is
+  # not writable) and survives pod restarts. Empty string disables the env.
+  mavenRepoLocal: "/app/dist/bin/artifacts/m2-repository"
+  # Force Maven offline (MAVEN_ARGS, honoured by the 3.9+ launcher) so the
+  # runtime entity.jar build never reaches a repository -- the seed's
+  # m2-repository is proven complete for the connector-entity build. Empty to
+  # allow online fallback (e.g. if you customize the connector-entity pom).
+  mavenArgs: "--offline"
   # Persistent store for produced connector packages (browser download).
   persistence:
     enabled: true

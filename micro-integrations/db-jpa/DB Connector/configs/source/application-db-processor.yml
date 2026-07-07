@@ -1,0 +1,28 @@
+solace-db:
+  bindings:
+    input-0:
+      consumer:
+        tableClass: com.solace.connectors.database.source.entity.Customers
+        tableKey: Customers
+        propertiesEnabled:
+          dbReadTime: false
+          dbTrackingId: true
+          dbReadIndicatorBridgeInProgressValue: true
+          dbReadIndicatorBridgeFailedValue: true
+          dbReadRecordSequentialOrder: true
+        topic: dbjpa/order_management/customers
+        lvqTopic: dbjpa/order_management/customers/lvq
+        dbConnectorTimestampFormat: 'yyyy/dd/MM HH:mm:ss'
+        dbMsgHeaderTimestampFormat: 'yyyy/dd/MM HH:mm:ss.SSS'
+        dbChildTable: ""
+        dbParentCollection: ""
+        dbReadTime: ""
+        dbTrackingId: customerId
+        parentChildRelationKey: ""
+        dbParentChildMode: one2many
+        dbReadIndicatorBridgeInProgressValue: 'true'
+        dbReadIndicatorBridgeFailedValue: 'true'
+        dbReadRecordSequentialOrder: asc
+        dbReadRecordSequentialIndicator: customerId
+        customMessageHeaders:
+          MESSAGE_HEADER_CUSTOMER_ID: customerId

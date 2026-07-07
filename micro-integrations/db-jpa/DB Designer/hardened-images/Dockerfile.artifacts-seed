@@ -26,9 +26,37 @@ COPY ["DB CLI/jpa-entity-generator/src", "/build/src"]
 # verify = unit tests as a quality gate before the jar enters the seed
 RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp clean verify
 
-# --- Stage 2: assemble the seed payload --------------------------------------
+# --- Stage 2: warm the Maven repository for OFFLINE entity.jar builds --------
+# The Designer backend runs `mvn clean install` on the solace-connector-entity
+# template at download time. Pre-resolve that build's FULL dependency tree so
+# the runtime build works air-gapped and never downloads (the pod points
+# maven.repo.local at the seeded repo). The second, offline (-o) run proves
+# completeness at image-build time: the build FAILS here if anything is
+# missing from the cache.
+# Pin to the EXACT Maven version the vendor image runs (3.9.2) so the default
+# plugin versions (resources/compiler/jar/install/surefire, which the
+# connector-entity pom does not pin) match what the runtime resolves --
+# otherwise the seeded repo carries the wrong plugin versions and offline
+# builds fail.
+FROM --platform=$BUILDPLATFORM maven:3.9.2-eclipse-temurin-17 AS m2-warm
+COPY ["DB Designer/charts/db-designer/files/solace-connector-entity.zip", "/tmp/sce.zip"]
+WORKDIR /warm
+RUN jar xf /tmp/sce.zip
+RUN --mount=type=cache,id=sce-m2,target=/m2cache \
+    cd solace-connector-entity \
+ && mvn -B -ntp -Dmaven.repo.local=/m2cache clean install \
+ && mkdir -p /m2 && cp -a /m2cache/. /m2/ \
+ && find /m2 -name "*.lastUpdated" -delete
+# Offline completeness proof (uses ONLY /m2):
+RUN cd solace-connector-entity \
+ && mvn -B -ntp -o -Dmaven.repo.local=/m2 clean install
+
+# --- Stage 3: assemble the seed payload --------------------------------------
 FROM busybox:1.36
 COPY ["DB Designer/artifacts", "/seed/artifacts/"]
 COPY --from=cli-build ["/build/target/jpa-entity-generator-*.jar", "/seed/artifacts/tools/jpa-entity-generator.jar"]
-# Group-0 read for OpenShift arbitrary UIDs.
-RUN chgrp -R 0 /seed/artifacts && chmod -R g+rX /seed/artifacts
+COPY --from=m2-warm ["/m2", "/seed/artifacts/m2-repository"]
+# Group-0 read for OpenShift arbitrary UIDs; the m2 repo needs group-WRITE
+# (maven updates tracking metadata even on cached builds).
+RUN chgrp -R 0 /seed/artifacts && chmod -R g+rX /seed/artifacts \
+ && chmod -R g+w /seed/artifacts/m2-repository

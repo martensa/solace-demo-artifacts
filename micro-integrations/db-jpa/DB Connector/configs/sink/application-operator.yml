@@ -7,8 +7,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: none
-      naming:
-        physical-strategy: com.solacecoe.connectors.strategy.OracleSchemaNameStrategy     # set this only when using oracle.      
+      # Only when the sink targets Oracle -- must stay off for Postgres etc.:
+      #naming:
+      #  physical-strategy: com.solacecoe.connectors.strategy.OracleSchemaNameStrategy
   boot:
     admin:
       client:
@@ -148,12 +149,15 @@ jasypt:
     #password: test123@!
     #algorithm: PBEWithMD5AndDES
     #iv-generator-classname: org.jasypt.iv.NoIvGenerator
+# Demo datasource aligned with the repo's order_management Postgres demo.
+# (The shipped config mixed a SQL Server driver/URL with database: oracle
+# and an Oracle naming strategy, which misbehaves against any real DB.)
 solace-persistence:
   datasource:
-    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
-    url: 'jdbc:sqlserver://3.10.117.249:1433;databaseName=MASTERULIS;Encrypt=false'
-    username: sa
-    password: MyPassword123
+    driver-class-name: org.postgresql.Driver
+    url: 'jdbc:postgresql://host.docker.internal:5432/order_management'
+    username: postgres
+    password: postgres
     hikari:
       minimum-idle: 1
       maximum-pool-size: 5
@@ -162,7 +166,7 @@ solace-persistence:
       connection-timeout: 5000
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:
@@ -171,7 +175,7 @@ solace-persistence:
         order_updates: true
         order_inserts: true
         generate_statistics: false
-    database: oracle
+    database: postgresql
   sink:
     db-crud-mode: JPA
     jpaBatchMode: true

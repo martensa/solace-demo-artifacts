@@ -6,6 +6,8 @@
 !DB CLI/jpa-entity-generator/pom.xml
 !DB CLI/jpa-entity-generator/src/**
 !DB Designer/artifacts/**
+# Maven template project for the offline .m2 warm-up (m2-warm stage).
+!DB Designer/charts/db-designer/files/solace-connector-entity.zip
 # Connector binaries are a user upload via the Designer UI -- never seeded.
 DB Designer/artifacts/connectorType/**
 # Prebuilt CLI jars are ignored: stage 1 builds the CLI from source.

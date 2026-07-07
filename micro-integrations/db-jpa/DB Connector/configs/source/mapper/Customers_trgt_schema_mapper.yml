@@ -1,0 +1,94 @@
+solace-connector-mapper:
+    mapper-metadata:
+        source-schema-type: json
+        target-schema-type: sourcetable
+        encrypted: null
+        escape-special-characters: true
+        source-schema-name: Customers
+        target-schema-name: sourcetable
+    payload-mapper:
+        mapper-customerId-customers/customerid:
+            source-xpath: Customers/customerId
+            source-datatype: integer
+            target-xpath: customers/customer_id
+            target-datatype: integer
+        mapper-firstName-customers/firstname:
+            source-xpath: Customers/firstName
+            source-datatype: 'character varying'
+            target-xpath: customers/first_name
+            target-datatype: 'character varying'
+        mapper-lastName-customers/lastname:
+            source-xpath: Customers/lastName
+            source-datatype: 'character varying'
+            target-xpath: customers/last_name
+            target-datatype: 'character varying'
+        mapper-email-customers/email:
+            source-xpath: Customers/email
+            source-datatype: 'character varying'
+            target-xpath: customers/email
+            target-datatype: 'character varying'
+        mapper-phone-customers/phone:
+            source-xpath: Customers/phone
+            source-datatype: 'character varying'
+            target-xpath: customers/phone
+            target-datatype: 'character varying'
+        mapper-addressLine1-customers/addressline1:
+            source-xpath: Customers/addressLine1
+            source-datatype: 'character varying'
+            target-xpath: customers/address_line1
+            target-datatype: 'character varying'
+        mapper-addressLine2-customers/addressline2:
+            source-xpath: Customers/addressLine2
+            source-datatype: 'character varying'
+            target-xpath: customers/address_line2
+            target-datatype: 'character varying'
+        mapper-city-customers/city:
+            source-xpath: Customers/city
+            source-datatype: 'character varying'
+            target-xpath: customers/city
+            target-datatype: 'character varying'
+        mapper-state-customers/state:
+            source-xpath: Customers/state
+            source-datatype: 'character varying'
+            target-xpath: customers/state
+            target-datatype: 'character varying'
+        mapper-postalCode-customers/postalcode:
+            source-xpath: Customers/postalCode
+            source-datatype: 'character varying'
+            target-xpath: customers/postal_code
+            target-datatype: 'character varying'
+        mapper-country-customers/country:
+            source-xpath: Customers/country
+            source-datatype: 'character varying'
+            target-xpath: customers/country
+            target-datatype: 'character varying'
+        mapper-registrationDate-customers/registrationdate:
+            source-xpath: Customers/registrationDate
+            source-datatype: 'timestamp without time zone'
+            target-xpath: customers/registration_date
+            target-datatype: 'timestamp without time zone'
+        mapper-lastLogin-customers/lastlogin:
+            source-xpath: Customers/lastLogin
+            source-datatype: 'timestamp without time zone'
+            target-xpath: customers/last_login
+            target-datatype: 'timestamp without time zone'
+        mapper-phone-customers/customers/phone:
+            source-xpath: Customers/phone
+            source-datatype: 'character varying'
+            target-xpath: customers/phone
+            target-datatype: 'character varying'
+        mapper-firstName-customers/customers/firstname:
+            source-xpath: Customers/firstName
+            source-datatype: 'character varying'
+            target-xpath: customers/first_name
+            target-datatype: 'character varying'
+        mapper-lastName-customers/customers/lastname:
+            source-xpath: Customers/lastName
+            source-datatype: 'character varying'
+            target-xpath: customers/last_name
+            target-datatype: 'character varying'
+            function:
+                function-uppercase:
+                    sequence: null
+                    input:
+                        param1: lastName
