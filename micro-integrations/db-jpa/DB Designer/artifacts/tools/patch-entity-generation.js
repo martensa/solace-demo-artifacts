@@ -208,7 +208,22 @@ function applyPatch() {
             // package's dependencies/, so hand back a throwaway copy and keep
             // the cache intact.
             const cachePath = path.join(destinationPath, schemaId, '.entity-compiled.cache.jar');
-            if (fs.existsSync(cachePath)) {
+            // Invalidate the cache when the DB CLI jar is newer than it: a reseed
+            // with an updated CLI (e.g. changed type mapping: integer->Integer,
+            // timestamp->java.util.Date) MUST NOT serve a stale compiled entity.jar
+            // built by the old CLI. Otherwise reuse it (fast repeat downloads).
+            let cacheFresh = fs.existsSync(cachePath);
+            if (cacheFresh) {
+                try {
+                    const cliJar = path.join(TOOLS_DIR, 'jpa-entity-generator.jar');
+                    if (fs.existsSync(cliJar) &&
+                        fs.statSync(cliJar).mtimeMs > fs.statSync(cachePath).mtimeMs) {
+                        cacheFresh = false;
+                        console.log('[DB CLI Patch] entity.jar cache older than the CLI jar -> rebuilding fresh');
+                    }
+                } catch (e) { /* stat failed -> keep using the cache */ }
+            }
+            if (cacheFresh) {
                 const handoff = path.join(destinationPath, schemaId, 'entity.jar');
                 try {
                     fs.copyFileSync(cachePath, handoff);
@@ -357,10 +372,60 @@ function applyPatch() {
                                 }
                             }
                         } catch (e) { console.error(`[DB CLI Patch] dialect post-process failed: ${e.message}`); }
+
+                        // Fix application-db-processor.yml (connectorPropsConfigPath =
+                        // args[2]). The Designer derives tableClass/tableKey from a
+                        // single-level scan of the entity dir, which fails when the CLI
+                        // wrote entities package-nested -> `tableClass: <pkg>.` (no class)
+                        // and `tableKey: ""`. And a CDC feature disabled via
+                        // propertiesEnabled but still carrying a value fails the
+                        // connector's DbTableIndicatorConfig validation ("must be
+                        // configured and empty"). Post-process the written file: fill the
+                        // entity name (from the built entity.jar, then the mapper file),
+                        // and drop every disabled CDC feature's lines.
+                        try {
+                            const dbpPath = args && args[2];
+                            if (dbpPath && fs.existsSync(dbpPath)) {
+                                let dbp = fs.readFileSync(dbpPath, 'utf8');
+                                const before = dbp;
+                                if (/^\s*tableClass:\s*\S*\.\s*$/m.test(dbp) || /^\s*tableKey:\s*(""|'')\s*$/m.test(dbp)) {
+                                    let entity = null;
+                                    try {
+                                        const ej = path.join(path.dirname(dbpPath), '..', 'dependencies', 'entity.jar');
+                                        if (fs.existsSync(ej)) {
+                                            const names = (fs.readFileSync(ej).toString('latin1').match(/([A-Za-z0-9_]+)\.class/g) || [])
+                                                .map((s) => s.replace(/\.class$/, ''))
+                                                .filter((n) => !/(DAO|Repo|Id)$/.test(n));
+                                            if (names.length) entity = names[0];
+                                        }
+                                    } catch (e) { /* fall through */ }
+                                    if (!entity) {
+                                        try {
+                                            const md = path.join(path.dirname(dbpPath), 'mapper');
+                                            const mf = fs.readdirSync(md).find((f) => /_trgt_schema_mapper\.yml$/.test(f) && !/^_trgt/.test(f));
+                                            if (mf) entity = mf.replace(/_trgt_schema_mapper\.yml$/, '');
+                                        } catch (e) { /* none */ }
+                                    }
+                                    if (entity) {
+                                        dbp = dbp.replace(/^(\s*tableClass:\s*)(\S*\.)\s*$/m, `$1$2${entity}`);
+                                        dbp = dbp.replace(/^(\s*tableKey:\s*)(""|'')\s*$/m, `$1${entity}`);
+                                    }
+                                }
+                                ['dbReadTime', 'dbTrackingId', 'dbReadIndicatorBridgeInProgressValue', 'dbReadIndicatorBridgeFailedValue'].forEach((feat) => {
+                                    if (new RegExp(`\\n[ \\t]+${feat}:[ \\t]*false(?=\\r?\\n)`).test(dbp)) {
+                                        dbp = dbp.replace(new RegExp(`\\n[ \\t]+${feat}:[^\\n]*`, 'g'), '');
+                                    }
+                                });
+                                if (dbp !== before) {
+                                    fs.writeFileSync(dbpPath, dbp);
+                                    console.log('[DB CLI Patch] application-db-processor.yml fixed (tableClass/tableKey + disabled-CDC cleanup)');
+                                }
+                            }
+                        } catch (e) { console.error(`[DB CLI Patch] db-processor post-process failed: ${e.message}`); }
                         return result;
                     });
                 };
-                console.log('[DB CLI Patch] dialect-from-driver post-process installed');
+                console.log('[DB CLI Patch] dialect + db-processor post-process installed');
             }
         } catch (dialErr) {
             console.error(`[DB CLI Patch] could not install dialect post-process: ${dialErr.message}`);
