@@ -324,6 +324,48 @@ function applyPatch() {
             console.error(`[DB CLI Patch] could not install getEntityColumns hang-fix: ${gecErr.message}`);
         }
 
+        // Fix the JPA dialect. The Designer writes application-operator.yml
+        // wholesale from the stored PROJECT_CONFIGURATION blob and NEVER derives
+        // solace-persistence.jpa.database from the chosen JDBC driver -- so the
+        // connector-binary template default surfaces (sqlserver for source, oracle
+        // for sink) even when the user picked Postgres, producing e.g. `select top`
+        // (T-SQL) against Postgres. Wrap the config writer to set jpa.database from
+        // the driver (via the controller's own driverKeyword) after it writes the
+        // operator.yml. The value the connector expects matches the driverKeyword
+        // key exactly (org.postgresql.Driver -> "postgresql").
+        try {
+            const OrigUpdateConfigFiles = ConnectorsController.prototype.updateConfigFilesFromDesginerScreen;
+            if (typeof OrigUpdateConfigFiles === 'function') {
+                ConnectorsController.prototype.updateConfigFilesFromDesginerScreen = function (projConfigpath) {
+                    const args = arguments;
+                    const self = this;
+                    return Promise.resolve(OrigUpdateConfigFiles.apply(self, args)).then((result) => {
+                        try {
+                            if (projConfigpath && fs.existsSync(projConfigpath) && typeof self.driverKeyword === 'function') {
+                                const content = fs.readFileSync(projConfigpath, 'utf8');
+                                const m = content.match(/driver-class-name:\s*['"]?([^'"\n]+)/);
+                                const dialect = m ? self.driverKeyword(m[1].trim()) : null;
+                                if (dialect) {
+                                    const fixed = content.replace(
+                                        /(\n[ \t]+database:[ \t]*)(['"]?)(sqlserver|oracle|mysql|mariadb|postgresql|postgres)(['"]?)/gi,
+                                        `$1${dialect}`
+                                    );
+                                    if (fixed !== content) {
+                                        fs.writeFileSync(projConfigpath, fixed);
+                                        console.log(`[DB CLI Patch] jpa.database derived from driver -> '${dialect}' (${m[1].trim()})`);
+                                    }
+                                }
+                            }
+                        } catch (e) { console.error(`[DB CLI Patch] dialect post-process failed: ${e.message}`); }
+                        return result;
+                    });
+                };
+                console.log('[DB CLI Patch] dialect-from-driver post-process installed');
+            }
+        } catch (dialErr) {
+            console.error(`[DB CLI Patch] could not install dialect post-process: ${dialErr.message}`);
+        }
+
         // Note: the browser package download is left fully open -- the user's
         // UI selection (any combination of core connector binary / configs /
         // entity jar) is honoured as-is. Once the getEntityColumns hang above

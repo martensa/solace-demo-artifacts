@@ -32,12 +32,14 @@ public class OracleTypeMapper extends TypeMapper {
             case "BLOB" -> "byte[]";
             case "BFILE" -> "java.lang.String";  // BFILE is an external file pointer, not inline binary
 
-            // Date and time
-            case "DATE" -> "java.time.LocalDateTime";  // Oracle DATE includes time
-            case "TIMESTAMP" -> "java.time.LocalDateTime";
-            case "TIMESTAMP(6)" -> "java.time.LocalDateTime";
-            case "TIMESTAMP WITH TIME ZONE", "TIMESTAMP(6) WITH TIME ZONE" -> "java.time.OffsetDateTime";
-            case "TIMESTAMP WITH LOCAL TIME ZONE", "TIMESTAMP(6) WITH LOCAL TIME ZONE" -> "java.time.LocalDateTime";
+            // Date and time -> java.util.Date (connector sets raw JDBC values;
+            // java.time.* would throw argument type mismatch). Untested for Oracle;
+            // WITH TIME ZONE variants lose the offset under java.util.Date.
+            case "DATE" -> "java.util.Date";  // Oracle DATE includes time
+            case "TIMESTAMP" -> "java.util.Date";
+            case "TIMESTAMP(6)" -> "java.util.Date";
+            case "TIMESTAMP WITH TIME ZONE", "TIMESTAMP(6) WITH TIME ZONE" -> "java.util.Date";
+            case "TIMESTAMP WITH LOCAL TIME ZONE", "TIMESTAMP(6) WITH LOCAL TIME ZONE" -> "java.util.Date";
             case "INTERVAL YEAR TO MONTH" -> "java.lang.String";
             case "INTERVAL DAY TO SECOND" -> "java.lang.String";  // No standard JPA converter for Duration
 
@@ -56,10 +58,7 @@ public class OracleTypeMapper extends TypeMapper {
             default -> {
                 // Handle TIMESTAMP with varying precision: TIMESTAMP(0) through TIMESTAMP(9)
                 if (typeName.startsWith("TIMESTAMP")) {
-                    if (typeName.contains("WITH TIME ZONE")) {
-                        yield "java.time.OffsetDateTime";
-                    }
-                    yield "java.time.LocalDateTime";
+                    yield "java.util.Date";
                 }
                 log.warn("Unmapped Oracle type '{}' for column '{}' — defaulting to String",
                         column.getSqlTypeName(), column.getColumnName());
@@ -69,33 +68,12 @@ public class OracleTypeMapper extends TypeMapper {
     }
 
     /**
-     * Oracle NUMBER(p,s) mapping:
-     * - NUMBER without precision -> BigDecimal
-     * - NUMBER(1) -> Boolean (common pattern for boolean flags)
-     * - NUMBER(p,0) with small precision -> Integer/Long
-     * - NUMBER(p,s) with scale -> BigDecimal
+     * Oracle NUMBER mapping. Oracle JDBC getObject() on NUMBER always returns a
+     * BigDecimal, and the connector runtime sets that raw value reflectively, so
+     * NUMBER maps unconditionally to BigDecimal (no scale-0 narrowing, no
+     * NUMBER(1)->Boolean shortcut) to avoid an argument-type mismatch.
      */
     private String resolveNumberType(ColumnMetadata column) {
-        int precision = column.getColumnSize();
-        int scale = column.getDecimalDigits();
-
-        // NUMBER without precision (precision=0 in metadata means unspecified in Oracle)
-        if (precision == 0 && scale == -127) {
-            return "java.math.BigDecimal";
-        }
-
-        // Common Oracle pattern: NUMBER(1) for booleans
-        if (precision == 1 && scale == 0) {
-            return "java.lang.Boolean";
-        }
-
-        if (scale == 0) {
-            if (precision <= 4) return "java.lang.Short";
-            if (precision <= 9) return "java.lang.Integer";
-            if (precision <= 18) return "java.lang.Long";
-            return "java.math.BigInteger";
-        }
-
         return "java.math.BigDecimal";
     }
 }

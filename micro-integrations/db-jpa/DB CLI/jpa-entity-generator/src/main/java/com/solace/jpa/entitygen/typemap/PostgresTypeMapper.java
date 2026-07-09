@@ -20,8 +20,10 @@ public class PostgresTypeMapper extends TypeMapper {
             // Boolean
             case "BOOL", "BOOLEAN" -> "java.lang.Boolean";
 
-            // Integer types
-            case "INT2", "SMALLINT", "SMALLSERIAL" -> "java.lang.Short";
+            // Integer types. NOTE: the connector runtime (JpaBeanUtil) sets raw
+            // JDBC getObject() values on the entity, and pgjdbc getObject returns
+            // Integer for smallint -- so map INT2/SMALLINT to Integer, not Short.
+            case "INT2", "SMALLINT", "SMALLSERIAL" -> "java.lang.Integer";
             case "INT4", "INTEGER", "INT", "SERIAL" -> "java.lang.Integer";
             case "INT8", "BIGINT", "BIGSERIAL" -> "java.lang.Long";
 
@@ -29,19 +31,27 @@ public class PostgresTypeMapper extends TypeMapper {
             case "FLOAT4", "REAL" -> "java.lang.Float";
             case "FLOAT8", "DOUBLE PRECISION" -> "java.lang.Double";
 
-            // Exact numeric
-            case "NUMERIC", "DECIMAL" -> resolveNumericType(column);
+            // Exact numeric. getObject always returns BigDecimal for numeric/decimal,
+            // so map unconditionally to BigDecimal (no scale-0 narrowing) to match
+            // what the connector's reflective setter receives at runtime.
+            case "NUMERIC", "DECIMAL" -> "java.math.BigDecimal";
 
             // Character types
             case "VARCHAR", "CHARACTER VARYING", "TEXT", "CHAR", "CHARACTER",
                  "BPCHAR", "NAME", "CITEXT" -> "java.lang.String";
 
-            // Date and time
-            case "DATE" -> "java.time.LocalDate";
+            // Date and time. The connector sets raw JDBC getObject() values, which
+            // for temporal columns are java.sql.Date/Time/Timestamp (all subclasses
+            // of java.util.Date) -- NOT java.time.* -- so map every temporal type to
+            // java.util.Date (EntityGenerator adds @Temporal(TIMESTAMP)). Mapping to
+            // java.time.LocalDateTime here would throw "argument type mismatch".
+            case "DATE" -> "java.util.Date";
             case "TIME", "TIMETZ", "TIME WITH TIME ZONE", "TIME WITHOUT TIME ZONE"
-                    -> "java.time.LocalTime";
-            case "TIMESTAMP", "TIMESTAMP WITHOUT TIME ZONE" -> "java.time.LocalDateTime";
-            case "TIMESTAMPTZ", "TIMESTAMP WITH TIME ZONE" -> "java.time.OffsetDateTime";
+                    -> "java.util.Date";
+            case "TIMESTAMP", "TIMESTAMP WITHOUT TIME ZONE" -> "java.util.Date";
+            // timestamptz: java.util.Date carries no zone offset (acceptable for the
+            // connector's epoch-millis contract).
+            case "TIMESTAMPTZ", "TIMESTAMP WITH TIME ZONE" -> "java.util.Date";
             case "INTERVAL" -> "java.lang.String";  // PostgreSQL INTERVAL has no standard JPA converter
 
             // Binary
@@ -82,17 +92,5 @@ public class PostgresTypeMapper extends TypeMapper {
                 yield "java.lang.String";
             }
         };
-    }
-
-    private String resolveNumericType(ColumnMetadata column) {
-        int precision = column.getColumnSize();
-        int scale = column.getDecimalDigits();
-
-        if (scale == 0 && precision > 0) {
-            if (precision <= 4) return "java.lang.Short";
-            if (precision <= 9) return "java.lang.Integer";
-            if (precision <= 18) return "java.lang.Long";
-        }
-        return "java.math.BigDecimal";
     }
 }

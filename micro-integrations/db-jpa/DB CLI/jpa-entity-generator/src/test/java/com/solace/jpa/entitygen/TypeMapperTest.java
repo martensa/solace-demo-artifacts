@@ -39,8 +39,8 @@ class TypeMapperTest {
             "float8,     java.lang.Double",
             "varchar,    java.lang.String",
             "text,       java.lang.String",
-            "timestamp,  java.time.LocalDateTime",
-            "timestamptz,java.time.OffsetDateTime",
+            "timestamp,  java.util.Date",
+            "timestamptz,java.util.Date",
             "bytea,      byte[]",
             "uuid,       java.util.UUID",
             "jsonb,      java.lang.String",
@@ -53,10 +53,12 @@ class TypeMapperTest {
     }
 
     @Test
-    void postgresNumericWithScaleZeroMapsToInteger() {
+    void postgresNumericScaleZeroMapsToBigDecimal() {
         TypeMapper mapper = TypeMapper.forVendor(DatabaseVendor.POSTGRESQL);
         ColumnMetadata col = column("numeric", 9, 0);
-        assertEquals("java.lang.Integer", mapper.resolveJavaType(col));
+        // getObject returns BigDecimal for numeric regardless of scale; the
+        // connector's reflective setter needs the field type to match.
+        assertEquals("java.math.BigDecimal", mapper.resolveJavaType(col));
     }
 
     @Test
@@ -86,8 +88,8 @@ class TypeMapperTest {
             "DOUBLE,     java.lang.Double",
             "VARCHAR,    java.lang.String",
             "TEXT,       java.lang.String",
-            "DATE,       java.time.LocalDate",
-            "DATETIME,   java.time.LocalDateTime",
+            "DATE,       java.util.Date",
+            "DATETIME,   java.util.Date",
             "JSON,       java.lang.String",
     })
     void mysqlTypeMappings(String sqlType, String expectedJava) {
@@ -133,38 +135,28 @@ class TypeMapperTest {
     // ========================
 
     @Test
-    void oracleNumber1MapsToBoolean() {
+    void oracleNumberMapsToBigDecimal() {
+        // Oracle getObject on NUMBER always returns BigDecimal, so every NUMBER
+        // (incl. NUMBER(1) and scale-0) maps to BigDecimal for connector runtime
+        // compatibility -- no Boolean/Integer narrowing.
         TypeMapper mapper = TypeMapper.forVendor(DatabaseVendor.ORACLE);
-        ColumnMetadata col = column("NUMBER", 1, 0);
-        assertEquals("java.lang.Boolean", mapper.resolveJavaType(col));
+        assertEquals("java.math.BigDecimal", mapper.resolveJavaType(column("NUMBER", 1, 0)));
+        assertEquals("java.math.BigDecimal", mapper.resolveJavaType(column("NUMBER", 0, -127)));
+        assertEquals("java.math.BigDecimal", mapper.resolveJavaType(column("NUMBER", 9, 0)));
     }
 
     @Test
-    void oracleNumberWithoutPrecisionMapsToBigDecimal() {
-        TypeMapper mapper = TypeMapper.forVendor(DatabaseVendor.ORACLE);
-        ColumnMetadata col = column("NUMBER", 0, -127);
-        assertEquals("java.math.BigDecimal", mapper.resolveJavaType(col));
-    }
-
-    @Test
-    void oracleNumber9MapsToInteger() {
-        TypeMapper mapper = TypeMapper.forVendor(DatabaseVendor.ORACLE);
-        ColumnMetadata col = column("NUMBER", 9, 0);
-        assertEquals("java.lang.Integer", mapper.resolveJavaType(col));
-    }
-
-    @Test
-    void oracleDateMapsToLocalDateTime() {
+    void oracleDateMapsToUtilDate() {
         TypeMapper mapper = TypeMapper.forVendor(DatabaseVendor.ORACLE);
         ColumnMetadata col = column("DATE", 0, 0);
-        assertEquals("java.time.LocalDateTime", mapper.resolveJavaType(col));
+        assertEquals("java.util.Date", mapper.resolveJavaType(col));
     }
 
     @Test
-    void oracleTimestampWithTimeZone() {
+    void oracleTimestampWithTimeZoneMapsToUtilDate() {
         TypeMapper mapper = TypeMapper.forVendor(DatabaseVendor.ORACLE);
         ColumnMetadata col = column("TIMESTAMP(6) WITH TIME ZONE", 0, 0);
-        assertEquals("java.time.OffsetDateTime", mapper.resolveJavaType(col));
+        assertEquals("java.util.Date", mapper.resolveJavaType(col));
     }
 
     // ========================
@@ -178,9 +170,9 @@ class TypeMapperTest {
             "BIGINT,             java.lang.Long",
             "FLOAT,              java.lang.Double",
             "NVARCHAR,           java.lang.String",
-            "DATE,               java.time.LocalDate",
-            "DATETIME2,          java.time.LocalDateTime",
-            "DATETIMEOFFSET,     java.time.OffsetDateTime",
+            "DATE,               java.util.Date",
+            "DATETIME2,          java.util.Date",
+            "DATETIMEOFFSET,     java.util.Date",
             "UNIQUEIDENTIFIER,   java.util.UUID",
             "VARBINARY,          byte[]",
     })

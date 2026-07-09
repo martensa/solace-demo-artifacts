@@ -73,6 +73,19 @@ async function generateEntityWithDbCli(dbInfo, destinationPath, schemaId) {
         const generateEntityTemplatePath = path.join(destinationPath, generateEntityZipName);
         const entityFilesPath = path.join(generateEntityTemplatePath, generateEntityCommonPath);
 
+        // The DB CLI recreates the package path UNDER outputDir and appends a
+        // trailing ".entity" segment to the package name. Passing
+        // outputDir=entityFilesPath + package "...pull.entity" therefore produced a
+        // DUPLICATED nested path
+        // (.../pull/entity/com/solace/connector/db/pull/entity/entity/Customers.java),
+        // which broke the Designer's single-level entity scan (empty
+        // tableClass/tableKey) and getEntityColumns. Pass the src root + the PARENT
+        // package so files land FLAT at entityFilesPath
+        // (.../pull/entity/Customers.java). The CLI's --clean only wipes its own
+        // target package dir (verified), so sibling files under src/main/java are safe.
+        const srcMainJava = path.join(generateEntityTemplatePath, 'src', 'main', 'java');
+        const cliPackageName = 'com.solace.connector.db.pull';
+
         // Clean and recreate the output directory to prevent stale files
         if (fs.existsSync(entityFilesPath)) {
             fs.rmSync(entityFilesPath, { recursive: true, force: true });
@@ -110,8 +123,8 @@ async function generateEntityWithDbCli(dbInfo, destinationPath, schemaId) {
             strategy: strategy,
             strategyColumn: strategyColumn,
             connectorMode: 'SOURCE',
-            outputDir: entityFilesPath,
-            packageName: 'com.solace.connector.db.pull.entity',
+            outputDir: srcMainJava,
+            packageName: cliPackageName,
             schemaId: schemaId,
         });
 

@@ -32,8 +32,9 @@ public class MySqlTypeMapper extends TypeMapper {
             case "FLOAT" -> "java.lang.Float";
             case "DOUBLE", "DOUBLE PRECISION" -> "java.lang.Double";
 
-            // Exact numeric
-            case "DECIMAL", "NUMERIC", "DEC", "FIXED" -> resolveDecimalType(column);
+            // Exact numeric -> BigDecimal always (getObject returns BigDecimal;
+            // narrowing would mismatch the connector's reflective setter).
+            case "DECIMAL", "NUMERIC", "DEC", "FIXED" -> "java.math.BigDecimal";
 
             // Character types
             case "CHAR", "VARCHAR", "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT",
@@ -43,12 +44,13 @@ public class MySqlTypeMapper extends TypeMapper {
             case "BINARY", "VARBINARY", "TINYBLOB", "BLOB", "MEDIUMBLOB", "LONGBLOB"
                     -> "byte[]";
 
-            // Date and time
-            case "DATE" -> "java.time.LocalDate";
-            case "TIME" -> "java.time.LocalTime";
-            case "DATETIME" -> "java.time.LocalDateTime";
-            case "TIMESTAMP" -> "java.time.LocalDateTime";
-            case "YEAR" -> "java.lang.Short";
+            // Date and time -> java.util.Date (connector sets raw JDBC values;
+            // java.time.* would throw argument type mismatch). Untested for MySQL.
+            case "DATE" -> "java.util.Date";
+            case "TIME" -> "java.util.Date";
+            case "DATETIME" -> "java.util.Date";
+            case "TIMESTAMP" -> "java.util.Date";
+            case "YEAR" -> "java.lang.Integer";
 
             // JSON
             case "JSON" -> "java.lang.String";
@@ -64,17 +66,5 @@ public class MySqlTypeMapper extends TypeMapper {
                 yield "java.lang.String";
             }
         };
-    }
-
-    private String resolveDecimalType(ColumnMetadata column) {
-        int precision = column.getColumnSize();
-        int scale = column.getDecimalDigits();
-
-        if (scale == 0 && precision > 0) {
-            if (precision <= 4) return "java.lang.Short";
-            if (precision <= 9) return "java.lang.Integer";
-            if (precision <= 18) return "java.lang.Long";
-        }
-        return "java.math.BigDecimal";
     }
 }
