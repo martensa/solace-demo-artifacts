@@ -10,7 +10,8 @@ set -euo pipefail
 #     VERSION
 #     charts/db-designer-<version>.tgz
 #     images/*.tar          hardened services/ui + artifacts seed (amd64)
-#     connector/            connector jar + configs + launcher scripts
+#     connector/            connector jar + jpa_start.sh + examples/ + empty
+#                           Config/ and dependencies/ placeholders
 #     scripts/load-and-push.sh
 #     docs/*.md
 #
@@ -94,8 +95,13 @@ docker save "db-designer-artifacts-seed:$VERSION" \
 echo "==> [4/5] Collecting connector binaries, scripts and docs ..."
 cp "$CONNECTOR_DIR"/pubsubplus-connector-database-*.jar "$STAGE/connector/" 2>/dev/null \
   || echo "WARNING: no connector jar found in DB Connector/ -- bundle ships without it."
-cp -R "$CONNECTOR_DIR/configs" "$STAGE/connector/configs"
-cp "$CONNECTOR_DIR"/jpa_source_start.sh "$CONNECTOR_DIR"/jpa_sink_start.sh "$STAGE/connector/"
+# One generic launcher works for source and sink (each is a self-contained
+# package whose own Config/ decides the direction). Config/ + dependencies/
+# are placeholders the customer fills from a DB Designer package; examples/
+# carries reference source and sink configs.
+cp "$CONNECTOR_DIR"/jpa_start.sh "$STAGE/connector/"
+cp -R "$CONNECTOR_DIR/examples" "$STAGE/connector/examples"
+mkdir -p "$STAGE/connector/Config" "$STAGE/connector/dependencies"
 cp "$SCRIPT_DIR/load-and-push.sh" "$STAGE/scripts/load-and-push.sh"
 chmod +x "$STAGE/scripts/load-and-push.sh"
 cp "$DESIGNER_DIR/docs/"*.md "$STAGE/docs/"

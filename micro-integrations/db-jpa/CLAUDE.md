@@ -38,9 +38,10 @@ docker load -i connector_designer_ui.tar
 docker compose up -d          # UI :6003, API :6002, Postgres :5435
 docker compose down           # stop (named volume cd_pgdata kept)
 
-# DB Connector - run one JVM per direction (from "DB Connector/")
-bash jpa_source_start.sh      # database -> Solace, app :8392, mgmt :9002
-bash jpa_sink_start.sh        # Solace -> database, app :8092, mgmt :9003
+# DB Connector - one generic launcher, run from inside a package dir
+# (source or sink; the package's own Config/ decides the direction)
+bash jpa_start.sh                  # uses ./Config + ./dependencies, mgmt :9002
+MGMT_PORT=9003 bash jpa_start.sh   # a second connector on the same host
 ```
 
 There is no `start.sh`/`stop.sh`/`Makefile` wrapper yet (unlike
@@ -79,35 +80,32 @@ If you add a genuinely small jar that must ship, use
 
 ## Common Pitfalls
 
-### Launcher scripts must match the real layout
+### One generic launcher
 
-`jpa_source_start.sh` / `jpa_sink_start.sh` originally referenced a
-non-existent `2.0.1-SNAPSHOT` jar and `SOURCE_JPA_SQ_mssql/` /
-`SINK_DATABASE_DEV_JPA_mssql/` folders. They now use the actual
-`pubsubplus-connector-database-2.0.2.jar` and the real
-`./dependencies` + `./configs/{source,sink}` layout, with distinct
-management ports (9002 / 9003). Run from inside `DB Connector/`.
+`jpa_start.sh` is the single launcher for both directions -- source and
+sink are separate, self-contained packages, so the package's own `Config/`
+decides the direction. It globs `pubsubplus-connector-database-*.jar`, sets
+`-Dloader.path=./dependencies,./Config`, and honours `MGMT_PORT` (default
+9002) so a second connector can run on the same host. Run from inside the
+package directory (or a filled `DB Connector/`). The old per-direction
+`jpa_source_start.sh` / `jpa_sink_start.sh` are gone.
 
-### Missing application-db-processor.yml
+### Config/ and dependencies/ are placeholders
 
-Both operator configs do `spring.config.import:
-application-db-processor.yml`, but that file is not present in
-`configs/source|sink`; it ships inside a DB Designer package under
-`Config/`. The bare `DB Connector/` directory will not start until
-it (and any `mapper/` files) is supplied per deployment.
+`DB Connector/Config/` and `dependencies/` ship empty (`.gitkeep`). Fill
+them from a DB Designer package (or an `examples/` config + a generated
+`entity.jar`). The operator config imports `application-db-processor.yml`
+via `spring.config.import`, so the connector will not start until `Config/`
+has it (and any `mapper/` files). Reference source/sink configs live in
+`examples/{source,sink}/`.
 
-### Single shared dependencies/ folder
+### Sink dialect
 
-Source and sink need different `entity.jar` contents (different
-entity packages; the sink may target a different database). As
-shipped there is one `dependencies/` folder, so run one direction at
-a time, or give each direction its own connector directory.
-
-### Sink dialect mix
-
-`configs/sink/application-operator.yml` combines a SQL Server JDBC
-URL/driver with `database: oracle` and `OracleSchemaNameStrategy`.
-Align these to the actual sink database before relying on it.
+`examples/sink/application-operator.yml` historically mixed a SQL Server
+JDBC URL with `database: oracle`. The Designer now derives
+`solace-persistence.jpa.database` from the JDBC driver at generation time
+(startup patch), so freshly generated packages get the right dialect; align
+hand-written configs to the actual database.
 
 ### Demo credentials are intentional; two files are excluded
 
@@ -217,7 +215,7 @@ Enterprise notes:
   full Designer E2E (upload -> flow -> entities -> compiled package) verified
   on Rancher. The distribution bundle was also built end to end
   (`release/package-release.sh 1.0.0` -> a 673MB zip: amd64 image tars +
-  chart tgz + connector jar/configs + MANIFEST with sha256; the
+  chart tgz + connector jar + jpa_start.sh + examples + MANIFEST sha256; the
   `load-and-push.sh` load+retag path and the packaged chart render were
   verified; only the external `docker push` is customer-side).
 - **Wave 4 (in progress -- user-driven)** - start the generated connector

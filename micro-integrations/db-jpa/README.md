@@ -23,7 +23,7 @@ cooperating components: a runtime **DB Connector**, a low-code
 | --- | --- | --- |
 | **DB CLI** (`DB CLI/`) | Introspects a database schema and generates JPA entities, Spring Data repositories, DAOs, and packages them as `entity.jar` | Java 17 / Maven project, Spring Shell CLI |
 | **DB Designer** (`DB Designer/`) | Web UI to model source/sink flows, introspect databases, invoke the CLI, and build a downloadable connector package | docker-compose: Postgres + Node backend (`:6002`) + React UI (`:6003`) |
-| **DB Connector** (`DB Connector/`) | The deployable runtime: one Spring Boot JVM per direction (source DB->Solace, sink Solace->DB) | `java` launched from `jpa_source_start.sh` / `jpa_sink_start.sh` |
+| **DB Connector** (`DB Connector/`) | The deployable runtime: one Spring Boot JVM per direction (source DB->Solace, sink Solace->DB) | `java` launched from `jpa_start.sh` |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -84,11 +84,11 @@ db-jpa/
     generateEntity-cli/       interactive shell wrapper + backend service
     order_management.sql      sample schema for the demo
   DB Connector/               the runtime connector
-    jpa_source_start.sh       launcher: database -> Solace
-    jpa_sink_start.sh         launcher: Solace -> database
-    configs/source/           source Spring config (application*.yml)
-    configs/sink/             sink Spring config (application*.yml)
-    dependencies/             drop generated entity.jar here (kept empty)
+    jpa_start.sh              generic launcher (source or sink package)
+    Config/                   placeholder: the package's application*.yml
+    dependencies/             placeholder: drop the generated entity.jar here
+    examples/source/          reference source Spring config
+    examples/sink/            reference sink Spring config
   DB Designer/                Connector Control Center
     docker-compose.yml        Postgres + services + UI
     artifacts/                templates, tools, meta-api, connector types
@@ -225,37 +225,36 @@ directory:
 
 ```text
 DB Connector/
+  jpa_start.sh                              generic launcher (source or sink)
   pubsubplus-connector-database-2.0.2.jar   (obtain separately)
-  jpa_source_start.sh
-  jpa_sink_start.sh
-  configs/source/  application.yml, application-operator.yml
-  configs/sink/    application.yml, application-operator.yml
-  dependencies/    entity.jar goes here (obtain / generate)
+  Config/                                   placeholder: application*.yml (+ mapper/)
+  dependencies/                             placeholder: entity.jar
+  examples/source/                          reference source config
+  examples/sink/                            reference sink config
 ```
 
-Before starting, this directory must be completed per deployment with
-artifacts the DB Designer package provides:
+Source and sink are separate, self-contained packages, so one launcher
+serves both -- the package's own `Config/` decides the direction. `Config/`
+and `dependencies/` are placeholders you fill from a DB Designer package (or
+by copying an `examples/` config and dropping a generated `entity.jar`):
 
 1. Place the connector fat-jar at the top level.
 2. Drop the generated `entity.jar` into `dependencies/`.
-3. Add `application-db-processor.yml` (and any `mapper/` files) into
-   `configs/source/` and/or `configs/sink/`. The operator configs
-   import it via `spring.config.import`, so the connector will not
-   start without it. A concrete example ships inside the Designer
-   package under `Config/`.
+3. Put the package's `application*.yml` (and any `mapper/` files) into
+   `Config/`. The operator config imports `application-db-processor.yml`
+   via `spring.config.import`, so the connector will not start without it.
 
-Start the connectors (run from inside `DB Connector/`):
+Start the connector (run from inside the package directory):
 
 ```bash
-bash jpa_source_start.sh   # database -> Solace, app :8392, mgmt :9002
-bash jpa_sink_start.sh     # Solace -> database, app :8092, mgmt :9003
+bash jpa_start.sh                  # uses ./Config + ./dependencies, mgmt :9002
+MGMT_PORT=9003 bash jpa_start.sh   # a second connector on the same host
 ```
 
-Each script sets `-Dloader.path` to `dependencies` (for `entity.jar`)
-and the matching `configs/` folder, then layers
-`application.yml` + `application-operator.yml` +
-`application-db-processor.yml`. Source and sink use distinct
-management ports (`9002` / `9003`) so both can run on one host.
+The launcher sets `-Dloader.path` to `dependencies` (for `entity.jar`) and
+`Config`, then layers `application.yml` + `application-operator.yml` +
+`application-db-processor.yml`. Set `MGMT_PORT` to run source and sink on one
+host without a port clash.
 
 ## End-to-end demo (order_management)
 
@@ -267,7 +266,7 @@ management ports (`9002` / `9003`) so both can run on one host.
    `application-db-processor.yml`).
 4. Start a Solace PubSub+ broker and point the connector configs at
    it.
-5. Run `jpa_source_start.sh` and/or `jpa_sink_start.sh`.
+5. Run `jpa_start.sh` from the package directory (once per direction).
 
 ## Configuration and secrets
 
@@ -281,16 +280,18 @@ secrets belong in untracked `.env` files.
 
 ## Known limitations
 
-- **`application-db-processor.yml` is not in `configs/`.** The operator
-  configs import it, so the bare `DB Connector/` directory will not
-  start until the file is supplied from a Designer package (by design;
-  see Component 3).
-- **Single shared `dependencies/`.** Source and sink need different
-  `entity.jar` contents. As shipped, run one direction at a time, or
-  give each direction its own connector directory.
-- **Sink dialect mix.** `configs/sink/application-operator.yml`
-  combines a SQL Server JDBC URL/driver with `database: oracle` and
-  `OracleSchemaNameStrategy`. Align these to the actual sink database.
+- **`Config/` and `dependencies/` start empty.** They are placeholders
+  for the artifacts a DB Designer package provides; the connector will
+  not start until they are filled (operator config imports
+  `application-db-processor.yml` via `spring.config.import`). By design;
+  see Component 3.
+- **Source and sink are separate packages.** Each is self-contained with
+  its own `Config/` and `entity.jar`; run one package per directory and
+  set `MGMT_PORT` to run both on one host without a port clash.
+- **Reference configs in `examples/`.** `examples/source/` and
+  `examples/sink/` carry runnable sample configs. Align the JDBC dialect
+  to the actual database (the Designer now derives `jpa.database` from the
+  driver at generation time).
 - **Docker image naming.** Two connector image tars ship with
   inconsistent names (`...AMD64.tar`, `...V2.0.2.tar`); confirm which
   maps to the 2.0.2 jar.
