@@ -217,11 +217,15 @@ function applyPatch() {
                     const result = await generateEntityWithDbCli(data, schemaDestPath, schemaId);
 
                     // Invalidate the compiled entity.jar cache: entities just
-                    // changed, so the next download must rebuild via Maven.
-                    try {
-                        fs.unlinkSync(path.join(schemaDestPath, '.entity-compiled.cache.jar'));
-                        console.log(`[DB CLI Patch] Invalidated compiled entity.jar cache for ${schemaId}`);
-                    } catch (e) { /* no cache yet */ }
+                    // changed, so the next download must rebuild via Maven. Clear
+                    // BOTH connector-type variants (source/sink) plus the legacy
+                    // schema-only name, since the underlying entities are shared.
+                    for (const name of ['.entity-compiled.source.cache.jar', '.entity-compiled.sink.cache.jar', '.entity-compiled.cache.jar']) {
+                        try {
+                            fs.unlinkSync(path.join(schemaDestPath, name));
+                            console.log(`[DB CLI Patch] Invalidated ${name} for ${schemaId}`);
+                        } catch (e) { /* not present */ }
+                    }
 
                     // Update entity info in DB (same as original does)
                     if (this.updateEntityInfoInDb && schemaId) {
@@ -266,7 +270,13 @@ function applyPatch() {
             // cache). The controller renames the returned jar into the
             // package's dependencies/, so hand back a throwaway copy and keep
             // the cache intact.
-            const cachePath = path.join(destinationPath, schemaId, '.entity-compiled.cache.jar');
+            // Key the cache by CONNECTOR TYPE as well as schema: source and sink
+            // flows share a schemaId but need DIFFERENT jars (source.entity.<T> vs
+            // sink.entity.<T>, and usually different tables). A schema-only key let
+            // a sink download reuse the source's cached jar -> the connector loaded
+            // the wrong classes (ClassNotFound / wrong table).
+            const ctype = splitConnectorType && splitConnectorType.includes('SINK') ? 'sink' : 'source';
+            const cachePath = path.join(destinationPath, schemaId, `.entity-compiled.${ctype}.cache.jar`);
             // Invalidate the cache when the DB CLI jar is newer than it: a reseed
             // with an updated CLI (e.g. changed type mapping: integer->Integer,
             // timestamp->java.util.Date) MUST NOT serve a stale compiled entity.jar
@@ -283,10 +293,10 @@ function applyPatch() {
                 } catch (e) { /* stat failed -> keep using the cache */ }
             }
             if (cacheFresh) {
-                const handoff = path.join(destinationPath, schemaId, 'entity.jar');
+                const handoff = path.join(destinationPath, schemaId, `entity.${ctype}.jar`);
                 try {
                     fs.copyFileSync(cachePath, handoff);
-                    console.log(`[DB CLI Patch] Reusing cached compiled entity.jar (skipping Maven)`);
+                    console.log(`[DB CLI Patch] Reusing cached compiled ${ctype} entity.jar (skipping Maven)`);
                     return handoff;
                 } catch (e) {
                     console.error(`[DB CLI Patch] cache copy failed, rebuilding: ${e.message}`);
@@ -507,6 +517,33 @@ function applyPatch() {
                                 }
                             }
                         } catch (e) { console.error(`[DB CLI Patch] dialect post-process failed: ${e.message}`); }
+
+                        // Fill an empty data-plane Solace host in operator.yml. The
+                        // SINK generation writes `solace.java.host: ""` (and empty
+                        // kebab-case client-username/client-password/msg-vpn beside
+                        // populated camelCase siblings). The Spring Cloud Stream
+                        // `solace` binder that the sink's input binding uses reads
+                        // solace.java.host, so an empty value throws
+                        // `InvalidPropertiesException: Property (host) is not provided`
+                        // and the connector never starts. The management session host
+                        // IS populated (same broker), so mirror it; and strip the
+                        // empty auth duplicates so relaxed binding can't resolve a
+                        // credential to blank. (No-op for source, whose host is set.)
+                        try {
+                            if (projConfigpath && fs.existsSync(projConfigpath)) {
+                                let cfg = fs.readFileSync(projConfigpath, 'utf8');
+                                const before = cfg;
+                                const hostVal = (cfg.match(/\n[ \t]+host:[ \t]*['"]?(tcp:\/\/[^'"\s]+)/) || [])[1];
+                                if (hostVal) {
+                                    cfg = cfg.replace(/(\n[ \t]+host:[ \t]*)(""|'')(?=[ \t]*\r?\n)/g, `$1'${hostVal}'`);
+                                }
+                                cfg = cfg.replace(/\n[ \t]+(client-username|client-password|msg-vpn):[ \t]*(""|'')(?=[ \t]*\r?\n)/g, '');
+                                if (cfg !== before) {
+                                    fs.writeFileSync(projConfigpath, cfg);
+                                    console.log(`[DB CLI Patch] solace.java.host filled${hostVal ? ` -> '${hostVal}'` : ''}; empty auth duplicates removed`);
+                                }
+                            }
+                        } catch (e) { console.error(`[DB CLI Patch] solace.java host fill failed: ${e.message}`); }
 
                         // Fix application-db-processor.yml (connectorPropsConfigPath =
                         // args[2]). The Designer derives tableClass/tableKey from a
