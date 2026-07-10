@@ -27,6 +27,57 @@ const TOOLS_DIR = path.join(process.cwd(), 'artifacts', 'tools');
 const { sanitizeEntityRelationships } = require(path.join(TOOLS_DIR, 'sanitize-entity-relationships'));
 
 /**
+ * Force a single, correct RUNTIME package on every entity .java in entityDir
+ * (com.solace.connectors.database.{source|sink}.entity), just before Maven
+ * compiles the connector entity jar.
+ *
+ * Why this is needed: the vendor copies the CLI-generated entities into the
+ * connector Maven tree and rewrites their package to the runtime package --
+ * but its rewrite assumes `package ...;` is the FIRST line. Our CLI emits a
+ * `/** ... *\/` header first, so the vendor clobbers the comment opener and
+ * leaves the ORIGINAL package line intact -> the file ends up with TWO package
+ * declarations. Maven then compiles to an inconsistent package and the
+ * connector's `Class.forName(tableClass)` throws
+ * `EntityName ... ClassNotFound`. This runs on every download's jar build, so
+ * the compiled classes always match the `tableClass` the vendor writes,
+ * regardless of the (possibly stale/mangled) generateEntity sources.
+ */
+function normalizeEntityPackage(entityDir, splitConnectorType) {
+    const runtimePkg = splitConnectorType && splitConnectorType.includes('SINK')
+        ? 'com.solace.connectors.database.sink.entity'
+        : 'com.solace.connectors.database.source.entity';
+    let files;
+    try {
+        files = fs.readdirSync(entityDir).filter((f) => f.endsWith('.java'));
+    } catch (e) {
+        console.error(`[Sanitize Patch] normalizeEntityPackage: cannot read ${entityDir}: ${e.message}`);
+        return;
+    }
+    let fixed = 0;
+    for (const f of files) {
+        const p = path.join(entityDir, f);
+        let src;
+        try { src = fs.readFileSync(p, 'utf8'); } catch (e) { continue; }
+        let body = src;
+        // Normalize stale package references (imports + nested `.entity.entity`).
+        body = body.replace(/com\.solace\.connector\.db\.pull\.entity(?:\.entity)*/g, runtimePkg);
+        // Strip EVERY existing package declaration.
+        body = body.replace(/^[ \t]*package[ \t]+[^\n;]+;[ \t]*\r?\n/gm, '');
+        // Repair a doc comment whose `/**` opener was eaten by the vendor rewrite.
+        if (/^[ \t]*\*/.test(body)) {
+            body = '/**\n' + body;
+        }
+        const out = `package ${runtimePkg};\n` + body;
+        if (out !== src) {
+            try { fs.writeFileSync(p, out); fixed++; } catch (e) { /* skip unwritable */ }
+        }
+    }
+    if (fixed > 0) {
+        console.log(`[Sanitize Patch] normalizeEntityPackage: single package -> ${runtimePkg} in ${fixed} file(s)`);
+    }
+}
+
+/**
  * Wraps the original generateConnectorEntity to sanitize entity files
  * before Maven compilation. This fixes compilation errors caused by
  * dangling @OneToMany/@ManyToOne references to entity types that were
@@ -84,6 +135,14 @@ async function sanitizedMavenBuild(originalFn, schemaId, splitConnectorType) {
         } catch (sanitizeError) {
             console.error(`[Sanitize Patch] Warning: sanitization failed: ${sanitizeError.message}`);
             console.error(`[Sanitize Patch] Proceeding with Maven build anyway...`);
+        }
+
+        // Force a single correct runtime package so the compiled classes match
+        // the tableClass the connector loads (avoids ClassNotFound at launch).
+        try {
+            normalizeEntityPackage(entityDir, splitConnectorType);
+        } catch (npErr) {
+            console.error(`[Sanitize Patch] Warning: package normalize failed: ${npErr.message}`);
         }
 
         // Restore original and call it
@@ -339,6 +398,82 @@ function applyPatch() {
             console.error(`[DB CLI Patch] could not install getEntityColumns hang-fix: ${gecErr.message}`);
         }
 
+        // Fix tableClass/tableKey at their SOURCE. The config generator does:
+        //   sourceTableName = getEntityTableNameBasedonDbName(allEntityFiles, flow.tableName)
+        //   tableClass = `${pkg}.${sourceTableName}`;  tableKey = sourceTableName
+        // where allEntityFiles = readdirSync(<generateEntity>/.../pull/entity).
+        // The DB CLI writes entities package-nested (.../pull/entity/com/.../
+        // entity/entity/Customers.java), so that readdir yields only ['com'] and
+        // the lookup for the flow's real table ('customers') matches nothing ->
+        // sourceTableName='' -> `tableClass: <pkg>.` (truncated) + `tableKey: ''`.
+        // A plain package download never re-runs generateEntity, so the nested
+        // tree persists on every download. Recover by AUGMENTING allEntityFiles
+        // with the real entity CLASS names collected recursively from the nested
+        // source tree: the vendor's own resolver, keyed on flow.tableName, then
+        // returns the correctly-cased class (e.g. 'Customers'). This is
+        // schema-accurate -- the match is driven by the selected table, never by
+        // entity.jar byte order (which would pick whichever class sorts first).
+        try {
+            const ENTITY_STORE = process.env.CCC_DOWNLOAD_GENERATE_ENTITY_PATH || '/app/tmp/entityFolders';
+            const collectEntityClassNames = (schemaId) => {
+                const roots = [];
+                const addRoot = (r) => { try { if (r && fs.existsSync(r)) roots.push(r); } catch (e) { /* skip */ } };
+                if (schemaId) addRoot(path.join(ENTITY_STORE, schemaId));
+                if (!roots.length) {
+                    // Sink config-gen passes no schemaId -> scan every schema dir.
+                    try {
+                        fs.readdirSync(ENTITY_STORE, { withFileTypes: true })
+                            .filter((d) => d.isDirectory())
+                            .forEach((d) => addRoot(path.join(ENTITY_STORE, d.name)));
+                    } catch (e) { /* store missing */ }
+                }
+                const names = new Set();
+                const stack = [...roots];
+                while (stack.length) {
+                    const dir = stack.pop();
+                    let entries;
+                    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { continue; }
+                    for (const ent of entries) {
+                        const full = path.join(dir, ent.name);
+                        if (ent.isDirectory()) { stack.push(full); continue; }
+                        if (ent.name.endsWith('.java')) names.add(ent.name.replace(/\.java$/, ''));
+                    }
+                }
+                return Array.from(names);
+            };
+            const augment = (allEntityFiles, schemaId, label) => {
+                try {
+                    const recovered = collectEntityClassNames(schemaId);
+                    if (!recovered.length) return allEntityFiles;
+                    const base = Array.isArray(allEntityFiles) ? allEntityFiles : [];
+                    const merged = Array.from(new Set([...base, ...recovered]));
+                    if (merged.length !== base.length) {
+                        console.log(`[DB CLI Patch] allEntityFiles augmented (+${merged.length - base.length}) for ${label} from nested entity tree`);
+                    }
+                    return merged;
+                } catch (e) {
+                    console.error(`[DB CLI Patch] allEntityFiles augment failed (${label}): ${e.message}`);
+                    return allEntityFiles;
+                }
+            };
+            [
+                ['generateConnectorConfigSourceJPA', true],
+                ['generateConnectorConfigSourceSQL', true],
+                ['generateConnectorConfigSinkJPA', false],
+                ['generateConnectorConfigSinkSQL', false],
+            ].forEach(([method, hasSchemaId]) => {
+                const orig = ConnectorsController.prototype[method];
+                if (typeof orig !== 'function') return;
+                ConnectorsController.prototype[method] = function (connectorConfigData, allEntityFiles, schemaId) {
+                    const fixed = augment(allEntityFiles, hasSchemaId ? schemaId : undefined, method);
+                    return orig.call(this, connectorConfigData, fixed, schemaId);
+                };
+            });
+            console.log('[DB CLI Patch] allEntityFiles augmentation installed (tableClass/tableKey root-fix)');
+        } catch (augErr) {
+            console.error(`[DB CLI Patch] could not install allEntityFiles augmentation: ${augErr.message}`);
+        }
+
         // Fix the JPA dialect. The Designer writes application-operator.yml
         // wholesale from the stored PROJECT_CONFIGURATION blob and NEVER derives
         // solace-persistence.jpa.database from the chosen JDBC driver -- so the
@@ -380,9 +515,14 @@ function applyPatch() {
                         // and `tableKey: ""`. And a CDC feature disabled via
                         // propertiesEnabled but still carrying a value fails the
                         // connector's DbTableIndicatorConfig validation ("must be
-                        // configured and empty"). Post-process the written file: fill the
-                        // entity name (from the built entity.jar, then the mapper file),
-                        // and drop every disabled CDC feature's lines.
+                        // configured and empty"). Post-process the written file as a
+                        // SAFETY NET (the allEntityFiles augmentation above normally
+                        // makes the vendor write these correctly): if tableClass/
+                        // tableKey are still empty, fill them from the MAPPER file the
+                        // Designer just created (<Table>_trgt_schema_mapper.yml) -- it
+                        // is keyed on the flow's real table, so it is authoritative.
+                        // NEVER guess from the multi-table entity.jar (byte order is
+                        // not the selected table). Then drop every disabled CDC line.
                         try {
                             const dbpPath = args && args[2];
                             if (dbpPath && fs.existsSync(dbpPath)) {
@@ -390,21 +530,16 @@ function applyPatch() {
                                 const before = dbp;
                                 if (/^\s*tableClass:\s*\S*\.\s*$/m.test(dbp) || /^\s*tableKey:\s*(""|'')\s*$/m.test(dbp)) {
                                     let entity = null;
-                                    try {
-                                        const ej = path.join(path.dirname(dbpPath), '..', 'dependencies', 'entity.jar');
-                                        if (fs.existsSync(ej)) {
-                                            const names = (fs.readFileSync(ej).toString('latin1').match(/([A-Za-z0-9_]+)\.class/g) || [])
-                                                .map((s) => s.replace(/\.class$/, ''))
-                                                .filter((n) => !/(DAO|Repo|Id)$/.test(n));
-                                            if (names.length) entity = names[0];
-                                        }
-                                    } catch (e) { /* fall through */ }
-                                    if (!entity) {
+                                    const mapperDirs = [
+                                        path.join(path.dirname(dbpPath), 'mapper'),
+                                        path.join(path.dirname(dbpPath), '..', 'mapper'),
+                                        path.join(path.dirname(dbpPath), 'Config', 'mapper'),
+                                    ];
+                                    for (const md of mapperDirs) {
                                         try {
-                                            const md = path.join(path.dirname(dbpPath), 'mapper');
                                             const mf = fs.readdirSync(md).find((f) => /_trgt_schema_mapper\.yml$/.test(f) && !/^_trgt/.test(f));
-                                            if (mf) entity = mf.replace(/_trgt_schema_mapper\.yml$/, '');
-                                        } catch (e) { /* none */ }
+                                            if (mf) { entity = mf.replace(/_trgt_schema_mapper\.yml$/, ''); break; }
+                                        } catch (e) { /* try next dir */ }
                                     }
                                     if (entity) {
                                         dbp = dbp.replace(/^(\s*tableClass:\s*)(\S*\.)\s*$/m, `$1$2${entity}`);
