@@ -78,6 +78,81 @@ function normalizeEntityPackage(entityDir, splitConnectorType) {
 }
 
 /**
+ * Repair a generated SINK mapper file (event_<T>_mapper.yml) so the connector
+ * can consume it. Three fixes (see the wrapper comment for the rationale):
+ *   1. de-double source-xpath: `<entity>/<entity>/<col>` -> `<entity>/<col>`.
+ *   2. target-xpath -> `<entity>/<camelCaseField>` (2-segment wrapper whose leaf
+ *      is the camelCase entity field, which is what
+ *      JsonUtil.convertJson2MapWithEngine + BeanUtil.loadEntity require).
+ *   3. drop stale duplicate-target entries -- when two entries share a target,
+ *      keep the identity mapping (source column == target field) and drop the
+ *      others (this removes a mapping the UI "removed" but never pruned).
+ * Idempotent: re-running on an already-fixed mapper is a no-op.
+ */
+function fixSinkMapper(filePath, entity) {
+    let YAML;
+    try { YAML = require('yamljs'); } catch (e) {
+        console.error(`[DB CLI Patch] fixSinkMapper: yamljs unavailable: ${e.message}`);
+        return;
+    }
+    const camel = (x) => (x || '').replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    let doc;
+    try { doc = YAML.parse(fs.readFileSync(filePath, 'utf8')); } catch (e) {
+        console.error(`[DB CLI Patch] fixSinkMapper: cannot parse ${filePath}: ${e.message}`);
+        return;
+    }
+    const root = doc && doc['solace-connector-mapper'];
+    const pm = root && root['payload-mapper'];
+    if (!pm || typeof pm !== 'object') return;
+    let changed = false;
+
+    // 1 + 2: fix source/target xpath on every entry.
+    for (const key of Object.keys(pm)) {
+        const e = pm[key];
+        if (!e || typeof e !== 'object') continue;
+        if (typeof e['source-xpath'] === 'string') {
+            const dedup = e['source-xpath'].replace(new RegExp('^' + entity + '/' + entity + '/'), entity + '/');
+            if (dedup !== e['source-xpath']) { e['source-xpath'] = dedup; changed = true; }
+        }
+        if (typeof e['target-xpath'] === 'string') {
+            const leaf = e['target-xpath'].includes('/') ? e['target-xpath'].split('/').pop() : e['target-xpath'];
+            const wrapped = entity + '/' + camel(leaf);
+            if (e['target-xpath'] !== wrapped) { e['target-xpath'] = wrapped; changed = true; }
+        }
+    }
+
+    // 3: drop stale duplicate-target entries (keep the identity mapping).
+    const byTarget = {};
+    for (const key of Object.keys(pm)) {
+        const tx = pm[key] && pm[key]['target-xpath'];
+        if (!tx) continue;
+        (byTarget[tx] = byTarget[tx] || []).push(key);
+    }
+    for (const tx of Object.keys(byTarget)) {
+        const keys = byTarget[tx];
+        if (keys.length < 2) continue;
+        const targetLeaf = tx.split('/').pop();
+        const identity = keys.filter((k) => {
+            const sx = (pm[k]['source-xpath'] || '');
+            return camel(sx.split('/').pop() || '') === targetLeaf;
+        });
+        const keep = identity.length ? identity[0] : keys[0];
+        for (const k of keys) {
+            if (k !== keep) { delete pm[k]; changed = true; }
+        }
+    }
+
+    if (changed) {
+        try {
+            fs.writeFileSync(filePath, YAML.stringify(doc, 100, 2));
+            console.log(`[DB CLI Patch] sink mapper ${path.basename(filePath)} fixed (source de-doubled, target -> ${entity}/<camelField>, stale removed)`);
+        } catch (e) {
+            console.error(`[DB CLI Patch] fixSinkMapper: cannot write ${filePath}: ${e.message}`);
+        }
+    }
+}
+
+/**
  * Wraps the original generateConnectorEntity to sanitize entity files
  * before Maven compilation. This fixes compilation errors caused by
  * dangling @OneToMany/@ManyToOne references to entity types that were
@@ -482,6 +557,51 @@ function applyPatch() {
             console.log('[DB CLI Patch] allEntityFiles augmentation installed (tableClass/tableKey root-fix)');
         } catch (augErr) {
             console.error(`[DB CLI Patch] could not install allEntityFiles augmentation: ${augErr.message}`);
+        }
+
+        // Fix the generated SINK mapper (event_<T>_mapper.yml). The Designer emits
+        // a mapper that the connector cannot consume, on three axes:
+        //  1. source-xpath is DOUBLE-nested (products/products/<col>) -- the same
+        //     entity-nesting family as the source-side bugs.
+        //  2. target-xpath is a single-segment SNAKE_CASE column (product_name),
+        //     but the connector flattens the transform output via
+        //     JsonUtil.convertJson2MapWithEngine (values() -> putAll, requiring each
+        //     value to be a nested Map) and BeanUtil.loadEntity keys the result by
+        //     the entity's camelCase JAVA field names. So the target must be
+        //     `<entity>/<camelCaseField>` (a 2-segment wrapper whose leaf is the
+        //     camelCase field), else every column resolves to null / ClassCast.
+        //  3. a removed UI mapping lingers (the frontend deletes only the canvas
+        //     arrow, not the derived payload-mapper), so a stale duplicate-target
+        //     entry (e.g. sku -> is_active) is written verbatim.
+        // Post-process the written mapper: de-double the source, rewrite the target
+        // to `<entity>/<camelCaseField>`, and drop stale duplicate-target entries
+        // (keep the identity mapping, whose source column equals its target field).
+        // Verified end to end: a snake-wrapped event then writes public.products.
+        try {
+            const OrigUpdateMapper = ConnectorsController.prototype.updateMapperConfigFromDesginerScreen;
+            if (typeof OrigUpdateMapper === 'function') {
+                ConnectorsController.prototype.updateMapperConfigFromDesginerScreen = function (dataFlowId, mapperPath) {
+                    const args = arguments;
+                    const self = this;
+                    return Promise.resolve(OrigUpdateMapper.apply(self, args)).then((result) => {
+                        try {
+                            if (mapperPath && fs.existsSync(mapperPath)) {
+                                const files = fs.readdirSync(mapperPath)
+                                    .filter((f) => /^event_.+_mapper\.yml$/.test(f));
+                                for (const f of files) {
+                                    const m = f.match(/^event_(.+)_mapper\.yml$/);
+                                    const entity = m ? m[1].toLowerCase() : '';
+                                    if (entity) fixSinkMapper(path.join(mapperPath, f), entity);
+                                }
+                            }
+                        } catch (e) { console.error(`[DB CLI Patch] sink mapper fix failed: ${e.message}`); }
+                        return result;
+                    });
+                };
+                console.log('[DB CLI Patch] sink mapper fix installed (source de-double + target camelCase wrap + stale removal)');
+            }
+        } catch (mapErr) {
+            console.error(`[DB CLI Patch] could not install sink mapper fix: ${mapErr.message}`);
         }
 
         // Fix the JPA dialect. The Designer writes application-operator.yml
