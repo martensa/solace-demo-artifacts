@@ -53,6 +53,29 @@ agents appear as tools named `<agent>_<skill>`, RBAC-filtered per
 the logged-in user -- for example
 `retail_crm_query_expert_query_retail_crm`.
 
+## Manual setup (app UI, without connect.sh)
+
+The same result can be configured by hand in the desktop app --
+this mirrors exactly what `connect.sh` automates:
+
+1. Models: in the app open Agent Mesh -> Models and configure
+   BOTH default aliases, `general` and `planning`:
+   - Provider: Custom (OpenAI-compatible)
+   - Model name: `openai/claude-opus-4-8`
+   - API base: `https://lite-llm.mymaas.net`
+   - API key: the `LLM_SERVICE_API_KEY` value from `.env`
+   - Model params: `max_tokens: 16384`
+   Then restart the app (bindings load at startup); the
+   "No default model" banner disappears.
+2. Connector: Connectors -> add connector -> MCP -> Remote:
+   - Server URL: `https://sam.solace.lab/gw/dev`
+   - Connection type: Streamable HTTP
+   - Authentication: OAuth, mode Discovery
+3. Agent: open the Orchestrator in the agent editor, attach the
+   new connector and save (the agent redeploys).
+4. First K8s tool call: complete the Keycloak login (e.g.
+   `sam_admin` or `power_user`).
+
 ## Notes
 
 - After the FIRST model configuration, restart the desktop app:
