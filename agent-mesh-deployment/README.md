@@ -80,8 +80,32 @@ requires cluster-internal hostname resolution.
 - `helm` 3
 - `docker` (for the image load step)
 - `bash`, `curl`, `jq`, `python3`
-- the `sam` CLI from the delivery package (see `.env` variables
-  `SAM_CLI_PATH` / `SAM_CLI_TAR`)
+- the `sam` CLI from the delivery package (see below)
+
+### Installing the sam CLI
+
+The CLI ships in the delivery package as
+`solace-agent-mesh-<version>-cli-<os>-<arch>.tar.gz` (a single
+static binary). Install it for interactive use (`sam auth login`,
+`sam config`, `sam api`):
+
+```bash
+mkdir -p ~/.local/bin
+tar -xzf ~/Downloads/solace-agent-mesh-<ver>-cli-darwin-arm64.tar.gz \
+  -C ~/.local/bin sam
+sam --help   # verify
+```
+
+Notes:
+
+- `~/.local/bin` must come early in the PATH -- in particular
+  BEFORE any Python framework bin directory if the old v1 Python
+  CLI (`pip install solace-agent-mesh`, also named `sam`) is
+  still installed; the v2 Go CLI must win the lookup.
+- The repo scripts do not require this install: they resolve the
+  CLI via `scripts/lib/common.sh` (`SAM_CLI_PATH` from `.env`,
+  then PATH, then auto-extract from `SAM_CLI_TAR`). The install
+  is for the interactive login and ad-hoc `sam` commands.
 
 ## Architecture Overview
 

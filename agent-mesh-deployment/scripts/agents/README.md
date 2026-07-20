@@ -101,22 +101,32 @@ code with PKCE and dynamic client registration -- clients
 discover everything from the 401 challenge. With RBAC on, `tools/list` is
 filtered to the caller's `agent:<name>:invoke` scopes.
 
-Connect from Claude Code:
+### Connecting Claude Code
 
-```bash
-claude mcp add --transport http sam-lab https://sam.solace.lab/gw/dev
-```
+1. Provide the lab CA: Node-based clients (Claude Code included)
+   do not use the macOS keychain, so export the trust bundle once
+   and reference it in `~/.zshrc`:
 
-Node-based clients (Claude Code included) do not use the macOS
-keychain, so the lab CA must be provided explicitly, e.g. in
-`~/.zshrc`:
+   ```bash
+   mkdir -p ~/.solace-lab
+   kubectl get configmap solace-lab-ca-trust-bundle -n default \
+     -o jsonpath='{.data.ca-certificates\.crt}' \
+     > ~/.solace-lab/ca-bundle.crt
+   echo 'export NODE_EXTRA_CA_CERTS="$HOME/.solace-lab/ca-bundle.crt"' \
+     >> ~/.zshrc
+   ```
 
-```bash
-export NODE_EXTRA_CA_CERTS="$HOME/.solace-lab/ca-bundle.crt"
-```
+2. Register the MCP server (new terminal, so the env var is set):
 
-(Bundle exported from the cluster ConfigMap
-`solace-lab-ca-trust-bundle`.)
+   ```bash
+   claude mcp add --transport http sam-lab https://sam.solace.lab/gw/dev
+   ```
+
+3. In Claude Code run `/mcp`, select `sam-lab` and choose
+   Authenticate -- the browser opens the Keycloak login (use a
+   demo user with agent invoke scopes, e.g. `sam_admin` or
+   `power_user`). After the login the agent tools appear and can
+   be used directly in chat.
 
 Notes: entrypoint tokens are minted in-memory per entrypoint --
 a restart invalidates them (clients re-auth silently via refresh
