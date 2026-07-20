@@ -46,14 +46,21 @@ no auth), via `sam config plan/apply`:
   must be a real YAML list; a JSON string is rejected with
   `'manifest' must be a list of tool entries, got string`.
 - `generate-manifest.sh` -- regenerates the connector YAML from
-  the live K8s platform API. Entrypoint tool names are
-  `<card>_<skill id>` where the card name of a DB-managed agent
-  is its instanceName (`agent_<uuid>`), NOT the display name --
-  and the UUIDs change whenever the platform DB is rebuilt
-  (stop.sh). Run it (then `connect.sh`) after every K8s
-  teardown/rebuild; needs a valid `sam auth login` against
-  `https://sam.solace.lab`. `--all` includes every deployed
-  agent instead of only the retail four.
+  the live mesh (`/api/v1/agentCards`, exactly what the
+  entrypoint exposes). Tool names are `<card>_<skill NAME>`
+  (both sanitized: lowercase, non-alphanumerics to `_`): the
+  suffix comes from the skill NAME, not the skill id, and the
+  card name of a DB-managed agent is its instanceName
+  (`agent_<uuid>`) -- NOT the display name. The UUIDs change
+  whenever the platform DB is rebuilt (stop.sh), so run it
+  (then `connect.sh`) after every K8s teardown/rebuild; needs a
+  valid `sam auth login` against `https://sam.solace.lab`.
+  Default is the retail demo set incl. the retail-360-report
+  workflow; `--all` includes every mesh card (Builder, K8s
+  Orchestrator, web research/scraper and utility agents) -- 26
+  tools as of now. Deployed workflows ARE callable MCP tools
+  (verified end-to-end); the `message` argument lands in
+  `{{workflow.input.text}}`.
 - `agents/Orchestrator.yaml` -- the desktop's built-in
   Orchestrator (pulled via `sam config pull`) extended with the
   connector.

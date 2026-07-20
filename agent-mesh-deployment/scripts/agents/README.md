@@ -130,8 +130,9 @@ filtered to the caller's `agent:<name>:invoke` scopes.
 
 Notes: entrypoint tokens are minted in-memory per entrypoint --
 a restart invalidates them (clients re-auth silently via refresh
-token). Workflows are not exposed over MCP in 2.225.14; route via
-an agent if needed.
+token). Deployed workflows ARE exposed as MCP tools (named
+`workflow_<uuid>_<skill name>`, verified end-to-end); the tool's
+`message` argument lands in `{{workflow.input.text}}`.
 
 ## Prerequisites
 

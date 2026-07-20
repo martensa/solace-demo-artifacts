@@ -3,19 +3,33 @@ set -euo pipefail
 
 # =============================================================
 # generate-manifest.sh -- regenerate the static tool manifest in
-# connectors/SAM K8s Mesh.yaml from the LIVE K8s platform API.
+# connectors/SAM K8s Mesh.yaml from the LIVE K8s mesh.
 # =============================================================
-# Why: the MCP entrypoint names its tools <card>_<skill id>, and
-# the card name of a DB-managed agent is its instanceName
-# (agent_<uuid with underscores>) -- NOT the display name. The
-# UUIDs change whenever the platform DB is rebuilt (stop.sh),
-# so the manifest must be regenerated after every teardown.
+# Why a static manifest at all: the MCP entrypoint blocks
+# tools/list until the user completes OAuth, so the desktop
+# runtime needs the tool schemas pre-declared at agent startup.
+#
+# Naming (verified live against 2.225.14):
+#   tool = sanitize(card name) + "_" + sanitize(skill NAME)
+# where sanitize = lowercase + every [^a-z0-9_] char becomes "_".
+# The suffix comes from the skill NAME, not the skill id
+# (Builder skill id "automate-task", name "Automate a Task"
+# -> builder_automate_a_task). The card name of a DB-managed
+# agent is its instanceName (agent_<uuid>) and of a workflow
+# workflow_<uuid> -- the UUIDs change whenever the platform DB
+# is rebuilt (stop.sh), so regenerate after every rebuild.
+#
+# Source of truth is /api/v1/agentCards (exactly what the
+# entrypoint exposes, including external agents and deployed
+# workflows). Workflow cards ARE callable MCP tools (verified
+# end-to-end); their input lands in {{workflow.input.text}}.
 #
 # Requires a valid sam CLI login against the K8s platform
 # (sam auth login solace-lab --url https://sam.solace.lab).
 #
-# Default: the four retail demo agents. --all includes every
-# deployed standard agent (Builder, web agents, ...).
+# Default: the retail demo set (CRM/OMS/PDM experts, Retail 360
+# Reporter and the retail-360-report workflow). --all includes
+# every card in the mesh (Builder, Orchestrator, web agents...).
 # =============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,38 +44,53 @@ INCLUDE_ALL="${1:-}"
 load_env "$PROJECT_DIR"
 sam_auth_token
 
+CARDS_JSON=$(curl -sk -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
+  "$K8S_URL/api/v1/agentCards")
 AGENTS_JSON=$(curl -sk -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
   "$K8S_URL/api/v1/platform/agents")
+WORKFLOWS_JSON=$(curl -sk -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
+  "$K8S_URL/api/v1/platform/workflows")
 
-MANIFEST_BLOCK=$(AGENTS_JSON="$AGENTS_JSON" python3 - "$INCLUDE_ALL" <<'PYEOF'
+MANIFEST_BLOCK=$(CARDS_JSON="$CARDS_JSON" AGENTS_JSON="$AGENTS_JSON" \
+  WORKFLOWS_JSON="$WORKFLOWS_JSON" python3 - "$INCLUDE_ALL" <<'PYEOF'
 import json, os, re, sys, textwrap
 
 include_all = sys.argv[1] == "--all"
-retail = {
+retail_agents = {
     "Retail CRM Query Expert",
     "Retail OMS Query Expert",
     "Retail PDM Query Expert",
     "Retail 360 Reporter",
 }
+retail_workflows = {"retail-360-report"}
 
-d = json.loads(os.environ["AGENTS_JSON"])
-agents = d if isinstance(d, list) else d.get("data", d.get("agents", []))
+def rows(payload):
+    d = json.loads(os.environ[payload])
+    return d if isinstance(d, list) else d.get("data", [])
 
 def sanitize(s):
     return re.sub(r"[^a-z0-9_]", "_", s.lower())
 
-lines = []
-count = 0
-for a in agents:
-    if a.get("deploymentStatus") != "deployed":
-        continue
-    if not include_all and a.get("name") not in retail:
-        continue
-    card = a.get("instanceName") or a.get("name")
-    for s in a.get("skills") or []:
-        tool = f"{sanitize(card)}_{sanitize(s['id'])}"
+# card name -> human-readable display name
+display = {}
+for a in rows("AGENTS_JSON"):
+    display[a.get("instanceName") or a["name"]] = a["name"]
+for w in rows("WORKFLOWS_JSON"):
+    display["workflow_" + w["id"].replace("-", "_")] = w["name"]
+
+lines, count = [], 0
+for card in rows("CARDS_JSON"):
+    cname = card["name"]
+    is_workflow = cname.startswith("workflow_")
+    disp = display.get(cname, cname)
+    if not include_all:
+        if not (disp in retail_agents or disp in retail_workflows):
+            continue
+    kind = "workflow" if is_workflow else "agent"
+    for s in card.get("skills") or []:
+        tool = f"{sanitize(cname)}_{sanitize(s.get('name') or s['id'])}"
         desc = (f"{s.get('description') or s.get('name') or s['id']} "
-                f"(K8s mesh agent: {a.get('name')})")
+                f"(K8s mesh {kind}: {disp})")
         desc = " ".join(desc.split())
         lines.append(f"      - name: {tool}")
         lines.append("        description: >-")
@@ -78,7 +107,7 @@ for a in agents:
         count += 1
 
 if count == 0:
-    sys.exit("no deployed agents matched; manifest would be empty")
+    sys.exit("no cards matched; manifest would be empty")
 print("\n".join(lines))
 print(f"generated {count} tool entries", file=sys.stderr)
 PYEOF
@@ -86,9 +115,10 @@ PYEOF
 
 cat > "$CONNECTOR_FILE" <<EOF
 # GENERATED by generate-manifest.sh -- edit the generator, not
-# this file. Regenerate after every K8s platform rebuild: tool
-# names embed the DB UUIDs (agent instanceName), which change
-# when stop.sh destroys the platform DB.
+# this file. Regenerate (then ./connect.sh) after every K8s
+# platform rebuild: tool names embed the DB UUIDs of DB-managed
+# agents and workflows, which change when stop.sh destroys the
+# platform DB.
 #
 # MCP connector to the local Kubernetes SAM deployment. Uses the
 # same MCP entrypoint as Claude Code (Streamable HTTP + OAuth 2.1
@@ -104,8 +134,9 @@ kind: connector
 name: SAM K8s Mesh
 description: >-
   Local Kubernetes Solace Agent Mesh (sam.solace.lab) exposed via
-  its MCP entrypoint. Provides the retail demo agents (CRM, OMS
-  and PDM query experts, Retail 360 Reporter) as callable tools.
+  its MCP entrypoint. Provides the mesh agents and deployed
+  workflows as callable tools (retail demo experts, Retail 360
+  workflow, web research and utility agents).
 spec:
   type: mcp
   subtype: remote
