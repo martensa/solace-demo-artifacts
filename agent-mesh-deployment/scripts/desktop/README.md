@@ -1,11 +1,22 @@
-# Desktop App to K8s Mesh (MCP)
+# Desktop App to K8s Mesh (MCP) + Mirror App
 
-Connects the SAM desktop app ("Solace Agent Mesh.app", the
-encapsulated trial environment) to the local Kubernetes
-deployment -- over the same MCP entrypoint Claude Code uses
-(`https://sam.solace.lab/gw/dev`). The desktop stays fully local
-(embedded broker, SQLite); its Orchestrator gains every K8s mesh
-agent as a callable MCP tool.
+Two ways to bring the local Kubernetes deployment onto the
+desktop:
+
+1. `connect.sh` -- connects the SAM desktop app ("Solace Agent
+   Mesh.app", the encapsulated trial environment) to the K8s
+   deployment over the same MCP entrypoint Claude Code uses
+   (`https://sam.solace.lab/gw/dev`). The desktop stays fully
+   local (embedded broker, SQLite); its Orchestrator gains every
+   K8s mesh agent as a callable MCP tool.
+2. `make-mirror-app.sh` -- builds "SAM K8s.app" (in
+   `~/Applications`), a 1:1 MIRROR of the K8s WebUI: a Chrome
+   app-mode window with its own Dock icon, sharing the normal
+   Chrome profile/Keycloak session. No local runtime, no mesh
+   side effects -- the exact browser view, packaged as an app.
+   Background: the Solace desktop app has no remote/server mode
+   in 2.225.14; it always boots its embedded environment, so a
+   true mirror needs the browser route.
 
 ## What connect.sh applies
 
