@@ -27,9 +27,16 @@ spec:
   values:
     enableAuth: "true"
     serverName: Solace Lab Agent Mesh
+    # includeTools stays empty: ALL mesh agents are exposed (retail
+    # experts, Retail 360 Reporter, Orchestrator, Builder, external
+    # agents); tools/list is additionally RBAC-filtered per caller.
+    # Restrict with includeTools patterns (agent/skill/tool name,
+    # exact or regex) if a narrower surface is ever needed.
     serverDescription: >-
-      Retail demo agents (CRM/OMS/PDM query experts) exposed as
-      MCP tools.
+      All Solace Lab Agent Mesh agents exposed as MCP tools --
+      retail demo experts, Retail 360 Reporter, Orchestrator and
+      the external agents. The tool list is RBAC-filtered per
+      caller.
     allowedRedirectUris:
       - uri: http://127.0.0.1
       - uri: http://localhost

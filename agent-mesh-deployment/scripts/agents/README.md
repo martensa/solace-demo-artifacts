@@ -74,6 +74,12 @@ on the same host as the WebUI. One MCP tool per agent-card skill,
 named `<agent>_<skill>` (for example
 `retail_crm_query_expert_query_retail_crm`).
 
+ALL mesh agents are exposed (`includeTools` is empty): the retail
+experts, the Retail 360 Reporter, Orchestrator, Builder and the
+external agents. Narrow the surface with `includeTools` patterns
+(matched against agent, skill and tool names; exact or regex) if
+needed.
+
 Auth is the cluster OIDC (Keycloak): OAuth 2.1 authorization
 code with PKCE and dynamic client registration -- clients
 discover everything from the 401 challenge. With RBAC on, `tools/list` is
