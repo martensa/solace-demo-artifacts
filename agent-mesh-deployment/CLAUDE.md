@@ -146,6 +146,11 @@ reference DB-managed roles, never the YAML `sam_admin`.
   `modelParams.max_tokens` via `sam api` (SAM_AUTH_TOKEN from the
   CLI login cache) and restarts the awe deployment. Both agents
   and models tooling are v2-native and verified live.
+- `scripts/desktop/` -- `connect.sh` wires the SAM desktop app
+  (its platform runs unauthenticated on localhost:8800) to this
+  deployment: configures the desktop `general` model and attaches
+  an `mcp/remote` connector (gw/dev, OAuth discovery) to the
+  desktop Orchestrator via `sam config apply`.
 
 ## References
 

@@ -1,0 +1,17 @@
+# Configures the desktop app's 'general' model alias with the same
+# LiteLLM proxy the K8s deployment uses. The API key resolves from
+# the repo .env (LLM_SERVICE_API_KEY) - sam config auto-loads the
+# nearest ancestor .env at apply time. max_tokens matches the
+# K8s-side tuning (see scripts/models/README.md).
+kind: model
+name: general
+description: General-purpose model via the lab LiteLLM proxy.
+spec:
+  provider: custom
+  modelName: openai/claude-opus-4-8
+  apiBase: https://lite-llm.mymaas.net
+  authConfig:
+    type: apikey
+    api_key: ${LLM_SERVICE_API_KEY}
+  modelParams:
+    max_tokens: 16384

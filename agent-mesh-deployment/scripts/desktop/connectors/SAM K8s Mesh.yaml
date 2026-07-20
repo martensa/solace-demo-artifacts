@@ -1,0 +1,24 @@
+# MCP connector to the local Kubernetes SAM deployment. Uses the
+# same MCP entrypoint as Claude Code (Streamable HTTP + OAuth 2.1
+# discovery against the cluster Keycloak). The desktop app is a Go
+# binary, so the lab CA from the macOS keychain is trusted - no
+# extra CA configuration needed.
+#
+# On first use the desktop app prompts for the OAuth login
+# (Keycloak, e.g. sam_admin or power_user); the K8s agents then
+# appear as tools named <agent>_<skill>, RBAC-filtered per user.
+kind: connector
+name: SAM K8s Mesh
+description: >-
+  Local Kubernetes Solace Agent Mesh (sam.solace.lab) exposed via
+  its MCP entrypoint. Provides the retail demo agents (CRM, OMS
+  and PDM query experts, Retail 360 Reporter) and the other mesh
+  agents as callable tools.
+spec:
+  type: mcp
+  subtype: remote
+  values:
+    server_url: https://sam.solace.lab/gw/dev
+    connection_type: streamable-http
+    auth_type: oauth
+    auth_oauth_mode: discovery

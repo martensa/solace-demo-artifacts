@@ -421,6 +421,8 @@ agent-mesh-deployment/
     agents/                       Retail demo provisioning
                                   (declarative, sam config, v2)
     models/                       Model tuning via sam CLI (v2)
+    desktop/                      Connect the SAM desktop app to
+                                  this deployment (MCP connector)
   CLAUDE.md                       Claude Code instructions
   README.md                       This file
 ```

@@ -1,0 +1,21 @@
+# Connects the SAM DESKTOP APP (embedded trial environment) to the
+# local Kubernetes deployment via the MCP entrypoint - the same
+# path Claude Code uses (https://sam.solace.lab/gw/dev).
+#
+# Applied against the desktop app's local platform (port 8800,
+# no auth) with:  ./connect.sh   (sam config plan/apply)
+kind: manifest
+name: desktop-to-k8s-mesh
+description: >-
+  Attach the local K8s Agent Mesh (MCP entrypoint gw/dev) as an
+  MCP connector to the desktop app's Orchestrator.
+target:
+  name: desktop-local
+  url: http://localhost:8800
+resources:
+  models:
+    - general
+  connectors:
+    - SAM K8s Mesh
+  agents:
+    - Orchestrator
