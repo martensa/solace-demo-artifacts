@@ -39,9 +39,11 @@ spec:
       caller.
     # Loopback hosts match any port (RFC 8252), but the PATH is
     # compared: Claude Code redirects to
-    # http://localhost:<port>/callback and MCP Inspector to
-    # http://localhost:<port>/oauth/callback, so both path variants
-    # are allowlisted explicitly.
+    # http://localhost:<port>/callback, MCP Inspector to
+    # http://localhost:<port>/oauth/callback and the SAM desktop
+    # app (embedded runtime, port 8800) to
+    # http://localhost:<port>/api/v1/auth/tool/callback, so all
+    # path variants are allowlisted explicitly.
     allowedRedirectUris:
       - uri: http://127.0.0.1
       - uri: http://localhost
@@ -49,6 +51,8 @@ spec:
       - uri: http://localhost/callback
       - uri: http://127.0.0.1/oauth/callback
       - uri: http://localhost/oauth/callback
+      - uri: http://127.0.0.1/api/v1/auth/tool/callback
+      - uri: http://localhost/api/v1/auth/tool/callback
     includeTools: []
     excludeTools: []
     corsAllowedOrigins: []
