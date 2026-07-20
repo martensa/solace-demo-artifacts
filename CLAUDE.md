@@ -42,13 +42,19 @@ cd event-mesh-deployment
 
 ```bash
 cd agent-mesh-deployment
-cp .env.example .env                 # edit LLM_SERVICE_API_KEY
+cp .env.example .env                 # edit LLM key + artifact paths
 ./scripts/setup-keycloak-client.sh   # creates OIDC client
 # paste the printed client secret into .env
 ./scripts/setup-keycloak-users.sh    # creates groups + demo users
-./scripts/start.sh                   # helm install with --set
+./scripts/load-images.sh             # offline images -> registry
+./scripts/start.sh                   # helm install (local chart)
+./scripts/rbac/apply-rbac.sh         # roles + claim mappings
 ./scripts/stop.sh                    # full teardown incl. Keycloak
 ```
+
+SAM v2 (Go stack): the chart and images come from the offline
+delivery package; `.env` points at the local copies
+(`SAM_CHART_PATH`, image and CLI tarballs).
 
 ## Terraform Conventions
 

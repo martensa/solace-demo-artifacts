@@ -1,5 +1,12 @@
 # Agent and Connector Provisioning
 
+Note: written against the SAM v1 platform API (enterprise
+1.543.0). The v2 platform exposes similar endpoints (for example
+`/api/v1/platform/connectors`), but payloads and token handling
+are unverified on v2 -- test before relying on these scripts. For
+declarative v2 provisioning prefer `sam config apply`
+(agent/connector kinds), see `../rbac/README.md` for the pattern.
+
 Automated provisioning of Solace Agent Mesh (SAM) connectors and agents
 through the SAM Platform REST API. The `create.sh` script creates the
 connectors and agents from the JSON definitions in this directory.

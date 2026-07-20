@@ -1,5 +1,10 @@
 # Model Configuration Adjustments
 
+Note: written against the SAM v1 platform API (enterprise
+1.543.0); unverified on v2. In v2 the `llmService.*` Helm values
+seed the model configurations at startup, and models can also be
+managed declaratively via `sam config apply` (model kind).
+
 Scripts for adjusting Solace Agent Mesh (SAM) model configurations through the
 SAM Platform REST API. Add further model and runtime tuning scripts of this
 kind to this directory.
