@@ -37,9 +37,14 @@ spec:
       retail demo experts, Retail 360 Reporter, Orchestrator and
       the external agents. The tool list is RBAC-filtered per
       caller.
+    # Loopback hosts match any port (RFC 8252), but the PATH is
+    # compared: Claude Code redirects to http://localhost:<port>/callback,
+    # so the /callback path variants are required.
     allowedRedirectUris:
       - uri: http://127.0.0.1
       - uri: http://localhost
+      - uri: http://127.0.0.1/callback
+      - uri: http://localhost/callback
     includeTools: []
     excludeTools: []
     corsAllowedOrigins: []
