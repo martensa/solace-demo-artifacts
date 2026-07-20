@@ -11,11 +11,20 @@ description: >-
   one executive report.
 spec:
   appConfig:
-    version: "1.0.1"
+    version: "1.0.3"
     display_name: Retail 360 Report
     description: >-
       Parallel CRM/OMS/PDM analysis merged into one executive
       report.
+    # Agent-card skill advertisement: without at least one skill
+    # the WebUI chat picker hides the workflow's card.
+    skills:
+      - id: retail_360_report
+        name: Retail 360 Report
+        description: >-
+          Fan a business question out to the CRM, OMS and PDM
+          experts in parallel and merge the findings into one
+          executive report.
     output_mapping:
       report: "{{report.output}}"
     nodes:
@@ -28,7 +37,7 @@ spec:
             Query the retail_crm database as needed and return your
             key findings as a concise markdown section (numbers
             included, no fluff). Request:
-            {{workflow.input.message}}
+            {{workflow.input.text}}
       - id: oms
         type: agent
         agent_name: Retail OMS Query Expert
@@ -38,7 +47,7 @@ spec:
             Query the retail_oms database as needed (mind the
             line-item grain) and return your key findings as a
             concise markdown section (numbers included, no fluff).
-            Request: {{workflow.input.message}}
+            Request: {{workflow.input.text}}
       - id: pdm
         type: agent
         agent_name: Retail PDM Query Expert
@@ -48,7 +57,7 @@ spec:
             Query the retail_pdm database as needed and return your
             key findings as a concise markdown section (numbers
             included, no fluff). Request:
-            {{workflow.input.message}}
+            {{workflow.input.text}}
       - id: report
         type: agent
         agent_name: Retail 360 Reporter
@@ -60,7 +69,7 @@ spec:
           message: |
             Merge these three findings sections into one executive
             Retail 360 report answering the original request:
-            {{workflow.input.message}}
+            {{workflow.input.text}}
 
             ## CRM findings
             {{crm.output}}

@@ -59,11 +59,18 @@ referenced by name and reconciled idempotently.
 Four nodes: `crm`, `oms`, `pdm` run in parallel (no
 `depends_on` between them), `report` (the Retail 360 Reporter)
 merges their outputs. Input wiring uses
-`{{workflow.input.message}}` and `{{<node>.output}}` templates;
-`output_mapping` returns the report.
+`{{workflow.input.text}}` and `{{<node>.output}}` templates;
+`output_mapping` returns the report. NOTE: text input delegated
+over A2A arrives under the key `text` (verified in the awe log:
+`inputKeys: ["text"]`) -- `{{workflow.input.message}}` stays
+an unresolved placeholder.
 
-Once deployed, the workflow is addressable like an agent (chat,
-delegation). RBAC: callers need `workflow:*:invoke` AND
+Triggering (2.225.14): the WebUI chat picker lists agents only
+(workflow cards are filtered out); trigger the workflow by asking
+the Orchestrator to delegate to it, e.g. "Delegiere diese Aufgabe
+an den Workflow 'Retail 360 Report': ...". The first cold run can
+exceed the Orchestrator's delegation timeout -- it retries
+automatically. RBAC: callers need `workflow:*:invoke` AND
 `agent:*:invoke` -- every node hop is authorized against the
 caller (the `power_user` role has both; `sam_user` does not).
 
