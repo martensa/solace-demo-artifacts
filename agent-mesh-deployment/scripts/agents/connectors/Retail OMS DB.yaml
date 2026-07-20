@@ -1,0 +1,19 @@
+kind: connector
+name: Retail OMS DB
+description: >-
+  This connector is used to generate dynamic SQL queries for the
+  database of the connected retail OMS (order management system).
+  The purpose of the database is to store order and order lifecycle
+  information for supporting end-to-end order processing
+  operations. The data contains order creation, processing status,
+  inventory allocation, shipping details, payment information, and
+  fulfillment tracking records. Timestamps are in UTC.
+spec:
+  type: sql
+  subtype: postgres
+  values:
+    database: retail_oms
+    hostname: host.docker.internal
+    port: 5432
+    username: ${RETAIL_DB_USERNAME}
+    password: ${RETAIL_DB_PASSWORD}

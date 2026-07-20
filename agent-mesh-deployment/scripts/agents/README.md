@@ -1,115 +1,83 @@
-# Agent and Connector Provisioning
+# Agent and Connector Provisioning (SAM v2)
 
-Note: written against the SAM v1 platform API (enterprise
-1.543.0). The v2 platform exposes similar endpoints (for example
-`/api/v1/platform/connectors`), but payloads and token handling
-are unverified on v2 -- test before relying on these scripts. For
-declarative v2 provisioning prefer `sam config apply`
-(agent/connector kinds), see `../rbac/README.md` for the pattern.
-
-Automated provisioning of Solace Agent Mesh (SAM) connectors and agents
-through the SAM Platform REST API. The `create.sh` script creates the
-connectors and agents from the JSON definitions in this directory.
-
-It creates configuration only. Deploying each agent is a separate step; the
-script prints ready-to-run deploy commands when it finishes.
+Declarative provisioning of the retail demo agents and their
+postgres connectors via the sam CLI (`sam config plan/apply`).
+No REST calls, no tokens from the browser, no ID handling --
+everything is referenced by name and reconciled idempotently.
 
 ## Files
 
-- `create.sh` -- provisioning script (idempotent for connectors).
-- `agent-retail_crm_query_expert.json` -- Retail CRM agent definition.
-- `agent-retail_oms_query_expert.json` -- Retail OMS agent definition.
-- `agent-retail_pdm_query_expert.json` -- Retail PDM agent definition.
-- `connector-retail_crm_db.json` -- Retail CRM DB connector definition.
-- `connector-retail_oms_db.json` -- Retail OMS DB connector definition.
-- `connector-retail_pdm_db.json` -- Retail PDM DB connector definition.
+- `manifest.yaml` -- the `sam config` manifest (target
+  `https://sam.solace.lab`, DB credential variables, resource
+  lists).
+- `connectors/` -- one `kind: connector` (sql/postgres) per
+  retail database (CRM, OMS, PDM). Credentials come from the
+  `${RETAIL_DB_USERNAME}` / `${RETAIL_DB_PASSWORD}` variables.
+- `agents/` -- one `kind: agent` per query expert. Each agent
+  references by name: the `general` model alias, the built-in
+  `data_analysis` and `builtin_artifact_tools` toolsets, its
+  connector, and declares an inline agent-card skill.
+- `create.sh` -- thin wrapper: plan, then apply.
 
-Each agent is paired with its connector in the `PAIRS` list at the top of
-`create.sh`.
+## What each agent gets
+
+- **Connector** (`spec.connectors`): provides the
+  `execute_sql_query` tool against the live postgres database.
+- **`data_analysis` toolset** (built-in, referenced by name):
+  SQL on result artifacts (`create_sqlite_db`,
+  `query_data_with_sql`) and Plotly chart generation
+  (`create_chart_from_plotly_config`) -- the system prompts
+  instruct the agents to use these for follow-up analysis and
+  visualizations instead of re-querying the database.
+- **`builtin_artifact_tools` toolset**: list/load artifacts.
+- **Inline skill** (`spec.skills`): an agent-card capability
+  advertisement (`{id, name, description}`) used for discovery
+  and routing. These are metadata-only ("instruction-only") --
+  loadable skill bundles (SKILL.md packages) would go into
+  `spec.skillRefs` instead and are not needed here.
+- **Agent card welcome** with click-to-run suggestions
+  (`additionalConfigurations.agentCard.welcome`).
 
 ## Prerequisites
 
-- `curl` and `jq` on the PATH.
-- A logged-in SAM session in Chrome (for automatic token detection), or a
-  token passed explicitly (see below).
+- The sam CLI (see `../rbac/README.md` for resolution order) and
+  a login as a user with agent_builder + connector scopes:
 
-## What it does
-
-For each agent and connector pair, the script:
-
-1. Resolves the model id dynamically from its alias (default `general`).
-2. Ensures the connector exists, matched by name. It is reused if present,
-   otherwise created from the connector JSON.
-3. Injects the resolved model id and connector id into the agent payload.
-4. Creates the agent (configuration only, not deployed).
-
-No ids are hard-coded, so the script runs unchanged in any SAM environment.
+  ```bash
+  sam auth login solace-lab --url https://sam.solace.lab
+  ```
 
 ## CLI usage
 
-Run the script from this directory:
+Run from this directory:
 
 ```bash
-# Auto-detect the token from Chrome, then create connectors + agents
+# Create/update connectors + agents; agents stay NOT deployed
 ./create.sh
 
-# Pass the token explicitly (also: --token)
-./create.sh -t '<sam_access_token>'
+# Same, and deploy the agents
+./create.sh --deploy
 
-# Provide the token through the environment
-SAM_TOKEN='<sam_access_token>' ./create.sh
-
-# Resolve everything and report what would happen; create nothing
+# Plan only, change nothing
 ./create.sh --dry-run
 
-# Print usage (also: -h)
-./create.sh --help
+# Different DB credentials (defaults: postgres/postgres)
+RETAIL_DB_PASSWORD='secret' ./create.sh
 ```
 
-Token resolution order: `-t/--token`, then `SAM_TOKEN`, then Chrome
-localStorage.
-
-### Environment variables
-
-- `SAM_BASE` -- API base URL (default `https://sam.solace.lab`).
-- `MODEL_ALIAS` -- model alias to resolve (default `general`).
-- `DB_USERNAME` -- DB user, used only when a connector is created
-  (default `postgres`).
-- `DB_PASSWORD` -- DB password, used only when a connector is created
-  (default `postgres`).
-
-Example, creating connectors with a different password:
-
-```bash
-DB_PASSWORD='secret' ./create.sh
-```
-
-## Getting the token
-
-The script reads the token automatically from Chrome. To pass it manually,
-open the DevTools console on a logged-in SAM tab and run:
-
-```js
-copy(localStorage.getItem('sam_access_token'))
-```
-
-The token is short-lived (about one hour).
-
-## Deploying
-
-`create.sh` creates configuration only. When it finishes it prints one deploy
-command per agent. Run those to roll the agents out, or deploy them later from
-the WebUI.
-
-## Adding another agent
-
-1. Add an `agent-*.json` and a `connector-*.json` to this directory.
-2. Append one line to the `PAIRS` list in `create.sh`.
-
-No other change is needed.
+Re-running is safe: `sam config apply` reconciles creates and
+updates. Agents are created undeployed by default (`--no-deploy`);
+`--deploy` runs the deployment phase for the `deploy: true`
+agents.
 
 ## Notes
 
-- Connector matching is by name. An existing connector is reused as-is and is
-  not updated to match the JSON.
-- Agent names are not unique, so a second run creates duplicate agents.
+- NEVER pass `--prune` here: the platform hosts agents this
+  manifest does not manage (for example the built-in
+  Orchestrator). The plan output lists them as `delete`
+  proposals; without `--prune` the apply skips them.
+- Adding another agent: add `connectors/<name>.yaml` and
+  `agents/<name>.yaml`, then list both names in `manifest.yaml`.
+- Secrets: `${VAR}` placeholders resolve at plan/apply time from
+  the manifest `variables` block, the process environment, or a
+  `.env` file; the platform stores the resolved value.

@@ -1,0 +1,20 @@
+kind: connector
+name: Retail PDM DB
+description: >-
+  This connector is used to generate dynamic SQL queries for the
+  database of the connected retail PDM (product data management)
+  system. The purpose of the database is to store product and
+  product lifecycle information for supporting production plant
+  operation and catalog management. The data contains product
+  specifications, pricing, inventory levels, categorization,
+  supplier details, and lifecycle management records. Timestamps
+  are in UTC.
+spec:
+  type: sql
+  subtype: postgres
+  values:
+    database: retail_pdm
+    hostname: host.docker.internal
+    port: 5432
+    username: ${RETAIL_DB_USERNAME}
+    password: ${RETAIL_DB_PASSWORD}

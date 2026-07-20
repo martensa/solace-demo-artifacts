@@ -1,0 +1,33 @@
+# Declarative manifest for the retail demo agents.
+# Applied with:  sam config plan/apply -m manifest.yaml  (see create.sh)
+#
+# Order of creation is handled by the CLI: connectors are reconciled
+# before the agents that reference them (by name).
+kind: manifest
+name: retail-demo-agents
+description: >-
+  Retail demo: CRM, OMS and PDM SQL query expert agents, each with
+  its own postgres connector, the built-in data_analysis and
+  artifact toolsets, and an inline instruction-only skill.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    # Token cache from `sam auth login solace-lab` (browser flow,
+    # log in as a user with agent_builder/connector scopes, e.g.
+    # the bootstrap admin sam_admin).
+    type: oauth
+variables:
+  # Demo defaults (see repo conventions); override via environment
+  # at apply time, e.g. RETAIL_DB_PASSWORD=secret ./create.sh
+  RETAIL_DB_USERNAME: "postgres"
+  RETAIL_DB_PASSWORD: "postgres"
+resources:
+  connectors:
+    - Retail CRM DB
+    - Retail OMS DB
+    - Retail PDM DB
+  agents:
+    - Retail CRM Query Expert
+    - Retail OMS Query Expert
+    - Retail PDM Query Expert
