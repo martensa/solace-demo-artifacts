@@ -1,5 +1,6 @@
 # MCP entrypoint: exposes the mesh agents as MCP tools (one tool
-# per agent-card skill, named <agent>_<skill>) at
+# per agent-card skill, named <card>_<skill NAME>, both sanitized;
+# DB-managed agents/workflows use their UUID instance name) at
 #   https://sam.solace.lab/gw/dev/     (Streamable HTTP)
 #
 # Auth is the cluster OIDC (Keycloak): clients discover the OAuth

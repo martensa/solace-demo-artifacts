@@ -7,8 +7,8 @@ desktop:
    Mesh.app", the encapsulated trial environment) to the K8s
    deployment over the same MCP entrypoint Claude Code uses
    (`https://sam.solace.lab/gw/dev`). The desktop stays fully
-   local (embedded broker, SQLite); its Orchestrator gains every
-   K8s mesh agent as a callable MCP tool.
+   local (embedded broker, SQLite); its Orchestrator gains the
+   K8s mesh agents and deployed workflows as callable MCP tools.
 2. `make-mirror-app.sh` -- builds "SAM K8s.app" (in
    `~/Applications`), a 1:1 MIRROR of the K8s WebUI: a Chrome
    app-mode window with its own Dock icon, sharing the normal
@@ -36,8 +36,9 @@ no auth), via `sam config plan/apply`:
   `https://sam.solace.lab/gw/dev` (Streamable HTTP,
   `auth_type: oauth` with `auth_oauth_mode: discovery` -- the
   same OAuth 2.1 flow Claude Code uses). The connector carries a
-  static tool `manifest` (the four retail tools, each with the
-  single required string field `message`). This is REQUIRED: the
+  static tool `manifest` (the generated tool entries, each with
+  the single required string field `message`). This is REQUIRED:
+  the
   entrypoint blocks `tools/list` until the user completes OAuth,
   and without a manifest the runtime refuses the MCP client at
   agent startup (`failed to add MCP client ... requires a
@@ -86,9 +87,9 @@ open -a "Solace Agent Mesh"   # start the desktop app
 Then chat with the Orchestrator in the app: on the first K8s tool
 call the app runs the Keycloak OAuth login (use a demo user with
 agent invoke scopes, e.g. `sam_admin` or `power_user`). The K8s
-agents appear as tools named `<agent>_<skill>`, RBAC-filtered per
-the logged-in user -- for example
-`retail_crm_query_expert_query_retail_crm`.
+agents appear as tools named `<card>_<skill name>` -- for example
+`agent_<uuid>_query_retail_crm` (DB-managed agents carry their
+UUID instance name as card name).
 
 ## Manual setup (app UI, without connect.sh)
 
@@ -129,10 +130,10 @@ this mirrors exactly what `connect.sh` automates:
   keychain, where the lab CA is installed -- no extra CA
   configuration (unlike Node-based clients).
 - The desktop keeps its own encapsulated runtime; only the tool
-  calls go to the K8s mesh. Rebuilding the K8s deployment does
-  not require re-running connect.sh (the entrypoint URL stays
-  stable), but a new OAuth login may be needed after the MCP
-  entrypoint restarts.
+  calls go to the K8s mesh. After a K8s teardown/rebuild, re-run
+  `generate-manifest.sh` + `connect.sh`: the tool names embed the
+  platform-DB UUIDs, which change with the rebuild. A new OAuth
+  login may also be needed after the MCP entrypoint restarts.
 - Re-running `connect.sh` is safe (reconciles). NEVER pass
   `--prune` -- the manifest does not manage the desktop's sample
   resources.

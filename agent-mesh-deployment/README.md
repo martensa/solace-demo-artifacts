@@ -293,6 +293,10 @@ To rebuild:
 7. `cd scripts/agents && ./create.sh --deploy`
 8. `cd scripts/models && ./set-max-tokens.sh` (plus
    `--model-alias planning` and `--model-alias report_gen`)
+9. If the desktop app is connected:
+   `cd scripts/desktop && ./generate-manifest.sh && ./connect.sh`
+   (the MCP tool names embed platform-DB UUIDs, which the rebuild
+   changed)
 
 ## Upgrade
 

@@ -87,8 +87,12 @@ the workflow's UUID in underscore form (get the UUID from
 
 Serves MCP (Streamable HTTP) at `https://sam.solace.lab/gw/dev/`
 on the same host as the WebUI. One MCP tool per agent-card skill,
-named `<agent>_<skill>` (for example
-`retail_crm_query_expert_query_retail_crm`).
+named `<card>_<skill name>` (both sanitized: lowercase,
+non-alphanumerics to `_`; the suffix comes from the skill NAME,
+not the skill id). DB-managed agents and workflows carry their
+UUID instance name as card name -- for example
+`agent_<uuid>_query_retail_crm` -- so tool names change with
+every platform rebuild.
 
 ALL mesh agents are exposed (`includeTools` is empty): the retail
 experts, the Retail 360 Reporter, Orchestrator, Builder and the
