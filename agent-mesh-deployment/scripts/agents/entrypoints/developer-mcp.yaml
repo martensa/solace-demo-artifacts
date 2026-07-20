@@ -1,0 +1,38 @@
+# MCP entrypoint: exposes the mesh agents as MCP tools (one tool
+# per agent-card skill, named <agent>_<skill>) at
+#   https://sam.solace.lab/gw/dev/     (Streamable HTTP)
+#
+# Auth is the cluster OIDC (Keycloak): clients discover the OAuth
+# flow from the 401 challenge (authorization code + PKCE, dynamic
+# client registration). With state redirection (default on) the
+# IdP only needs the WebUI callback, which Keycloak already
+# allowlists via https://sam.solace.lab/*.
+#
+# Claude Code:
+#   claude mcp add --transport http sam-lab https://sam.solace.lab/gw/dev
+#
+# Note: with RBAC on, tools/list is filtered to the caller's
+# agent:<name>:invoke scopes. Tokens are minted per entrypoint
+# in-memory: an entrypoint restart invalidates them (clients
+# re-auth via refresh token automatically).
+kind: entrypoint
+name: developer-mcp
+description: >-
+  MCP endpoint exposing the Agent Mesh agents as MCP tools for
+  developer clients such as Claude Code and MCP Inspector.
+spec:
+  type: mcp
+  slug: dev
+  deploy: true
+  values:
+    enableAuth: "true"
+    serverName: Solace Lab Agent Mesh
+    serverDescription: >-
+      Retail demo agents (CRM/OMS/PDM query experts) exposed as
+      MCP tools.
+    allowedRedirectUris:
+      - uri: http://127.0.0.1
+      - uri: http://localhost
+    includeTools: []
+    excludeTools: []
+    corsAllowedOrigins: []

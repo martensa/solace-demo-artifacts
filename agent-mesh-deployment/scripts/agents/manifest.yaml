@@ -27,7 +27,16 @@ resources:
     - Retail CRM DB
     - Retail OMS DB
     - Retail PDM DB
+  skills:
+    - retail-crm-schema
+    - retail-oms-schema
+    - retail-pdm-schema
   agents:
     - Retail CRM Query Expert
     - Retail OMS Query Expert
     - Retail PDM Query Expert
+    - Retail 360 Reporter
+  workflows:
+    - retail-360-report
+  entrypoints:
+    - developer-mcp

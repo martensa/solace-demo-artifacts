@@ -1,0 +1,71 @@
+# Retail 360 workflow: fan out to the three domain experts in
+# parallel (no depends_on between them), then merge their findings.
+# Triggered like an agent (chat, delegation) once deployed; the
+# caller needs workflow:*:invoke AND agent:*:invoke scopes (each
+# node hop is authorized against the caller).
+kind: workflow
+name: retail-360-report
+description: >-
+  Retail 360 report: fans a business question out to the CRM, OMS
+  and PDM query experts in parallel and merges their findings into
+  one executive report.
+spec:
+  appConfig:
+    display_name: Retail 360 Report
+    description: >-
+      Parallel CRM/OMS/PDM analysis merged into one executive
+      report.
+    output_mapping:
+      report: "{{report.output}}"
+    nodes:
+      - id: crm
+        type: agent
+        agent_name: Retail CRM Query Expert
+        input:
+          message: >-
+            Analyze the CUSTOMER (CRM) perspective of this request.
+            Query the retail_crm database as needed and return your
+            key findings as a concise markdown section (numbers
+            included, no fluff). Request:
+            {{workflow.input.message}}
+      - id: oms
+        type: agent
+        agent_name: Retail OMS Query Expert
+        input:
+          message: >-
+            Analyze the ORDER (OMS) perspective of this request.
+            Query the retail_oms database as needed (mind the
+            line-item grain) and return your key findings as a
+            concise markdown section (numbers included, no fluff).
+            Request: {{workflow.input.message}}
+      - id: pdm
+        type: agent
+        agent_name: Retail PDM Query Expert
+        input:
+          message: >-
+            Analyze the PRODUCT (PDM) perspective of this request.
+            Query the retail_pdm database as needed and return your
+            key findings as a concise markdown section (numbers
+            included, no fluff). Request:
+            {{workflow.input.message}}
+      - id: report
+        type: agent
+        agent_name: Retail 360 Reporter
+        depends_on:
+          - crm
+          - oms
+          - pdm
+        input:
+          message: |
+            Merge these three findings sections into one executive
+            Retail 360 report answering the original request:
+            {{workflow.input.message}}
+
+            ## CRM findings
+            {{crm.output}}
+
+            ## OMS findings
+            {{oms.output}}
+
+            ## PDM findings
+            {{pdm.output}}
