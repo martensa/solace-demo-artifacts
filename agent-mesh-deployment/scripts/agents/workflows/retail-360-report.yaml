@@ -11,6 +11,7 @@ description: >-
   one executive report.
 spec:
   appConfig:
+    version: "1.0.1"
     display_name: Retail 360 Report
     description: >-
       Parallel CRM/OMS/PDM analysis merged into one executive
