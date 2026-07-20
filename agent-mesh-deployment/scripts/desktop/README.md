@@ -23,11 +23,14 @@ desktop:
 Against the desktop app's local platform (`http://localhost:8800`,
 no auth), via `sam config plan/apply`:
 
-- `models/general.yaml` -- configures the desktop's `general`
-  model alias with the lab LiteLLM proxy. The API key resolves
-  from the repo `.env` (`LLM_SERVICE_API_KEY`) through the CLI's
-  nearest-ancestor `.env` auto-loading; `max_tokens: 16384`
-  matches the K8s-side tuning.
+- `models/general.yaml` + `models/planning.yaml` -- configure
+  BOTH desktop default model aliases with the lab LiteLLM proxy.
+  The app's "No default model has been set up" banner
+  (`GET /api/v1/platform/models/status`) only clears when every
+  default alias (`general` AND `planning`) is configured. The API
+  key resolves from the repo `.env` (`LLM_SERVICE_API_KEY`)
+  through the CLI's nearest-ancestor `.env` auto-loading;
+  `max_tokens: 16384` matches the K8s-side tuning.
 - `connectors/SAM K8s Mesh.yaml` -- `mcp/remote` connector to
   `https://sam.solace.lab/gw/dev` (Streamable HTTP,
   `auth_type: oauth` with `auth_oauth_mode: discovery` -- the
@@ -51,6 +54,11 @@ the logged-in user -- for example
 `retail_crm_query_expert_query_retail_crm`.
 
 ## Notes
+
+- After the FIRST model configuration, restart the desktop app:
+  the embedded runtime binds model configs at startup (log line
+  "model binding upserted"), and the running instance keeps the
+  unconfigured state until restarted.
 
 - TLS: the desktop app is a Go binary and trusts the macOS
   keychain, where the lab CA is installed -- no extra CA

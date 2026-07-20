@@ -15,6 +15,7 @@ target:
 resources:
   models:
     - general
+    - planning
   connectors:
     - SAM K8s Mesh
   agents:
