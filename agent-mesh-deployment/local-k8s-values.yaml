@@ -103,6 +103,12 @@ ingress:
     # (JWT session cookie + Set-Cookie + state exceeds default 4k/8k)
     nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
     nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    # MCP tools/call holds one HTTP request open for the whole
+    # agent/workflow run (retail-360-report: workflow_timeout
+    # 900s). The NGINX default proxy-read-timeout of 60s cut
+    # those off with 504 -- match the workflow budget instead.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "900"
     cert-manager.io/cluster-issuer: "solace-lab-ca-issuer"
   autoConfigurePaths: true
   host: "sam.solace.lab"
