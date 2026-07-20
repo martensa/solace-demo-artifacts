@@ -59,7 +59,9 @@ spec:
         description: >-
           General conversation, task orchestration, and getting
           started with Solace Agent Mesh. (K8s mesh agent:
-          Orchestrator)
+          Orchestrator) Can delegate to the mesh workflows
+          ('retail-360-report') and returns their full results
+          directly -- preferred for report requests.
         inputSchema:
           type: object
           properties:
@@ -72,7 +74,14 @@ spec:
         description: >-
           Fan a business question out to the CRM, OMS and PDM experts
           in parallel and merge the findings into one executive
-          report. (K8s mesh workflow: retail-360-report)
+          report. (K8s mesh workflow: retail-360-report) NOTE: the
+          tool result is only a completion status; the produced
+          report/artifacts stay on the mesh and re-fetching from an
+          agent REGENERATES them. To receive the result directly in
+          one call, use
+          agent_019f7f95_9813_78d6_a115_076f0230ba93_general instead
+          and ask it to delegate to the workflow 'retail-360-report'
+          and return the full report text.
         inputSchema:
           type: object
           properties:

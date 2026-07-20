@@ -55,12 +55,22 @@ no auth), via `sam config plan/apply`:
   whenever the platform DB is rebuilt (stop.sh), so run it
   (then `connect.sh`) after every K8s teardown/rebuild; needs a
   valid `sam auth login` against `https://sam.solace.lab`.
-  Default is the retail demo set incl. the retail-360-report
-  workflow; `--all` includes every mesh card (Builder, K8s
-  Orchestrator, web research/scraper and utility agents) -- 26
-  tools as of now. Deployed workflows ARE callable MCP tools
-  (verified end-to-end); the `message` argument lands in
+  Default is the retail demo set (incl. the retail-360-report
+  workflow and the K8s Orchestrator); `--all` includes every
+  mesh card (Builder, web research/scraper and utility agents)
+  -- 26 tools as of now. Deployed workflows ARE callable MCP
+  tools (verified end-to-end); the `message` argument lands in
   `{{workflow.input.text}}`.
+  Workflow result gap (2.225.14, verified twice): the MCP tool
+  result of a workflow call is ONLY a completion status --
+  output and artifacts stay on the mesh, and re-fetching from an
+  agent afterwards REGENERATES the report (no shared session).
+  The generated tool descriptions therefore steer the desktop
+  Orchestrator to the one-call path for report requests: call
+  the K8s Orchestrator tool (`agent_<uuid>_general`) and let it
+  delegate to the workflow -- it collects the artifacts in the
+  same mesh session and returns the full report text as the
+  tool result.
 - `agents/Orchestrator.yaml` -- the desktop's built-in
   Orchestrator (pulled via `sam config pull`) extended with the
   connector.

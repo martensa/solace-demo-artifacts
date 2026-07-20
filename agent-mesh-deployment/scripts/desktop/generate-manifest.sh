@@ -61,6 +61,8 @@ retail_agents = {
     "Retail OMS Query Expert",
     "Retail PDM Query Expert",
     "Retail 360 Reporter",
+    # One-call path to workflow results (see NOTE logic below).
+    "Orchestrator",
 }
 retail_workflows = {"retail-360-report"}
 
@@ -73,10 +75,20 @@ def sanitize(s):
 
 # card name -> human-readable display name
 display = {}
+orch_card = None
 for a in rows("AGENTS_JSON"):
-    display[a.get("instanceName") or a["name"]] = a["name"]
+    card = a.get("instanceName") or a["name"]
+    display[card] = a["name"]
+    if a["name"] == "Orchestrator":
+        orch_card = card
 for w in rows("WORKFLOWS_JSON"):
     display["workflow_" + w["id"].replace("-", "_")] = w["name"]
+
+# Orchestrator tool name (the one-call path to workflow RESULTS:
+# the MCP result of a workflow tool carries only a completion
+# status in 2.225.14 -- output and artifacts stay on the mesh).
+orch_tool = f"{sanitize(orch_card)}_general" if orch_card else None
+wf_names = [w["name"] for w in rows("WORKFLOWS_JSON")]
 
 lines, count = [], 0
 for card in rows("CARDS_JSON"):
@@ -91,6 +103,24 @@ for card in rows("CARDS_JSON"):
         tool = f"{sanitize(cname)}_{sanitize(s.get('name') or s['id'])}"
         desc = (f"{s.get('description') or s.get('name') or s['id']} "
                 f"(K8s mesh {kind}: {disp})")
+        if is_workflow:
+            desc += (" NOTE: the tool result is only a completion"
+                     " status; the produced report/artifacts stay"
+                     " on the mesh and re-fetching from an agent"
+                     " REGENERATES them.")
+            if orch_tool:
+                desc += (f" To receive the result directly in one"
+                         f" call, use {orch_tool} instead and ask"
+                         f" it to delegate to the workflow"
+                         f" '{disp}' and return the full report"
+                         f" text.")
+        elif orch_tool and sanitize(cname) == sanitize(orch_card):
+            if wf_names:
+                names = ", ".join(f"'{n}'" for n in wf_names)
+                desc += (f" Can delegate to the mesh workflows"
+                         f" ({names}) and returns their full"
+                         f" results directly -- preferred for"
+                         f" report requests.")
         desc = " ".join(desc.split())
         lines.append(f"      - name: {tool}")
         lines.append("        description: >-")
