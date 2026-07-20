@@ -1,129 +1,71 @@
-# SAM Core Configuration
-sam:
-  platform: python
-  communityMode: false
+# Helm values for Solace Agent Mesh v2 (chart solace-agent-mesh 2.0.x)
+# on the local solace-lab cluster (Rancher Desktop / k3s).
+#
+# v2 architecture: three Go components replace the v1 core pod --
+#   gwe (Entrypoint Executor: WebUI + platform API, ingress backend),
+#   awe (Agent-Workflow Executor), str (Secure Tool Runtime).
+# There is no agent-deployer in v2.
+#
+# Removed v1 keys (do not re-add; the v2 schema rejects unknown keys):
+#   sam.platform, sam.communityMode, samDeployment.image,
+#   samDeployment.agentDeployer, sam.authenticationRbac.customRoles/
+#   idpClaims/defaultRoles (RBAC beyond bootstrap admins is managed
+#   post-install via `sam config apply`, see scripts/rbac/).
 
-  # Authentication and authorization configuration
-  # When enabled, SAM will enforce RBAC authorization
-  # When disabled (for dev/quickstart), all users have admin access
+sam:
+  # Enforce OIDC + RBAC (disabled would make every user an admin).
   authorization:
     enabled: true
 
-  # Use localhost for local development
+  # External URL host. Takes precedence over ingress.host for all
+  # computed URLs (frontend URL, OIDC redirect URI).
   dnsName: "sam.solace.lab"
 
-  # Session secret for local demo use
+  # Session secret for local demo use (deliberately checked in).
   sessionSecretKey: "s6iRVUVvTsAkXCcWyedhFE6d4wLCw0ZA"
 
-  # OIDC configuration -- issuer, clientId, clientSecret
-  # are injected via --set in start.sh.
-  # The redirect URI is computed automatically by SAM from the
-  # ingress/DNS configuration; Keycloak is configured to accept
-  # https://<dnsName>/* in setup-keycloak-client.sh.
+  # OIDC configuration -- issuer, clientId, clientSecret are injected
+  # via --set in start.sh. providerName stays empty: the binary's
+  # default catalog entry is generic OIDC fed by these values, which
+  # works for Keycloak. The redirect URI is computed by the chart as
+  # https://<dnsName>/api/v1/auth/callback; Keycloak accepts
+  # https://sam.solace.lab/* (setup-keycloak-client.sh).
   oauthProvider:
     oidc:
       issuer: ""
       clientId: ""
       clientSecret: ""
 
+  # Bootstrap admins only. All other roles, assignments and IDP claim
+  # mappings are applied post-install via `sam config apply`
+  # (see scripts/rbac/). Identity = OIDC identity (email) of the
+  # Keycloak demo admin created by setup-keycloak-users.sh.
   authenticationRbac:
-    # Custom roles (in addition to built-in sam_admin and sam_user).
-    # Scope style follows the SAM Helm Quickstart documentation.
-    #
-    # Note on agent:*:delegate: required to chat with agents. It is
-    # NOT granted implicitly -- every interactive role must include
-    # it explicitly. The built-in sam_user has it.
-    #
-    # The 'viewer' role here is intentionally passive (no delegate,
-    # no tools). Users who need to interact get sam_user or a
-    # custom role below. defaultRoles fall back to sam_user (not
-    # viewer) so users without explicit group mapping can still use
-    # the system.
-    customRoles:
-      viewer:
-        description: "Passive observer -- read-only deployments and connectors"
-        scopes:
-          - "artifact:read"
-          - "sam:deployments:read"
-          - "sam:connectors:read"
+    users:
+      - identity: "sam_admin@solace.lab"
+        roles: ["sam_admin"]
+        description: "Bootstrap admin (Keycloak demo user sam_admin)"
 
-      data_engineer:
-        description: "Data engineering with data tools and connectors"
-        scopes:
-          - "agent:*:delegate"
-          - "tool:basic:*"
-          - "tool:data:*"
-          - "artifact:read"
-          - "artifact:write"
-          - "sam:connectors:read"
-          - "sam:connectors:create"
-
-      power_user:
-        description: "Advanced user with broader tool access"
-        scopes:
-          - "agent:*:delegate"
-          - "artifact:*"
-          - "tool:*"
-          - "sam:agent_builder:read"
-          - "sam:connectors:*"
-          - "sam:deployments:read"
-
-    # Static user assignments (leave empty when using idpClaims)
-    users: []
-
-    # Dynamic role assignment from IDP claims.
-    # Note: oidcProvider must match the key under
-    # sam.oauthProvider (above) -- NOT the IdP product name.
-    # The SAM chart exposes the generic "oidc" sub-block for
-    # any OIDC-compliant provider (Keycloak, Auth0, Okta, ...),
-    # so the value here is "oidc", not "keycloak".
-    idpClaims:
-      enabled: true
-      oidcProvider: "oidc"
-      claimKey: "groups"
-      # Map Keycloak group names to SAM roles
-      mappings:
-        "admin": ["sam_admin"]
-        "user": ["sam_user"]
-        "viewer": ["viewer"]
-        "data_engineer": ["data_engineer"]
-        "power_user": ["power_user"]
-
-    # Default roles for users whose claims do not match any mapping.
-    # sam_user (built-in) gives basic interactive access (chat + basic
-    # tools); preferred over 'viewer' as a default because demo users
-    # without explicit group assignment should still be able to use
-    # the system.
-    defaultRoles:
-      - "sam_user"
-
-  # Optional URL overrides for local development
-  frontendServerUrl: ""
-  platformServiceUrl: ""
-
+  # Chart default is localhost-only; empty disables the CORS origin
+  # restriction for the demo (same-origin via ingress anyway).
   cors:
     allowedOriginRegex: ""
 
-  taskLogging:
-    enabled: true
-    logStatusUpdates: true
-    logArtifactEvents: false
-    logFileParts: true
-    maxFilePartSizeBytes: 10240
-    hybridBuffer:
-      enabled: true
-      flushThreshold: 10
-
-# Solace Broker Configuration
-# Connects to the sam VPN on solace-1 from event-mesh-deployment
+# Solace Broker Configuration (external).
+# Connects to the sam VPN on solace-1 from event-mesh-deployment.
+# Only used because global.broker.embedded is false; all four fields
+# are required by the chart in that mode. TLS/host/port are encoded
+# in the single URL (ws:// = plaintext WebSocket).
 broker:
   url: "ws://host.docker.internal:8008"
   clientUsername: "default"
   password: "default"
   vpn: "sam"
 
-# LLM Service Configuration
-# API key is injected via --set in start.sh
+# LLM Service Configuration.
+# API key is injected via --set in start.sh. Non-empty models are
+# seeded idempotently into the platform model_configurations table
+# (aliases planning/general/report_gen/image_gen) at startup.
 llmService:
   planningModel: "openai/claude-opus-4-8"
   generalModel: "openai/claude-opus-4-8"
@@ -133,20 +75,18 @@ llmService:
   llmServiceEndpoint: "https://lite-llm.mymaas.net"
   llmServiceApiKey: ""
 
-environmentVariables: {}
 # Note: REQUESTS_CA_BUNDLE and SSL_CERT_FILE are injected
 # cluster-wide by the Kyverno policy
 # 'inject-solace-lab-ca-trust-bundle' from
-# solace-lab-infrastructure/pki. No per-deployment config
-# required for Solace Lab CA trust.
+# solace-lab-infrastructure/pki. Do NOT enable
+# samDeployment.customCA -- it mounts the same path
+# (/etc/ssl/certs/ca-certificates.crt) and would conflict with the
+# Kyverno mechanism.
 
-# Kubernetes Service Configuration
+# Kubernetes Service Configuration (gwe is the only exposed
+# component; TLS terminates at the ingress).
 service:
   type: ClusterIP
-  annotations: {}
-  tls:
-    enabled: false
-    passphrase: ""
 
 ingress:
   enabled: true
@@ -167,76 +107,75 @@ ingress:
       hosts:
         - sam.solace.lab
 
-# Persistence Configuration
 global:
   # The chart defaults global.imageRegistry to "gcr.io/gcp-maas-prod"
-  # (Solace's public MaaS registry) and PREPENDS it to every image's
-  # repository. Our samDeployment.image.repository values already carry
-  # the full "registry.solace.lab/..." path, so the default would produce
-  # the broken ref "gcr.io/gcp-maas-prod/registry.solace.lab/...".
-  # Set it empty so the full repository paths are used verbatim. SAM
-  # images come from registry.solace.lab; the bundled postgres/seaweedfs
-  # (not mirrored locally) then resolve from Docker Hub.
+  # (Solace's private MaaS registry) and PREPENDS it to every image
+  # whose per-image registry is empty -- including the bundled
+  # postgres/seaweedfs. Set it empty so those resolve from Docker Hub;
+  # the SAM app/str images carry their own registry below.
   imageRegistry: ""
+  # Applied to ALL pods including the sam-doctor pre-install hook
+  # (which runs the gwe image from registry.solace.lab). The secret
+  # is synced into the namespace by the Kyverno policy
+  # 'inject-registry-pull-secret'. Must be a list of plain strings.
+  imagePullSecrets:
+    - registry-pull-secret
   broker:
+    # Use the external event-mesh broker, not the embedded one.
     embedded: false
   persistence:
+    # Bundled PostgreSQL + SeaweedFS (dev/POC persistence).
+    # namespaceId also namespaces broker topics (kept identical to v1
+    # so the topic prefix sam-solace-lab/... stays stable) and derives
+    # the DB/bucket names.
     enabled: true
     namespaceId: "sam-solace-lab"
 
-# SAM Deployment Configuration
 samDeployment:
-  # Resource requests/limits use the chart defaults
-  # (sam: 1000m/2000m CPU, 1024Mi/2048Mi memory;
-  #  agentDeployer: smaller).
-  # Override samDeployment.resources.sam and
-  # samDeployment.resources.agentDeployer if needed.
-
-  serviceAccount:
-    name: solace-agent-mesh-sa
-    annotations: {}
-
-  imagePullSecret: "registry-pull-secret"
-
-  # Main SAM Image
-  image:
-    repository: registry.solace.lab/solace-agent-mesh-enterprise
-    tag: 1.543.0
-    pullPolicy: Always
-
-  # S3 (SeaweedFS) init container that runs before sam-core when bundled
-  # persistence is enabled. The chart default tag "3.97-compliant" is a
-  # Solace-private rebuild that only exists in gcr.io/gcp-maas-prod and is
-  # NOT published on Docker Hub. With global.imageRegistry="" this image
-  # comes from Docker Hub, so pin the valid upstream tag "3.97".
+  # gwe = app image (WebUI + platform API + entrypoints). Loaded into
+  # the private registry by scripts/load-images.sh from the offline
+  # tarball. awe inherits this image field-by-field (no awe block).
+  gwe:
+    image:
+      registry: "registry.solace.lab"
+      repository: "solace-agent-mesh"
+      tag: "2.225.14"
+      pullPolicy: IfNotPresent
+  # str has its own image (Go+Python tool venvs). Never blank its
+  # repository -- it would silently inherit the gwe image and break
+  # tool execution.
+  str:
+    image:
+      registry: "registry.solace.lab"
+      repository: "solace-agent-mesh-str"
+      tag: "1.50.3"
+      pullPolicy: IfNotPresent
+  # S3 (SeaweedFS) init container used with bundled persistence.
+  # The chart default tag "3.97-compliant" is a Solace-private
+  # rebuild absent from Docker Hub; pin the valid upstream tag.
   s3Init:
     image:
       tag: "3.97"
+  # dbInit uses postgres:18.0-trixie (valid Docker Hub tag) -- chart
+  # default is fine with imageRegistry "".
 
-  # Agent Deployer image
-  agentDeployer:
-    image:
-      repository: registry.solace.lab/sam-agent-deployer
-      tag: 1.8.2
-      pullPolicy: Always
-    version: "k8s-1.501.11"
-    chartVersion: "1.501.6"
-
-  rollout:
-    rollingUpdate: {}
-    strategy: RollingUpdate
-
-dataStores:
-  objectStorage:
-    workloadIdentity:
-      enabled: false
+# sam-doctor pre-install/pre-upgrade hook: keep the checks (broker,
+# LLM, OIDC reachability) but warn-only, so start.sh stays push-button
+# even when a dependency is briefly down.
+samDoctor:
+  failOnError: false
 
 # Bundled persistence (postgresql + seaweedfs) subchart overrides.
-# postgres:18.0-trixie is a valid Docker Hub tag, but the seaweedfs default
-# tag "3.97-compliant" is a Solace-private build absent from Docker Hub.
-# With global.imageRegistry="" seaweedfs resolves from Docker Hub, so pin
-# the valid upstream tag "3.97".
+# postgres:18.0-trixie is a valid Docker Hub tag, but the seaweedfs
+# default tag "3.97-compliant" is a Solace-private build absent from
+# Docker Hub -- pin the valid upstream tag "3.97" (same override as
+# the s3Init image above). Subchart pullPolicy defaults to Always;
+# IfNotPresent avoids re-pulls from Docker Hub on every pod start.
 persistence-layer:
+  postgresql:
+    image:
+      pullPolicy: IfNotPresent
   seaweedfs:
     image:
       tag: "3.97"
+      pullPolicy: IfNotPresent

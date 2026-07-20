@@ -8,12 +8,10 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SAM_NAMESPACE="sam-solace-lab"
 SAM_RELEASE="agent-mesh"
 SAM_DNS_NAME="sam.solace.lab"
-# Pin the chart version for reproducibility. Leaving this unset lets
-# `helm repo update` silently jump to a newer chart line (this is what
-# broke the 1.2.x -> 1.50x transition). 1.501.11 is the latest published
-# chart and its default sam-agent-deployer image (1.8.2) and deployer
-# version (k8s-1.501.11) match local-k8s-values.yaml.
-SAM_CHART_VERSION="1.501.11"
+# The SAM v2 chart is distributed offline (not on a public Helm repo)
+# and is deliberately NOT checked in. SAM_CHART_PATH in .env points at
+# the unpacked chart directory; the chart version is whatever that
+# directory contains (no --version pinning against a remote repo).
 
 # --- CLI prerequisites --------------------------------------------
 command -v kubectl >/dev/null 2>&1 || {
@@ -87,18 +85,24 @@ if [ -n "$missing" ]; then
   exit 1
 fi
 
-# --- Helm repo ----------------------------------------------------
-helm repo add solace-agent-mesh \
-  https://solaceproducts.github.io/solace-agent-mesh-helm-quickstart/ \
-  2>/dev/null || true
-helm repo update solace-agent-mesh
+# --- Offline chart path -------------------------------------------
+if [ -z "${SAM_CHART_PATH:-}" ] || [ ! -f "$SAM_CHART_PATH/Chart.yaml" ]; then
+  echo "ERROR: SAM_CHART_PATH in .env must point at the unpacked"
+  echo "SAM v2 Helm chart directory (containing Chart.yaml)."
+  echo "Current value: '${SAM_CHART_PATH:-<unset>}'"
+  exit 1
+fi
+CHART_VERSION=$(awk '$1 == "version:" {print $2; exit}' \
+  "$SAM_CHART_PATH/Chart.yaml")
+echo "Using local chart: $SAM_CHART_PATH (version ${CHART_VERSION:-unknown})"
 
 # --- Namespace and pull secret ------------------------------------
 kubectl create namespace "$SAM_NAMESPACE" 2>/dev/null || true
 
 # --- TLS certificate (cert-manager) -------------------------------
-# The SAM chart (>= 1.500) validates at install time that the ingress
-# TLS secret already exists. Provision it explicitly via cert-manager
+# The SAM v2 chart validates at install time (lookup-based, gated by
+# validations.clusterResourceChecks) that the ingress TLS secret
+# already exists. Provision it explicitly via cert-manager
 # (solace-lab-ca-issuer), matching the lab convention used by keycloak,
 # grafana, registry and openmetadata. The namespace delete in stop.sh
 # cleans up both the Certificate and the generated secret.
@@ -123,8 +127,7 @@ fi
 
 # --- Install / Upgrade --------------------------------------------
 helm upgrade --install "$SAM_RELEASE" \
-  solace-agent-mesh/solace-agent-mesh \
-  --version "$SAM_CHART_VERSION" \
+  "$SAM_CHART_PATH" \
   --namespace "$SAM_NAMESPACE" \
   --values "$PROJECT_DIR/local-k8s-values.yaml" \
   --set sam.oauthProvider.oidc.issuer="$KEYCLOAK_ISSUER" \
