@@ -34,7 +34,16 @@ no auth), via `sam config plan/apply`:
 - `connectors/SAM K8s Mesh.yaml` -- `mcp/remote` connector to
   `https://sam.solace.lab/gw/dev` (Streamable HTTP,
   `auth_type: oauth` with `auth_oauth_mode: discovery` -- the
-  same OAuth 2.1 flow Claude Code uses).
+  same OAuth 2.1 flow Claude Code uses). The connector carries a
+  static tool `manifest` (the four retail tools, each with the
+  single required string field `message`). This is REQUIRED: the
+  entrypoint blocks `tools/list` until the user completes OAuth,
+  and without a manifest the runtime refuses the MCP client at
+  agent startup (`failed to add MCP client ... requires a
+  manifest` in the app log) -- the Orchestrator then sees no K8s
+  tools at all and claims it has no such connector. The manifest
+  must be a real YAML list; a JSON string is rejected with
+  `'manifest' must be a list of tool entries, got string`.
 - `agents/Orchestrator.yaml` -- the desktop's built-in
   Orchestrator (pulled via `sam config pull`) extended with the
   connector.
@@ -71,6 +80,11 @@ this mirrors exactly what `connect.sh` automates:
    - Server URL: `https://sam.solace.lab/gw/dev`
    - Connection type: Streamable HTTP
    - Authentication: OAuth, mode Discovery
+   Caveat: the connector also needs the static tool manifest
+   (see above), and the Connectors UI has no field for it. Create
+   the connector via `connect.sh` (or `sam config apply` with
+   `connectors/SAM K8s Mesh.yaml`); the UI path alone yields a
+   connector whose tools never load.
 3. Agent: open the Orchestrator in the agent editor, attach the
    new connector and save (the agent redeploys).
 4. First K8s tool call: complete the Keycloak login (e.g.

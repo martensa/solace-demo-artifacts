@@ -7,13 +7,22 @@
 # On first use the desktop app prompts for the OAuth login
 # (Keycloak, e.g. sam_admin or power_user); the K8s agents then
 # appear as tools named <agent>_<skill>, RBAC-filtered per user.
+#
+# The manifest below pre-declares the tool schemas: a streamable-
+# http server behind OAuth blocks tools/list until the user logs
+# in, so without a manifest the runtime refuses to add the MCP
+# client at agent startup ("failed to add MCP client ... requires
+# a manifest") and the agent sees no K8s tools at all. Every
+# entrypoint tool takes a single required string field "message"
+# (schema verified against a live 2.225.14 entrypoint). Tool names
+# are <agent card>_<skill id>, both sanitized to lowercase with
+# underscores.
 kind: connector
 name: SAM K8s Mesh
 description: >-
   Local Kubernetes Solace Agent Mesh (sam.solace.lab) exposed via
   its MCP entrypoint. Provides the retail demo agents (CRM, OMS
-  and PDM query experts, Retail 360 Reporter) and the other mesh
-  agents as callable tools.
+  and PDM query experts, Retail 360 Reporter) as callable tools.
 spec:
   type: mcp
   subtype: remote
@@ -22,3 +31,55 @@ spec:
     connection_type: streamable-http
     auth_type: oauth
     auth_oauth_mode: discovery
+    manifest:
+      - name: retail_crm_query_expert_query_retail_crm
+        description: >-
+          Query the retail_crm postgres database (customers, loyalty
+          tiers, preferences, lifetime spend). Send a natural-language
+          request; the agent writes and runs the SQL.
+        inputSchema:
+          type: object
+          properties:
+            message:
+              type: string
+              description: The message or request to send to the agent
+          required:
+            - message
+      - name: retail_oms_query_expert_query_retail_oms
+        description: >-
+          Query the retail_oms postgres database (orders at line-item
+          grain, stores, payments). Send a natural-language request;
+          the agent writes and runs the SQL.
+        inputSchema:
+          type: object
+          properties:
+            message:
+              type: string
+              description: The message or request to send to the agent
+          required:
+            - message
+      - name: retail_pdm_query_expert_query_retail_pdm
+        description: >-
+          Query the retail_pdm postgres database (products, inventory
+          status, prices, margins, suppliers). Send a natural-language
+          request; the agent writes and runs the SQL.
+        inputSchema:
+          type: object
+          properties:
+            message:
+              type: string
+              description: The message or request to send to the agent
+          required:
+            - message
+      - name: retail_360_reporter_retail_360_synthesis
+        description: >-
+          Merge CRM, OMS and PDM findings into one executive retail
+          report.
+        inputSchema:
+          type: object
+          properties:
+            message:
+              type: string
+              description: The message or request to send to the agent
+          required:
+            - message
