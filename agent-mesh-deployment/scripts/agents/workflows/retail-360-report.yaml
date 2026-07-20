@@ -1,8 +1,9 @@
 # Retail 360 workflow: fan out to the three domain experts in
 # parallel (no depends_on between them), then merge their findings.
-# Triggered like an agent (chat, delegation) once deployed; the
-# caller needs workflow:*:invoke AND agent:*:invoke scopes (each
-# node hop is authorized against the caller).
+# Triggered via Orchestrator delegation once deployed (the 2.225.14
+# WebUI chat picker lists agents only); the caller needs
+# workflow:*:invoke AND agent:*:invoke scopes (each node hop is
+# authorized against the caller).
 kind: workflow
 name: retail-360-report
 description: >-
@@ -11,13 +12,22 @@ description: >-
   one executive report.
 spec:
   appConfig:
-    version: "1.0.3"
+    # Bump this version to force a redeploy: the apply deploy phase
+    # only fires for resources whose config CHANGED (see create.sh).
+    version: "1.0.4"
     display_name: Retail 360 Report
     description: >-
       Parallel CRM/OMS/PDM analysis merged into one executive
       report.
-    # Agent-card skill advertisement: without at least one skill
-    # the WebUI chat picker hides the workflow's card.
+    # Give slow first runs room (cold LLM caches + several SQL
+    # queries per expert) and keep going if one domain fails - the
+    # Reporter is instructed to mark failed sections transparently.
+    workflow_timeout: "900s"
+    default_node_timeout: "420s"
+    fail_fast: false
+    # Agent-card skill advertisement: capability metadata for
+    # Orchestrator delegation and MCP tool naming (the 2.225.14
+    # WebUI chat picker hides workflow cards regardless).
     skills:
       - id: retail_360_report
         name: Retail 360 Report

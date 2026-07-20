@@ -3,11 +3,15 @@ name: Retail CRM DB
 description: >-
   This connector is used to generate dynamic SQL queries for the
   database of the connected retail CRM (customer relationship
-  management) system. The database stores customer relationship
-  management information supporting sales and customer service
-  operations: customer profiles, contact information, sales
-  opportunities, interaction history, and account management
-  records. Timestamps are in UTC.
+  management) system. The database holds one table
+  (retail_customers) with customer master data: customer type,
+  loyalty card and membership tier, demographics (age group,
+  income range, household size, lifestyle), location
+  (city/state/region), shopping preference flags (organic,
+  premium, local, health-conscious, sustainable,
+  budget-conscious) and lifetime purchase aggregates (total
+  transactions, total spend, first/last transaction dates).
+  Timestamps are in UTC.
 spec:
   type: sql
   subtype: postgres

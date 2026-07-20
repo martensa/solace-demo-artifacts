@@ -48,7 +48,8 @@ Scope mapping from the v1 roles:
     DB-managed replacement for the v1 built-in of the same name.
   - `viewer` -- passive read-only (deployments, connectors, tool
     catalog); deliberately no invoke scope.
-  - `data_engineer` -- invoke plus connector read/create.
+  - `data_engineer` -- agent and workflow invoke plus connector
+    read/create.
   - `power_user` -- invoke, workflows, agent-builder read, full
     connector management, deployment read.
 - `rbac/claim-mappings/` -- one `rbacClaimMapping` per Keycloak
@@ -71,8 +72,12 @@ the `sam_admin` role).
 
 v1 parity keeps `sam_user` as the fallback for authenticated users
 without a matching group (for example the realm accounts `admin`
-and `user`). There is no declarative kind for default roles;
-`apply-rbac.sh` sets them through the platform REST API
+and `user`). Per the SAM RBAC reference, default roles are a
+fallback, not an addition: they apply only to identities with no
+assignment from file, claim mapping or database -- so they do not
+stack onto group-mapped users such as `viewer`. There is no
+declarative kind for default roles; `apply-rbac.sh` sets them
+through the platform REST API
 (`PUT /api/v1/platform/rbac/defaultRoles`) after the roles exist.
 
 ## Usage
@@ -84,9 +89,10 @@ sam auth login solace-lab --url https://sam.solace.lab
 ./apply-rbac.sh
 ```
 
-The sam CLI is resolved from `SAM_CLI_PATH` in `.env`, then the
-PATH, then auto-extracted from `SAM_CLI_TAR` into `.cache/`
-(gitignored). The CLI ships in the SAM delivery package as
+The sam CLI is resolved by `../lib/common.sh`: `SAM_CLI_PATH`
+from `.env`, then the PATH, then auto-extracted from
+`SAM_CLI_TAR` into `../lib/.cache/` (gitignored). The CLI ships
+in the SAM delivery package as
 `solace-agent-mesh-<version>-cli-<os>-<arch>.tar.gz`.
 
 Re-running is safe: `sam config apply` reconciles create/update;

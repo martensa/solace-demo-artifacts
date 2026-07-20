@@ -2,13 +2,17 @@
 #     artifact:write, sam:connectors:read, sam:connectors:create
 # In v2, built-in tool and artifact operations are implied by the
 # agent invoke scope, so only connectors need explicit grants.
+# workflow:*:invoke is a v2 addition: the data persona should be
+# able to run the retail-360-report workflow (each node hop is
+# additionally authorized against the caller's agent scopes).
 kind: rbacRole
 name: data_engineer
 description: >-
-  Data engineering: chat with agents (data tools and artifacts
-  implied) plus read and create connectors.
+  Data engineering: chat with agents and run workflows (data tools
+  and artifacts implied) plus read and create connectors.
 spec:
   scopes:
     - "agent:*:invoke"
+    - "workflow:*:invoke"
     - "connector:*:read"
     - "connector:_:create"

@@ -54,8 +54,16 @@ docker login registry.solace.lab    # once
 ./scripts/load-images.sh            # offline tarballs -> registry
 ./scripts/start.sh                  # helm install (local chart)
 ./scripts/rbac/apply-rbac.sh        # roles + claim mappings
+docker start postgres pgadmin       # retail demo DBs (host)
+(cd scripts/agents && ./create.sh --deploy)  # retail demo
+(cd scripts/models && ./set-max-tokens.sh)   # max_tokens 16384
 ./scripts/stop.sh                   # full teardown
 ```
+
+stop.sh destroys the platform DB and with it all DB-managed
+content (RBAC, agents, workflow, MCP entrypoint, model tuning) --
+the README's "Rebuilding after teardown" section documents the
+re-provisioning order.
 
 ## Secrets Handling
 
@@ -89,6 +97,10 @@ docker login registry.solace.lab    # once
 - The chart validates at install time that the ingress TLS secret
   exists -- `start.sh` applies and waits on the cert-manager
   Certificate before helm.
+- `sam config apply`'s deploy phase only fires for resources whose
+  config CHANGED in that apply: re-running `--deploy` over an
+  unchanged undeployed resource is a silent no-op (bump a config
+  field, e.g. the workflow appConfig version, to force it).
 
 ## RBAC (v2 model)
 
@@ -118,15 +130,22 @@ reference DB-managed roles, never the YAML `sam_admin`.
 - `scripts/start.sh` -- Sources `.env`, installs from
   `SAM_CHART_PATH`
 - `scripts/stop.sh` -- Full teardown including Keycloak client
+- `scripts/lib/common.sh` -- shared helpers (.env loading, sam
+  CLI resolution, SAM_AUTH_TOKEN export) sourced by the rbac,
+  agents and models scripts
 - `scripts/rbac/` -- Declarative RBAC (manifest + roles + claim
-  mappings + `apply-rbac.sh`)
+  mappings + `apply-rbac.sh`; default roles via one REST call)
 - `scripts/setup-keycloak-client.sh` / `setup-keycloak-users.sh`
   and their teardown counterparts -- Keycloak client, groups,
   demo users
-- `scripts/agents/`, `scripts/models/` -- REST provisioning and
-  model tuning written against the v1 platform API; unverified
-  on v2 (v2 exposes similar endpoints, e.g.
-  `/api/v1/platform/connectors`, but token handling may differ)
+- `scripts/agents/` -- Declarative retail demo provisioning
+  (connectors, schema skills, agents, workflow, MCP entrypoint)
+  applied via `sam config plan/apply` by `create.sh`; NOT
+  deployed by default (`--deploy` to deploy; NEVER `--prune`)
+- `scripts/models/` -- `set-max-tokens.sh` patches
+  `modelParams.max_tokens` via `sam api` (SAM_AUTH_TOKEN from the
+  CLI login cache) and restarts the awe deployment. Both agents
+  and models tooling are v2-native and verified live.
 
 ## References
 

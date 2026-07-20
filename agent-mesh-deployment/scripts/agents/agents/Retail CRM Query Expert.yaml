@@ -63,14 +63,17 @@ spec:
     agentCard:
       welcome:
         message: Ask me anything about your CRM data
+        # Suggestions are aligned with the ACTUAL retail_crm schema
+        # (single customer-master table; see the retail-crm-schema
+        # skill) so every click produces a real result.
         suggestions:
           - autoSend: true
             label: Top customers
-            prompt: Who are our top 10 customers by total opportunity value?
+            prompt: Who are our top 10 customers by lifetime spend?
           - autoSend: true
-            label: Pipeline overview
-            prompt: Show the current sales pipeline grouped by opportunity stage, as a chart.
+            label: Regional preferences
+            prompt: Show the customer preference profile (organic, premium, budget) per region.
           - autoSend: true
-            label: Recent interactions
-            prompt: Summarize the customer interactions of the last 30 days.
+            label: Tier comparison
+            prompt: Compare average lifetime spend and transactions per membership tier, as a chart.
   deploy: true

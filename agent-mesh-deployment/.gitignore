@@ -1,3 +1,8 @@
 # Secrets
 .env
+
+# Local caches and CLI working dirs (never commit)
 scripts/rbac/.cache/
+scripts/lib/.cache/
+.sam/
+**/pulled/

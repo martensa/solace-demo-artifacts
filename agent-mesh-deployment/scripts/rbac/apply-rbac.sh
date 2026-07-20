@@ -13,8 +13,9 @@ set -euo pipefail
 #        sam auth login solace-lab --url https://sam.solace.lab
 #      (log in as Keycloak demo user sam_admin / sam_admin)
 #
-# CLI resolution order: SAM_CLI_PATH from .env, `sam` on PATH,
-# else auto-extract from SAM_CLI_TAR into .cache/ (gitignored).
+# CLI resolution order (scripts/lib/common.sh): SAM_CLI_PATH from
+# .env, `sam` on PATH, else auto-extract from SAM_CLI_TAR into
+# scripts/lib/.cache/ (gitignored).
 # =============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,32 +23,11 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 SAM_BASE="${SAM_BASE:-https://sam.solace.lab}"
 
-# --- Load environment variables -----------------------------------
-if [ -f "$PROJECT_DIR/.env" ]; then
-  # shellcheck source=/dev/null
-  . "$PROJECT_DIR/.env"
-fi
-
-# --- Resolve the sam CLI ------------------------------------------
-SAM_CLI=""
-if [ -n "${SAM_CLI_PATH:-}" ] && [ -x "$SAM_CLI_PATH" ]; then
-  SAM_CLI="$SAM_CLI_PATH"
-elif command -v sam >/dev/null 2>&1; then
-  SAM_CLI="$(command -v sam)"
-elif [ -n "${SAM_CLI_TAR:-}" ] && [ -f "$SAM_CLI_TAR" ]; then
-  echo "Extracting sam CLI from $SAM_CLI_TAR ..."
-  mkdir -p "$SCRIPT_DIR/.cache"
-  tar -xzf "$SAM_CLI_TAR" -C "$SCRIPT_DIR/.cache" sam
-  chmod +x "$SCRIPT_DIR/.cache/sam"
-  SAM_CLI="$SCRIPT_DIR/.cache/sam"
-fi
-if [ -z "$SAM_CLI" ]; then
-  echo "ERROR: sam CLI not found. Set SAM_CLI_PATH or SAM_CLI_TAR in"
-  echo ".env, or put 'sam' on the PATH. The CLI ships in the SAM"
-  echo "delivery package as solace-agent-mesh-<ver>-cli-<os>-<arch>.tar.gz"
-  exit 1
-fi
-echo "Using sam CLI: $SAM_CLI"
+# --- Shared helpers (env, sam CLI resolution) ----------------------
+# shellcheck source=../lib/common.sh
+. "$PROJECT_DIR/scripts/lib/common.sh"
+load_env "$PROJECT_DIR"
+resolve_sam_cli
 
 # --- Plan and apply -----------------------------------------------
 cd "$SCRIPT_DIR"
@@ -77,16 +57,12 @@ echo "=== sam config apply ==="
 # login cache written by `sam auth login solace-lab`.
 echo ""
 echo "=== default roles -> [sam_user] ==="
-AUTH_CACHE="$HOME/Library/Application Support/sam/auth/solace-lab.json"
-if [ -f "$AUTH_CACHE" ]; then
-  SAM_AUTH_TOKEN=$(python3 -c \
-    "import json;print(json.load(open('$AUTH_CACHE'))['sam_access_token'])")
-  export SAM_AUTH_TOKEN
-fi
+sam_auth_token || true
 SAM_USER_ID=$("$SAM_CLI" api /api/v1/platform/rbac/roles 2>/dev/null \
   | python3 -c "
 import sys, json
-d = json.load(sys.stdin)
+raw = ''.join(l for l in sys.stdin if l.lstrip().startswith(('{','[')))
+d = json.loads(raw)
 rows = d.get('data') if isinstance(d, dict) else d
 print(next((r['id'] for r in rows or [] if r.get('name') == 'sam_user'), ''))" \
   2>/dev/null || true)

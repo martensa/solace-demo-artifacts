@@ -66,13 +66,22 @@ requires cluster-internal hostname resolution.
   (see [`../event-mesh-deployment/`](../event-mesh-deployment/))
   with the `sam` VPN on `solace-1`
 - **LLM Service** endpoint (e.g. a LiteLLM proxy) with an API key
+- **Retail demo databases** (for the retail demo agents): a
+  standalone postgres docker container on the host (containers
+  `postgres` + `pgadmin`, managed outside this repo) serving
+  `retail_crm`, `retail_oms` and `retail_pdm` on port 5432. The
+  connectors reach it via `host.docker.internal:5432`. Note: the
+  container stays `Exited` after a host restart -- start it with
+  `docker start postgres pgadmin`.
 
 ### Local CLI Tools
 
 - `kubectl` configured for your cluster
 - `helm` 3
 - `docker` (for the image load step)
-- `bash`, `curl`, `jq`
+- `bash`, `curl`, `jq`, `python3`
+- the `sam` CLI from the delivery package (see `.env` variables
+  `SAM_CLI_PATH` / `SAM_CLI_TAR`)
 
 ## Architecture Overview
 
@@ -192,7 +201,42 @@ needs a browser login as `sam_admin`:
 sam auth login solace-lab --url https://sam.solace.lab
 ```
 
-### 7. Teardown
+### 7. Start the retail demo databases
+
+The retail demo agents query three postgres databases that live in
+a standalone docker container on the host (outside this repo):
+
+```bash
+docker start postgres pgadmin
+```
+
+The container serves `retail_crm`, `retail_oms` and `retail_pdm`
+on port 5432 and stays `Exited` after host restarts.
+
+### 8. Provision the retail demo (agents, workflow, MCP)
+
+```bash
+cd scripts/agents && ./create.sh --deploy
+```
+
+Creates and deploys the connectors, schema skills, query-expert
+agents, the `retail-360-report` workflow and the MCP entrypoint.
+See [`scripts/agents/README.md`](scripts/agents/README.md).
+Requires the `sam auth login` from step 6.
+
+### 9. Set the model output limit
+
+```bash
+cd scripts/models && ./set-max-tokens.sh
+```
+
+Sets `modelParams.max_tokens` (default 16384) on the `general`
+model and restarts the agents. Without it the chart-seeded empty
+`modelParams` reintroduce the tool-call truncation failure
+documented in [`scripts/models/README.md`](scripts/models/README.md).
+Repeat with `--model-alias planning` and `--model-alias report_gen`.
+
+### 10. Teardown
 
 ```bash
 ./scripts/stop.sh
@@ -202,6 +246,29 @@ This uninstalls the Helm release, deletes PVCs, removes the
 namespace, removes `sam.solace.lab` from CoreDNS NodeHosts,
 removes the Keycloak users and groups, and deletes the Keycloak
 OIDC client.
+
+## Rebuilding after teardown
+
+`stop.sh` destroys the platform database, and with it ALL
+DB-managed content: RBAC roles, claim mappings and default roles,
+the retail connectors, skills, agents, workflow and MCP
+entrypoint, and the model `max_tokens` tuning. The Keycloak
+client is deleted too, so the sam CLI login cache is invalid.
+To rebuild:
+
+1. `docker start postgres pgadmin` (retail demo DBs, see step 7)
+2. `./scripts/setup-keycloak-client.sh` -- paste the NEW client
+   secret into `.env`
+3. `./scripts/setup-keycloak-users.sh`
+4. `./scripts/start.sh` (`docker login` + `load-images.sh` are
+   only needed if the private registry itself was rebuilt --
+   images persist outside the namespace)
+5. `sam auth login solace-lab --url https://sam.solace.lab`
+   (as `sam_admin`)
+6. `./scripts/rbac/apply-rbac.sh`
+7. `cd scripts/agents && ./create.sh --deploy`
+8. `cd scripts/models && ./set-max-tokens.sh` (plus
+   `--model-alias planning` and `--model-alias report_gen`)
 
 ## Upgrade
 
@@ -240,7 +307,10 @@ Consumed by the scripts only (never passed to Helm):
 - `SAM_CHART_PATH` -- offline chart directory (start.sh)
 - `SAM_APP_IMAGE_TAR`, `SAM_STR_IMAGE_TAR` -- image tarballs
   (load-images.sh)
-- `SAM_CLI_TAR` / `SAM_CLI_PATH` -- sam CLI (apply-rbac.sh)
+- `SAM_CLI_TAR` / `SAM_CLI_PATH` -- sam CLI (rbac/apply-rbac.sh,
+  agents/create.sh, models/set-max-tokens.sh via scripts/lib/)
+- `RETAIL_DB_USERNAME` / `RETAIL_DB_PASSWORD` -- retail connector
+  credentials (optional; manifest defaults postgres/postgres)
 
 ### Helm Values (local-k8s-values.yaml)
 
@@ -322,12 +392,11 @@ agent-mesh-deployment/
     load-images.sh                Load offline images -> registry
     start.sh                      Deploy SAM (local chart path)
     stop.sh                       Full teardown
+    lib/                          Shared helpers (sam CLI, .env)
     rbac/                         Declarative RBAC (sam config)
-    agents/                       Agent/connector provisioning
-                                  (written against the v1
-                                  platform API; unverified on v2)
-    models/                       Model tuning scripts (v1 API;
-                                  unverified on v2)
+    agents/                       Retail demo provisioning
+                                  (declarative, sam config, v2)
+    models/                       Model tuning via sam CLI (v2)
   CLAUDE.md                       Claude Code instructions
   README.md                       This file
 ```

@@ -64,14 +64,17 @@ spec:
     agentCard:
       welcome:
         message: Ask me anything about your order data
+        # Suggestions are aligned with the ACTUAL retail_oms schema
+        # (line-item grain, single-day demo dataset; see the
+        # retail-oms-schema skill) so every click produces a result.
         suggestions:
           - autoSend: true
-            label: Order status
-            prompt: How many orders are in each processing status right now?
+            label: Store revenue
+            prompt: Which stores generated the most revenue, as a chart?
           - autoSend: true
-            label: Fulfillment trend
-            prompt: Show the daily fulfilled order volume of the last 30 days as a chart.
+            label: Payment mix
+            prompt: How are orders distributed across payment methods?
           - autoSend: true
-            label: Payment issues
-            prompt: List orders with failed or pending payments from the last 7 days.
+            label: Top products
+            prompt: Which products sold the most units and revenue?
   deploy: true

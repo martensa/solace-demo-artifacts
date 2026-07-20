@@ -72,7 +72,16 @@ an den Workflow 'Retail 360 Report': ...". The first cold run can
 exceed the Orchestrator's delegation timeout -- it retries
 automatically. RBAC: callers need `workflow:*:invoke` AND
 `agent:*:invoke` -- every node hop is authorized against the
-caller (the `power_user` role has both; `sam_user` does not).
+caller (`power_user` and `data_engineer` have both; `sam_user`
+and `viewer` do not).
+
+Known WebUI bug (2.225.14): the Builder's workflow list links by
+the platform name, but the detail page resolves the MESH card
+name -- clicking a CLI-created workflow shows "Workflow not
+found". Workaround: open the card-name URL directly, e.g.
+`https://sam.solace.lab/#/agents/workflows/workflow_<uuid>` with
+the workflow's UUID in underscore form (get the UUID from
+`sam api /api/v1/platform/workflows`).
 
 ## MCP entrypoint: developer-mcp
 
@@ -98,6 +107,17 @@ Connect from Claude Code:
 claude mcp add --transport http sam-lab https://sam.solace.lab/gw/dev
 ```
 
+Node-based clients (Claude Code included) do not use the macOS
+keychain, so the lab CA must be provided explicitly, e.g. in
+`~/.zshrc`:
+
+```bash
+export NODE_EXTRA_CA_CERTS="$HOME/.solace-lab/ca-bundle.crt"
+```
+
+(Bundle exported from the cluster ConfigMap
+`solace-lab-ca-trust-bundle`.)
+
 Notes: entrypoint tokens are minted in-memory per entrypoint --
 a restart invalidates them (clients re-auth silently via refresh
 token). Workflows are not exposed over MCP in 2.225.14; route via
@@ -105,12 +125,20 @@ an agent if needed.
 
 ## Prerequisites
 
-- The sam CLI (see `../rbac/README.md` for resolution order) and
-  a login as a user with agent_builder + connector scopes:
+- The sam CLI (resolved by `../lib/common.sh`: `SAM_CLI_PATH`,
+  then PATH, then auto-extract from `SAM_CLI_TAR`) and a login as
+  a user with agent_builder + connector scopes:
 
   ```bash
   sam auth login solace-lab --url https://sam.solace.lab
   ```
+
+- The retail demo databases: a standalone postgres docker
+  container on the HOST (containers `postgres` + `pgadmin`,
+  managed outside this repo) serving `retail_crm`, `retail_oms`
+  and `retail_pdm` on port 5432. The connectors reach it via
+  `host.docker.internal:5432`. It stays `Exited` after host
+  restarts -- start it with `docker start postgres pgadmin`.
 
 ## CLI usage
 
@@ -131,9 +159,15 @@ RETAIL_DB_PASSWORD='secret' ./create.sh
 ```
 
 Re-running is safe: `sam config apply` reconciles creates and
-updates. Agents are created undeployed by default (`--no-deploy`);
-`--deploy` runs the deployment phase for the `deploy: true`
-agents.
+updates. Resources are created undeployed by default
+(`--no-deploy`); `--deploy` runs the deployment phase for the
+`deploy: true` resources.
+
+CAUTION (2.225.14): the deploy phase only fires for resources
+whose config CHANGED in that apply. After a create-only run,
+re-running `--deploy` over unchanged resources is a silent no-op
+-- bump any config field (e.g. the workflow `appConfig.version`)
+to force the deploy phase for that resource.
 
 ## Notes
 

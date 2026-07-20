@@ -34,7 +34,6 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 MODEL_ALIAS="${MODEL_ALIAS:-general}"
 SAM_NAMESPACE="${SAM_NAMESPACE:-sam-solace-lab}"
-AUTH_CACHE="$HOME/Library/Application Support/sam/auth/solace-lab.json"
 DRY_RUN=0
 RESTART=1
 MAX_TOKENS=16384
@@ -52,39 +51,26 @@ done
 
 [[ "$MAX_TOKENS" =~ ^[0-9]+$ ]] || {
   echo "ERROR: VALUE must be a positive integer (got '$MAX_TOKENS')." >&2; exit 1; }
+# MODEL_ALIAS is interpolated into inline Python below - keep it to a
+# safe identifier charset.
+[[ "$MODEL_ALIAS" =~ ^[a-z0-9_-]+$ ]] || {
+  echo "ERROR: --model-alias must match [a-z0-9_-]+ (got '$MODEL_ALIAS')." >&2; exit 1; }
 
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 not found." >&2; exit 1; }
 
-# --- Resolve the sam CLI (same order as scripts/rbac) --------------
-if [ -f "$PROJECT_DIR/.env" ]; then
-  # shellcheck source=/dev/null
-  . "$PROJECT_DIR/.env"
-fi
-SAM_CLI=""
-if [ -n "${SAM_CLI_PATH:-}" ] && [ -x "$SAM_CLI_PATH" ]; then
-  SAM_CLI="$SAM_CLI_PATH"
-elif command -v sam >/dev/null 2>&1; then
-  SAM_CLI="$(command -v sam)"
-fi
-if [ -z "$SAM_CLI" ]; then
-  echo "ERROR: sam CLI not found. Set SAM_CLI_PATH in .env or put" >&2
-  echo "'sam' on the PATH (see scripts/rbac/README.md)." >&2
-  exit 1
-fi
-
-# --- Token from the login cache ------------------------------------
-if [ ! -f "$AUTH_CACHE" ]; then
-  echo "ERROR: no sam CLI login cache. Log in first:" >&2
-  echo "  $SAM_CLI auth login solace-lab --url https://sam.solace.lab" >&2
-  exit 1
-fi
-SAM_AUTH_TOKEN=$(python3 -c \
-  "import json;print(json.load(open('$AUTH_CACHE'))['sam_access_token'])")
-export SAM_AUTH_TOKEN
+# --- Shared helpers (env, sam CLI, auth token) ----------------------
+# shellcheck source=../lib/common.sh
+. "$PROJECT_DIR/scripts/lib/common.sh"
+load_env "$PROJECT_DIR"
+resolve_sam_cli
+sam_auth_token
 
 # --- Resolve model + current params --------------------------------
 # Note: the EA sam CLI prints its log lines on stdout; keep only the
 # JSON payload line(s) before parsing.
+# '|| true' keeps set -e from silently killing the script when the
+# api call fails (e.g. expired token) - the empty-check below then
+# prints the actionable re-login error instead.
 MODEL_JSON=$("$SAM_CLI" api /api/v1/platform/models 2>/dev/null \
   | python3 -c "
 import sys, json
@@ -92,7 +78,7 @@ raw = ''.join(l for l in sys.stdin if l.lstrip().startswith(('{','[')))
 d = json.loads(raw)
 rows = d.get('data') if isinstance(d, dict) else d
 m = next((r for r in rows or [] if (r.get('alias') or r.get('name')) == '$MODEL_ALIAS'), None)
-print(json.dumps(m) if m else '')")
+print(json.dumps(m) if m else '')" 2>/dev/null || true)
 [ -n "$MODEL_JSON" ] || {
   echo "ERROR: model alias '$MODEL_ALIAS' not found (token expired?" >&2
   echo "Re-run: $SAM_CLI auth login solace-lab --url https://sam.solace.lab)" >&2

@@ -3,12 +3,12 @@ name: Retail PDM DB
 description: >-
   This connector is used to generate dynamic SQL queries for the
   database of the connected retail PDM (product data management)
-  system. The purpose of the database is to store product and
-  product lifecycle information for supporting production plant
-  operation and catalog management. The data contains product
-  specifications, pricing, inventory levels, categorization,
-  supplier details, and lifecycle management records. Timestamps
-  are in UTC.
+  system. The database holds one table (retail_product_master)
+  with product master data: categories and departments, brand,
+  supplier, unit and cost price, margin percentage, product flags
+  (organic, local, artisan, luxury, premium), stock level and
+  inventory status, unit of measure, dimensions and weight,
+  popularity score and seasonality. Timestamps are in UTC.
 spec:
   type: sql
   subtype: postgres

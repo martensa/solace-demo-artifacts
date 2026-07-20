@@ -119,9 +119,11 @@ if [ -z "$CLIENT_UUID" ]; then
 fi
 
 # --- Add group membership mapper ---------------------------------
-# SAM RBAC expects a "groups" claim in the ID token
+# SAM RBAC expects a "groups" claim in the ID token. A silently
+# failed mapper write would break all group-based role mappings,
+# so the HTTP status is checked.
 echo "Adding group membership protocol mapper ..."
-curl -sk -o /dev/null -X POST \
+HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -X POST \
   "${BASE}/clients/${CLIENT_UUID}/protocol-mappers/models" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
@@ -136,7 +138,13 @@ curl -sk -o /dev/null -X POST \
       \"userinfo.token.claim\": \"true\",
       \"claim.name\": \"groups\"
     }
-  }"
+  }")
+
+if [ "$HTTP_CODE" != "201" ]; then
+  echo "ERROR: Failed to add group membership mapper (HTTP ${HTTP_CODE})."
+  echo "SAM group-based RBAC will not work without the 'groups' claim."
+  exit 1
+fi
 
 # --- Add offline_access as optional client scope -----------------
 # SAM requests offline_access to receive refresh tokens
@@ -146,9 +154,13 @@ OFFLINE_ACCESS_ID=$(curl -sk "${BASE}/client-scopes" \
   | jq -r '.[] | select(.name=="offline_access") | .id')
 
 if [ -n "$OFFLINE_ACCESS_ID" ]; then
-  curl -sk -o /dev/null -X PUT \
+  HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -X PUT \
     "${BASE}/clients/${CLIENT_UUID}/optional-client-scopes/${OFFLINE_ACCESS_ID}" \
-    -H "Authorization: Bearer ${TOKEN}"
+    -H "Authorization: Bearer ${TOKEN}")
+  if [ "$HTTP_CODE" != "204" ]; then
+    echo "WARNING: adding offline_access scope failed (HTTP ${HTTP_CODE})."
+    echo "Refresh tokens may be unavailable to SAM."
+  fi
 else
   echo "WARNING: offline_access scope not found in realm."
 fi

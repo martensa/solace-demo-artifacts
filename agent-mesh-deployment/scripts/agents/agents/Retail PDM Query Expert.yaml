@@ -64,14 +64,17 @@ spec:
     agentCard:
       welcome:
         message: Ask me anything about your product data
+        # Suggestions are aligned with the ACTUAL retail_pdm schema
+        # (single product-master table; see the retail-pdm-schema
+        # skill) so every click produces a real result.
         suggestions:
           - autoSend: true
             label: Low inventory
-            prompt: Which products are below their minimum inventory level?
+            prompt: Which products are low in stock or have a constrained inventory status?
           - autoSend: true
-            label: Price overview
-            prompt: Show the average product price per category as a chart.
+            label: Price and margin
+            prompt: Show average product price and margin per main category, as a chart.
           - autoSend: true
             label: Supplier check
-            prompt: List suppliers with the most active products in the catalog.
+            prompt: Which suppliers have the most products in the catalog?
   deploy: true

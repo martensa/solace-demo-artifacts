@@ -3,11 +3,14 @@ name: Retail OMS DB
 description: >-
   This connector is used to generate dynamic SQL queries for the
   database of the connected retail OMS (order management system).
-  The purpose of the database is to store order and order lifecycle
-  information for supporting end-to-end order processing
-  operations. The data contains order creation, processing status,
-  inventory allocation, shipping details, payment information, and
-  fulfillment tracking records. Timestamps are in UTC.
+  The database holds one table (retail_sales_orders) at order
+  LINE-ITEM grain: one row per product line of a point-of-sale
+  order, with order and transaction identifiers, customer and
+  store references, order date and time (the demo dataset covers
+  a single day, 2024-10-22), product references (product_id,
+  sku), quantities, line prices, discounts and taxes, payment
+  method, cashier, and order-level totals repeated on every line.
+  Timestamps are in UTC.
 spec:
   type: sql
   subtype: postgres

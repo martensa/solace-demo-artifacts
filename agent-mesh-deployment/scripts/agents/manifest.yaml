@@ -6,9 +6,10 @@
 kind: manifest
 name: retail-demo-agents
 description: >-
-  Retail demo: CRM, OMS and PDM SQL query expert agents, each with
-  its own postgres connector, the built-in data_analysis and
-  artifact toolsets, and an inline instruction-only skill.
+  Retail demo end to end: CRM/OMS/PDM postgres connectors, schema
+  skill bundles, the three SQL query expert agents plus the Retail
+  360 Reporter, the retail-360-report workflow and the developer
+  MCP entrypoint.
 target:
   name: solace-lab
   url: https://sam.solace.lab

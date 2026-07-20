@@ -36,10 +36,11 @@ sam:
       clientId: ""
       clientSecret: ""
 
-  # Bootstrap admins only. All other roles, assignments and IDP claim
-  # mappings are applied post-install via `sam config apply`
-  # (see scripts/rbac/). Identity = OIDC identity (email) of the
-  # Keycloak demo admin created by setup-keycloak-users.sh.
+  # Bootstrap admins only. All other roles and IDP claim mappings
+  # are applied post-install via `sam config apply`, plus one
+  # defaultRoles REST call (see scripts/rbac/apply-rbac.sh).
+  # Identity = OIDC identity (email) of the Keycloak demo admin
+  # created by setup-keycloak-users.sh.
   authenticationRbac:
     users:
       - identity: "sam_admin@solace.lab"
@@ -64,8 +65,11 @@ broker:
 
 # LLM Service Configuration.
 # API key is injected via --set in start.sh. Non-empty models are
-# seeded idempotently into the platform model_configurations table
-# (aliases planning/general/report_gen/image_gen) at startup.
+# seeded into the platform model_configurations table (aliases
+# planning/general/report_gen/image_gen; transcriptionModel is env
+# only, not table-seeded) at startup. Seeding is insert-only, so
+# post-install tuning (scripts/models/set-max-tokens.sh) survives
+# restarts and upgrades.
 llmService:
   planningModel: "openai/claude-opus-4-8"
   generalModel: "openai/claude-opus-4-8"

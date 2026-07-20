@@ -48,8 +48,10 @@ load_and_push() {
   local ref="$1" tar="$2"
   local target="$REGISTRY/$ref"
 
-  if docker image inspect "$ref" >/dev/null 2>&1; then
-    echo "Image $ref already loaded - skipping docker load."
+  # FORCE=1 re-loads from the tarball even if the tag is already
+  # present locally (needed if a re-released tarball reuses a tag).
+  if [ "${FORCE:-0}" != "1" ] && docker image inspect "$ref" >/dev/null 2>&1; then
+    echo "Image $ref already loaded - skipping docker load (FORCE=1 to reload)."
   else
     if [ -z "$tar" ] || [ ! -f "$tar" ]; then
       echo "ERROR: tarball for $ref not found."

@@ -40,7 +40,7 @@ upsert_coredns_nodehost() {
   current=$(kubectl -n kube-system get configmap coredns \
     -o jsonpath='{.data.NodeHosts}' 2>/dev/null || echo "")
 
-  new=$(printf '%s\n%s %s\n' "$current" "$ip" "$hostname" \
+  new=$(printf '%s\n' "$current" \
     | awk -v host="$hostname" '
         NF == 0 { next }
         ($2 == host) { next }
@@ -137,10 +137,11 @@ helm upgrade --install "$SAM_RELEASE" \
 
 echo ""
 echo "Waiting for pods to become ready ..."
+PODS_READY=1
 kubectl wait --for=condition=ready pod \
   -l app.kubernetes.io/instance="$SAM_RELEASE" \
   --namespace "$SAM_NAMESPACE" \
-  --timeout=300s 2>/dev/null || true
+  --timeout=300s 2>/dev/null || PODS_READY=0
 
 echo ""
 helm status "$SAM_RELEASE" --namespace "$SAM_NAMESPACE"
@@ -149,4 +150,10 @@ kubectl get pods \
   -l app.kubernetes.io/instance="$SAM_RELEASE" \
   --namespace "$SAM_NAMESPACE"
 echo ""
-echo "Solace Agent Mesh deployment complete."
+if [ "$PODS_READY" -eq 1 ]; then
+  echo "Solace Agent Mesh deployment complete."
+else
+  echo "Helm install finished, but not all pods became ready within"
+  echo "300s. Watch them with:"
+  echo "  kubectl get pods -n $SAM_NAMESPACE -w"
+fi

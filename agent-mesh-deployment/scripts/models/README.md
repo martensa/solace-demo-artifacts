@@ -61,8 +61,9 @@ unless `--no-restart` is passed.
 
 ## Prerequisites
 
-- The sam CLI (resolved via `SAM_CLI_PATH` in `.env`, else PATH)
-  and a login as an admin user:
+- The sam CLI (resolved by `../lib/common.sh`: `SAM_CLI_PATH`,
+  then PATH, then auto-extract from `SAM_CLI_TAR`) and a login as
+  an admin user:
 
   ```bash
   sam auth login solace-lab --url https://sam.solace.lab

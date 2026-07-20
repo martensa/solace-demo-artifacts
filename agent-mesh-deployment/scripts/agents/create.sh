@@ -5,15 +5,19 @@ set -euo pipefail
 # Create the retail demo connectors + agents (SAM v2, CLI-only)
 # =============================================================
 # Thin wrapper around `sam config plan/apply` with manifest.yaml.
-# The manifest reconciles the three postgres connectors and the
-# three query-expert agents (with inline instruction-only skills
-# and the built-in data_analysis + artifact toolsets) in the
-# right order, idempotently. No REST calls, no ID handling.
+# The manifest reconciles the retail demo end to end -- postgres
+# connectors, schema skill bundles, the query-expert agents, the
+# Retail 360 Reporter, the retail-360-report workflow and the MCP
+# entrypoint -- in the right order, idempotently. No REST calls,
+# no ID handling.
 #
-# Agents are created NOT deployed by default: apply runs with
-# --no-deploy (config sync only). Deploy in the same run with
-# --deploy, or later by re-running with --deploy. The agent files
-# declare deploy: true as the desired end state.
+# Resources are created NOT deployed by default: apply runs with
+# --no-deploy (config sync only). Deploy with --deploy. CAUTION
+# (2.225.14): the deploy phase only fires for resources whose
+# config CHANGED in that apply -- re-running --deploy over an
+# unchanged, undeployed resource is a silent no-op. To deploy it,
+# bump any config field (e.g. the workflow appConfig version) and
+# re-run with --deploy.
 #
 # NEVER pass --prune to sam config apply here: the platform also
 # hosts agents this manifest does not manage (e.g. Orchestrator),
@@ -52,25 +56,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# --- Load environment variables -----------------------------------
-if [ -f "$PROJECT_DIR/.env" ]; then
-  # shellcheck source=/dev/null
-  . "$PROJECT_DIR/.env"
-fi
-
-# --- Resolve the sam CLI (same order as scripts/rbac) --------------
-SAM_CLI=""
-if [ -n "${SAM_CLI_PATH:-}" ] && [ -x "$SAM_CLI_PATH" ]; then
-  SAM_CLI="$SAM_CLI_PATH"
-elif command -v sam >/dev/null 2>&1; then
-  SAM_CLI="$(command -v sam)"
-fi
-if [ -z "$SAM_CLI" ]; then
-  echo "ERROR: sam CLI not found. Set SAM_CLI_PATH in .env or put" >&2
-  echo "'sam' on the PATH (see scripts/rbac/README.md)." >&2
-  exit 1
-fi
-echo "Using sam CLI: $SAM_CLI"
+# --- Shared helpers (env, sam CLI resolution) ----------------------
+# shellcheck source=../lib/common.sh
+. "$PROJECT_DIR/scripts/lib/common.sh"
+load_env "$PROJECT_DIR"
+resolve_sam_cli
 
 cd "$SCRIPT_DIR"
 echo ""

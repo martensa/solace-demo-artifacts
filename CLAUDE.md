@@ -46,9 +46,13 @@ cp .env.example .env                 # edit LLM key + artifact paths
 ./scripts/setup-keycloak-client.sh   # creates OIDC client
 # paste the printed client secret into .env
 ./scripts/setup-keycloak-users.sh    # creates groups + demo users
+docker login registry.solace.lab     # once
 ./scripts/load-images.sh             # offline images -> registry
 ./scripts/start.sh                   # helm install (local chart)
 ./scripts/rbac/apply-rbac.sh         # roles + claim mappings
+docker start postgres pgadmin        # retail demo DBs (host)
+(cd scripts/agents && ./create.sh --deploy)  # retail demo
+(cd scripts/models && ./set-max-tokens.sh)   # max_tokens tuning
 ./scripts/stop.sh                    # full teardown incl. Keycloak
 ```
 

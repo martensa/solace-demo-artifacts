@@ -52,11 +52,16 @@ remove_coredns_nodehost() {
   fi
 }
 
-# --- Load environment variables (optional for teardown) -----------
-if [ -f "$PROJECT_DIR/.env" ]; then
-  # shellcheck source=/dev/null
-  . "$PROJECT_DIR/.env"
-fi
+# (No .env sourcing here: stop.sh itself uses no .env variables and
+# the Keycloak teardown scripts source .env on their own.)
+
+# --- Data-loss notice ---------------------------------------------
+echo "NOTE: this teardown deletes the platform database and with it"
+echo "ALL DB-managed content: RBAC roles/claim mappings/default roles,"
+echo "connectors, skills, agents, workflows, the MCP entrypoint and"
+echo "model max_tokens tuning. See 'Rebuilding after teardown' in the"
+echo "README for the re-provisioning order."
+echo ""
 
 # --- Uninstall Helm release ---------------------------------------
 echo "Uninstalling Helm release $SAM_RELEASE ..."
