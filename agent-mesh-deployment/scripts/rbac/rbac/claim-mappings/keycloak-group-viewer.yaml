@@ -1,0 +1,8 @@
+# Keycloak group "viewer" -> role viewer.
+kind: rbacClaimMapping
+name: keycloak-group-viewer
+spec:
+  oidcProvider: azure
+  claimKey: groups
+  claimValue: viewer
+  roleName: viewer

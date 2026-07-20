@@ -1,0 +1,12 @@
+# v1: artifact:read, sam:deployments:read, sam:connectors:read
+# Intentionally passive -- no agent invoke, no create/update.
+kind: rbacRole
+name: viewer
+description: >-
+  Passive observer: read-only access to deployments, connectors and
+  the tool catalog. Cannot chat with agents (no agent invoke scope).
+spec:
+  scopes:
+    - "deployment:_:read"
+    - "connector:*:read"
+    - "tool:_:read"

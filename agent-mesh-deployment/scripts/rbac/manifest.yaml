@@ -1,0 +1,32 @@
+# Declarative RBAC manifest for the solace-lab SAM v2 deployment.
+# Applied with:  sam config apply -m manifest.yaml   (see apply-rbac.sh)
+#
+# Ports the v1 Helm-values RBAC (customRoles + idpClaims) to the v2
+# model: DB-managed roles via kind rbacRole and Keycloak group claim
+# mappings via kind rbacClaimMapping. See README.md for the scope
+# mapping rationale.
+kind: manifest
+name: solace-lab-rbac
+description: >-
+  Roles and Keycloak group claim mappings for the solace-lab demo
+  deployment of Solace Agent Mesh v2.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    # Uses the token cache populated by `sam auth login` (browser
+    # OIDC flow against the deployment). Log in as the bootstrap
+    # admin sam_admin (Keycloak demo user) -- RBAC apply calls are
+    # scope-checked and need the sam_admin role.
+    type: oauth
+resources:
+  rbacRoles:
+    - sam_user
+    - viewer
+    - data_engineer
+    - power_user
+  rbacClaimMappings:
+    - keycloak-group-user
+    - keycloak-group-viewer
+    - keycloak-group-data-engineer
+    - keycloak-group-power-user

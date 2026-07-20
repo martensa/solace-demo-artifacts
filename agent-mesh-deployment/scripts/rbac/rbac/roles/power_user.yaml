@@ -1,0 +1,18 @@
+# v1: agent:*:delegate, artifact:*, tool:*, sam:agent_builder:read,
+#     sam:connectors:*, sam:deployments:read
+# v2 additions: workflow:*:invoke (workflows are authorized
+# separately from agents in v2 and the v1 tool:* breadth implied
+# full runtime access).
+kind: rbacRole
+name: power_user
+description: >-
+  Advanced user: chat with agents and run workflows, read the agent
+  builder, manage connectors, read deployments and the tool catalog.
+spec:
+  scopes:
+    - "agent:*:invoke"
+    - "workflow:*:invoke"
+    - "agent_builder:*:read"
+    - "connector:*:*"
+    - "deployment:_:read"
+    - "tool:_:read"

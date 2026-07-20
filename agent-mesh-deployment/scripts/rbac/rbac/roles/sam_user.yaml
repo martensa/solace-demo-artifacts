@@ -1,0 +1,12 @@
+# DB-managed replacement for the v1 built-in sam_user role.
+# The v2 chart ships only sam_admin as a YAML role; claim mappings
+# and default roles may only reference DB-managed roles, so the
+# basic interactive role is (re)created here.
+kind: rbacRole
+name: sam_user
+description: >-
+  Basic interactive access: chat with any agent. Built-in tools and
+  artifact operations are implied by the agent invoke scope.
+spec:
+  scopes:
+    - "agent:*:invoke"

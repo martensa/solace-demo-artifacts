@@ -1,0 +1,8 @@
+# Keycloak group "power_user" -> role power_user.
+kind: rbacClaimMapping
+name: keycloak-group-power-user
+spec:
+  oidcProvider: azure
+  claimKey: groups
+  claimValue: power_user
+  roleName: power_user

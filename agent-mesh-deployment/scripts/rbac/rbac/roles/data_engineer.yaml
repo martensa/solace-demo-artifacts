@@ -1,0 +1,14 @@
+# v1: agent:*:delegate, tool:basic:*, tool:data:*, artifact:read,
+#     artifact:write, sam:connectors:read, sam:connectors:create
+# In v2, built-in tool and artifact operations are implied by the
+# agent invoke scope, so only connectors need explicit grants.
+kind: rbacRole
+name: data_engineer
+description: >-
+  Data engineering: chat with agents (data tools and artifacts
+  implied) plus read and create connectors.
+spec:
+  scopes:
+    - "agent:*:invoke"
+    - "connector:*:read"
+    - "connector:_:create"

@@ -1,0 +1,12 @@
+# Keycloak group "user" -> role sam_user (DB-managed port of the
+# v1 built-in). oidcProvider names the platform's provider catalog
+# entry (the generic OIDC entry is called "azure"); claim values
+# are plain group names because the Keycloak group-membership
+# mapper is configured with full.path=false.
+kind: rbacClaimMapping
+name: keycloak-group-user
+spec:
+  oidcProvider: azure
+  claimKey: groups
+  claimValue: user
+  roleName: sam_user
