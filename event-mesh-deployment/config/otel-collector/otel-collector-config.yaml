@@ -90,6 +90,21 @@ receivers:
       insecure: true
       insecure_skip_verify: true
 
+  # SAM A2A tracing: the sam VPN on solace-1 exposes AMQP on its
+  # own per-VPN port (5673). Every gwe<->awe<->str hop is a
+  # guaranteed message and becomes a broker span in Tempo.
+  solace/solace-1-sam:
+    broker: [solace-1:5673]
+    max_unacknowledged: 500
+    auth:
+      sasl_plain:
+        username: trace
+        password: trace
+    queue: queue://#telemetry-trace
+    tls:
+      insecure: true
+      insecure_skip_verify: true
+
 service:
   extensions: [health_check, zpages]
   telemetry:
@@ -97,7 +112,7 @@ service:
       level: "info"
   pipelines:
     traces:
-      receivers: [solace/solace-1, solace/solace-2, otlp]
+      receivers: [solace/solace-1, solace/solace-1-sam, solace/solace-2, otlp]
       processors: [memory_limiter, batch]
       exporters: [otlphttp/tempo, debug]
     metrics:

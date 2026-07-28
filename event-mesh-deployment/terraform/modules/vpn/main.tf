@@ -47,10 +47,12 @@ resource "solacebroker_msg_vpn" "this" {
   event_transacted_session_count_threshold               = { "clear_percent" : 60, "set_percent" : 80 }
   event_transaction_count_threshold                      = { "clear_percent" : 60, "set_percent" : 80 }
 
-  # AMQP
+  # AMQP (plain-text port is per-VPN on software brokers; VPNs with
+  # messaging disabled can still enable AMQP selectively, e.g. the
+  # sam VPN for the tracing receiver of the OTel Collector)
   service_amqp_max_connection_count      = var.max_connection_count
-  service_amqp_plain_text_enabled        = var.services_enabled
-  service_amqp_plain_text_listen_port    = 5672
+  service_amqp_plain_text_enabled        = coalesce(var.amqp_plain_text_enabled, var.services_enabled)
+  service_amqp_plain_text_listen_port    = var.amqp_plain_text_listen_port
   service_amqp_tls_enabled               = var.services_enabled
   service_amqp_tls_listen_port           = 5671
 

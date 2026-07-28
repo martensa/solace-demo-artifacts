@@ -56,3 +56,16 @@ variable "max_transaction_count" {
   type        = number
   default     = 5000
 }
+
+variable "amqp_plain_text_enabled" {
+  description = "Override for AMQP plain-text (null = follow services_enabled)"
+  type        = bool
+  default     = null
+  nullable    = true
+}
+
+variable "amqp_plain_text_listen_port" {
+  description = "Per-VPN AMQP plain-text listen port"
+  type        = number
+  default     = 5672
+}

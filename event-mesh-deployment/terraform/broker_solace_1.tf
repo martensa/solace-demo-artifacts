@@ -51,6 +51,11 @@ module "solace_1_vpn_sam" {
   vpn_name                  = "sam"
   services_enabled          = false
   semp_over_msg_bus_enabled = false
+
+  # AMQP nur fuer den Solace-Receiver des OTel Collectors
+  # (A2A-Tracing); Port ist per-VPN, 5672 gehoert dem default VPN.
+  amqp_plain_text_enabled     = true
+  amqp_plain_text_listen_port = 5673
 }
 
 module "solace_1_client_sam" {
@@ -69,5 +74,18 @@ module "solace_1_telemetry" {
   providers = { solacebroker = solacebroker.solace_1 }
 
   vpn_name       = module.solace_1_vpn_default.vpn_name
+  trace_password = var.trace_password
+}
+
+# --- Telemetry (on sam VPN: SAM A2A distributed tracing) ---
+# Jeder gwe<->awe<->str A2A-Hop (Guaranteed Messaging) wird als
+# Broker-Span nach Tempo exportiert; SAM selbst emittiert in
+# 2.225.14 keine OTel-Spans.
+
+module "solace_1_telemetry_sam" {
+  source    = "./modules/telemetry"
+  providers = { solacebroker = solacebroker.solace_1 }
+
+  vpn_name       = module.solace_1_vpn_sam.vpn_name
   trace_password = var.trace_password
 }

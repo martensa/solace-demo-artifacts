@@ -125,10 +125,11 @@ re-check the matrix before every broker upgrade.
 
 ### Central OTLP Endpoint (Grafana Stack)
 
-The collector is the single telemetry hub for the lab. It runs
-three pipelines against the monitoring stack of the local k3s
-cluster (`monitoring` namespace, deployed by
-`solace-lab-infrastructure`):
+The collector is the telemetry hub for the Docker side of the
+lab (brokers, event-generator, event-consumer) AND the trace
+source for SAM's A2A traffic. It runs three pipelines against
+the monitoring stack of the local k3s cluster (`monitoring`
+namespace, deployed by `solace-lab-infrastructure`):
 
 - Traces -> Grafana Tempo (`tempo.monitoring:4318`, OTLP HTTP)
 - Metrics -> Prometheus remote write (`/api/v1/write`; the
@@ -142,10 +143,17 @@ containers share the Rancher Desktop VM with k3s, so ClusterIPs
 are directly routable. Container-name resolution (solace-1/-2)
 still works through Docker's embedded DNS.
 
-Future producers (e.g. Solace Agent Mesh) push OTLP to the
-collector from inside the cluster via
-`http://host.docker.internal:4318` (HTTP) or `:4317` (gRPC) --
-for SAM: `management_server.exporters` in the component config.
+SAM integration (see `agent-mesh-deployment`): SAM metrics and
+logs flow cluster-natively (ServiceMonitors + Alloy). SAM's A2A
+traffic (gwe/awe/str on the `sam` VPN of solace-1) is traced by
+the BROKER: the VPN has its own telemetry profile and a per-VPN
+AMQP port (5673) that the collector's `solace/solace-1-sam`
+receiver consumes -- every A2A hop shows up in Tempo as
+`sam-solace-lab/a2a/v1/...` spans. NOTE: enabling a telemetry
+profile on a running broker requires a broker restart before
+spans are generated. External producers can still push OTLP to
+the collector via `http://host.docker.internal:4318` (HTTP) or
+`:4317` (gRPC).
 
 ### Viewing Traces
 
