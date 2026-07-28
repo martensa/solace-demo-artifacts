@@ -113,6 +113,16 @@ brokers using the OpenTelemetry-based Solace tracing integration.
 - The OTel Collector also accepts standard OTLP input on
   4317 (gRPC) and 4318 (HTTP)
 
+### Broker / Collector Compatibility
+
+Per the Solace compatibility matrix (see
+`Distributed-Tracing-Receiver-Versions` in the Solace docs),
+brokers 10.10.1 and later require OpenTelemetry Collector
+0.113.0 or newer -- the pinned `0.149.0` satisfies this with
+room to spare (running broker: 10.25.0). Upgrade order matters:
+raise the Collector version BEFORE upgrading the brokers, and
+re-check the matrix before every broker upgrade.
+
 ### Central OTLP Endpoint (Grafana Stack)
 
 The collector is the single telemetry hub for the lab. It runs
@@ -217,7 +227,9 @@ Container image versions are defined in `.env.example`:
 - **EMA_IMG** -- `solace/event-management-agent:latest`
 - **OTELCOL_IMG** -- `otel/opentelemetry-collector-contrib:0.149.0`
   (pinned: the Solace receiver is a lower-stability component,
-  `latest` occasionally removes or renames components)
+  `latest` occasionally removes or renames components; 0.149.0
+  meets the >= 0.113.0 floor required for brokers 10.10.1+, see
+  Broker / Collector Compatibility above)
 
 ### Terraform Variables
 
