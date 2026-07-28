@@ -146,6 +146,25 @@ reference DB-managed roles, never the YAML `sam_admin`.
   `modelParams.max_tokens` via `sam api` (SAM_AUTH_TOKEN from the
   CLI login cache) and restarts the awe deployment. Both agents
   and models tooling are v2-native and verified live.
+- `scripts/observability/` -- overlays the image-baked component
+  configs with a `management_server` block (metrics) via a Helm 4
+  postrenderer/v1 plugin + kustomize (configMapGenerator hash =
+  auto-rollout). Gotchas: the block only works in the MAIN config
+  (extra `--config` files reject root keys: "expected YAML
+  list"); `/metrics` rides the `--health-addr` port (gwe 9090,
+  awe/str 8090); full-file overlays are drift-checked against the
+  delivery images by start.sh (`check-config-drift.sh`, re-base
+  on new delivery). After simultaneous gwe+awe restarts the
+  DB-managed agents may not load -- restart awe again AFTER gwe
+  is ready. `manifests/observability/` holds metrics Services,
+  ServiceMonitors, PrometheusRule (sam-alerts, ns monitoring) and
+  the Grafana dashboards (ConfigMaps, label grafana_dashboard=1,
+  folder annotation SAM). Token chargeback per user comes from
+  the platform DB (`tasks` table, Grafana role grafana_ro), NOT
+  from Prometheus (metrics carry no user identity). A2A traces
+  come from broker tracing on the sam VPN (event-mesh repo);
+  enabling a telemetry profile on a running broker needs a
+  broker restart.
 - `scripts/desktop/` -- wires the SAM desktop app (its platform
   runs unauthenticated on localhost:8800) to this deployment:
   `generate-manifest.sh` builds the connector's static tool

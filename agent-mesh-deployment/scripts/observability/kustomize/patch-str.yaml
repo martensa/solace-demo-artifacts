@@ -1,0 +1,19 @@
+# Overlay the baked str.yaml with the observability-enabled copy.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-mesh-solace-agent-mesh-str
+spec:
+  template:
+    spec:
+      containers:
+        - name: str
+          volumeMounts:
+            - name: sam-observability
+              mountPath: /etc/sam/configs/str/str.yaml
+              subPath: str.yaml
+              readOnly: true
+      volumes:
+        - name: sam-observability
+          configMap:
+            name: sam-observability

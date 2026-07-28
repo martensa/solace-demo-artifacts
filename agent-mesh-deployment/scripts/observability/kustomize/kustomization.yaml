@@ -1,0 +1,22 @@
+# Post-renderer overlay: injects the observability config overlays
+# into the SAM deployments. Applied by scripts/observability/
+# helm-plugin/post-render.sh, which concatenates
+# configs/<component>.base + configs/management_server.yaml into
+# the final files referenced by the configMapGenerator below.
+#
+# The generator's hash suffix makes config changes roll the pods
+# automatically; kustomize rewrites the volume references.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - all.yaml
+configMapGenerator:
+  - name: sam-observability
+    files:
+      - gwe.yaml
+      - sam.yaml
+      - str.yaml
+patches:
+  - path: patch-gwe.yaml
+  - path: patch-awe.yaml
+  - path: patch-str.yaml

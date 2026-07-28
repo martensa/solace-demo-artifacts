@@ -298,6 +298,61 @@ To rebuild:
    (the MCP tool names embed platform-DB UUIDs, which the rebuild
    changed)
 
+## Observability
+
+SAM is fully wired into the lab's Grafana stack
+(`https://monitoring.solace.lab`, folder "SAM": Operations,
+Token und Cost, Governance und Security):
+
+- **Metrics**: the SAM configs are baked into the images, so
+  `scripts/observability/` overlays them (full-file ConfigMap
+  overlays adding a `management_server` block) through a Helm 4
+  post-renderer plugin (`sam-observability`, installed by
+  start.sh). `/metrics` rides the existing health ports (gwe
+  9090, awe/str 8090); `manifests/observability/` adds metrics
+  Services + ServiceMonitors. Prometheus picks them up without
+  further wiring. Key metrics: `sam_entrypoint_*` (request rate
+  and latency), `sam_operation_duration_seconds` (agent/tool),
+  `sam_gen_ai_tokens_used_total` and `sam_gen_ai_cost_total`
+  (by model), plus `sam_instance_up` and
+  `sam_broker_connection_state` health gauges.
+- **Logs + audit (governance)**: pod stdout ships via the Alloy
+  DaemonSet (infra repo) to Loki. The SAM audit stream
+  (`logger_name=audit`) carries userID, agentName, tool,
+  duration_ms and RBAC denies -- the "who uses what" view. RBAC
+  GRANTS log at DEBUG and are invisible at the default INFO
+  level.
+- **Traces**: SAM emits no OTel spans in 2.225.14. A2A traffic
+  (gwe/awe/str, guaranteed messaging on the `sam` VPN) is traced
+  by the BROKER via a telemetry profile and lands in Tempo
+  through the event-mesh OTel Collector
+  (`sam-solace-lab/a2a/v1/...` spans).
+- **Token chargeback per user**: Grafana datasource
+  `SAM Platform DB` (read-only role `grafana_ro`) queries the
+  `tasks` table (`user_id`, `total_input/output_tokens`,
+  `token_usage_details` with per-model breakdown).
+
+Operational notes (learned the hard way):
+
+- **Config drift guard**: the overlays replace image-baked
+  configs in full. start.sh diffs them against the delivery
+  images (`scripts/observability/check-config-drift.sh`) and
+  aborts with re-basing instructions when a new SAM delivery
+  changes them.
+- The `management_server` block is only honored in the MAIN
+  component config; extra `--config` files are rejected
+  (`expected YAML list`). Its `port:` is overridden by
+  `--health-addr`.
+- After a simultaneous gwe+awe restart the DB-managed agents may
+  not load (deploy handshake race): restart awe once more AFTER
+  gwe is ready.
+- Enabling a telemetry profile on a running broker requires a
+  BROKER RESTART before spans are generated.
+- Keep an eye on the `sam` VPN spool: the gateway viz queue
+  (`q/gdk/viz/...`, quota capped to 1 GB) has no consumer and
+  fills over time; a full VPN spool (10 GB) blocks ALL task
+  publishing ("Spool Over Quota").
+
 ## Upgrade
 
 To upgrade SAM to a new version, point `.env` at the new delivery

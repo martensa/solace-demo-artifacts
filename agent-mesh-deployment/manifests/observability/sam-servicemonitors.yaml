@@ -1,0 +1,51 @@
+# ServiceMonitors for the SAM components. Prometheus
+# (kube-prometheus-stack) discovers ServiceMonitors in every
+# namespace (serviceMonitorSelectorNilUsesHelmValues: false in
+# solace-lab-infrastructure), no extra labels needed.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sam-gwe
+  namespace: sam-solace-lab
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: solace-agent-mesh
+      app.kubernetes.io/instance: agent-mesh
+      app.kubernetes.io/component: gwe
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sam-awe
+  namespace: sam-solace-lab
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: solace-agent-mesh
+      app.kubernetes.io/instance: agent-mesh
+      app.kubernetes.io/component: awe
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sam-str
+  namespace: sam-solace-lab
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: solace-agent-mesh
+      app.kubernetes.io/instance: agent-mesh
+      app.kubernetes.io/component: str
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s

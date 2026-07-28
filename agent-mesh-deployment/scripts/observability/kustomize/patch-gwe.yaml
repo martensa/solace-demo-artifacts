@@ -1,0 +1,20 @@
+# Overlay the baked gwe.yaml with the observability-enabled copy.
+# Name-keyed strategic merge (sidecar-safe, no container indices).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-mesh-solace-agent-mesh-gwe
+spec:
+  template:
+    spec:
+      containers:
+        - name: gwe
+          volumeMounts:
+            - name: sam-observability
+              mountPath: /etc/sam/configs/gwe/gwe.yaml
+              subPath: gwe.yaml
+              readOnly: true
+      volumes:
+        - name: sam-observability
+          configMap:
+            name: sam-observability

@@ -1,0 +1,67 @@
+# PrometheusRule fuer SAM (Konvention solace-lab-infrastructure:
+# Namespace monitoring, Labels prometheus/role, deutsche
+# summaries). Log-basierte Alerts (Auth-Failure-Spike,
+# ERROR-Tool-Executions) laufen ueber Grafana Unified Alerting
+# auf der Loki-Datasource, nicht ueber den (nicht installierten)
+# Loki-Ruler.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sam-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: sam.alerts
+      interval: 30s
+      rules:
+        - alert: SAMComponentDown
+          expr: up{namespace="sam-solace-lab", job=~".*-metrics"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SAM-Komponente {{ $labels.job }} down"
+            description: >-
+              Der Metrics-Endpoint von {{ $labels.job }} antwortet
+              seit 5 Minuten nicht. Pods und Logs im Namespace
+              sam-solace-lab pruefen.
+        - alert: SAMComponentAbsent
+          expr: absent(up{job="agent-mesh-solace-agent-mesh-gwe-metrics"})
+            or absent(up{job="agent-mesh-solace-agent-mesh-awe-metrics"})
+            or absent(up{job="agent-mesh-solace-agent-mesh-str-metrics"})
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SAM-Scrape-Target fehlt"
+            description: >-
+              Mindestens ein SAM-ServiceMonitor-Target ist aus
+              Prometheus verschwunden (Service/ServiceMonitor
+              geloescht oder Deployment entfernt?).
+        - alert: SAMBrokerDisconnected
+          expr: sam_broker_connection_state == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SAM {{ $labels.job }} ohne Broker-Verbindung"
+            description: >-
+              {{ $labels.job }} meldet seit 2 Minuten keine
+              Verbindung zum Solace-Broker (sam VPN auf solace-1).
+              Broker-Status und Event-Mesh-Container pruefen.
+        - alert: SAMEntrypointLatenzHoch
+          expr: >-
+            histogram_quantile(0.99, sum by (le)
+            (rate(sam_entrypoint_duration_seconds_bucket[5m]))) > 5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "SAM Entrypoint p99 ueber 5s"
+            description: >-
+              Die p99-Latenz der Entrypoint-Requests liegt seit 10
+              Minuten ueber 5 Sekunden. LLM-Service-Latenz und
+              awe-Auslastung pruefen (Dashboard SAM Operations).

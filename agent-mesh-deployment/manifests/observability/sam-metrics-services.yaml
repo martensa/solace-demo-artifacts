@@ -1,0 +1,64 @@
+# Metrics Services for the SAM components. /metrics rides the
+# management server, which binds to the --health-addr port
+# (gwe :9090, awe/str :8090). ClusterIP only -- the endpoint is
+# unauthenticated by design and must never be exposed through
+# the ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-mesh-solace-agent-mesh-gwe-metrics
+  namespace: sam-solace-lab
+  labels:
+    app.kubernetes.io/name: solace-agent-mesh
+    app.kubernetes.io/instance: agent-mesh
+    app.kubernetes.io/component: gwe
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: solace-agent-mesh
+    app.kubernetes.io/instance: agent-mesh
+    app.kubernetes.io/component: gwe
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-mesh-solace-agent-mesh-awe-metrics
+  namespace: sam-solace-lab
+  labels:
+    app.kubernetes.io/name: solace-agent-mesh
+    app.kubernetes.io/instance: agent-mesh
+    app.kubernetes.io/component: awe
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: solace-agent-mesh
+    app.kubernetes.io/instance: agent-mesh
+    app.kubernetes.io/component: awe
+  ports:
+    - name: metrics
+      port: 8090
+      targetPort: 8090
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-mesh-solace-agent-mesh-str-metrics
+  namespace: sam-solace-lab
+  labels:
+    app.kubernetes.io/name: solace-agent-mesh
+    app.kubernetes.io/instance: agent-mesh
+    app.kubernetes.io/component: str
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: solace-agent-mesh
+    app.kubernetes.io/instance: agent-mesh
+    app.kubernetes.io/component: str
+  ports:
+    - name: metrics
+      port: 8090
+      targetPort: 8090

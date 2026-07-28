@@ -1,0 +1,20 @@
+# Overlay the baked sam.yaml (awe main config) with the
+# observability-enabled copy.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-mesh-solace-agent-mesh-awe
+spec:
+  template:
+    spec:
+      containers:
+        - name: awe
+          volumeMounts:
+            - name: sam-observability
+              mountPath: /etc/sam/configs/awe/sam.yaml
+              subPath: sam.yaml
+              readOnly: true
+      volumes:
+        - name: sam-observability
+          configMap:
+            name: sam-observability

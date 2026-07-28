@@ -1,0 +1,10 @@
+
+# --- appended by scripts/observability (post-renderer) ---
+# Enables the OTel-SDK metrics endpoint. The management server
+# binds to the --health-addr port (gwe :9090, awe/str :8090) --
+# the port set here is OVERRIDDEN by that flag; /metrics rides
+# the existing health listener. Verified live on 2.225.14.
+management_server:
+  enabled: true
+  observability:
+    enabled: true

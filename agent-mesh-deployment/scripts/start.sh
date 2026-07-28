@@ -96,6 +96,29 @@ CHART_VERSION=$(awk '$1 == "version:" {print $2; exit}' \
   "$SAM_CHART_PATH/Chart.yaml")
 echo "Using local chart: $SAM_CHART_PATH (version ${CHART_VERSION:-unknown})"
 
+# --- Observability overlay (metrics) ------------------------------
+# scripts/observability/ overlays the image-baked component configs
+# with a management_server block (Prometheus /metrics on the health
+# ports) via a Helm post-renderer plugin. Guard against vendor
+# config drift first, then make sure the plugin is installed.
+GWE_IMG=$(python3 -c "
+import yaml
+v = yaml.safe_load(open('$PROJECT_DIR/local-k8s-values.yaml'))
+i = v['samDeployment']['gwe']['image']
+print(f\"{i['repository']}:{i['tag']}\")")
+STR_IMG=$(python3 -c "
+import yaml
+v = yaml.safe_load(open('$PROJECT_DIR/local-k8s-values.yaml'))
+i = v['samDeployment']['str']['image']
+print(f\"{i['repository']}:{i['tag']}\")")
+"$PROJECT_DIR/scripts/observability/check-config-drift.sh" \
+  "$GWE_IMG" "$STR_IMG"
+
+if ! helm plugin list 2>/dev/null | grep -q "^sam-observability"; then
+  echo "Installing helm post-renderer plugin sam-observability ..."
+  helm plugin install "$PROJECT_DIR/scripts/observability/helm-plugin"
+fi
+
 # --- Namespace and pull secret ------------------------------------
 kubectl create namespace "$SAM_NAMESPACE" 2>/dev/null || true
 
@@ -133,7 +156,12 @@ helm upgrade --install "$SAM_RELEASE" \
   --set sam.oauthProvider.oidc.issuer="$KEYCLOAK_ISSUER" \
   --set sam.oauthProvider.oidc.clientId="$KEYCLOAK_CLIENT_ID" \
   --set sam.oauthProvider.oidc.clientSecret="$KEYCLOAK_CLIENT_SECRET" \
-  --set llmService.llmServiceApiKey="$LLM_SERVICE_API_KEY"
+  --set llmService.llmServiceApiKey="$LLM_SERVICE_API_KEY" \
+  --post-renderer sam-observability
+
+# --- Observability manifests (Services, ServiceMonitors,
+#     Dashboards, Alerts) ------------------------------------------
+kubectl apply -R -f "$PROJECT_DIR/manifests/observability/"
 
 echo ""
 echo "Waiting for pods to become ready ..."
