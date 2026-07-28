@@ -1,0 +1,2 @@
+# Holds the real Event Portal API token -- never commit.
+generator_config_keys.env

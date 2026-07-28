@@ -1,0 +1,17 @@
+networks:
+  solace_net:
+    name: solace_net
+    external: true
+
+services:
+  consumer:
+    # .env is gitignored repo-wide; the default keeps a fresh
+    # clone working without one (override via CONSUMER_IMG).
+    image: ${CONSUMER_IMG:-martensa/event-consumer:latest}
+    hostname: consumer
+    container_name: consumer
+    networks:
+      - solace_net
+    env_file:
+      - ./consumer_config_keys.env
+    restart: on-failure

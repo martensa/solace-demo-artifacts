@@ -1,0 +1,19 @@
+networks:
+  solace_net:
+    name: solace_net
+    external: true
+
+services:
+  generator:
+    # .env is gitignored repo-wide; the default keeps a fresh
+    # clone working without one (override via GENERATOR_IMG).
+    image: ${GENERATOR_IMG:-martensa/eventportal-event-generator:latest}
+    hostname: generator
+    container_name: generator
+    networks:
+      - solace_net
+    env_file:
+      - ./generator_config_keys.env
+    ports:
+      - "8050:8050"
+    restart: on-failure
