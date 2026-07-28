@@ -28,11 +28,11 @@ using the Solace PubSub+ Terraform provider.
            |                                   |
            +-----------------------------------+
            |                                   |
-    +------+------+                     +------+------+
-    |    OTel     |                     |   Jaeger    |
-    |  Collector  |-------------------->|  (port      |
-    | (port 4317) |                     |   16686)    |
-    +-------------+                     +-------------+
+    +------+------+                     +--------------------+
+    |    OTel     |   traces, metrics,  | Grafana stack (k3s)|
+    |  Collector  |-------------------->| Tempo, Prometheus, |
+    | (4317/4318) |        logs         | Loki               |
+    +-------------+                     +--------------------+
 ```
 
 ## Containers
@@ -48,11 +48,9 @@ using the Solace PubSub+ Terraform provider.
 
 **otel-collector** -- `otel/opentelemetry-collector-contrib`
 
-- OTLP gRPC: 4317
-
-**jaeger** -- `jaegertracing/all-in-one`
-
-- UI: 16686
+- OTLP gRPC: 4317, OTLP HTTP: 4318
+- Exports to the Grafana stack in the local k3s cluster
+  (`monitoring` namespace, from `solace-lab-infrastructure`)
 
 **event-management-agent** -- `solace/event-management-agent`
 
@@ -104,20 +102,48 @@ brokers using the OpenTelemetry-based Solace tracing integration.
    (`#telemetry-trace`)
 2. The OpenTelemetry Collector receives spans from both brokers
    via the Solace receiver plugin (AMQP on port 5672)
-3. Spans are exported to Jaeger via OTLP gRPC
+3. Spans are exported to Grafana Tempo (OTLP HTTP) in the local
+   k3s cluster
 
 ### Telemetry Configuration
 
 - Telemetry profile: `trace`
 - Trace filter: `>` (matches all topics)
 - Trace client username: `trace`
-- The OTel Collector also accepts standard OTLP traces on
-  port 4317
+- The OTel Collector also accepts standard OTLP input on
+  4317 (gRPC) and 4318 (HTTP)
+
+### Central OTLP Endpoint (Grafana Stack)
+
+The collector is the single telemetry hub for the lab. It runs
+three pipelines against the monitoring stack of the local k3s
+cluster (`monitoring` namespace, deployed by
+`solace-lab-infrastructure`):
+
+- Traces -> Grafana Tempo (`tempo.monitoring:4318`, OTLP HTTP)
+- Metrics -> Prometheus remote write (`/api/v1/write`; the
+  receiver is enabled via `enableRemoteWriteReceiver` in the
+  infrastructure repo)
+- Logs -> Grafana Loki native OTLP ingest (`:3100/otlp`)
+
+The cluster service names resolve because the collector container
+uses kube-dns (`10.43.0.10`) as upstream DNS -- the compose
+containers share the Rancher Desktop VM with k3s, so ClusterIPs
+are directly routable. Container-name resolution (solace-1/-2)
+still works through Docker's embedded DNS.
+
+Future producers (e.g. Solace Agent Mesh) push OTLP to the
+collector from inside the cluster via
+`http://host.docker.internal:4318` (HTTP) or `:4317` (gRPC) --
+for SAM: `management_server.exporters` in the component config.
 
 ### Viewing Traces
 
-Open the Jaeger UI at `http://localhost:16686` to view
-distributed traces across both brokers.
+Open Grafana at `https://monitoring.solace.lab` (admin /
+prom-operator) and use Explore with the Tempo datasource to view
+distributed traces across both brokers. The Tempo datasource is
+pre-wired with tracesToLogs (Loki) and tracesToMetrics
+(Prometheus) links.
 
 ## Event Portal Integration
 
@@ -189,8 +215,9 @@ Container image versions are defined in `.env.example`:
 
 - **PUBSUB_IMG** -- `solace/solace-pubsub-standard:latest`
 - **EMA_IMG** -- `solace/event-management-agent:latest`
-- **OTELCOL_IMG** -- `otel/opentelemetry-collector-contrib:latest`
-- **JAEGER_IMG** -- `jaegertracing/all-in-one:latest`
+- **OTELCOL_IMG** -- `otel/opentelemetry-collector-contrib:0.149.0`
+  (pinned: the Solace receiver is a lower-stability component,
+  `latest` occasionally removes or renames components)
 
 ### Terraform Variables
 

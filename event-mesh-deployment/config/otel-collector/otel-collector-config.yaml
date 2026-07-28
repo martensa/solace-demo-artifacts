@@ -12,14 +12,18 @@ processors:
 
   batch:
 
+# Backends: der Grafana-Stack im lokalen k3s-Cluster (namespace
+# monitoring, aus solace-lab-infrastructure). Die *.svc.cluster.local
+# FQDNs funktionieren, weil der Container kube-dns (10.43.0.10) als
+# Upstream-DNS nutzt (siehe docker-compose.yaml) und die Compose-
+# Container in derselben Rancher-Desktop-VM wie k3s laufen.
 exporters:
   debug:
     verbosity: "basic"
 
-  otlp/jaeger:
-    endpoint: jaeger:4317
-    tls:
-      insecure: true
+  # Traces -> Grafana Tempo (OTLP HTTP)
+  otlphttp/tempo:
+    endpoint: http://tempo.monitoring.svc.cluster.local:4318
     retry_on_failure:
       enabled: true
       initial_interval: 5s
@@ -30,7 +34,31 @@ exporters:
       num_consumers: 10
       queue_size: 5000
 
+  # Logs -> Grafana Loki (nativer OTLP-Ingest; Exporter haengt
+  # /v1/logs an den Endpoint an; auth_enabled=false, kein Header)
+  otlphttp/loki:
+    endpoint: http://loki.monitoring.svc.cluster.local:3100/otlp
+    retry_on_failure:
+      enabled: true
+
+  # Metriken -> Prometheus Remote Write (Receiver aktiviert via
+  # enableRemoteWriteReceiver in solace-lab-infrastructure).
+  # resource_to_telemetry_conversion legt Ressourcen-Attribute
+  # (z. B. service.name) direkt auf die Serien - wichtig fuer die
+  # kuenftige SAM-Anbindung.
+  prometheusremotewrite:
+    endpoint: http://kube-prometheus-kube-prome-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
+    resource_to_telemetry_conversion:
+      enabled: true
+    target_info:
+      enabled: false
+    retry_on_failure:
+      enabled: true
+
 receivers:
+  # OTLP: Broker-fremde Quellen. Kuenftig pusht auch SAM (gwe/awe/str)
+  # Metriken+Logs hierher: management_server.exporters ->
+  # http://host.docker.internal:4318 (HTTP) bzw. :4317 (gRPC).
   otlp:
     protocols:
       grpc:
@@ -66,9 +94,17 @@ service:
   extensions: [health_check, zpages]
   telemetry:
     logs:
-      level: "debug"
+      level: "info"
   pipelines:
     traces:
       receivers: [solace/solace-1, solace/solace-2, otlp]
       processors: [memory_limiter, batch]
-      exporters: [otlp/jaeger, debug]
+      exporters: [otlphttp/tempo, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheusremotewrite]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]

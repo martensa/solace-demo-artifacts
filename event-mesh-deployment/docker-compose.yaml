@@ -5,20 +5,6 @@ networks:
     driver: bridge
 
 services:
-  jaeger:
-    image: ${JAEGER_IMG}
-    command: ["--memory.max-traces=1000"]
-    hostname: jaeger
-    container_name: jaeger
-    networks:
-      - solace_net
-    ports:
-      - "16685:16685"
-      - "16686:16686"
-      - "16687:16687"
-      - "14268:14268"
-      - "14250:14250"
-
   otel-collector:
     image: ${OTELCOL_IMG}
     command: ["--config=/etc/otel-collector-config.yaml", "${OTELCOL_ARGS}"]
@@ -26,17 +12,17 @@ services:
     container_name: otel-collector
     networks:
       - solace_net
+    dns:
+      - 10.43.0.10   # kube-dns: loest *.svc.cluster.local (Grafana-Stack);
+                     # Container-Namen (solace-1/-2) weiterhin via embedded DNS
+      - 1.1.1.1      # Fallback, falls k3s nicht laeuft
     volumes:
       - ./config/otel-collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
     ports:
-      - "1888:1888"   # pprof extension
-      - "8888:8888"   # Prometheus metrics exposed by the collector
-      - "8889:8889"   # Prometheus exporter metrics
       - "13133:13133" # health_check extension
       - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver (SAM via host.docker.internal:4318)
       - "55679:55679" # zpages extension
-    depends_on:
-      - jaeger
 
   solace-1:
     image: ${PUBSUB_IMG}
