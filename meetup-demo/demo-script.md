@@ -173,6 +173,24 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
     anwenden (`meetup-demo/fallback`), Retail-360-Workflow als
     Ersatzdemo (Folie 4, verifiziert), Grafana läuft immer.
 
+## Rebuild-Abhängigkeiten (nach jedem Plattform-Rebuild prüfen)
+
+1. **Workflow-Kartenname im Event-Entrypoint**: der Entrypoint
+   publiziert auf das A2A-Topic des MESH-KARTEN-Namens
+   (`workflow_<uuid>`), nicht auf den Config-Namen. Nach einem
+   Rebuild neu setzen:
+
+   ```bash
+   sam config pull  # oder: /api/v1/platform/workflows -> id
+   # entrypoints/shop-events.yaml: targetWorkflowName anpassen
+   ```
+
+2. **RBAC**: Event-Mesh-Entrypoints laufen unter einer eigenen
+   Gateway-Identität und halten nur die Default-Rollen — deshalb
+   trägt `sam_user` jetzt `workflow:*:invoke` (siehe
+   `scripts/rbac/rbac/roles/sam_user.yaml`).
+3. **MCP-Tool-Namen der Desktop-App** (`scripts/desktop`).
+
 ## Bekannte Grenzen (ehrlich moderieren)
 
 - MongoDB-Connector: **Experimental** (2.225.14).
@@ -181,3 +199,7 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
 - Supervision: work in progress, bewusst nicht Teil der Demo.
 - RBAC-Grants loggen auf DEBUG — Governance-Dashboard zeigt
   Executions und Denies, nicht die Grants.
+- **LLM-Budget**: der LiteLLM-Proxy hat ein hartes Kostenlimit
+  (`status 429 [budget_exceeded]`). Vor dem Meetup Budget prüfen —
+  ohne LLM-Kontingent laufen zwar Events, Workflow und Metriken,
+  aber die Agenten antworten nicht.

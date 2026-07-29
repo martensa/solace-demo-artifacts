@@ -10,3 +10,9 @@ description: >-
 spec:
   scopes:
     - "agent:*:invoke"
+    # Workflows are a separate RBAC category (agent:* does not cover
+    # them). Needed here so event-mesh entrypoints -- which run under
+    # their own gateway identity and therefore only hold the default
+    # roles -- can trigger workflows (meetup demo: shop-events ->
+    # order-incident-report).
+    - "workflow:*:invoke"

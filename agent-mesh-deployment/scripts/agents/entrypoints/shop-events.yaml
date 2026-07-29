@@ -31,7 +31,11 @@ spec:
           - topic: "acmeretail/shop/order/failed/>"
             qos: 1
         messageFormat: json
-        targetWorkflowName: order-incident-report
+        # NOTE: the entrypoint publishes to the A2A topic of the
+        # target's MESH CARD name -- for a DB-managed workflow that
+        # is workflow_<uuid>, NOT the config name. Regenerate after
+        # every platform rebuild (see meetup-demo/README).
+        targetWorkflowName: workflow_019fad02_c0cd_79df_b36e_86194a999133
         promptTemplate: >-
           A shop order failed. Analyze it and produce the incident
           report. Order event JSON: {payload}
