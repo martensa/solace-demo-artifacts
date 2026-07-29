@@ -11,7 +11,8 @@ description: >-
   channel with online orders.
 spec:
   type: standard
-  modelProvider: general
+  modelProvider:
+    - general
   connectors:
     - retail-poslog
   toolsets:

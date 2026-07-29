@@ -10,7 +10,8 @@ description: >-
   recommendation.
 spec:
   type: standard
-  modelProvider: general
+  modelProvider:
+    - general
   toolsets:
     - builtin_artifact_tools
   skills:

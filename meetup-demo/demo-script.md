@@ -1,19 +1,28 @@
 # Meetup-Demo: AI Worker Lifecycle live auf SAM v2 (20 min)
 
+Grundlage: der Point-of-Sale-Analytics-Use-Case aus dem Blog
+([Unleash Revenue Potential][blog]) und den Artefakten in
+[solace-sam-demos/sam-retail][repo]. Die POSLOG-Collection
+enthält die Original-Transaktionen des Blogs plus die
+Demo-Stories im selben Dokument-Schema.
+
+[blog]: https://blog.alexandermartens.de/unleash-revenue-potential-agentic-ais-impact-on-point-of-sale-analytics
+[repo]: https://github.com/martensa/solace-sam-demos/tree/master/sam-retail
+
 Rollen im Szenario: **OMS-Team** (SAM WebUI), **Entwickler**
 (Claude Code via MCP), **Plattform-Team** (Grafana). Personas via
 Keycloak: `viewer`, `data_engineer`, `power_user`.
 
 ## Timeline
 
-### 00:00–03:00 — Folien 1–6 (Rahmen)
+### 00:00–03:00 — Folien 1–4 (Rahmen)
 
-Folie 1 (warum EDA) → Folie 2 (Lifecycle) → Folie 3 (Plattform)
-→ Folie 4 (Retail 360, bereits live verifiziert) → **Folie 5**
-(heutiges Szenario: Event-Driven Retail Ops) → kurz Folie 6
-(was gleich wo passiert). Kernsatz: „Wir stellen heute live einen
-neuen AI-Worker ein, geben ihm Zugriff, lassen ihn im Team
-arbeiten — und messen ihn."
+Folie 1 (Lifecycle) → Folie 2 (Plattform auf K8s) → **Folie 3**
+(Szenario: Retail Stores streamen POSLOG über das Event Mesh nach
+MongoDB; PDM/OMS/CRM in Postgres — die Architektur aus dem Blog-
+Use-Case) → kurz Folie 4 (was gleich wo passiert). Kernsatz: „Wir
+stellen heute live einen neuen AI-Worker ein, geben ihm Zugriff,
+lassen ihn im Team arbeiten — und messen ihn."
 
 ### 03:00–08:00 — HIRING + ONBOARDING: AI Builder live
 
@@ -107,7 +116,7 @@ sam config apply` erstellt Connector + Agent deklarativ.
 
 ### 18:00–20:00 — Wrap
 
-Folie 6: jede Lifecycle-Phase abhaken (Supervision: work in
+Folie 4: jede Lifecycle-Phase abhaken (Supervision: work in
 progress). Schlusssatz: „Ein Event Mesh, ein Worker-Lifecycle —
 Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
 
@@ -119,7 +128,8 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
    margin or inventory critical?" (an den Orchestrator)
 3. **Mongo (der neue Worker):** „How often was the Tropical Acai
    Smoothie Bowl sold at the registers although stock is zero —
-   and were any transactions voided?"
+   and were any transactions voided?" (POSLOG-Dokumente tragen
+   `items[]`, `store{}`, `payment.status`)
 4. **Mongo+OMS Kanalvergleich:** „Compare Opus One Napa Valley
    2019 revenue: online orders vs. POS registers, by store."
 5. **CRM+PDM+Mongo (Orchestrator-Delegation):** „Who bought the

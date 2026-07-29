@@ -10,6 +10,8 @@ description: >-
 target:
   name: solace-lab
   url: https://sam.solace.lab
+  auth:
+    type: oauth
 resources:
   datasets:
     - retail-demo-questions
