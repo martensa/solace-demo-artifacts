@@ -1,0 +1,72 @@
+# Event-Mesh entrypoint (meetup demo): shop order events on the
+# sam VPN trigger SAM without any human in the loop.
+#   failed  -> order-incident-report workflow -> incident report
+#   created -> Retail OMS Query Expert -> short order confirmation
+# Both rules publish their result back onto the mesh
+# (acmeretail/shop/order/result/...), which the shop page
+# subscribes to -- the loop closes in the browser.
+#
+# The broker connection mirrors the SAM deployment values
+# (external broker solace-1, VPN sam). qos 1 + on_completion:
+# the event is only acknowledged after the workflow/agent
+# finishes (redelivery on crash).
+kind: entrypoint
+name: shop-events
+description: >-
+  Event-mesh entrypoint for the Acme Retail shop demo: failed
+  orders trigger the order-incident-report workflow, created
+  orders get a confirmation from the OMS expert.
+spec:
+  type: event_mesh
+  deploy: true
+  values:
+    broker_url: "ws://host.docker.internal:8008"
+    broker_vpn: sam
+    broker_username: default
+    broker_password: default
+    tls_skip_verify: "false"
+    event_rules:
+      - name: failed_orders
+        subscriptions:
+          - topic: "acmeretail/shop/order/failed/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: order-incident-report
+        promptTemplate: >-
+          A shop order failed. Analyze it and produce the incident
+          report. Order event JSON: {payload}
+        acknowledgmentPolicy:
+          mode: on_completion
+          timeoutSeconds: 600
+        successOutput:
+          enabled: true
+          topic: "acmeretail/shop/order/result/incident"
+          topicType: static
+          responseType: full
+        errorOutput:
+          enabled: true
+          topic: "acmeretail/shop/order/result/error"
+          topicType: static
+      - name: created_orders
+        subscriptions:
+          - topic: "acmeretail/shop/order/created/>"
+            qos: 1
+        messageFormat: json
+        targetAgent: Retail OMS Query Expert
+        promptTemplate: >-
+          A new online order arrived. Confirm it in 3 sentences:
+          check in retail_oms whether the customer is known and
+          whether the product has sold before, then confirm the
+          order looks good. Order event JSON: {payload}
+        acknowledgmentPolicy:
+          mode: on_completion
+          timeoutSeconds: 300
+        successOutput:
+          enabled: true
+          topic: "acmeretail/shop/order/result/confirmation"
+          topicType: static
+          responseType: full
+        errorOutput:
+          enabled: true
+          topic: "acmeretail/shop/order/result/error"
+          topicType: static

@@ -1,0 +1,15 @@
+kind: experiment
+name: meetup-quality
+description: >-
+  Meetup regression check: does the Retail CRM Query Expert answer
+  the demo questions correctly? Judged by the seeded LLM Judge
+  plus ROUGE overlap against the expected responses.
+spec:
+  datasetId: retail-demo-questions
+  targetAgent: Retail CRM Query Expert
+  evaluatorIds:
+    - LLM Judge
+    - rouge
+  primaryEvaluatorId: LLM Judge
+  runsPerExample: 1
+  maxWorkers: 2

@@ -1,0 +1,22 @@
+networks:
+  solace_net:
+    name: solace_net
+    external: true
+
+services:
+  retail-pos-mongo:
+    image: mongo:7
+    container_name: retail-pos-mongo
+    hostname: retail-pos-mongo
+    networks:
+      - solace_net
+    ports:
+      - "27017:27017"
+    environment:
+      # Demo-only credentials (repo convention, never production)
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+      MONGO_INITDB_DATABASE: retail_pos
+    volumes:
+      - ./seed:/docker-entrypoint-initdb.d:ro
+    restart: on-failure

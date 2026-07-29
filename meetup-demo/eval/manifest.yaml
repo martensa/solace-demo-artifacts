@@ -1,0 +1,17 @@
+# Offline evaluation for the meetup demo (Improvement phase).
+# Apply once before the meetup, then run:
+#   sam config apply -m manifest.yaml
+#   sam eval run meetup-quality --url https://sam.solace.lab --threshold 0.8
+kind: manifest
+name: meetup-eval
+description: >-
+  Offline evaluation of the retail demo agents for the meetup
+  (dataset + LLM-judge experiment).
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+resources:
+  datasets:
+    - retail-demo-questions
+  experiments:
+    - meetup-quality

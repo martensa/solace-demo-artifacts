@@ -1,0 +1,18 @@
+# Break-glass fallback for the live Builder demo: creates the
+# MongoDB POSLOG connector + agent declaratively if the Builder
+# beat fails on stage.  Apply with:
+#   sam config apply -m manifest.yaml
+# NEVER --prune (unmanaged resources would be deleted).
+kind: manifest
+name: meetup-poslog-fallback
+description: >-
+  Fallback provisioning of the Retail POS Analyst (MongoDB POSLOG)
+  for the meetup demo.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+resources:
+  connectors:
+    - retail-poslog
+  agents:
+    - Retail POS Analyst

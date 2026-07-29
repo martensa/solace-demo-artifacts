@@ -37,7 +37,14 @@ resources:
     - Retail OMS Query Expert
     - Retail PDM Query Expert
     - Retail 360 Reporter
+    # Meetup demo: merge agent for the order-incident workflow.
+    # NOTE: the Retail POS Analyst is deliberately NOT managed
+    # here -- it is created live via the AI Builder (fallback:
+    # meetup-demo/fallback/).
+    - Order Incident Reporter
   workflows:
     - retail-360-report
+    - order-incident-report
   entrypoints:
     - developer-mcp
+    - shop-events

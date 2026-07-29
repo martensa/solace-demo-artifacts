@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Acme Retail — Online Shop (Meetup Demo)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./solclient.js"></script>
+<style>
+  :root {
+    --bg: #0d1420; --panel: #16202f; --card: #1b2839;
+    --text: #e8eef5; --muted: #8aa0b5; --accent: #00c895;
+    --amber: #fca829; --red: #ff5d6c; --navy: #0a3b5e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text);
+         font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 14px;
+           padding: 18px 28px; background: var(--panel);
+           border-bottom: 2px solid var(--accent); }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  #led { width: 12px; height: 12px; border-radius: 50%;
+         background: var(--red); margin-left: auto;
+         box-shadow: 0 0 8px var(--red); transition: all .3s; }
+  #led.on { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  #ledlabel { font-size: 12px; color: var(--muted); }
+  main { max-width: 1180px; margin: 26px auto; padding: 0 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 16px; }
+  .card { background: var(--card); border-radius: 12px; padding: 18px;
+          display: flex; flex-direction: column; gap: 8px;
+          border: 1px solid #263a52; }
+  .card .emoji { font-size: 42px; }
+  .card h3 { font-size: 15px; min-height: 42px; }
+  .card .brand { color: var(--muted); font-size: 12px; }
+  .card .price { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .badge { align-self: flex-start; font-size: 10.5px; padding: 2px 8px;
+           border-radius: 10px; background: #24405e; color: #bcd6ee; }
+  .badge.warn { background: #4a3620; color: var(--amber); }
+  button { margin-top: auto; padding: 10px 12px; border: 0; border-radius: 8px;
+           background: var(--accent); color: #06281e; font-weight: 700;
+           cursor: pointer; font-size: 14px; }
+  button:hover { filter: brightness(1.12); }
+  button:disabled { background: #33475d; color: #7b8ea1; cursor: wait; }
+  #log { margin-top: 26px; background: var(--panel); border-radius: 12px;
+         padding: 16px 18px; }
+  #log h2 { font-size: 13px; color: var(--muted); text-transform: uppercase;
+            letter-spacing: .08em; margin-bottom: 10px; }
+  .evt { padding: 10px 12px; border-left: 3px solid var(--accent);
+         background: #101a28; border-radius: 6px; margin-bottom: 8px;
+         font-size: 13px; animation: pop .25s ease; }
+  .evt.fail { border-color: var(--red); }
+  .evt.result { border-color: var(--amber); }
+  .evt .topic { color: var(--muted); font-size: 11px; word-break: break-all; }
+  .evt pre { white-space: pre-wrap; word-break: break-word; color: #cfe3d9;
+             font-size: 12px; margin-top: 4px; max-height: 180px; overflow: auto; }
+  @keyframes pop { from { transform: translateY(-4px); opacity: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <div style="font-size:28px">🛒</div>
+  <div>
+    <h1>Acme Retail — Online Shop</h1>
+    <div class="sub">Checkout publiziert Events direkt auf das Solace Event Mesh
+      (VPN <b>sam</b>) &rarr; Event-Mesh-Entrypoint &rarr; SAM Workflow</div>
+  </div>
+  <div id="led"></div><div id="ledlabel">connecting…</div>
+</header>
+<main>
+  <div class="grid" id="products"></div>
+  <div id="log"><h2>Event Stream (publiziert / empfangen)</h2><div id="events"></div></div>
+</main>
+<script>
+"use strict";
+/* Products come straight from retail_pdm; the three failure cases
+   are real data stories (stock 0, out-of-season, contaminated
+   inventory_status), see meetup-demo/demo-script.md. */
+const PRODUCTS = [
+  { id: "ITM_006", sku: "WIN_OPUS_750ML", name: "Opus One Napa Valley 2019",
+    brand: "Opus One", price: 425.00, emoji: "🍷",
+    badge: "In Stock · 67", ok: true,
+    customer: "CUST_992847531" },
+  { id: "ITM_013", sku: "COF_PIKE_12OZ", name: "Pike Place Signature Roast 12oz",
+    brand: "Pike Roasters", price: 16.99, emoji: "☕",
+    badge: "In Stock · 187", ok: true,
+    customer: "CUST_332156789" },
+  { id: "ITM_010", sku: "SMT_ACAI_16OZ", name: "Tropical Acai Smoothie Bowl 16oz",
+    brand: "Beach Bowl Co", price: 14.99, emoji: "🫐",
+    badge: "Made to Order · Bestand 0!", warn: true, ok: false,
+    reason: "OUT_OF_STOCK", customer: "CUST_887234901" },
+  { id: "ITM_046", sku: "TRF_BLK_SHAVED_1OZ", name: "Shaved Black Truffle 1oz",
+    brand: "Périgord Treasures", price: 159.99, emoji: "🍄",
+    badge: "Saison Nov–Mar!", warn: true, ok: false,
+    reason: "OUT_OF_SEASON", customer: "CUST_112233445" },
+  { id: "ITM_023", sku: "TRL_ALPINE_BULK_1LB", name: "Alpine Trail Mix Bulk 1lb",
+    brand: "Bulk Bin", price: 12.99, emoji: "🥜",
+    badge: "Status: 'Bulk Bin' ?!", warn: true, ok: false,
+    reason: "DATA_QUALITY", customer: "CUST_778899001" },
+];
+const STORE = "STR_WEB_ONLINE_001";
+let session = null, connected = false, orderSeq = 0;
+
+const $ = (s) => document.querySelector(s);
+function logEvent(cls, topic, body) {
+  const div = document.createElement("div");
+  div.className = "evt " + cls;
+  div.innerHTML = `<div class="topic">${topic}</div><pre></pre>`;
+  div.querySelector("pre").textContent =
+    typeof body === "string" ? body : JSON.stringify(body, null, 1);
+  $("#events").prepend(div);
+}
+
+function renderProducts() {
+  for (const p of PRODUCTS) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="emoji">${p.emoji}</div>
+      <span class="badge ${p.warn ? "warn" : ""}">${p.badge}</span>
+      <h3>${p.name}</h3>
+      <div class="brand">${p.brand} · ${p.sku}</div>
+      <div class="price">$${p.price.toFixed(2)}</div>
+      <button data-id="${p.id}">Jetzt bestellen</button>`;
+    card.querySelector("button").onclick = (e) => order(p, e.target);
+    $("#products").appendChild(card);
+  }
+}
+
+function order(p, btn) {
+  if (!connected) { logEvent("fail", "—", "Broker nicht verbunden"); return; }
+  btn.disabled = true; setTimeout(() => (btn.disabled = false), 1500);
+  orderSeq += 1;
+  const orderId = `WEB-${new Date().toISOString().slice(0,10).replaceAll("-","")}-${String(orderSeq).padStart(4,"0")}`;
+  const payload = {
+    order_id: orderId, channel: "ONLINE", store_id: STORE,
+    ts: new Date().toISOString(),
+    customer_id: p.customer,
+    lines: [{ product_id: p.id, sku: p.sku, description: p.name,
+              qty: 1, unit_price: p.price, extended_price: p.price }],
+    total: p.price, currency: "USD",
+    status: p.ok ? "CREATED" : "FAILED",
+    ...(p.ok ? {} : { failure_reason: p.reason,
+      failure_detail: {
+        OUT_OF_STOCK: "Checkout accepted but stock_level is 0 (status 'Made to Order' masks it)",
+        OUT_OF_SEASON: "Product seasonality is Nov-Mar; order date is outside the season window",
+        DATA_QUALITY: "inventory_status contains the merch descriptor 'Bulk Bin' - no availability signal",
+      }[p.reason] }),
+  };
+  const topic = p.ok
+    ? `acmeretail/shop/order/created/${STORE}/${p.sku}`
+    : `acmeretail/shop/order/failed/${p.reason}/${p.sku}`;
+  const msg = solace.SolclientFactory.createMessage();
+  msg.setDestination(solace.SolclientFactory.createTopicDestination(topic));
+  msg.setBinaryAttachment(JSON.stringify(payload));
+  msg.setDeliveryMode(solace.MessageDeliveryModeType.PERSISTENT);
+  try {
+    session.send(msg);
+    logEvent(p.ok ? "" : "fail", `➡ ${topic}`, payload);
+  } catch (e) { logEvent("fail", topic, "Publish-Fehler: " + e.message); }
+}
+
+function connect() {
+  const factoryProps = new solace.SolclientFactoryProperties();
+  factoryProps.profile = solace.SolclientFactoryProfiles.version10;
+  solace.SolclientFactory.init(factoryProps);
+  session = solace.SolclientFactory.createSession({
+    url: "ws://localhost:8008",
+    vpnName: "sam",
+    userName: "default",
+    password: "default",
+    publisherProperties: { enabled: true, acknowledgeMode:
+      solace.MessagePublisherAcknowledgeMode.PER_MESSAGE },
+  });
+  session.on(solace.SessionEventCode.UP_NOTICE, () => {
+    connected = true;
+    $("#led").classList.add("on");
+    $("#ledlabel").textContent = "sam VPN · ws://localhost:8008";
+    // Workflow-/Agent-Antworten live anzeigen
+    session.subscribe(
+      solace.SolclientFactory.createTopicDestination("acmeretail/shop/order/result/>"),
+      true, "result-sub", 10000);
+    logEvent("", "✔ verbunden", "Session up, subscribed to acmeretail/shop/order/result/>");
+  });
+  session.on(solace.SessionEventCode.CONNECT_FAILED_ERROR, (e) => {
+    $("#ledlabel").textContent = "Verbindung fehlgeschlagen";
+    logEvent("fail", "—", "Connect failed: " + e.infoStr);
+  });
+  session.on(solace.SessionEventCode.MESSAGE, (msg) => {
+    let body = msg.getBinaryAttachment() || "";
+    try { body = JSON.parse(body); } catch (_) { /* Text belassen */ }
+    logEvent("result", `⬅ ${msg.getDestination().getName()}`, body);
+  });
+  session.connect();
+}
+renderProducts();
+connect();
+</script>
+</body>
+</html>

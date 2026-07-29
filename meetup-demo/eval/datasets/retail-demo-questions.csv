@@ -1,0 +1,7 @@
+sequence_number,prompt,expected_response
+1,"How many customers do we have in total?","There are 13 customers in the retail CRM database."
+2,"Who is our top customer by lifetime spend? Give the customer id and the amount.","The top customer by lifetime spend is CUST_992847531."
+3,"How many customers are VIPs, and in which cities do they live?","The answer names the VIP customers with their cities based on customer_type = VIP."
+4,"Which membership tiers exist and how many customers are in each?","A breakdown of membership_tier values with counts, e.g. Diamond, Platinum, Gold and customers without a tier."
+5,"Do we have customers without a loyalty card? Who are they?","Yes -- the answer identifies the customers whose loyalty_card is missing, including the tourist customer CUST_887234901."
+6,"Which region generates the highest total lifetime spend?","A region-level aggregation of total_spend naming the top region."

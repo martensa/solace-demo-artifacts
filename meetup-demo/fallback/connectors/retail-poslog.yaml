@@ -1,0 +1,27 @@
+# MongoDB connector to the local POSLOG store (meetup-demo/mongodb,
+# host container retail-pos-mongo, port 27017 published on the
+# host). sam_ro/sam_ro is a demo-only read-only user (repo
+# convention). The connector is EXPERIMENTAL in 2.225.14 and
+# generates ONE tool (<collection>_mongo_query_<suffix>) with
+# aggregate/insert/update/delete operations; schema introspection
+# samples up to 100 documents at startup.
+kind: connector
+name: retail-poslog
+description: >-
+  POSLOG transactions from the store point-of-sale systems
+  (MongoDB collection poslog_transactions): receipts with line
+  items, tender, terminal, operator and loyalty data per store
+  and business date. Complements the online order data in
+  retail_oms with the in-store channel.
+spec:
+  type: document_db
+  subtype: mongodb
+  values:
+    scheme: mongodb
+    hostname: host.docker.internal
+    port: 27017
+    username: sam_ro
+    password: sam_ro
+    database: retail_pos
+    collection: poslog_transactions
+    options: "authSource=retail_pos"
