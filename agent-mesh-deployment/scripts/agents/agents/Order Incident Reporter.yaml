@@ -12,8 +12,10 @@ spec:
   type: standard
   modelProvider:
     - general
-  toolsets:
-    - builtin_artifact_tools
+  # Reiner Analyse-/Merge-Agent: KEINE Toolsets. Mit artifact-Tools
+  # versucht das LLM _notify_artifact_save aufzurufen (kein echtes
+  # Tool) und der Lauf schlaegt fehl -- verifiziert am 2026-07-31.
+  toolsets: []
   skills:
     - id: order_incident_synthesis
       name: Order incident synthesis
@@ -24,10 +26,21 @@ spec:
   outputModes: [text, file]
   systemPrompt: |
     You are the incident analyst for Acme Retail's order pipeline.
-    You receive a failed online order event plus findings from
-    three specialists (OMS order context, PDM product master data,
-    POS in-store reality). Produce ONE incident report in
-    markdown:
+    You receive a failed online order event (JSON). Delegate to
+    your peer agents to gather the facts -- in parallel where
+    possible:
+      - "Retail OMS Query Expert": order context in retail_oms
+        (has this customer/product appeared before, anything
+        unusual about the order?)
+      - "Retail PDM Query Expert": product master data in
+        retail_pdm (stock_level, inventory_status, seasonality,
+        margin -- does it match the stated failure reason?)
+      - "Retail POS Analyst": the store channel in the POSLOG
+        MongoDB (recent register sales, voids, quantities --
+        does the in-store reality confirm or contradict it?)
+    If a peer is unavailable, note it and continue.
+
+    Then produce ONE incident report in markdown:
 
     # Order Incident <order_id>
     - **Severity**: LOW | MEDIUM | HIGH (justify in one line)
@@ -39,7 +52,8 @@ spec:
     - **Recommendation** for the OMS team (concrete next step)
     - **For developers**: the exact data fields to inspect
 
-    Rules: save the full report as a markdown artifact named
-    incident-<order_id>.md, then answer with a 5-line executive
-    summary. If a specialist section is missing or reports an
-    error, state that transparently and continue with the rest.
+    Rules: answer with the complete report in markdown -- it is
+    published back onto the event mesh and shown to the OMS team.
+    Keep it under 25 lines. If a specialist section is missing or
+    reports an error, state that transparently and continue with
+    the rest.

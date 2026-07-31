@@ -31,14 +31,31 @@ spec:
           - topic: "acmeretail/shop/order/failed/>"
             qos: 1
         messageFormat: json
-        # NOTE: the entrypoint publishes to the A2A topic of the
-        # target's MESH CARD name -- for a DB-managed workflow that
-        # is workflow_<uuid>, NOT the config name. Regenerate after
-        # every platform rebuild (see meetup-demo/README).
-        targetWorkflowName: workflow_019fad02_c0cd_79df_b36e_86194a999133
+        # NOTE (verified 2026-07-31): with targetWorkflowName the
+        # entrypoint delivers an EMPTY A2A message -- promptTemplate
+        # is only rendered for AGENT targets (A2A sniff:
+        # parts[0].text == ""). Therefore the incident path runs
+        # through the Reporter AGENT, which delegates to the OMS,
+        # PDM and POS experts itself. The order-incident-report
+        # workflow stays deployed and is used for the UI/Activities
+        # story; vendor gap reported.
+        #
+        # Target is the ORCHESTRATOR: only it can delegate to peer
+        # agents (a standard agent reports "peer delegation lives at
+        # my level, not theirs"). It fans out to the OMS/PDM/POS
+        # experts and has the Order Incident Reporter merge.
+        targetAgent: Orchestrator
         promptTemplate: >-
-          A shop order failed. Analyze it and produce the incident
-          report. Order event JSON: {payload}
+          A shop order failed. Delegate in parallel: "Retail OMS
+          Query Expert" for the order context in retail_oms,
+          "Retail PDM Query Expert" for the product master data in
+          retail_pdm (stock, inventory_status, seasonality, margin
+          vs. the stated failure reason) and "Retail POS Analyst"
+          for the store channel in the POSLOG MongoDB (register
+          sales, voids, quantities). Then have "Order Incident
+          Reporter" merge the findings into the incident report and
+          return that report as your answer. Failed order event
+          JSON: {payload}
         acknowledgmentPolicy:
           mode: on_completion
           timeoutSeconds: 600

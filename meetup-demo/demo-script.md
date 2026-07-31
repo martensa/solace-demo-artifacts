@@ -86,10 +86,11 @@ sam config apply` erstellt Connector + Agent deklarativ.
 2. **Opus One bestellen** → created-Event → OMS-Bestätigung
    erscheint als Response-Event im Shop.
 3. **Açaí Bowl bestellen** → failed-Event (OUT_OF_STOCK) →
-   Event-Mesh-Entrypoint triggert `order-incident-report`:
-   parallel OMS + PDM + POS Analyst, Merge zum Incident-Report.
+   Event-Mesh-Entrypoint → **Orchestrator** delegiert parallel an
+   OMS + PDM + POS Analyst, „Order Incident Reporter" merged.
    Während er läuft: SAM UI → **Activities** → Task öffnen →
    Flow-Graph live; nach Abschluss **Performance** (Gantt).
+   Laufzeit ~3–4 min, ~110k Tokens — verifiziert 2026-07-31.
 4. Ergebnis: Incident-Summary als Event im Shop; Artefakt
    `incident-<order_id>.md` in der Session (OMS-Team-Sicht).
 5. Persona-Split: Entwickler stellt in **Claude Code** (MCP,
@@ -199,6 +200,16 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
 - Supervision: work in progress, bewusst nicht Teil der Demo.
 - RBAC-Grants loggen auf DEBUG — Governance-Dashboard zeigt
   Executions und Denies, nicht die Grants.
+- **Event-Trigger → Workflow ist in 2.225.14 defekt**: mit
+  `targetWorkflowName` liefert der Entrypoint eine LEERE A2A-
+  Nachricht (per Sniff belegt: `parts[0].text == ""`), der
+  Workflow läuft ins Nichts. Deshalb zeigt die Demo den
+  Event-Pfad über den **Orchestrator** (`targetAgent`), der
+  delegiert — Workflow `order-incident-report` bleibt deployed
+  und wird im UI/Activities-Beat gezeigt. Vendor-Gap fürs
+  Support-Ticket.
+- **Nur der Orchestrator kann delegieren**: ein Standard-Agent
+  meldet „peer delegation lives at my level, not theirs".
 - **LLM-Budget**: der LiteLLM-Proxy hat ein hartes Kostenlimit
   (`status 429 [budget_exceeded]`). Vor dem Meetup Budget prüfen —
   ohne LLM-Kontingent laufen zwar Events, Workflow und Metriken,

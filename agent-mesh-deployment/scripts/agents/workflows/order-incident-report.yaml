@@ -15,7 +15,11 @@ description: >-
 spec:
   appConfig:
     # Bump to force a redeploy (deploy phase fires on change only).
-    version: "1.0.0"
+    # NOTE: event-triggered runs deliver NO structured input keys
+    # (awe logs inputKeys: []), so nodes must reference the raw
+    # task text as {{workflow.input}} -- {{workflow.input.text}}
+    # stays an unresolved literal here (verified 2026-07-31).
+    version: "1.0.1"
     display_name: Order Incident Report
     description: >-
       Failed-order analysis across OMS, PDM and POS, merged into
@@ -41,7 +45,7 @@ spec:
             this customer ordered before, has this product sold
             online before (retail_oms), and does anything about
             the order look unusual? Concise markdown section with
-            numbers. Failed order event: {{workflow.input.text}}
+            numbers. Failed order event: {{workflow.input}}
       - id: pdm
         type: agent
         agent_name: Retail PDM Query Expert
@@ -52,7 +56,7 @@ spec:
             inventory_status, seasonality, margin, price -- and
             whether the failure reason matches what the data
             shows. Concise markdown section with numbers. Failed
-            order event: {{workflow.input.text}}
+            order event: {{workflow.input}}
       - id: pos
         type: agent
         agent_name: Retail POS Analyst
@@ -63,7 +67,7 @@ spec:
             transactions, voids, quantities sold -- does the
             in-store reality confirm or contradict the failure
             reason? Concise markdown section with numbers. Failed
-            order event: {{workflow.input.text}}
+            order event: {{workflow.input}}
       - id: report
         type: agent
         agent_name: Order Incident Reporter
@@ -74,7 +78,7 @@ spec:
         input:
           message: |
             Create the incident report for this failed shop order:
-            {{workflow.input.text}}
+            {{workflow.input}}
 
             ## OMS findings (order context)
             {{oms.output}}
