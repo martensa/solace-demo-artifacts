@@ -1,0 +1,32 @@
+# Declarative manifest for the additional LLM models (applied on
+# top of the four platform-seeded aliases general / planning /
+# report_gen / image_gen). NOTE: the platform NORMALIZES model
+# aliases to lowercase on create (verified 2026-07-31: submitting
+# "Workflow" stores "workflow") -- names here must be lowercase
+# or every apply would re-plan a create.
+# Applied with:  sam config apply -m manifest.yaml  (see
+# apply-models.sh, which also probes each upstream afterwards).
+#
+# All five run through the same LiteLLM proxy and API key as the
+# seeded models. Upstream health was probe-verified 2026-07-31;
+# the azure-* and gemini-* routes on the proxy have broken
+# backend credentials (final state, not expected to be fixed),
+# which is why the set is Claude / DeepSeek / Qwen.
+kind: manifest
+name: additional-models
+description: >-
+  Additional LLM models for per-task model selection: workflow,
+  reasoning, coding, expert and fast.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    # Token cache from `sam auth login solace-lab` (browser flow).
+    type: oauth
+resources:
+  models:
+    - workflow
+    - reasoning
+    - coding
+    - expert
+    - fast

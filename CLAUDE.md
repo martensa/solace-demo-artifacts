@@ -53,6 +53,7 @@ docker login registry.solace.lab     # once
 docker start postgres pgadmin        # retail demo DBs (host)
 (cd scripts/agents && ./create.sh --deploy)  # retail demo
 (cd scripts/models && ./set-max-tokens.sh)   # max_tokens tuning
+# five additional model aliases come from start.sh automatically
 ./scripts/stop.sh                    # full teardown incl. Keycloak
 ```
 

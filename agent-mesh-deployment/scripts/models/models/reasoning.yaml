@@ -1,0 +1,20 @@
+# Analytical model, keeps a second vendor in the mix. This proxy
+# route runs DeepSeek V3.2 in non-thinking mode, where DeepSeek's
+# official parameter table applies: temperature 1.0 for data
+# analysis (0.0 coding/math, 1.3 conversation). 8192 is the V3.2
+# API output ceiling (probe-verified 2026-07-31).
+kind: model
+name: reasoning
+description: >-
+  Analytical model for deep data analysis at low cost
+  (DeepSeek V3.2).
+spec:
+  provider: custom
+  modelName: openai/deepseek.v3.2
+  apiBase: https://lite-llm.mymaas.net
+  authConfig:
+    type: apikey
+    api_key: ${LLM_SERVICE_API_KEY}
+  modelParams:
+    max_tokens: 8192
+    temperature: 1.0

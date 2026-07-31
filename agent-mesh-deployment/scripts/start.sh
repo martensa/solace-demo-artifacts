@@ -185,3 +185,20 @@ else
   echo "300s. Watch them with:"
   echo "  kubectl get pods -n $SAM_NAMESPACE -w"
 fi
+
+# --- Additional LLM models (declarative, idempotent) ---------------
+# Creates/updates the workflow / reasoning / coding / expert / fast
+# model aliases on top of the chart-seeded ones and probes every
+# upstream. Needs a sam CLI login; a missing token must not fail
+# the deployment -- warn and point at the standalone re-run.
+if [ "$PODS_READY" -eq 1 ]; then
+  echo ""
+  echo "Applying additional LLM models ..."
+  if ! "$PROJECT_DIR/scripts/models/apply-models.sh"; then
+    echo ""
+    echo "WARNING: additional models were not (fully) applied."
+    echo "If the sam CLI login is missing or expired, run:"
+    echo "  sam auth login solace-lab --url https://sam.solace.lab"
+    echo "  ./scripts/models/apply-models.sh"
+  fi
+fi

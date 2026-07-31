@@ -1,0 +1,20 @@
+# Escalation tier for the hardest questions. Claude 5 family:
+# temperature/top_p/top_k are REMOVED (HTTP 400 -- verified
+# 2026-07-31); adaptive thinking is on by default and counts
+# INSIDE max_tokens, so 16384 would truncate -- keep 32768.
+# Upstream runs via Bedrock (the proxy's Anthropic-direct
+# fallback key is invalid; Bedrock route verified working).
+kind: model
+name: expert
+description: >-
+  Escalation model for the highest-quality answers
+  (Claude Opus 5).
+spec:
+  provider: custom
+  modelName: openai/claude-opus-5
+  apiBase: https://lite-llm.mymaas.net
+  authConfig:
+    type: apikey
+    api_key: ${LLM_SERVICE_API_KEY}
+  modelParams:
+    max_tokens: 32768

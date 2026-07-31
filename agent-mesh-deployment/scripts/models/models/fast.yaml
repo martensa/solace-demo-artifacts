@@ -1,0 +1,20 @@
+# Fast, low-cost tier for high-volume routine tasks -- makes the
+# token-cost dashboard story tangible (cheap vs. premium per
+# task). Haiku 4.5 still accepts sampling params, but none are
+# set: vendor default temperature is the right choice here and
+# keeps the file consistent with the other Claude entries.
+# 16384 matches the platform-wide default tuning; ceiling is 64k.
+kind: model
+name: fast
+description: >-
+  Fast, low-cost model for high-volume routine tasks
+  (Claude Haiku 4.5).
+spec:
+  provider: custom
+  modelName: openai/claude-haiku-4-5-20251001
+  apiBase: https://lite-llm.mymaas.net
+  authConfig:
+    type: apikey
+    api_key: ${LLM_SERVICE_API_KEY}
+  modelParams:
+    max_tokens: 16384

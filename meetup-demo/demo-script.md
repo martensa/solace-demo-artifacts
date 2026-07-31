@@ -32,10 +32,15 @@ lassen ihn im Team arbeiten — und messen ihn."
    Connector (System-Zugriff), Modell-Bindung, Credentials =
    **Onboarding**. MongoDB-Connector ist als *Experimental*
    markiert — ehrlich benennen.
-3. Multi-LLM-Beat (2 min): **Models**-Seite zeigen — Aliase
-   `general`/`planning`/`report_gen`, Provider-Liste (Bedrock,
-   Azure, Anthropic, Ollama, Custom). Aussage: „Agent bindet
-   einen Alias, nie einen Key — Modellwechsel ohne Restart."
+3. Multi-LLM-Beat (2 min): **Models**-Seite zeigen — 9 Aliase:
+   die geseedeten `general`/`planning`/`report_gen`/`image_gen`
+   (Claude Opus 4.8) plus `workflow` (Sonnet 5), `reasoning`
+   (DeepSeek V3.2), `coding` (Qwen3 Coder), `expert` (Opus 5),
+   `fast` (Haiku 4.5) — drei Vendors, ein Proxy. Aussage: „Agent
+   bindet einen Alias, nie einen Key — Modellwechsel ohne
+   Restart. Der Incident-Report läuft auf Sonnet 5, die
+   Spezialisten auf Opus 4.8 — gleich in Activities und im
+   Token-Dashboard (`by_model`) sichtbar."
 4. Security-Beat (1 min): zweites Browserfenster (Inkognito) als
    `viewer`-User: kein Builder-Menü, weniger Agenten sichtbar —
    RBAC via Keycloak-Gruppen.

@@ -248,7 +248,7 @@ agents, the `retail-360-report` workflow and the MCP entrypoint.
 See [`scripts/agents/README.md`](scripts/agents/README.md).
 Requires the `sam auth login` from step 6.
 
-### 9. Set the model output limit
+### 9. Models: output limit and additional LLMs
 
 ```bash
 cd scripts/models && ./set-max-tokens.sh
@@ -259,6 +259,22 @@ model and restarts the agents. Without it the chart-seeded empty
 `modelParams` reintroduce the tool-call truncation failure
 documented in [`scripts/models/README.md`](scripts/models/README.md).
 Repeat with `--model-alias planning` and `--model-alias report_gen`.
+
+`start.sh` additionally applies five extra model aliases
+(`workflow`, `reasoning`, `coding`, `expert`, `fast`) from the
+declarative package in `scripts/models/` and probes every model
+upstream. Standalone runs:
+
+```bash
+cd scripts/models && ./apply-models.sh
+```
+
+```bash
+cd scripts/models && ./apply-models.sh --probe-only
+```
+
+Note: the platform normalizes model aliases to lowercase on
+create, so all aliases are lowercase by design.
 
 ### 10. Teardown
 
@@ -292,8 +308,14 @@ To rebuild:
 6. `./scripts/rbac/apply-rbac.sh`
 7. `cd scripts/agents && ./create.sh --deploy`
 8. `cd scripts/models && ./set-max-tokens.sh` (plus
-   `--model-alias planning` and `--model-alias report_gen`)
-9. If the desktop app is connected:
+   `--model-alias planning` and `--model-alias report_gen`),
+   then `./apply-models.sh` -- during the rebuild, `start.sh`
+   ran before the `sam auth login` existed, so the additional
+   models step was skipped with a warning
+9. Re-bind agents that use the additional models (e.g. the
+   Order Incident Reporter on `workflow`):
+   `cd scripts/agents && ./create.sh --deploy` covers this
+10. If the desktop app is connected:
    `cd scripts/desktop && ./generate-manifest.sh && ./connect.sh`
    (the MCP tool names embed platform-DB UUIDs, which the rebuild
    changed)

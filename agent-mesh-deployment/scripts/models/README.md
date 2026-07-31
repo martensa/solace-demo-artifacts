@@ -1,14 +1,64 @@
-# Model Configuration Adjustments (SAM v2)
+# Model Configuration (SAM v2)
 
-Scripts for adjusting Solace Agent Mesh (SAM) model
-configurations. Rewritten for SAM v2: the platform is accessed
-through the sam CLI (`sam api`) using the `sam auth login` token
-cache -- no browser tokens, no CSRF handling.
+Scripts and declarative configs for Solace Agent Mesh (SAM)
+model configurations. The platform is accessed through the sam
+CLI using the `sam auth login` token cache -- no browser tokens,
+no CSRF handling.
 
 ## Files
 
-- `set-max-tokens.sh` -- set the max output tokens on a model
-  configuration.
+- `set-max-tokens.sh` -- set the max output tokens on a
+  (chart-seeded) model configuration.
+- `manifest.yaml` + `models/*.yaml` -- declarative definitions of
+  the five additional model aliases (`workflow`, `reasoning`,
+  `coding`, `expert`, `fast`).
+- `apply-models.sh` -- applies the declarative package
+  (idempotent create-or-update) and probes every model upstream
+  with a 1-token call. Called automatically by `start.sh` after
+  the pods are ready; `--probe-only` runs just the health probes
+  (pre-flight check).
+
+## Additional models
+
+Five aliases extend the chart-seeded set for per-task model
+selection. All run through the same LiteLLM proxy and API key
+(`LLM_SERVICE_API_KEY` from `.env`, substituted at apply time):
+
+- `workflow` -- Claude Sonnet 5, `max_tokens` 32768. Fast,
+  reliable tool use and merge steps in event-triggered
+  pipelines; 1M input context makes it the long-context option.
+  The Order Incident Reporter agent runs on it (multi-model
+  demo beat).
+- `reasoning` -- DeepSeek V3.2, `max_tokens` 8192,
+  `temperature` 1.0 (DeepSeek's official recommendation for
+  data analysis in non-thinking mode; 8192 is the V3.2 output
+  ceiling).
+- `coding` -- Qwen3 Coder Next, `max_tokens` 8192,
+  `temperature` 0.7, `top_p` 0.8 (Qwen's official Qwen3-Coder
+  sampling; 8192 is the proxy's published output ceiling).
+- `expert` -- Claude Opus 5, `max_tokens` 32768. Escalation
+  tier; adaptive thinking counts inside `max_tokens`, so 16384
+  would truncate.
+- `fast` -- Claude Haiku 4.5, `max_tokens` 16384. Low-cost tier
+  for high-volume routine tasks.
+
+Parameter rules discovered while building this set (all verified
+live against the proxy on 2026-07-31):
+
+- The platform **normalizes model aliases to lowercase** on
+  create -- declarative names must be lowercase or every apply
+  re-plans a create.
+- The Claude 5 family (Sonnet 5, Opus 5) **rejects**
+  `temperature`, `top_p` and `top_k` with HTTP 400
+  ("deprecated for this model") -- omit them entirely.
+- `modelParams` is a free-form pass-through object; which
+  parameters actually work depends on the model behind the
+  proxy, so the params differ per model by design.
+- The proxy's `azure-*` and `gemini-*` routes have broken
+  backend credentials (Azure subscription key, Google service
+  account -- final state). That is why the set is
+  Claude / DeepSeek / Qwen; `deepseek-v4-pro` also runs over
+  the broken Azure route.
 
 ## Background: max output tokens
 

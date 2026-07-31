@@ -57,6 +57,8 @@ docker login registry.solace.lab    # once
 docker start postgres pgadmin       # retail demo DBs (host)
 (cd scripts/agents && ./create.sh --deploy)  # retail demo
 (cd scripts/models && ./set-max-tokens.sh)   # max_tokens 16384
+# additional models (workflow/reasoning/coding/expert/fast) are
+# applied by start.sh; standalone: scripts/models/apply-models.sh
 ./scripts/stop.sh                   # full teardown
 ```
 
@@ -144,8 +146,17 @@ reference DB-managed roles, never the YAML `sam_admin`.
   deployed by default (`--deploy` to deploy; NEVER `--prune`)
 - `scripts/models/` -- `set-max-tokens.sh` patches
   `modelParams.max_tokens` via `sam api` (SAM_AUTH_TOKEN from the
-  CLI login cache) and restarts the awe deployment. Both agents
-  and models tooling are v2-native and verified live.
+  CLI login cache) and restarts the awe deployment. Plus the
+  declarative package for five additional aliases (`workflow` =
+  Sonnet 5 for the incident merge, `reasoning` = DeepSeek V3.2,
+  `coding` = Qwen3 Coder, `expert` = Opus 5, `fast` = Haiku 4.5)
+  applied by `apply-models.sh` (start.sh hook; `--probe-only` =
+  upstream health check). Gotchas: the platform lowercases model
+  aliases on create (declarative names must be lowercase); the
+  Claude 5 family rejects temperature/top_p/top_k (HTTP 400); the
+  proxy's azure-*/gemini-* routes have permanently broken backend
+  credentials. Both agents and models tooling are v2-native and
+  verified live.
 - `scripts/observability/` -- overlays the image-baked component
   configs with a `management_server` block (metrics) via a Helm 4
   postrenderer/v1 plugin + kustomize (configMapGenerator hash =

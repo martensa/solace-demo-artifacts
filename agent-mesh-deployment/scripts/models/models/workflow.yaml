@@ -1,0 +1,21 @@
+# Workflow model: fast, reliable tool use and structured merge
+# steps in event-triggered pipelines (order-incident path). With
+# 1M input tokens this is also the long-context option of the set.
+# Claude 5 family: temperature/top_p/top_k are REMOVED (HTTP 400,
+# "deprecated for this model" -- verified 2026-07-31); adaptive
+# thinking counts INSIDE max_tokens, so keep the cap generous.
+kind: model
+name: workflow
+description: >-
+  Workflow model for event-triggered pipelines and merge steps;
+  1M input context makes it the long-context option (Claude
+  Sonnet 5).
+spec:
+  provider: custom
+  modelName: openai/claude-sonnet-5
+  apiBase: https://lite-llm.mymaas.net
+  authConfig:
+    type: apikey
+    api_key: ${LLM_SERVICE_API_KEY}
+  modelParams:
+    max_tokens: 32768

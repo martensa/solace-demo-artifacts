@@ -10,8 +10,13 @@ description: >-
   recommendation.
 spec:
   type: standard
+  # Multi-model demo beat: the report merge runs on the workflow
+  # model (Claude Sonnet 5, scripts/models/) while the OMS/PDM/POS
+  # specialists stay on general (Claude Opus 4.8) -- visibly
+  # different models in Activities and the token dashboard.
+  # NOTE: model aliases are platform-normalized to lowercase.
   modelProvider:
-    - general
+    - workflow
   # Reiner Analyse-/Merge-Agent: KEINE Toolsets. Mit artifact-Tools
   # versucht das LLM _notify_artifact_save aufzurufen (kein echtes
   # Tool) und der Lauf schlaegt fehl -- verifiziert am 2026-07-31.

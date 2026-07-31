@@ -1,0 +1,21 @@
+# Agentic coding model (262k context), third vendor in the set.
+# Sampling params are Qwen's official recommendation for
+# Qwen3-Coder (temperature 0.7, top_p 0.8); 8192 is the output
+# ceiling this proxy publishes for the model group
+# (probe-verified 2026-07-31).
+kind: model
+name: coding
+description: >-
+  Agentic coding model for code and tool generation
+  (Qwen3 Coder Next).
+spec:
+  provider: custom
+  modelName: openai/qwen.qwen3-coder-next
+  apiBase: https://lite-llm.mymaas.net
+  authConfig:
+    type: apikey
+    api_key: ${LLM_SERVICE_API_KEY}
+  modelParams:
+    max_tokens: 8192
+    temperature: 0.7
+    top_p: 0.8
