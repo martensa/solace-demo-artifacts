@@ -7,9 +7,12 @@ description: >-
 spec:
   datasetId: retail-demo-questions
   targetAgent: Retail CRM Query Expert
+  # Seeded evaluators (exact platform names; there is no "rouge"
+  # in 2.225.14 -- the heuristic overlap evaluator is called
+  # "Response Match").
   evaluatorIds:
     - LLM Judge
-    - rouge
+    - Factuality
   primaryEvaluatorId: LLM Judge
   runsPerExample: 1
   maxWorkers: 2

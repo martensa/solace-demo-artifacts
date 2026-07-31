@@ -119,10 +119,18 @@ sam config apply` erstellt Connector + Agent deklarativ.
 2. Tempo-Drilldown (30 s): Explore → Tempo →
    `sam-solace-lab/a2a`-Spans — jeder A2A-Hop der Demo.
 3. Offline-Evals: SAM UI → Evaluations → Experiment
-   `meetup-quality` (vorab gelaufen) → Scores zeigen; optional
-   live: `sam eval run meetup-quality --url
-   https://sam.solace.lab --threshold 0.8` — „Exit-Code ≠ 0 =
-   CI-Gate: Qualität wird Pipeline-Kriterium."
+   `meetup-quality` (vorab gelaufen: 12/12, 100 %) → Scores
+   zeigen; optional live im Terminal:
+
+   ```bash
+   export SAM_AUTH_TOKEN=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/Library/Application Support/sam/auth/solace-lab.json')))['sam_access_token'])")
+   sam eval run meetup-quality --url https://sam.solace.lab --threshold 0.8
+   ```
+
+   Laufzeit ~6 min für 6 Beispiele × 2 Evaluatoren. „Exit-Code ≠ 0
+   = CI-Gate: Qualität wird Pipeline-Kriterium." Evaluatoren:
+   `LLM Judge` + `Factuality` (Seeded; ein „rouge" existiert
+   nicht — heuristisch heißt es `Response Match`).
 
 ### 18:00–20:00 — Wrap
 
