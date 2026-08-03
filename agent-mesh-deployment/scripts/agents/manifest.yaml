@@ -42,6 +42,8 @@ resources:
     # here -- it is created live via the AI Builder (fallback:
     # meetup-demo/fallback/).
     - Order Incident Reporter
+    # Meetup demo: Haiku-bound clerk for the good-case shop path.
+    - Order Confirmation Clerk
   workflows:
     - retail-360-report
     - order-incident-report

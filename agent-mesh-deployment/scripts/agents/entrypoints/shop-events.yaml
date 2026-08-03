@@ -80,7 +80,10 @@ spec:
           - topic: "acmeretail/shop/order/created/>"
             qos: 1
         messageFormat: json
-        targetAgent: Retail OMS Query Expert
+        # Confirmations are routine, high-volume work -> the clerk
+        # runs on the `fast` alias (Haiku): visible cheap-tier
+        # traffic in the dashboards and faster replies in the shop.
+        targetAgent: Order Confirmation Clerk
         defaultUserIdentity: power_user@solace.lab
         promptTemplate: >-
           A new online order arrived. Confirm it in 3 sentences:

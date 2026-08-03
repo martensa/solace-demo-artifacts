@@ -12,7 +12,7 @@ description: >-
 spec:
   type: standard
   modelProvider:
-    - general
+    - reasoning
   connectors:
     - retail-poslog
   toolsets:

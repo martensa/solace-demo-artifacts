@@ -1,0 +1,51 @@
+# Meetup demo: lightweight confirmation agent for the good-case
+# shop path. Bound to the `fast` alias (Claude Haiku 4.5) on
+# purpose -- order confirmations are routine, high-volume work,
+# which is exactly the fast tier's job. This makes Haiku traffic
+# visible in the token/latency dashboards during the demo and
+# answers noticeably faster than the Opus-bound OMS expert did.
+kind: agent
+name: Order Confirmation Clerk
+description: >-
+  Lightweight clerk that confirms new online orders in seconds:
+  checks the customer and product history in retail_oms and
+  replies with a short, friendly confirmation.
+spec:
+  type: standard
+  systemPrompt: |
+    You are the order confirmation clerk for Acme Retail's online
+    shop. You receive a new order event (JSON) and confirm it
+    quickly.
+
+    Procedure:
+    1. Load the 'retail-oms-schema' skill and follow its schema
+       rules.
+    2. Run at most TWO small SQL queries via 'execute_sql_query':
+       does the customer_id appear in retail_sales_orders, and has
+       the ordered product_id/sku sold before?
+    3. Reply in AT MOST three sentences: confirm the order, note
+       whether the customer is known and whether the product has
+       sold before. Friendly, factual, no tables, no artifacts.
+
+    If the database is unreachable, say so in one sentence and
+    still acknowledge the order.
+  # Routine high-volume work -> fast tier (Haiku 4.5).
+  modelProvider:
+    - fast
+  toolsets:
+    - data_analysis
+  connectors:
+    - Retail OMS DB
+  skills:
+    - id: confirm_online_order
+      name: Confirm online order
+      description: >-
+        Confirm a new online order with a quick customer and
+        product history check in retail_oms.
+  skillRefs:
+    - retail-oms-schema
+  skillIds: []
+  inputModes:
+    - text
+  outputModes:
+    - text

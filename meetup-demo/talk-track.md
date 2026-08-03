@@ -175,7 +175,7 @@ System access (create a MongoDB connector "retail-poslog"):
 - database: retail_pos, collection: poslog_transactions
 - username: sam_ro, password: sam_ro (authSource retail_pos)
 
-Toolsets: data analysis and artifact tools. Model: general.
+Toolsets: data analysis and artifact tools. Model: reasoning.
 ```
 
 **SAY** (while pasting and sending):
@@ -187,7 +187,9 @@ Toolsets: data analysis and artifact tools. Model: general.
 > connector** to the POSLOG database — with a read-only service
 > account, not an admin login. Note what I did **not** paste:
 > no API key, no model endpoint. The agent gets a model
-> **alias**, and credentials live in the connector, scoped
+> **alias** — and deliberately the `reasoning` tier: an analyst
+> doing data work gets the cost-efficient DeepSeek model, not
+> the premium tier. Credentials live in the connector, scoped
 > read-only.
 >
 > Hiring takes a minute or two — so while HR does the
@@ -338,7 +340,9 @@ it excludes from revenue.
 > "First day at work — a real question against the real
 > MongoDB. It writes an aggregation pipeline, unwinds the line
 > items, filters the voids — exactly the domain rules from the
-> job posting."
+> job posting. And it's answering on **DeepSeek** — remember,
+> we hired this analyst onto the cost-efficient reasoning
+> tier." (verified: ~20 s, correct numbers)
 
 **SAY** (when the answer lands):
 
@@ -375,20 +379,23 @@ it excludes from revenue.
 **SAY**:
 
 > "A premium order — Opus One, 425 dollars. The event is on the
-> mesh; the `shop-events` entrypoint picked it up and asked the
-> OMS expert for a quick confirmation. That's the cheap,
-> high-volume path: every order gets a sanity check against the
-> order history — is the customer known, has the product sold
-> before."
+> mesh; the `shop-events` entrypoint picked it up and handed it
+> to the **Order Confirmation Clerk** — a deliberately small
+> worker on the **Haiku fast tier**, because confirmations are
+> routine, high-volume work. Every order gets a sanity check
+> against the order history — is the customer known, has the
+> product sold before."
 
 **DO**: Wait for the confirmation event to land in the shop
-(typically well under a minute; keep talking).
+(verified: ~7 seconds — barely time for the sentence above).
 
 **SAY** (when it lands):
 
-> "There it is, back in the shop as an event: returning
-> customer, the product has sold before, order looks good. A
-> human never touched that."
+> "Seven seconds, and there it is, back in the shop as an
+> event: returning customer, the product has sold before, order
+> looks good. A human never touched that — and it cost a
+> fraction of a cent, because the clerk runs on the cheap
+> tier."
 
 ### 7.3 The failure — Acai Bowl, 1 min (kick off + narrate)
 
@@ -551,10 +558,11 @@ Demo**). Point at row 1: "Komponenten up" (3, green),
 > "How fast does the team work? Request duration p50 and p95 —
 > and next to it, the number I find more interesting: **LLM
 > latency per model**. Remember we route by task? Here you can
-> SEE that decision: Haiku answers in seconds, Sonnet 5 in the
-> mid range, Opus takes its time on the hard analysis. Model
-> routing isn't ideology — it's a latency and cost curve you
-> can watch."
+> SEE that decision — four model families in one demo: Haiku
+> confirmed orders in seconds, DeepSeek did the POS analysis,
+> Sonnet 5 merged the incident report, Opus carried the hard
+> orchestration. Model routing isn't ideology — it's a latency
+> and cost curve you can watch."
 
 ### 8.3 Cost and chargeback — row 3 (1 min)
 

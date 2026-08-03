@@ -81,7 +81,7 @@ System access (create a MongoDB connector "retail-poslog"):
 - database: retail_pos, collection: poslog_transactions
 - username: sam_ro, password: sam_ro (authSource retail_pos)
 
-Toolsets: data analysis and artifact tools. Model: general.
+Toolsets: data analysis and artifact tools. Model: reasoning.
 ```
 
 **Fallback (Break glass):** `cd meetup-demo/fallback &&
@@ -101,8 +101,10 @@ sam config apply` erstellt Connector + Agent deklarativ.
 1. `meetup-demo/shop/index.html` öffnen (Datei im Browser).
    Status-LED grün = verbunden mit `ws://localhost:8008`, VPN
    `sam` — „der Browser publiziert direkt ins Event Mesh."
-2. **Opus One bestellen** → created-Event → OMS-Bestätigung
-   erscheint als Response-Event im Shop.
+2. **Opus One bestellen** → created-Event → der **Order
+   Confirmation Clerk** (eigener Agent auf `fast`/Haiku, ~7s,
+   ~28k Tokens — verifiziert) bestätigt als Response-Event im
+   Shop. Sichtbarer Cheap-Tier-Traffic für die Dashboards.
 3. **Açaí Bowl bestellen** → failed-Event (OUT_OF_STOCK) →
    Event-Mesh-Entrypoint → **Orchestrator** delegiert parallel an
    OMS + PDM + POS Analyst, „Order Incident Reporter" merged.
