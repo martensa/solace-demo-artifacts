@@ -10,8 +10,12 @@ Demo-Stories im selben Dokument-Schema.
 [repo]: https://github.com/martensa/solace-sam-demos/tree/master/sam-retail
 
 Rollen im Szenario: **OMS-Team** (SAM WebUI), **Entwickler**
-(Claude Code via MCP), **Plattform-Team** (Grafana). Personas via
-Keycloak: `viewer`, `data_engineer`, `power_user`.
+(Claude Code via MCP), **Plattform-Team** (Grafana). Persona-
+Choreografie (Passwort = Username): `sam_admin` = Hiring
+(Builder + First-Day-Test), `power_user` = Operations (Event-
+Läufe via `defaultUserIdentity` + Activities-Beat, eigenes
+Browserfenster), `data_engineer` = Developer (Claude Code/MCP).
+`viewer` optional für den Security-Beat.
 
 ## Timeline
 
@@ -105,10 +109,12 @@ sam config apply` erstellt Connector + Agent deklarativ.
    Während er läuft: SAM UI → **Activities** → Task öffnen →
    Flow-Graph live; nach Abschluss **Performance** (Gantt).
    Laufzeit ~2,5–4 min, ~110–135k Tokens — verifiziert. Die
-   Event-Tasks laufen via `defaultUserIdentity` als `sam_admin`
-   und erscheinen daher in Activities (ohne das Feld läuft der
-   Task unter der unsichtbaren Gateway-Identität — 2026-08-03
-   in der Probe gefunden und gefixt).
+   Event-Tasks laufen via `defaultUserIdentity` als
+   `power_user` und erscheinen daher in DESSEN Activities-
+   Fenster (Activities ist für alle Rollen eine Pro-User-Sicht;
+   ohne das Feld läuft der Task unter der unsichtbaren
+   Gateway-Identität — 2026-08-03 in der Probe gefunden und
+   gefixt, Attribution live verifiziert).
 4. Ergebnis: Incident-Summary als Event im Shop; Artefakt
    `incident-<order_id>.md` in der Session (OMS-Team-Sicht).
 5. Persona-Split: Entwickler stellt in **Claude Code** (MCP,

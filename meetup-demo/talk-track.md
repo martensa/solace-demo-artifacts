@@ -19,21 +19,35 @@ no dead air waiting for the Builder.
 
 ## 0. Stage setup (5 min before going live)
 
+Three personas carry the demo (all demo users: password =
+username): **sam_admin** hires and tests the new worker (Builder
++ first-day chat test), **power_user** is operations — the
+event-triggered incident runs are attributed to it
+(`defaultUserIdentity` on the shop-events entrypoint) and it
+watches them in Activities, and **data_engineer** is the
+developer in Claude Code. Three names, three visible usage
+blocks in the governance dashboard later.
+
 Tabs and windows, in the order you will need them:
 
 1. Slides (slide 3 up).
-2. `https://sam.solace.lab` logged in as `sam_admin@solace.lab`,
-   sidebar on **Agent Management**.
-3. Shop page: `meetup-demo/shop/index.html` in a browser tab —
+2. Browser window A: `https://sam.solace.lab` logged in as
+   `sam_admin@solace.lab`, sidebar on **Agent Management**.
+3. Browser window B (separate profile/incognito):
+   `https://sam.solace.lab` logged in as `power_user` /
+   `power_user`, sidebar on **Activities**. Used only in 7.4 —
+   Activities is a PER-USER view (admins included), and the
+   incident tasks are attributed to power_user.
+4. Shop page: `meetup-demo/shop/index.html` in a browser tab —
    status LED green (connected to `ws://localhost:8008`).
-4. Claude Code window with the SAM MCP server connected AND
+5. Claude Code window with the SAM MCP server connected AND
    authenticated as `data_engineer` / `data_engineer` (`/mcp`
    shows the entrypoint's tools). The developer persona runs
    under this user on purpose: its role carries
    `agent:*:invoke`, and the governance dashboard later shows
    the IDE queries under `data_engineer@solace.lab` -- do the
    OAuth roundtrip BEFORE the demo, never on stage.
-5. Terminal in the repo root (fallback commands).
+6. Terminal in the repo root (fallback commands).
 
 Quick checks: Retail POS Analyst must NOT exist (delete agent
 AND `retail-poslog` connector if present); MongoDB container
@@ -395,16 +409,21 @@ card. The shop publishes a FAILED order event
 
 ### 7.4 Watch the team — Activities (2–3 min, while it runs)
 
-**DO**: SAM tab → **Activities** → open the NEWEST task (the
-Orchestrator run — event-triggered tasks are attributed to
-`sam_admin` via the entrypoint's `defaultUserIdentity`, so they
-appear in your list; there is deliberately NO workflow run, the
-incident path runs through the Orchestrator). Show the flow
-graph building up; click into one delegation branch.
+**DO**: Switch to browser window B (`power_user`) →
+**Activities** → open the NEWEST task (the Orchestrator run —
+event-triggered tasks are attributed to `power_user` via the
+entrypoint's `defaultUserIdentity`, so they appear in THIS
+window, not in the admin's; Activities is per-user for
+everyone. There is deliberately NO workflow run — the incident
+path runs through the Orchestrator). Show the flow graph
+building up; click into one delegation branch.
 
 **SAY**:
 
-> "This is the live task graph. The Orchestrator in the middle;
+> "Notice I switched users: this is the **operations view** —
+> the event-triggered runs belong to the power user, not to the
+> admin. This is the live task graph. The Orchestrator in the
+> middle;
 > the parallel delegations fanning out — OMS, PDM, and the new
 > POS analyst. Every edge here is an **A2A message over the
 > event mesh**, not an in-process call: each of these agents
