@@ -16,17 +16,32 @@ no dead air waiting for the Builder.
 
 ---
 
+## Personas and RBAC — who is logged in when
+
+All demo users live in Keycloak (`solace-lab` realm, password =
+username); their groups map to SAM RBAC roles via claim
+mappings, so what each window may see and do is enforced by the
+platform, not by discipline. Order of appearance:
+
+| # | User | Where | Role (scopes) | Beats |
+|---|------|-------|---------------|-------|
+| 1 | `sam_admin` | Browser A | bootstrap admin (full) | Tour (3, 5), Builder (4, 6.1), first-day test (6.2), Evals (8.6) |
+| 2 | `power_user` | Browser B | ops: invoke agents/workflows, manage connectors, builder read-only | Activities (7.4); the event-triggered runs are attributed to it (`defaultUserIdentity`) |
+| 3 | `data_engineer` | Claude Code | invoke agents/workflows, read/create connectors | MCP finale (7.6) |
+| 4 | `viewer` (optional) | Incognito | chat only | Security aside: no Builder menu, fewer agents |
+
+Evals note: stay on `sam_admin` for 8.6 — evaluation management
+(datasets, evaluators, experiments) is not part of the demo
+roles' scope set. Nice framing when asked: hiring, quality
+gates and audits are management concerns; operating and using
+the workers is delegated.
+
+---
+
 ## 0. Stage setup (5 min before going live)
 
-Three personas carry the demo (all demo users: password =
-username): **sam_admin** hires and tests the new worker
-(Builder and first-day chat test), **power_user** is
-operations — the event-triggered incident runs are attributed
-to it
-(`defaultUserIdentity` on the shop-events entrypoint) and it
-watches them in Activities, and **data_engineer** is the
-developer in Claude Code. Three names, three visible usage
-blocks in the governance dashboard later.
+Personas: see "Personas and RBAC" above — three names, three
+visible usage blocks in the governance dashboard later.
 
 Tabs and windows, in the order you will need them:
 
@@ -647,8 +662,9 @@ the request topics.
 
 ### 8.6 Quality — offline evals (1 min)
 
-**DO**: Back to browser window A (`sam_admin`) → **Evaluations**
-→ Experiments. Two experiments share one dataset
+**DO**: Back to browser window A (`sam_admin` — evaluation
+management needs admin scopes, see the RBAC table) →
+**Evaluations** → Experiments. Two experiments share one dataset
 (`retail-ops-questions`): open **retail-ops-quality** (the
 production gate, pre-run results) first, then
 **retail-ops-model-benchmark** (the same agent pinned to

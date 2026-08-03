@@ -12,7 +12,7 @@ Demo-Stories im selben Dokument-Schema.
 Rollen im Szenario: **OMS-Team** (SAM WebUI), **Entwickler**
 (Claude Code via MCP), **Plattform-Team** (Grafana). Persona-
 Choreografie (Passwort = Username): `sam_admin` = Hiring
-(Builder + First-Day-Test), `power_user` = Operations (Event-
+(Builder + First-Day-Test) und Evals (Management-Scopes), `power_user` = Operations (Event-
 Läufe via `defaultUserIdentity` + Activities-Beat, eigenes
 Browserfenster), `data_engineer` = Developer (Claude Code/MCP).
 `viewer` optional für den Security-Beat.
