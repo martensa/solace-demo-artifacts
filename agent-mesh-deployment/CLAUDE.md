@@ -99,6 +99,16 @@ re-provisioning order.
 - The chart validates at install time that the ingress TLS secret
   exists -- `start.sh` applies and waits on the cert-manager
   Certificate before helm.
+- An STR restart LOSES dynamically registered connector tool
+  packages (per-collection MongoDB tools like
+  `<collection>_mongo_query_<uuid>`): the durable topic
+  subscription survives, but invokes then fail with "tool not
+  in manifest" and the agent reports the data source as
+  offline. The package is pushed to STR only on connector
+  CREATE -- an agent redeploy does NOT restore it (verified
+  2026-08-03). Remedy: delete and recreate connector + agent
+  (e.g. meetup-demo/fallback). Builtin tools (execute_sql_query
+  for the SQL experts) are unaffected.
 - The Builder Test engine is broken in 2.225.14: its
   `generate_test_plan` str tool is killed at a hard 30 s
   (caller-side `timeout_seconds` default; the skill manifest's
