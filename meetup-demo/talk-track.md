@@ -98,10 +98,19 @@ guided tour; keep each stop to two or three sentences.
 ### 3.2 Workflows — the standard operating procedure
 
 **DO**: Paste the direct link (the workflow link in the UI is
-broken in this build — known bug, use the URL):
+broken in this build — known bug, use the URL). The app uses
+hash routing and matches the workflow's display name:
 
 ```text
-https://sam.solace.lab/agents/workflows/order-incident-report
+https://sam.solace.lab/#/agents/workflows/Order%20Incident%20Report
+```
+
+Fallback if the display name ever changes — the mesh card name
+also works, but it embeds the platform UUID and therefore
+changes on every rebuild (current value):
+
+```text
+https://sam.solace.lab/#/agents/workflows/workflow_019fad02_c0cd_79df_b36e_86194a999133
 ```
 
 **SAY**:
@@ -292,9 +301,13 @@ it excludes from revenue.
 
 ## Notes for the rehearsal
 
-- The direct workflow link is name-based, so it survives
-  platform rebuilds (agent/workflow UUIDs change on rebuild,
-  names don't).
+- The direct workflow link needs the HASH route (`/#/agents/
+  workflows/...`) — without the `#` the app falls back to the
+  start page. The display-name variant survives platform
+  rebuilds (`display_name` is config-managed); the
+  `workflow_<uuid>` variant must be regenerated after every
+  rebuild. The page resolves the link against the live agent
+  cards, so the workflow must be DEPLOYED for the link to work.
 - If the Builder asks clarifying questions instead of building,
   answer briefly or restart with the same prompt — it is
   non-deterministic. The fallback needs ~20 s.
