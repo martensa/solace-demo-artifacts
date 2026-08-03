@@ -51,9 +51,10 @@ docker login registry.solace.lab     # once
 ./scripts/start.sh                   # helm install (local chart)
 ./scripts/rbac/apply-rbac.sh         # roles + claim mappings
 docker start postgres pgadmin        # retail demo DBs (host)
-(cd scripts/agents && ./create.sh --deploy)  # retail demo
+(cd scripts/agents && ./create.sh --deploy)  # retail core
 (cd scripts/models && ./set-max-tokens.sh)   # max_tokens tuning
 # five additional model aliases come from start.sh automatically
+(cd ../sam-retail-ops-demo && ./install.sh)  # demo overlay
 ./scripts/stop.sh                    # full teardown incl. Keycloak
 ```
 

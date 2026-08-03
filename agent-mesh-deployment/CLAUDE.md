@@ -171,10 +171,16 @@ reference DB-managed roles, never the YAML `sam_admin`.
 - `scripts/setup-keycloak-client.sh` / `setup-keycloak-users.sh`
   and their teardown counterparts -- Keycloak client, groups,
   demo users
-- `scripts/agents/` -- Declarative retail demo provisioning
-  (connectors, schema skills, agents, workflow, MCP entrypoint)
-  applied via `sam config plan/apply` by `create.sh`; NOT
-  deployed by default (`--deploy` to deploy; NEVER `--prune`)
+- `scripts/agents/` -- Declarative retail CORE (connectors,
+  schema skills, CRM/OMS/PDM query experts, Retail 360 Reporter
+  - workflow, developer MCP entrypoint) applied via
+  `sam config plan/apply` by `create.sh`; NOT deployed by
+  default (`--deploy` to deploy; NEVER `--prune`). Demo-specific
+  resources (confirmation clerk, incident reporter/workflow,
+  shop-events entrypoint, POS analyst) are an OVERLAY in
+  ../sam-retail-ops-demo/ with idempotent install.sh /
+  uninstall.sh -- the base deployment stays reusable for other
+  demos.
 - `scripts/models/` -- `set-max-tokens.sh` patches
   `modelParams.max_tokens` via `sam api` (SAM_AUTH_TOKEN from the
   CLI login cache) and restarts the awe deployment. Plus the

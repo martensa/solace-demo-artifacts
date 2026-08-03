@@ -37,16 +37,13 @@ resources:
     - Retail OMS Query Expert
     - Retail PDM Query Expert
     - Retail 360 Reporter
-    # Meetup demo: merge agent for the order-incident workflow.
-    # NOTE: the Retail POS Analyst is deliberately NOT managed
-    # here -- it is created live via the AI Builder (fallback:
-    # sam-retail-ops-demo/fallback/).
-    - Order Incident Reporter
-    # Meetup demo: Haiku-bound clerk for the good-case shop path.
-    - Order Confirmation Clerk
+    # NOTE: demo-specific resources (Order Incident Reporter,
+    # Order Confirmation Clerk, order-incident-report workflow,
+    # shop-events entrypoint, POS analyst) are NOT managed here.
+    # They live in the demo overlay sam-retail-ops-demo/ and are
+    # installed/removed via its install.sh / uninstall.sh -- this
+    # package is the reusable retail CORE on top of the platform.
   workflows:
     - retail-360-report
-    - order-incident-report
   entrypoints:
     - developer-mcp
-    - shop-events

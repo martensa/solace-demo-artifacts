@@ -23,10 +23,12 @@ ServiceMonitor, HPA, NetworkPolicy).
 2. The lab has the `registry-pull-secret` injected via the Kyverno
    policy from `solace-lab-infrastructure` (same as agent-mesh).
 3. The bridge image is in the lab registry — build via:
+
    ```bash
    docker build -f Dockerfile.bridge -t registry.solace.lab/om-eventportal-bridge:0.3.0 .
    docker push registry.solace.lab/om-eventportal-bridge:0.3.0
    ```
+
 4. `bridge.solace.lab` resolves to the ingress (same CoreDNS NodeHosts
    pattern as SAM and the OM deployment).
 

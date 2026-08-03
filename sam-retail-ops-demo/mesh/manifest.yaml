@@ -1,0 +1,26 @@
+# Demo overlay: the event-driven incident story on top of the
+# retail core (agent-mesh-deployment/scripts/agents). Installed
+# and removed by ../install.sh / ../uninstall.sh -- apply order
+# matters: the order-incident-report workflow references the
+# Retail POS Analyst, which install.sh creates from ../fallback
+# BEFORE applying this manifest (xref validation checks the
+# platform for referenced agents).
+kind: manifest
+name: retail-ops-demo-mesh
+description: >-
+  Event-driven retail ops demo overlay: confirmation clerk
+  (fast tier), incident reporter (workflow tier), the incident
+  workflow and the shop-events event-mesh entrypoint.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  agents:
+    - Order Confirmation Clerk
+    - Order Incident Reporter
+  workflows:
+    - order-incident-report
+  entrypoints:
+    - shop-events

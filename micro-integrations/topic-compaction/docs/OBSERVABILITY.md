@@ -53,7 +53,7 @@ The three pillars are stitched together by the trace ID:
 
 | Property / env var | Default | Purpose |
 |---|---|---|
-| {OTEL_EXPORTER_OTLP_ENDPOINT} | {http://localhost:4317} | OTLP endpoint URL. K8s default is {http://host.docker.internal:4317} (host docker-compose collector). |
+| {OTEL_EXPORTER_OTLP_ENDPOINT} | {<http://localhost:4317}> | OTLP endpoint URL. K8s default is {<http://host.docker.internal:4317}> (host docker-compose collector). |
 | {OTEL_SERVICE_NAME} | {topic-compaction-mi} | Resource attribute {service.name}. |
 | {OTEL_RESOURCE_ATTRIBUTES} | {service.namespace=...,service.version=...} | Comma-separated resource tags applied to every span. Operators add {deployment.environment}, {team}, {k8s.cluster.name} here. |
 | {OTEL_EXPORTER_OTLP_HEADERS} | -- | Comma-separated HTTP headers for vendor auth, e.g. {api-key=...,team=mdm}. Read by the OTel SDK directly. |
@@ -175,6 +175,7 @@ Application MDC keys attached by the workflow services:
 The MI is fully OTLP-instrumented out of the box. Spans are exported
 to any OTLP-compatible collector (in-cluster Tempo, host-side OTEL
 Collector via docker-compose, vendor SaaS) without any code changes
+
 - only the {OTEL_EXPORTER_OTLP_ENDPOINT} environment variable
 needs to point at the collector.
 
@@ -216,6 +217,7 @@ The OTLP setup uses three configuration layers, each overriding
 the next:
 
 1. {src/main/resources/application.yml} (in-image default):
+
    ```yaml
    management:
      tracing:
@@ -226,9 +228,11 @@ the next:
          endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
          transport: grpc
    ```
+
 2. K8s {ConfigMap} ({deploy/k8s/10-configmap.yaml}) - same shape,
    identical defaults today.
 3. K8s {Deployment} env vars ({deploy/k8s/40-deployment.yaml}):
+
    ```yaml
    env:
      - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -275,6 +279,7 @@ Rancher Desktop version uses a different gateway IP, adjust the
 {cidr} in {70-networkpolicy.yaml} accordingly.
 
 Verify the IP by running:
+
 ```bash
 kubectl run --rm -i --restart=Never --image=busybox:1.36 \
   --namespace=default dnstest \
@@ -338,10 +343,13 @@ production this should be tuned downward - 1% is a reasonable
 starting point. Two ways:
 
 1. Spring Boot property:
+
    ```yaml
    management.tracing.sampling.probability: 0.01
    ```
+
 2. OpenTelemetry SDK env vars (override Spring's setting):
+
    ```bash
    OTEL_TRACES_SAMPLER=parentbased_traceidratio
    OTEL_TRACES_SAMPLER_ARG=0.01
@@ -383,8 +391,8 @@ both data sources are linked via the trace-to-logs derived field.
 
 The MI implements W3C trace-context propagation across all four
 workflows so a single trace can span:
-{publisher application} -> {Solace broker hop} -> {MI consumer
-+ KV upsert} -> {MI publish (audit / replay / lookup-reply)} ->
+{publisher application} -> {Solace broker hop} -> {MI consumer +
+KV upsert} -> {MI publish (audit / replay / lookup-reply)} ->
 {Solace broker hop} -> {downstream consumer}.
 
 **Inbound side.** Every consumer interceptor wraps its work in
@@ -598,10 +606,10 @@ all three workflow bindings are UP.
   observability decision
 - {logback-spring.xml} -- the logging profile definitions
 - Spring Boot Tracing reference:
-  https://docs.spring.io/spring-boot/reference/actuator/tracing.html
+  <https://docs.spring.io/spring-boot/reference/actuator/tracing.html>
 - OpenTelemetry SDK env-var spec:
-  https://opentelemetry.io/docs/specs/otel/protocol/exporter/
+  <https://opentelemetry.io/docs/specs/otel/protocol/exporter/>
 - Micrometer Observation @Observed reference:
-  https://micrometer.io/docs/observation
+  <https://micrometer.io/docs/observation>
 - {observability.MetricsConfig} -- Prometheus registry wiring
 - {observability.TracingConfig} -- AOP aspect registration

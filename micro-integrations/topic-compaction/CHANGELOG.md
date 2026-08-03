@@ -124,7 +124,7 @@ cascade as a sibling pair of receive + skipped-loop spans.
 
 Solace publishes an OpenTelemetry Java Agent extension
 ({com.solace.spring.cloud:spring-cloud-stream-binder-solace-instrumentation}
-+ {com.solace:solace-opentelemetry-jcsmp-integration}) that
+-- {com.solace:solace-opentelemetry-jcsmp-integration}) that
 instruments the Spring Cloud Stream Solace binder via byte-code
 weaving when the OTel javaagent is attached at JVM startup. We
 intentionally did **not** wire that path because:
@@ -170,7 +170,7 @@ enable Solace PubSub+ Distributed Tracing on the broker:
   tab -> create a Telemetry Profile pointing at the same OTLP
   collector the MI uses.
 - Self-hosted broker: configure {tracing.span.batch}
-  + {tracing.span.endpoint} via SEMP or CLI per the Solace
+  - {tracing.span.endpoint} via SEMP or CLI per the Solace
   PubSub+ Distributed Tracing reference.
 
 The broker emits its own spans, parented onto the
@@ -230,7 +230,7 @@ emitted via the binder publish path.
 
 ### Operator note: OTEL Collector wiring
 
-The K8s deployment now points at {http://host.docker.internal:4317}
+The K8s deployment now points at {<http://host.docker.internal:4317}>
 by default to match the typical Rancher Desktop development setup
 where an OTEL Collector runs on the host via docker-compose. The
 {70-networkpolicy.yaml} grew an explicit egress rule for the Lima
