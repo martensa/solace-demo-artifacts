@@ -1,10 +1,9 @@
-# Talk Track — AI Worker Lifecycle on SAM v2 (Parts 1–2)
+# Talk Track — AI Worker Lifecycle on SAM v2 (complete)
 
-Spoken script (English) for the meetup demo, from the opening
-through the end of Teamwork. Ops details (full pre-flight,
-fallbacks) live in [demo-script.md](demo-script.md); this file
-is what you actually say and click. Part 3 (Improvement, Wrap)
-follows after the rehearsal.
+Spoken script (English) for the full 20-minute meetup demo.
+Ops details (full pre-flight, fallbacks) live in
+[demo-script.md](demo-script.md); this file is what you
+actually say and click.
 
 Conventions: **DO** = click path, **SAY** = spoken line
 (shorten freely, keep the bold claims). Slide numbers refer to
@@ -48,7 +47,12 @@ Tabs and windows, in the order you will need them:
    `agent:*:invoke`, and the governance dashboard later shows
    the IDE queries under `data_engineer@solace.lab` -- do the
    OAuth roundtrip BEFORE the demo, never on stage.
-6. Terminal in the repo root (fallback commands).
+6. Grafana tab: `https://monitoring.solace.lab` logged in,
+   folder **SAM** → dashboard **SAM Meetup Demo** open (10 s
+   refresh, time range "Last 1 hour" — widen it if your last
+   incident run is older).
+7. Terminal in the repo root (fallback commands; for the
+   optional live eval: fresh `sam auth login` done).
 
 Quick checks: Retail POS Analyst must NOT exist (delete agent
 AND `retail-poslog` connector if present); MongoDB container
@@ -515,6 +519,157 @@ the same facts the incident report named as root cause.
 
 ---
 
+## 8. IMPROVEMENT — measure the workforce (15:30–18:30)
+
+The whole section lives in ONE Grafana dashboard with a guided
+top-to-bottom flow — scroll, don't click around. Your rehearsal
+and demo traffic is real data here.
+
+### 8.1 Health — row 1 (30 s)
+
+**DO**: Switch to the Grafana tab (dashboard **SAM Meetup
+Demo**). Point at row 1: "Komponenten up" (3, green),
+"Broker-Verbindungen", "Tasks in Flight", "Request-Rate".
+
+**SAY**:
+
+> "Last lifecycle stage: improvement. And the first rule of
+> improvement is: measure. We run AI workers like any other
+> production workload — same Prometheus, same Grafana your ops
+> team already uses. Top row: all three runtime components up,
+> broker links connected, and here you can see the demo
+> traffic we just generated — every order event, every
+> delegation."
+
+### 8.2 Speed — row 2 (45 s)
+
+**DO**: Scroll to row 2: "Anfrage-Dauer p50/p95" and
+"LLM-Latenz p95 je Modell".
+
+**SAY**:
+
+> "How fast does the team work? Request duration p50 and p95 —
+> and next to it, the number I find more interesting: **LLM
+> latency per model**. Remember we route by task? Here you can
+> SEE that decision: Haiku answers in seconds, Sonnet 5 in the
+> mid range, Opus takes its time on the hard analysis. Model
+> routing isn't ideology — it's a latency and cost curve you
+> can watch."
+
+### 8.3 Cost and chargeback — row 3 (1 min)
+
+**DO**: Scroll to row 3: "Token-Rate je Modell/Typ" and the
+table "Token-Chargeback je User".
+
+**SAY**:
+
+> "The question every CFO asks: what does this cost — and WHO
+> is spending it? Left: token rate per model, straight from the
+> runtime metrics. Right: the chargeback table — and note where
+> it comes from: the **platform database**, per task, per user.
+> Not an estimate.
+>
+> Look at the names: **power_user** — that's operations, the
+> event-triggered incident runs we just watched, the biggest
+> block. **sam_admin** — the hiring manager: the Builder run
+> and the first-day test. **data_engineer** — the IDE queries
+> from Claude Code. Three personas, three budgets. That's
+> governance: not 'AI costs money' but 'THIS team spent THAT
+> much on THOSE tasks'."
+
+### 8.4 Governance — row 4 (45 s)
+
+**DO**: Scroll to row 4: "Tool-Executions je User → Tool" and
+"Auth-Failures & RBAC-Denies".
+
+**SAY**:
+
+> "Who does what? This comes from the **audit stream** — every
+> tool execution, with user identity, shipped to Loki. Every
+> MongoDB query our new analyst ran today is in here,
+> attributed. And on the right: authentication failures and
+> RBAC denies. When the viewer account tries something it's
+> not allowed to do — that's not a log line lost in a pod,
+> it's a panel your security team watches."
+
+### 8.5 The proof — Tempo drilldown (45 s)
+
+**DO**: Row 5 lists the drilldowns. Open **Explore → Tempo** →
+search `sam-solace-lab/a2a` → open a trace from the incident
+run.
+
+**SAY**:
+
+> "And if you don't believe dashboards: raw telemetry. Every
+> A2A hop between agents is a **broker span** — the event mesh
+> itself is traced. This is the incident investigation you
+> watched in Activities, as hard distributed-tracing evidence:
+> entrypoint, Orchestrator, three specialists, the merge. Same
+> Tempo your other services trace into."
+
+### 8.6 Quality — offline evals (1 min)
+
+**DO**: Back to browser window A (`sam_admin`) → **Evaluations**
+→ Experiments → **meetup-quality**. Show the pre-run results:
+12/12 passed, LLM Judge + Factuality.
+
+**SAY**:
+
+> "Speed and cost are easy to measure — quality is the hard
+> one. So we treat it like software: a **regression suite for
+> the agent**. Six real business questions with expected
+> answers, judged by an LLM judge plus a factuality check —
+> twelve of twelve passed on the current setup.
+>
+> And because it runs from the CLI with a threshold, the exit
+> code is a **CI gate**: change a prompt, swap a model, rerun
+> the suite — if quality drops, the pipeline goes red before
+> your users notice. Improvement stops being a feeling."
+
+(Optional, only with 6+ minutes of buffer: run it live in the
+terminal — `sam eval run meetup-quality --url
+https://sam.solace.lab --threshold 0.8` after exporting
+SAM_AUTH_TOKEN; see demo-script.md. Otherwise the pre-run
+results carry the beat.)
+
+---
+
+## 9. WRAP — the lifecycle, closed (18:30–20:00)
+
+**DO**: Back to the slides — slide 4 (the lifecycle mapping).
+
+**SAY**:
+
+> "Let's close the loop. **Hiring**: you saw the roster and a
+> job posting turned into a worker. **Onboarding**: the
+> Builder wired it to MongoDB with scoped credentials, and it
+> answered its first question two minutes later.
+> **Teamwork**: a customer order failed, and a team of five
+> agents — including the one we hired during this talk —
+> investigated it end to end, triggered by the event, no human
+> in the loop, and told the developers which line of code to
+> fix. **Improvement**: everything measured — health, speed,
+> cost per person, audit trail, and a quality gate in CI.
+>
+> The point is not that agents can answer questions. The point
+> is that you can run them like a **workforce**: hired,
+> onboarded, collaborating over an event mesh, and
+> accountable. That's what an event-driven agent platform buys
+> you.
+>
+> Everything you saw — the shop, the agents, the dashboards,
+> the eval suite — is on my GitHub, and the retail use case is
+> written up on my blog. Thank you — questions?"
+
+**Fallback closer** (if time ran out and the incident is still
+running): skip 8.5/8.6, jump to slide 4, and close with:
+
+> "The incident report will land in the shop any second — that
+> is the nature of live systems. Everything else you saw is
+> measured, attributed and gated. Thank you — questions?"
+
+---
+
 ## Notes for the rehearsal
 
 - The direct workflow link needs the HASH route (`/#/agents/
@@ -562,6 +717,11 @@ the same facts the incident report named as root cause.
 - Claude Code MCP: verify the OAuth session BEFORE the demo
   (`/mcp` → tools listed); re-auth takes a browser roundtrip
   you don't want live.
+- Part 3: check the Grafana time range covers your latest
+  incident run (default "Last 1 hour"); the chargeback table
+  reads the platform DB live, so rehearsal traffic shows up
+  immediately. Do NOT start the live eval without 6+ minutes of
+  buffer — the pre-run 12/12 carries the beat on its own.
 - After the rehearsal, delete the Retail POS Analyst agent AND
   the `retail-poslog` connector again so the live demo starts
   clean (Agent Management → delete; Connectors → delete).
