@@ -430,14 +430,27 @@ arrives; open/scroll the incident card.
 **SAY**:
 
 > "And there's the report — published back onto the mesh, into
-> the shop, and to the OMS team. Look at the root cause: PDM
-> confirms **stock level zero**, masked by a 'Made to Order'
-> status — the checkout accepted an order it could never
-> fulfill. And the POS section — that's our new hire's
-> contribution — confirms the stores sell it happily. Severity,
-> customer impact, a concrete recommendation, and the exact
-> fields a developer should look at. From failed order to
-> triaged incident: no human in the loop."
+> the shop, and to the OMS team. Look at what the team found:
+> this is **not actually a stockout** — it's an
+> **inventory-modeling mismatch**. 'Made to Order' items carry
+> a stock level of zero **by design**; the stores understand
+> that and sell this bowl all day, but the online checkout
+> reads the zero literally and turns the customer away.
+>
+> And the detail that makes it hurt: the customer it turned
+> away is a **loyal repeat buyer of exactly this item** — the
+> stores know them, the webshop rejected them.
+>
+> So the fix isn't 'order more açaí'. It's one line of checkout
+> validation logic — and the report already tells the
+> developers **which fields to look at**, and to audit every
+> other Made-to-Order SKU for the same trap. From failed order
+> to triaged incident: no human in the loop."
+
+Anchor the summary on the three data-stable findings (PDM
+stock-0 masking, POS keeps selling, loyal repeat customer) —
+severity and exact unit counts vary between runs; the three
+findings do not.
 
 ### 7.6 Finale — the developer in Claude Code (1.5 min)
 
