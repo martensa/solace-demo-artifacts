@@ -222,6 +222,17 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
 - Supervision: work in progress, bewusst nicht Teil der Demo.
 - RBAC-Grants loggen auf DEBUG — Governance-Dashboard zeigt
   Executions und Denies, nicht die Grants.
+- **Builder kann mit „Expected toolResult blocks" sterben**
+  (2026-08-03 in der Probe getroffen): SAM 2.225.14 baut bei
+  langen Builder-Konversationen eine kaputte History (tool_use
+  ohne toolResult) — Bedrock lehnt mit 400 ab, die
+  -anthropic/-vertex-Fallbacks des Proxys sind tot, LiteLLM
+  retried 3× dieselbe kaputte Anfrage. Die Konversation ist
+  danach unbrauchbar: NEUE Build-with-AI-Konversation starten
+  (gleicher Prompt) oder Fallback (`meetup-demo/fallback`).
+  Vorher Teilzustand aufräumen (retail-poslog-Connector /
+  Draft-Agent löschen). Builder-Chat = EIN Prompt, keine
+  Follow-ups.
 - **Event-Trigger → Workflow ist in 2.225.14 defekt**: mit
   `targetWorkflowName` liefert der Entrypoint eine LEERE A2A-
   Nachricht (per Sniff belegt: `parts[0].text == ""`), der

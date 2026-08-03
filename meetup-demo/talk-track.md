@@ -482,6 +482,22 @@ the same facts the incident report named as root cause.
   that it is building before you switch to the tour. If it asks
   clarifying questions, answer in one line. If it errors, run
   the fallback DURING the tour and skip 6.1's review line.
+- KNOWN BUILDER FAILURE (hit in rehearsal): a long build
+  conversation can die with `Expected toolResult blocks at
+  messages.N ... BedrockException`. That means SAM sent a
+  malformed history (a tool_use without its toolResult -- SAM
+  2.225.14 bug) and the SAME conversation will fail on every
+  further message; the proxy's -anthropic/-vertex fallback
+  routes are dead, so there is no cushion. Recovery: do NOT
+  type into the broken chat. Either start a FRESH Build with
+  AI with the same prompt (usually succeeds -- the bug is
+  length/state dependent), or break glass with the fallback.
+  Before the fresh attempt, check for partial state: delete a
+  half-created `retail-poslog` connector and any draft POS
+  agent first (Connectors / Agent Management).
+- Keep the Builder chat to ONE prompt, no follow-ups. If it
+  asks more than one clarifying question, break glass -- every
+  extra turn raises the malformed-history risk.
 - The tour is elastic filler: if the Builder is still running
   after 5.5, extend Models (talk vendors/params); if it
   finished early, cut 5.5 short.
