@@ -251,14 +251,15 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
   Test-Agenten das `fast`-Binding gibt — ihr CHAT laeuft damit
   auf Haiku (verifiziert). Beides faellt bei stop.sh mit der
   Plattform-DB weg; Re-Erstellung optional.
-- **str-Restart verliert Mongo-Connector-Tools** (2026-08-03):
-  das per-Collection-Tool-Paket wird nur beim Connector-CREATE
-  an str gepusht; nach einem str-Restart bleibt die Subscription
-  bestehen, aber Invokes scheitern mit „tool not in manifest"
-  (Agent meldet „data source offline"). Agent-Redeploy stellt
-  es NICHT wieder her — Connector + Agent löschen und neu
-  anlegen (Fallback-Paket). SQL-Experten (Builtin
-  execute_sql_query) sind nicht betroffen.
+- **str-Restart verliert ALLE Connector-Tool-Pakete**
+  (2026-08-03): Mongo-per-Collection-Tools UND SQL-Connector-
+  Tools (`*_sql_query_<uuid>`). Subscription überlebt, Invokes
+  scheitern mit „tool not in manifest" (Agent meldet „data
+  source offline"). Agent-Redeploy stellt NICHTS wieder her;
+  ein Connector-UPDATE (Mini-Änderung an der Beschreibung +
+  `sam config apply`) pusht das Paket neu — UUIDs bleiben
+  stabil, kein Löschen nötig. Nach jedem str-Restart alle vier
+  Connector-Agenten smoken.
 - **Nach Netzwechsel des Macs: k3s-API fuer Pods tot**
   (2026-08-03): Rancher Desktop pinnt die Mac-LAN-IP als
   `--node-external-ip` in /etc/conf.d/k3s; nach DHCP-/

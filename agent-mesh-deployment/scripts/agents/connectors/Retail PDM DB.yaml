@@ -1,7 +1,7 @@
 kind: connector
 name: Retail PDM DB
 description: >-
-  This connector is used to generate dynamic SQL queries for the
+  This connector generates dynamic SQL queries for the
   database of the connected retail PDM (product data management)
   system. The database holds one table (retail_product_master)
   with product master data: categories and departments, brand,

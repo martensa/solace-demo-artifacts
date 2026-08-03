@@ -1,7 +1,7 @@
 kind: connector
 name: Retail CRM DB
 description: >-
-  This connector is used to generate dynamic SQL queries for the
+  This connector generates dynamic SQL queries for the
   database of the connected retail CRM (customer relationship
   management) system. The database holds one table
   (retail_customers) with customer master data: customer type,
