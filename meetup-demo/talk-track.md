@@ -501,12 +501,12 @@ the same facts the incident report named as root cause.
 - Keep the Builder chat to ONE prompt, no follow-ups. If it
   asks more than one clarifying question, break glass -- every
   extra turn raises the malformed-history risk.
-- The Builder's Test engine works again (its plan generator
-  runs in an str subprocess with a hard 30 s cap; the planning
-  model behind it is now Haiku 4.5 -- with Opus it timed out
-  deterministically). It is still NOT part of the show: the
-  first-day test in 6.2 deliberately uses plain Chat -- fast
-  first contact instead of a test-plan ceremony.
+- The Builder's Test engine is BROKEN in 2.225.14 (vendor bug,
+  fully diagnosed): its plan generator is killed at a hard 30 s
+  while its LLM call needs ~106 s on the Opus tier it insists on
+  using -- no configurable surface changes that model. Do not
+  touch the Test tab on stage; the first-day test in 6.2 uses
+  plain Chat by design.
 - The tour is elastic filler: if the Builder is still running
   after 5.5, extend Models (talk vendors/params); if it
   finished early, cut 5.5 short.

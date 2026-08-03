@@ -99,6 +99,18 @@ re-provisioning order.
 - The chart validates at install time that the ingress TLS secret
   exists -- `start.sh` applies and waits on the cert-manager
   Certificate before helm.
+- The Builder Test engine is broken in 2.225.14: its
+  `generate_test_plan` str tool is killed at a hard 30 s
+  (caller-side `timeout_seconds` default; the skill manifest's
+  90 s is ignored) while its LLM call needs ~106 s on Opus -- and
+  the model it uses is NOT operator-controllable (env in
+  str/awe/gwe, DB `planning` alias and the ephemeral test
+  agent's binding were all switched to Haiku and verified
+  ineffective via bifrost debug logs). Vendor ticket material.
+  Harmless leftovers: DB alias `planning` = Haiku, and a
+  platform-DB trigger `ephemeral_agent_default_model` binding
+  ephemeral test agents to `fast` (their chat then runs Haiku).
+  Both vanish with stop.sh.
 - `sam config apply`'s deploy phase only fires for resources whose
   config CHANGED in that apply: re-running `--deploy` over an
   unchanged undeployed resource is a silent no-op (bump a config

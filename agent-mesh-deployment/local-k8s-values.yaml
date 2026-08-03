@@ -71,13 +71,15 @@ broker:
 # post-install tuning (scripts/models/set-max-tokens.sh) survives
 # restarts and upgrades.
 llmService:
-  # Haiku, NOT Opus: the only consumer of this env is the STR IPC
-  # callback for skill-bundled tools (sam-test-harness
-  # generate_test_plan / generate_recommendations), which run in a
-  # subprocess with a HARD, non-configurable 30 s timeout -- Opus
-  # 4.8 exceeds it on the real plan prompt (verified 2026-08-03),
-  # Haiku fits with headroom. The DB-managed 'planning' model
-  # alias is independent of this env and stays on Opus.
+  # Haiku (harmless; kept in sync with the DB 'planning' alias,
+  # which nothing binds). NOTE (2026-08-03): this env does NOT
+  # govern the Builder test engine's plan generator -- that tool's
+  # LLM call ignored every configurable surface (this env in
+  # str/awe/gwe, the DB planning alias, the ephemeral test agent's
+  # model binding) and kept calling the general/report tier
+  # (Opus 4.8), which needs ~106 s while the caller kills at a
+  # hard 30 s. Vendor bug in 2.225.14; see meetup-demo/
+  # demo-script.md "Bekannte Grenzen".
   planningModel: "openai/claude-haiku-4-5-20251001"
   generalModel: "openai/claude-opus-4-8"
   reportModel: "openai/claude-opus-4-8"

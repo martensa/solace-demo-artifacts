@@ -233,15 +233,24 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
   Vorher Teilzustand aufräumen (retail-poslog-Connector /
   Draft-Agent löschen). Builder-Chat = EIN Prompt, keine
   Follow-ups.
-- **Builder-Test-Engine (GEFIXT 2026-08-03)**: der
-  Plan-Generator ist ein str-Builtin-Tool (Subprozess, HARTES
-  30s-Limit, nicht konfigurierbar) und ruft per IPC das Modell
-  aus `LLM_SERVICE_PLANNING_MODEL_NAME`. Mit Opus 4.8 timete er
-  deterministisch aus; `llmService.planningModel` steht jetzt
-  auf Haiku 4.5 (nur dieser str-IPC-Callback haengt an der Env,
-  das DB-Alias `planning` bleibt Opus). In der Demo wird der
-  Test-Tab trotzdem nicht genutzt (Talk Track 6.2 = normaler
-  Chat — schneller Erstkontakt statt Testplan-Zeremonie).
+- **Builder-Test-Engine: VENDOR-BUG, nicht behebbar**
+  (2026-08-03, vollstaendig diagnostiziert): der Plan-Generator
+  (`generate_test_plan`, str-Subprozess) wird vom Aufrufer nach
+  HARTEN 30s gekillt (`timeout_seconds`-Default; ignoriert die
+  90s aus Solaces eigenem Tool-Manifest). Sein LLM-Call braucht
+  auf Opus 4.8 gemessene ~106s — und die Modellwahl ignoriert
+  JEDE konfigurierbare Flaeche (Env in str/awe/gwe, DB-Alias
+  `planning`, Modell-Binding des ephemeren Test-Agenten; alles
+  nacheinander auf Haiku gestellt und per Debug-Log verifiziert:
+  der Call blieb auf Opus). Quelle ist das `general`/`report`-
+  Tier, das fuer die Demo-Agenten auf Opus bleiben muss.
+  Der Test-Tab bleibt aussen vor (Talk Track 6.2 = normaler
+  Chat). Bleibende harmlose Aenderungen: DB-Alias `planning` =
+  Haiku (nichts bindet es) und ein DB-Trigger
+  `ephemeral_agent_default_model` (platform-DB), der ephemeren
+  Test-Agenten das `fast`-Binding gibt — ihr CHAT laeuft damit
+  auf Haiku (verifiziert). Beides faellt bei stop.sh mit der
+  Plattform-DB weg; Re-Erstellung optional.
 - **Nach Netzwechsel des Macs: k3s-API fuer Pods tot**
   (2026-08-03): Rancher Desktop pinnt die Mac-LAN-IP als
   `--node-external-ip` in /etc/conf.d/k3s; nach DHCP-/
