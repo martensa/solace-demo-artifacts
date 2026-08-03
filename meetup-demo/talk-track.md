@@ -20,9 +20,10 @@ no dead air waiting for the Builder.
 ## 0. Stage setup (5 min before going live)
 
 Three personas carry the demo (all demo users: password =
-username): **sam_admin** hires and tests the new worker (Builder
-+ first-day chat test), **power_user** is operations — the
-event-triggered incident runs are attributed to it
+username): **sam_admin** hires and tests the new worker
+(Builder and first-day chat test), **power_user** is
+operations — the event-triggered incident runs are attributed
+to it
 (`defaultUserIdentity` on the shop-events entrypoint) and it
 watches them in Activities, and **data_engineer** is the
 developer in Claude Code. Three names, three visible usage
