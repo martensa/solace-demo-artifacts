@@ -603,17 +603,31 @@ table "Token-Chargeback je User".
 ### 8.5 The proof — Tempo drilldown (45 s)
 
 **DO**: Row 5 lists the drilldowns. Open **Explore → Tempo** →
-search `sam-solace-lab/a2a` → open a trace from the incident
-run.
+search `sam-solace-lab/a2a` → open a trace. The ever-present
+`discovery/agentcards receive` traces are ideal to explain the
+anatomy; traces from the incident run show the same pattern on
+the request topics.
 
-**SAY**:
+**SAY** (while the span waterfall is on screen):
 
-> "And if you don't believe dashboards: raw telemetry. Every
-> A2A hop between agents is a **broker span** — the event mesh
-> itself is traced. This is the incident investigation you
-> watched in Activities, as hard distributed-tracing evidence:
-> entrypoint, Orchestrator, three specialists, the merge. Same
-> Tempo your other services trace into."
+> "And if you don't believe dashboards: raw telemetry. What
+> you're looking at is the life of **one message inside the
+> broker** — the event mesh itself is traced, not the
+> applications. The root span is the broker **receiving** the
+> publish; open its attributes and you see standard OTel
+> messaging semantics plus the producing client's identity —
+> this one came from the workflow-executor pod. Every child
+> span below is one **delivery**: the broker fanning the
+> message out to each subscriber queue — the gateway's queues
+> and the A2A queue of every agent that subscribed, each with
+> the receiving pod's name and its own delivery latency.
+>
+> This particular trace is an **agent-card broadcast** —
+> service discovery, visible as telemetry. The incident run
+> produces the same picture per A2A hop: request in, delivered
+> to exactly the target agent's queue. No SDK in the agents did
+> this — the broker emitted it. Same Tempo your other services
+> trace into."
 
 ### 8.6 Quality — offline evals (1 min)
 
