@@ -363,8 +363,7 @@ it excludes from revenue.
 > customer, the product has sold before, order looks good. A
 > human never touched that."
 
-### 7.3 The failure — Acai Bowl (kick off, then narrate)
-(1 min)
+### 7.3 The failure — Acai Bowl, 1 min (kick off + narrate)
 
 **DO**: Click **Order** on the Tropical Acai Smoothie Bowl
 card. The shop publishes a FAILED order event
