@@ -35,7 +35,10 @@ AND `retail-poslog` connector if present); MongoDB container
 up; fresh CLI login (`sam auth login solace-lab --url
 https://sam.solace.lab`); model upstreams green:
 `cd agent-mesh-deployment/scripts/models && ./apply-models.sh
---probe-only`.
+--probe-only`; Kyverno healthy (`kubectl get pods -n kyverno`
+all Running — a crashlooping admission controller silently
+blocks every pod change; happens after the Mac switches
+networks, see demo-script.md for the 2-minute fix).
 
 ---
 
@@ -498,14 +501,12 @@ the same facts the incident report named as root cause.
 - Keep the Builder chat to ONE prompt, no follow-ups. If it
   asks more than one clarifying question, break glass -- every
   extra turn raises the malformed-history risk.
-- Do NOT use the Builder's Test engine on stage. Its plan
-  generator (`sam-test-harness__generate_test_plan`) runs as an
-  str subprocess with a HARD 30 s timeout and calls the
-  planning model (`LLM_SERVICE_PLANNING_MODEL_NAME`, currently
-  Opus 4.8) -- the real plan prompt exceeds 30 s, so it times
-  out deterministically (verified 2026-08-03; the follow-up
-  `generate_recommendations` tool has the same cap). The
-  first-day test in 6.2 deliberately uses plain Chat.
+- The Builder's Test engine works again (its plan generator
+  runs in an str subprocess with a hard 30 s cap; the planning
+  model behind it is now Haiku 4.5 -- with Opus it timed out
+  deterministically). It is still NOT part of the show: the
+  first-day test in 6.2 deliberately uses plain Chat -- fast
+  first contact instead of a test-plan ceremony.
 - The tour is elastic filler: if the Builder is still running
   after 5.5, extend Models (talk vendors/params); if it
   finished early, cut 5.5 short.

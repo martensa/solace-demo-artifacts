@@ -233,15 +233,27 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
   Vorher Teilzustand aufräumen (retail-poslog-Connector /
   Draft-Agent löschen). Builder-Chat = EIN Prompt, keine
   Follow-ups.
-- **Builder-Test-Engine timet deterministisch aus**: der
+- **Builder-Test-Engine (GEFIXT 2026-08-03)**: der
   Plan-Generator ist ein str-Builtin-Tool (Subprozess, HARTES
   30s-Limit, nicht konfigurierbar) und ruft per IPC das Modell
-  aus `LLM_SERVICE_PLANNING_MODEL_NAME` (= values
-  `llmService.planningModel`, aktuell Opus 4.8) — der echte
-  Plan-Prompt braucht länger als 30s. Fix wäre ein schnelleres
-  Planning-Modell (z. B. Haiku 4.5) in local-k8s-values.yaml +
-  str-Rollout; für die Demo wird der Test-Tab nicht genutzt
-  (Talk Track 6.2 = normaler Chat).
+  aus `LLM_SERVICE_PLANNING_MODEL_NAME`. Mit Opus 4.8 timete er
+  deterministisch aus; `llmService.planningModel` steht jetzt
+  auf Haiku 4.5 (nur dieser str-IPC-Callback haengt an der Env,
+  das DB-Alias `planning` bleibt Opus). In der Demo wird der
+  Test-Tab trotzdem nicht genutzt (Talk Track 6.2 = normaler
+  Chat — schneller Erstkontakt statt Testplan-Zeremonie).
+- **Nach Netzwechsel des Macs: k3s-API fuer Pods tot**
+  (2026-08-03): Rancher Desktop pinnt die Mac-LAN-IP als
+  `--node-external-ip` in /etc/conf.d/k3s; nach DHCP-/
+  WLAN-Wechsel zeigt der kubernetes-Endpoint auf die tote IP →
+  Pod→API "no route to host" → Kyverno crashloopt und blockiert
+  als Fail-closed-Webhook ALLE Pod-Aenderungen (rollout restart
+  schlaegt fehl, meldet aber "successfully rolled out"!).
+  Pre-Flight daher: `kubectl get pods -n kyverno` muss gruen
+  sein. Fix ohne Broker-Downtime: IP in /etc/conf.d/k3s per
+  `rdctl shell sudo sed` korrigieren, `rc-service k3s restart`,
+  Kyverno-Pods loeschen; ein Rancher-Desktop-Neustart schreibt
+  die Datei ohnehin neu.
 - **Event-Trigger → Workflow ist in 2.225.14 defekt**: mit
   `targetWorkflowName` liefert der Entrypoint eine LEERE A2A-
   Nachricht (per Sniff belegt: `parts[0].text == ""`), der

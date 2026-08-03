@@ -71,7 +71,14 @@ broker:
 # post-install tuning (scripts/models/set-max-tokens.sh) survives
 # restarts and upgrades.
 llmService:
-  planningModel: "openai/claude-opus-4-8"
+  # Haiku, NOT Opus: the only consumer of this env is the STR IPC
+  # callback for skill-bundled tools (sam-test-harness
+  # generate_test_plan / generate_recommendations), which run in a
+  # subprocess with a HARD, non-configurable 30 s timeout -- Opus
+  # 4.8 exceeds it on the real plan prompt (verified 2026-08-03),
+  # Haiku fits with headroom. The DB-managed 'planning' model
+  # alias is independent of this env and stays on Opus.
+  planningModel: "openai/claude-haiku-4-5-20251001"
   generalModel: "openai/claude-opus-4-8"
   reportModel: "openai/claude-opus-4-8"
   imageModel: "openai/imagen-3"
