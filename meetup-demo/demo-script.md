@@ -201,10 +201,25 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
    Connector `retail-poslog` darf bleiben (Builder-Prompt nutzt
    ihn dann einfach — oder ebenfalls löschen für den vollen
    Onboarding-Moment).
-9. sam-VPN-Spool-Check (die 10-GB-Falle):
+9. Modell-Upstreams gesund (5 Modelle, 1-Token-Probes):
+   `cd agent-mesh-deployment/scripts/models && ./apply-models.sh --probe-only`
+10. Kyverno gesund: `kubectl get pods -n kyverno` — alles
+    Running. Ein crashloopender admission-controller blockiert
+    JEDE Pod-Änderung still (tritt nach Mac-Netzwechsel auf;
+    Fix siehe „Bekannte Grenzen").
+11. Monitoring-Stack gesund: `kubectl get pods -n monitoring` —
+    besonders `tempo-0` (OOM bei Block-Kompaktierung meldet sich
+    als Exit 137/„Error", nicht als OOMKilled; Limit seit
+    2026-08-03 auf 4Gi).
+12. Falls str seit der letzten Connector-Anlage/-Änderung neu
+    gestartet wurde: Smoke-Test ALLER Connector-Agenten (CRM/
+    OMS/PDM/POS + Clerk, je eine kurze Frage). Bei „data source
+    offline": Connector-Beschreibung minimal ändern +
+    `sam config apply` (Update pusht das Tool-Paket neu).
+13. sam-VPN-Spool-Check (die 10-GB-Falle):
    `curl -s -u admin:admin "http://localhost:8080/SEMP/v2/monitor/msgVpns/sam?select=msgSpoolUsage"`
    — unter ~2 GB ist gesund.
-10. Notfall-Reihenfolge bei Totalausfall eines Beats: Fallback
+14. Notfall-Reihenfolge bei Totalausfall eines Beats: Fallback
     anwenden (`meetup-demo/fallback`), Retail-360-Workflow als
     Ersatzdemo (Folie 4, verifiziert), Grafana läuft immer.
 
