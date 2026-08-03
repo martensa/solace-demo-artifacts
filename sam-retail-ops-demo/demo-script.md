@@ -85,7 +85,7 @@ System access (create a MongoDB connector "retail-poslog"):
 Toolsets: data analysis and artifact tools. Model: reasoning.
 ```
 
-**Fallback (Break glass):** `cd meetup-demo/fallback &&
+**Fallback (Break glass):** `cd sam-retail-ops-demo/fallback &&
 sam config apply` erstellt Connector + Agent deklarativ.
 
 ### 08:00–10:00 — COACHING: Wissen statt Prompt-Spaghetti
@@ -99,7 +99,7 @@ sam config apply` erstellt Connector + Agent deklarativ.
 
 ### 10:00–15:00 — TEAMWORK: der Shop-Moment
 
-1. `meetup-demo/shop/index.html` öffnen (Datei im Browser).
+1. `sam-retail-ops-demo/shop/index.html` öffnen (Datei im Browser).
    Status-LED grün = verbunden mit `ws://localhost:8008`, VPN
    `sam` — „der Browser publiziert direkt ins Event Mesh."
 2. **Opus One bestellen** → created-Event → der **Order
@@ -224,7 +224,7 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
    `curl -s -u admin:admin "http://localhost:8080/SEMP/v2/monitor/msgVpns/sam?select=msgSpoolUsage"`
    — unter ~2 GB ist gesund.
 14. Notfall-Reihenfolge bei Totalausfall eines Beats: Fallback
-    anwenden (`meetup-demo/fallback`), Retail-360-Workflow als
+    anwenden (`sam-retail-ops-demo/fallback`), Retail-360-Workflow als
     Ersatzdemo (Folie 4, verifiziert), Grafana läuft immer.
 
 ## Rebuild-Abhängigkeiten (nach jedem Plattform-Rebuild prüfen)
@@ -260,7 +260,7 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
   -anthropic/-vertex-Fallbacks des Proxys sind tot, LiteLLM
   retried 3× dieselbe kaputte Anfrage. Die Konversation ist
   danach unbrauchbar: NEUE Build-with-AI-Konversation starten
-  (gleicher Prompt) oder Fallback (`meetup-demo/fallback`).
+  (gleicher Prompt) oder Fallback (`sam-retail-ops-demo/fallback`).
   Vorher Teilzustand aufräumen (retail-poslog-Connector /
   Draft-Agent löschen). Builder-Chat = EIN Prompt, keine
   Follow-ups.

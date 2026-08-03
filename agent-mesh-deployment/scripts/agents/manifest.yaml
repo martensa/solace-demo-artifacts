@@ -40,7 +40,7 @@ resources:
     # Meetup demo: merge agent for the order-incident workflow.
     # NOTE: the Retail POS Analyst is deliberately NOT managed
     # here -- it is created live via the AI Builder (fallback:
-    # meetup-demo/fallback/).
+    # sam-retail-ops-demo/fallback/).
     - Order Incident Reporter
     # Meetup demo: Haiku-bound clerk for the good-case shop path.
     - Order Confirmation Clerk

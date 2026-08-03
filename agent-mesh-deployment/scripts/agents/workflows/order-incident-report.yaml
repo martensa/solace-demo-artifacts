@@ -1,5 +1,5 @@
 # Event-triggered incident workflow (meetup demo): a failed shop
-# order (published by meetup-demo/shop on the sam VPN) is routed
+# order (published by sam-retail-ops-demo/shop on the sam VPN) is routed
 # here by the shop-events event-mesh entrypoint. Fans out to OMS,
 # PDM and POS specialists in parallel, then merges into an
 # incident report. fail_fast stays false: if the Retail POS

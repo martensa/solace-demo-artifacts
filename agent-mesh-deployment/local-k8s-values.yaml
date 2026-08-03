@@ -78,7 +78,7 @@ llmService:
   # str/awe/gwe, the DB planning alias, the ephemeral test agent's
   # model binding) and kept calling the general/report tier
   # (Opus 4.8), which needs ~106 s while the caller kills at a
-  # hard 30 s. Vendor bug in 2.225.14; see meetup-demo/
+  # hard 30 s. Vendor bug in 2.225.14; see sam-retail-ops-demo/
   # demo-script.md "Bekannte Grenzen".
   planningModel: "openai/claude-haiku-4-5-20251001"
   generalModel: "openai/claude-opus-4-8"

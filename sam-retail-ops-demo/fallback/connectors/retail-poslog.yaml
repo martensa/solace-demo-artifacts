@@ -1,4 +1,4 @@
-# MongoDB connector to the local POSLOG store (meetup-demo/mongodb,
+# MongoDB connector to the local POSLOG store (sam-retail-ops-demo/mongodb,
 # host container retail-pos-mongo, port 27017 published on the
 # host). sam_ro/sam_ro is a demo-only read-only user (repo
 # convention). The connector is EXPERIMENTAL in 2.225.14 and

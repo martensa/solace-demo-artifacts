@@ -53,7 +53,7 @@ Tabs and windows, in the order you will need them:
    `power_user`, sidebar on **Activities**. Used only in 7.4 —
    Activities is a PER-USER view (admins included), and the
    incident tasks are attributed to power_user.
-4. Shop page: `meetup-demo/shop/index.html` in a browser tab —
+4. Shop page: `sam-retail-ops-demo/shop/index.html` in a browser tab —
    status LED green (connected to `ws://localhost:8008`).
 5. Claude Code window with the SAM MCP server connected AND
    authenticated as `data_engineer` / `data_engineer` (`/mcp`
@@ -173,7 +173,7 @@ declaratively in ~20 s (requires the pre-flight `sam auth
 login`), then continue at 6.2:
 
 ```bash
-cd ~/Documents/GitHub/solace-demo-artifacts/meetup-demo/fallback && sam config apply
+cd ~/Documents/GitHub/solace-demo-artifacts/sam-retail-ops-demo/fallback && sam config apply
 ```
 
 ```text
@@ -337,7 +337,7 @@ https://sam.solace.lab/#/agents/workflows/workflow_019fad02_c0cd_79df_b36e_86194
 **DO**: Back to the **Builder** tab. Point at the generated
 system prompt and the connector binding, then **Deploy**.
 (Break glass if the Builder failed:
-`cd meetup-demo/fallback && sam config apply` — ~20 s, then
+`cd sam-retail-ops-demo/fallback && sam config apply` — ~20 s, then
 continue identically.)
 
 **SAY**:
