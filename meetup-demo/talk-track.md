@@ -26,8 +26,13 @@ Tabs and windows, in the order you will need them:
    sidebar on **Agent Management**.
 3. Shop page: `meetup-demo/shop/index.html` in a browser tab —
    status LED green (connected to `ws://localhost:8008`).
-4. Claude Code window with the SAM MCP server connected
-   (`/mcp` shows the entrypoint's tools).
+4. Claude Code window with the SAM MCP server connected AND
+   authenticated as `data_engineer` / `data_engineer` (`/mcp`
+   shows the entrypoint's tools). The developer persona runs
+   under this user on purpose: its role carries
+   `agent:*:invoke`, and the governance dashboard later shows
+   the IDE queries under `data_engineer@solace.lab` -- do the
+   OAuth roundtrip BEFORE the demo, never on stage.
 5. Terminal in the repo root (fallback commands).
 
 Quick checks: Retail POS Analyst must NOT exist (delete agent
@@ -472,7 +477,9 @@ the same facts the incident report named as root cause.
 > "Last stop: the developer who has to fix this. They live in
 > the IDE — so the same agent team is plugged into Claude Code
 > via the **MCP entrypoint** you saw earlier. Same workers,
-> same OAuth login, same RBAC — just a different door.
+> same OAuth, same RBAC — just a different door. And note: I'm
+> logged in here as the **data engineer**, not as the admin —
+> this user is allowed to invoke agents, nothing more.
 >
 > [Answer lands] Stock level zero, status 'Made to Order' —
 > the developer verifies the root cause against the same
