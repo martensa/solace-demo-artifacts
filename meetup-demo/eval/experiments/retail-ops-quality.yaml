@@ -1,11 +1,12 @@
 kind: experiment
-name: meetup-quality
+name: retail-ops-quality
 description: >-
-  Meetup regression check: does the Retail CRM Query Expert answer
-  the demo questions correctly? Judged by the seeded LLM Judge
-  plus ROUGE overlap against the expected responses.
+  Production quality gate: does the Retail CRM Query Expert answer
+  the retail operations questions correctly on its production
+  model? Judged by the seeded LLM Judge plus Factuality against
+  the expected responses.
 spec:
-  datasetId: retail-demo-questions
+  datasetId: retail-ops-questions
   targetAgent: Retail CRM Query Expert
   # Seeded evaluators (exact platform names; there is no "rouge"
   # in 2.225.14 -- the heuristic overlap evaluator is called

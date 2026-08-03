@@ -1,7 +1,0 @@
-kind: dataset
-name: retail-demo-questions
-description: >-
-  The meetup demo questions against the retail CRM database --
-  regression guard for the Retail CRM Query Expert.
-spec:
-  examples_file: retail-demo-questions.csv

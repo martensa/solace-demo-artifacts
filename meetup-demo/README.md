@@ -21,7 +21,8 @@ builder prompt, talk-to-data queries, pre-flight checklist).
 - `fallback/` -- break-glass declarative configs for the live
   Builder beat (`sam config apply`; NEVER `--prune`)
 - `eval/` -- offline evaluation (dataset + LLM-judge experiment);
-  apply once, then `sam eval run meetup-quality --threshold 0.8`
+  apply once, then `sam eval run retail-ops-quality --threshold 0.8`
+  (plus `retail-ops-model-benchmark` for the model comparison)
 
 The SAM-side resources (Order Incident Reporter agent, the
 order-incident-report workflow and the shop-events event-mesh

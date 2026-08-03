@@ -129,19 +129,22 @@ sam config apply` erstellt Connector + Agent deklarativ.
 ### 15:00–18:00 — IMPROVEMENT: Messen und verbessern
 
 1. Grafana `https://monitoring.solace.lab` → Ordner SAM →
-   **SAM Meetup Demo**: dem roten Faden folgen (Gesundheit →
+   **SAM Retail Ops Demo**: dem roten Faden folgen (Gesundheit →
    Geschwindigkeit → Kosten/Chargeback je User → Governance
    „wer nutzt was" → Beweis-Links). Die Demo-Last von eben ist
    live sichtbar (Token-Rate, Latenzen, Audit-Events).
 2. Tempo-Drilldown (30 s): Explore → Tempo →
    `sam-solace-lab/a2a`-Spans — jeder A2A-Hop der Demo.
 3. Offline-Evals: SAM UI → Evaluations → Experiment
-   `meetup-quality` (vorab gelaufen: 12/12, 100 %) → Scores
+   `retail-ops-quality` (Produktions-Gate, vorab gelaufen) →
+   Scores zeigen, dann `retail-ops-model-benchmark` (derselbe
+   Agent, gepinnt auf Sonnet 5 / DeepSeek / Haiku via
+   `spec.models` — nativer Multi-Modell-Support) → Scores
    zeigen; optional live im Terminal:
 
    ```bash
    export SAM_AUTH_TOKEN=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/Library/Application Support/sam/auth/solace-lab.json')))['sam_access_token'])")
-   sam eval run meetup-quality --url https://sam.solace.lab --threshold 0.8
+   sam eval run retail-ops-quality --url https://sam.solace.lab --threshold 0.8
    ```
 
    Laufzeit ~6 min für 6 Beispiele × 2 Evaluatoren. „Exit-Code ≠ 0
@@ -193,7 +196,7 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
 4. Shop öffnen: LED grün; eine Test-Order (Pike Place) feuern,
    Bestätigung abwarten; Event-Log im Shop leeren (Reload).
 5. SAM UI eingeloggt (power_user) + Inkognito-Fenster (viewer).
-6. Grafana offen: Dashboard „SAM Meetup Demo" + Explore-Tab
+6. Grafana offen: Dashboard „SAM Retail Ops Demo" + Explore-Tab
    Tempo vorbereitet.
 7. Claude Code: `/mcp` → sam-lab authentifiziert.
 8. Falls der POSLOG-Agent aus einem früheren Durchlauf existiert:

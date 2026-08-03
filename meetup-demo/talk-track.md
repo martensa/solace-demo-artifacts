@@ -48,7 +48,7 @@ Tabs and windows, in the order you will need them:
    the IDE queries under `data_engineer@solace.lab` -- do the
    OAuth roundtrip BEFORE the demo, never on stage.
 6. Grafana tab: `https://monitoring.solace.lab` logged in,
-   folder **SAM** → dashboard **SAM Meetup Demo** open (10 s
+   folder **SAM** → dashboard **SAM Retail Ops Demo** open (10 s
    refresh, time range "Last 1 hour" — widen it if your last
    incident run is older).
 7. Terminal in the repo root (fallback commands; for the
@@ -138,12 +138,28 @@ networks, see demo-script.md for the 2-minute fix).
 
 ## 4. ONBOARDING kickoff — Build with AI (3:30–4:30)
 
+Cleanliness check BEFORE this beat (part of stage setup, worth
+re-checking now): **Agent Management** must NOT list "Retail
+POS Analyst" and **Connectors** must NOT list `retail-poslog` —
+Agent Management is the source of truth for DB-managed agents,
+so if the rows are gone there, the worker is gone (optionally
+confirm the Chat agent picker no longer offers it).
+
 **DO**: Sidebar → **Builder** → **Build with AI** (Quick
 Build). Paste the prompt below and send it. Watch for ~10 s
 that it actually starts building (if it asks a clarifying
 question instead, answer in one line — it is
 non-deterministic). Then leave it running and move on to
 section 5.
+
+**Break glass** (Builder fails or stalls): run this in the
+terminal — it creates the identical connector + agent
+declaratively in ~20 s (requires the pre-flight `sam auth
+login`), then continue at 6.2:
+
+```bash
+cd ~/Documents/GitHub/solace-demo-artifacts/meetup-demo/fallback && sam config apply
+```
 
 ```text
 Create an agent called "Retail POS Analyst".
@@ -534,8 +550,8 @@ and demo traffic is real data here.
 
 ### 8.1 Health — row 1 (30 s)
 
-**DO**: Switch to the Grafana tab (dashboard **SAM Meetup
-Demo**). Point at row 1: "Komponenten up" (3, green),
+**DO**: Switch to the Grafana tab (dashboard **SAM Retail
+Ops Demo**). Point at row 1: "Komponenten up" (3, green),
 "Broker-Verbindungen", "Tasks in Flight", "Request-Rate".
 
 **SAY**:
@@ -632,27 +648,38 @@ the request topics.
 ### 8.6 Quality — offline evals (1 min)
 
 **DO**: Back to browser window A (`sam_admin`) → **Evaluations**
-→ Experiments → **meetup-quality**. Show the pre-run results:
-12/12 passed, LLM Judge + Factuality.
+→ Experiments. Two experiments share one dataset
+(`retail-ops-questions`): open **retail-ops-quality** (the
+production gate, pre-run results) first, then
+**retail-ops-model-benchmark** (the same agent pinned to
+Sonnet 5, DeepSeek and Haiku).
 
 **SAY**:
 
 > "Speed and cost are easy to measure — quality is the hard
 > one. So we treat it like software: a **regression suite for
-> the agent**. Six real business questions with expected
-> answers, judged by an LLM judge plus a factuality check —
-> twelve of twelve passed on the current setup.
+> the agent**. Six real retail-operations questions with
+> expected answers, judged by an LLM judge plus a factuality
+> check. This first experiment is the **production quality
+> gate** — the CRM expert on its production model.
+>
+> And here's the part I like: the second experiment runs the
+> **same agent, same questions, same judges — under three
+> other models**: Sonnet 5, DeepSeek, Haiku. We don't debate
+> model choice, we **measure** it. Swap the data, rerun, and
+> you see per model whether the cheap tier still holds up —
+> quality as a trend line, not a gut feeling.
 >
 > And because it runs from the CLI with a threshold, the exit
-> code is a **CI gate**: change a prompt, swap a model, rerun
-> the suite — if quality drops, the pipeline goes red before
-> your users notice. Improvement stops being a feeling."
+> code is a **CI gate**: change a prompt, swap a model — if
+> quality drops, the pipeline goes red before your users
+> notice."
 
-(Optional, only with 6+ minutes of buffer: run it live in the
-terminal — `sam eval run meetup-quality --url
-https://sam.solace.lab --threshold 0.8` after exporting
-SAM_AUTH_TOKEN; see demo-script.md. Otherwise the pre-run
-results carry the beat.)
+(Optional, only with 6+ minutes of buffer: run the gate live —
+`sam eval run retail-ops-quality --url https://sam.solace.lab
+--threshold 0.8` after exporting SAM_AUTH_TOKEN; see
+demo-script.md. The benchmark takes longer — always show its
+pre-run results.)
 
 ---
 

@@ -1,0 +1,7 @@
+kind: dataset
+name: retail-ops-questions
+description: >-
+  Retail operations questions against the retail CRM database --
+  the regression guard for the Retail CRM Query Expert.
+spec:
+  examples_file: retail-ops-questions.csv

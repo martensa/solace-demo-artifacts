@@ -1,11 +1,12 @@
-# Offline evaluation for the meetup demo (Improvement phase).
-# Apply once before the meetup, then run:
+# Offline evaluation for the retail ops demo (Improvement
+# phase). Apply once before the event, then run:
 #   sam config apply -m manifest.yaml
-#   sam eval run meetup-quality --url https://sam.solace.lab --threshold 0.8
+#   sam eval run retail-ops-quality --url https://sam.solace.lab --threshold 0.8
+#   sam eval run retail-ops-model-benchmark --url https://sam.solace.lab
 kind: manifest
-name: meetup-eval
+name: retail-ops-eval
 description: >-
-  Offline evaluation of the retail demo agents for the meetup
+  Offline evaluation of the retail demo agents for live events
   (dataset + LLM-judge experiment).
 target:
   name: solace-lab
@@ -14,6 +15,7 @@ target:
     type: oauth
 resources:
   datasets:
-    - retail-demo-questions
+    - retail-ops-questions
   experiments:
-    - meetup-quality
+    - retail-ops-quality
+    - retail-ops-model-benchmark
