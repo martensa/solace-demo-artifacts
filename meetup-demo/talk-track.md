@@ -660,42 +660,75 @@ the request topics.
 > this — the broker emitted it. Same Tempo your other services
 > trace into."
 
-### 8.6 Quality — offline evals (1 min)
+### 8.6 Quality — offline evals (2 min)
 
 **DO**: Back to browser window A (`sam_admin` — evaluation
 management needs admin scopes, see the RBAC table) →
-**Evaluations** → Experiments. Two experiments share one dataset
-(`retail-ops-questions`): open **retail-ops-quality** (the
-production gate, pre-run results) first, then
-**retail-ops-model-benchmark** (the same agent pinned to
-Sonnet 5, DeepSeek and Haiku).
+**Evaluations**.
 
-**SAY**:
+**SAY** (on the Evaluations landing page):
 
 > "Speed and cost are easy to measure — quality is the hard
-> one. So we treat it like software: a **regression suite for
-> the agent**. Six real retail-operations questions with
-> expected answers, judged by an LLM judge plus a factuality
-> check. This first experiment is the **production quality
-> gate** — the CRM expert on its production model.
+> one. This is the evaluation lab: **experiments validate that
+> your agents respond consistently and safely** — you coach the
+> agent into the correct behaviour BEFORE you ship, and you
+> catch regressions whenever a prompt, a model or a tool
+> changes. Same discipline as software testing, applied to
+> workers."
+
+**DO**: Click **Datasets** briefly, then **Evaluators**.
+
+**SAY** (two sentences while showing each):
+
+> "Datasets are versioned question sets with expected answers —
+> ours is `retail-ops-questions`, six real business questions
+> against the CRM; you can also generate datasets with AI. And
+> Evaluators are the judges: eleven ship out of the box — LLM
+> judges for factuality, closed QA, SQL, security, plus
+> heuristic ones like response match. You pick up to three per
+> experiment."
+
+**DO**: Open **Experiments** → **retail-ops-model-benchmark** →
+open the latest run group. Point at the three per-model runs
+and their score columns.
+
+**SAY** (walking the report):
+
+> "And this is where it gets interesting. This experiment ran
+> the **same agent, same six questions, same two judges — under
+> three different models**, pinned per run: Sonnet 5, DeepSeek,
+> Haiku. Each row here is one model's run; the columns are the
+> judge scores per question, aggregated up top. Click into any
+> row and you see question by question what the agent answered
+> and how the judge reasoned.
 >
-> And here's the part I like: the second experiment runs the
-> **same agent, same questions, same judges — under three
-> other models**: Sonnet 5, DeepSeek, Haiku. We don't debate
-> model choice, we **measure** it. Swap the data, rerun, and
-> you see per model whether the cheap tier still holds up —
+> Now the punchline in the numbers: **Haiku — the cheapest
+> model in the house — scores identically to Sonnet 5**, and
+> even a nose ahead of our Opus production tier on factuality.
+> For routine CRM questions, the premium model buys you
+> **nothing** — measured, not guessed. That's a routing
+> decision: these questions go to the cheap tier; Opus earns
+> its price on the hard orchestration and merge work you saw in
+> the incident. And because runs accumulate, you rerun this on
+> new data next month and see whether that's still true —
 > quality as a trend line, not a gut feeling.
 >
-> And because it runs from the CLI with a threshold, the exit
-> code is a **CI gate**: change a prompt, swap a model — if
-> quality drops, the pipeline goes red before your users
-> notice."
+> One honest caveat: six questions is a smoke suite, not a
+> paper — the point is the **method**: pin models, hold
+> everything else constant, let judges score, gate the
+> pipeline on the result."
 
 (Optional, only with 6+ minutes of buffer: run the gate live —
 `sam eval run retail-ops-quality --url https://sam.solace.lab
---threshold 0.8` after exporting SAM_AUTH_TOKEN; see
-demo-script.md. The benchmark takes longer — always show its
-pre-run results.)
+--threshold 0.8` after exporting SAM_AUTH_TOKEN. The benchmark
+takes ~10 min — always show its pre-run results.)
+
+Measured reference (2026-08-03 pre-runs, Factuality / LLM
+Judge): Haiku 0.83/0.88 — Sonnet 5 0.83/0.88 — Opus 4.8
+(production gate) 0.79/0.88, 11/12 — DeepSeek V3.2 0.79/0.75,
+all passing. Benchmark runs execute in parallel and share the
+runtime, so per-run durations are not comparable latency
+numbers — use the dashboard's LLM-latency panel for that.
 
 ---
 
