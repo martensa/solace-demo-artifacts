@@ -7,8 +7,9 @@ limits live in the appendices at the end.
 
 Conventions: **DO** = click path, **SAY** = spoken line
 (shorten freely, keep the bold claims). Slide numbers refer to
-`slides/SAM v2 – AI Worker Lifecycle Meetup.pptx` (slides 3
-and 4 are used). All verified numbers are from live runs on
+`slides/SAM v2 – AI Worker Lifecycle Meetup.pptx` (3 slides:
+1 = lifecycle, 2 = demo scenario, 3 = the demo mapped onto the
+lifecycle). All verified numbers are from live runs on
 2026-08-03.
 
 Flow note: the AI Builder is kicked off EARLY (right after the
@@ -43,15 +44,15 @@ the workers is delegated.
 
 | Section | Window | Content |
 |---|---|---|
-| 1 | 0:00–1:30 | Scenario (slide 3) |
-| 2 | 1:30–2:30 | Lifecycle (slide 4) |
+| 1 | 0:00–1:00 | Lifecycle (slide 1) |
+| 2 | 1:00–2:30 | Scenario (slide 2) |
 | 3 | 2:30–3:30 | Hiring: the roster and the gap |
 | 4 | 3:30–4:30 | Onboarding kickoff: Build with AI |
 | 5 | 4:30–7:30 | Workplace tour (while the Builder runs) |
 | 6 | 7:30–9:30 | Deploy + first-day test |
 | 7 | 9:30–16:00 | Teamwork: shop → incident → Claude Code |
 | 8 | 16:00–18:45 | Improvement: dashboard, traces, evals |
-| 9 | 18:45–20:00 | Wrap (slide 4) |
+| 9 | 18:45–20:00 | Wrap (slide 3) |
 
 Overrun plan — cut in this order, none of them break the story:
 (1) 5.4 Toolsets/Skills, (2) 8.1's health glance to 10
@@ -64,7 +65,7 @@ down to a single question and one closing sentence.
 
 Tabs and windows, in the order you will need them:
 
-1. Slides (slide 3 up).
+1. Slides (slide 1 up).
 2. Browser window A: `https://sam.solace.lab` logged in as
    `sam_admin@solace.lab`, sidebar on **Agent Management**.
 3. Browser window B (separate profile/incognito):
@@ -91,7 +92,7 @@ Tabs and windows, in the order you will need them:
    8.3 is then a single tab switch, no live typing.
 8. Terminal in the repo root (fallback commands ready).
 
-Optional cold open (zero risk, strong hook): before slide 3,
+Optional cold open (zero risk, strong hook): before slide 1,
 show a finished incident report from rehearsal traffic
 (screenshot is fine) and say: "Four minutes after a customer
 hit an out-of-stock error, this root-cause report existed. No
@@ -100,19 +101,41 @@ that did."
 
 ---
 
-## 1. Scenario — slide 3 (0:00–1:30)
+## 1. The lifecycle — slide 1 (0:00–1:00)
 
-**DO**: Open on slide 3 ("Live Demo: Event-Driven Retail Ops").
+**DO**: Open on slide 1 (the AI Worker Lifecycle).
 
 **SAY**:
 
-> "Let me set the scene. Acme Retail — stores, an online shop,
-> and the classic system landscape: customer data in a CRM,
-> orders in an OMS, product master data in a PDM — all
-> Postgres. And the stores stream every register receipt, the
-> POSLOG, over the Solace event mesh into MongoDB. This is a
-> real use case — I wrote it up in a blog post on point-of-sale
-> analytics; today you'll see it live.
+> "We treat AI agents like employees, not like scripts. And
+> employees have a lifecycle: you **hire** them, you **onboard**
+> them with system access, they do **teamwork**, and you
+> **measure and improve** them. That lifecycle is the red
+> thread of this demo.
+>
+> Concretely, in the next nineteen minutes: I'll show you the
+> team we already have and hire a brand-new worker live. While
+> the platform onboards him, I'll give you a tour of his new
+> workplace. Then teamwork: an order fails and a team of agents
+> investigates it, triggered by the event itself. And at the
+> end we measure everything: latency, tokens, cost per user,
+> quality."
+
+---
+
+## 2. Scenario — slide 2 (1:00–2:30)
+
+**DO**: Slide 2 ("Live Demo: Event-Driven Retail Operations").
+
+**SAY**:
+
+> "Here's the stage. Acme Retail — stores, an online shop, and
+> the classic system landscape: customer data in a CRM, orders
+> in an OMS, product master data in a PDM — all Postgres. And
+> the stores stream every register receipt, the POSLOG, over
+> the Solace event mesh into MongoDB. This is a real use case —
+> I wrote it up in a blog post on point-of-sale analytics;
+> today you'll see it live.
 >
 > One naming thing up front, because there are two meshes
 > tonight: the **event mesh** is the broker network moving the
@@ -128,30 +151,7 @@ that did."
 >
 > Today, AI workers notice — before anyone files a ticket.
 > Everything you'll see runs on Kubernetes, on my laptop,
-> against a real Solace broker."
-
----
-
-## 2. The lifecycle — slide 4 (1:30–2:30)
-
-**DO**: Slide 4 ("The demo in the lifecycle").
-
-**SAY**:
-
-> "We treat AI agents like employees, not like scripts. And
-> employees have a lifecycle: you **hire** them, you **onboard**
-> them with system access, they do **teamwork**, and you
-> **measure and improve** them. That lifecycle is the red
-> thread of this demo.
->
-> Concretely, in the next eighteen minutes: I'll show you the
-> team we already have and hire a brand-new worker live — an
-> analyst for the store receipts in MongoDB. While the platform
-> onboards him, I'll give you a tour of his new workplace. Then
-> teamwork: a customer order fails in the shop and a team of
-> agents investigates it, triggered by the event itself. And at
-> the end we measure everything: latency, tokens, cost per
-> user, quality."
+> against a real Solace broker. Let's meet the team."
 
 ---
 
@@ -675,7 +675,9 @@ LLM-latency panel for that.
 ## 9. WRAP — the lifecycle, closed (18:45–20:00)
 
 **DO**: Bridge over the window switch, back to the slides —
-slide 4 (the lifecycle mapping).
+slide 3 ("The Demo in the Lifecycle": the stage boxes now carry
+checkmarks with what the demo delivered; Supervision is honestly
+marked "not shown today").
 
 **SAY**:
 
@@ -755,7 +757,7 @@ slide 4 (the lifecycle mapping).
 14. Escalation ladder for a TOTAL beat failure: (1) apply the
     fallback (`sam-retail-ops-demo/fallback`, ~20 s); (2) show
     the verified Retail-360 workflow as the replacement demo
-    (slide 4); (3) Grafana always runs — the Improvement part
+    (slide 3 as backdrop); (3) Grafana always runs — the Improvement part
     is failure-proof.
 
 Setup from scratch (fresh platform): run the base one-click
