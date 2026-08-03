@@ -390,9 +390,12 @@ card. The shop publishes a FAILED order event
 
 ### 7.4 Watch the team — Activities (2–3 min, while it runs)
 
-**DO**: SAM tab → **Activities** → open the newest task (the
-Orchestrator run). Show the flow graph building up; click into
-one delegation branch.
+**DO**: SAM tab → **Activities** → open the NEWEST task (the
+Orchestrator run — event-triggered tasks are attributed to
+`sam_admin` via the entrypoint's `defaultUserIdentity`, so they
+appear in your list; there is deliberately NO workflow run, the
+incident path runs through the Orchestrator). Show the flow
+graph building up; click into one delegation branch.
 
 **SAY**:
 

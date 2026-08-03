@@ -45,6 +45,10 @@ spec:
         # my level, not theirs"). It fans out to the OMS/PDM/POS
         # experts and has the Order Incident Reporter merge.
         targetAgent: Orchestrator
+        # Attribute event-triggered tasks to sam_admin so they show
+        # up in Activities (the bare gateway identity is invisible
+        # in the UI task list) -- also cleaner RBAC/audit/chargeback.
+        defaultUserIdentity: sam_admin@solace.lab
         promptTemplate: >-
           A shop order failed. Delegate in parallel: "Retail OMS
           Query Expert" for the order context in retail_oms,
@@ -74,6 +78,7 @@ spec:
             qos: 1
         messageFormat: json
         targetAgent: Retail OMS Query Expert
+        defaultUserIdentity: sam_admin@solace.lab
         promptTemplate: >-
           A new online order arrived. Confirm it in 3 sentences:
           check in retail_oms whether the customer is known and

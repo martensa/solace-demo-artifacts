@@ -36,6 +36,13 @@ by the companion repo
   can pull.
 - Keycloak at `auth.solace.lab` with the `solace-lab` realm
 
+Event-mesh entrypoint rules should set `defaultUserIdentity`
+(e.g. `sam_admin@solace.lab`): without it, event-triggered tasks
+run under the bare gateway identity and are invisible in the
+Activities UI (and unattributed in chargeback). Verified
+2026-08-03; the schema also offers `userIdentityExpression` for
+per-message identity.
+
 In addition, `start.sh` registers `sam.solace.lab` in CoreDNS
 NodeHosts during deployment (and `stop.sh` removes it again) --
 SAM self-calls its external URL during the OAuth flow.

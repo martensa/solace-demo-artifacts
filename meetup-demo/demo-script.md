@@ -104,7 +104,11 @@ sam config apply` erstellt Connector + Agent deklarativ.
    OMS + PDM + POS Analyst, „Order Incident Reporter" merged.
    Während er läuft: SAM UI → **Activities** → Task öffnen →
    Flow-Graph live; nach Abschluss **Performance** (Gantt).
-   Laufzeit ~3–4 min, ~110k Tokens — verifiziert 2026-07-31.
+   Laufzeit ~2,5–4 min, ~110–135k Tokens — verifiziert. Die
+   Event-Tasks laufen via `defaultUserIdentity` als `sam_admin`
+   und erscheinen daher in Activities (ohne das Feld läuft der
+   Task unter der unsichtbaren Gateway-Identität — 2026-08-03
+   in der Probe gefunden und gefixt).
 4. Ergebnis: Incident-Summary als Event im Shop; Artefakt
    `incident-<order_id>.md` in der Session (OMS-Team-Sicht).
 5. Persona-Split: Entwickler stellt in **Claude Code** (MCP,
