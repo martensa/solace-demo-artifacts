@@ -498,6 +498,14 @@ the same facts the incident report named as root cause.
 - Keep the Builder chat to ONE prompt, no follow-ups. If it
   asks more than one clarifying question, break glass -- every
   extra turn raises the malformed-history risk.
+- Do NOT use the Builder's Test engine on stage. Its plan
+  generator (`sam-test-harness__generate_test_plan`) runs as an
+  str subprocess with a HARD 30 s timeout and calls the
+  planning model (`LLM_SERVICE_PLANNING_MODEL_NAME`, currently
+  Opus 4.8) -- the real plan prompt exceeds 30 s, so it times
+  out deterministically (verified 2026-08-03; the follow-up
+  `generate_recommendations` tool has the same cap). The
+  first-day test in 6.2 deliberately uses plain Chat.
 - The tour is elastic filler: if the Builder is still running
   after 5.5, extend Models (talk vendors/params); if it
   finished early, cut 5.5 short.

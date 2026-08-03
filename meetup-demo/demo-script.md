@@ -233,6 +233,15 @@ Agenten wie Mitarbeitende führen, nicht wie Skripte betreiben."
   Vorher Teilzustand aufräumen (retail-poslog-Connector /
   Draft-Agent löschen). Builder-Chat = EIN Prompt, keine
   Follow-ups.
+- **Builder-Test-Engine timet deterministisch aus**: der
+  Plan-Generator ist ein str-Builtin-Tool (Subprozess, HARTES
+  30s-Limit, nicht konfigurierbar) und ruft per IPC das Modell
+  aus `LLM_SERVICE_PLANNING_MODEL_NAME` (= values
+  `llmService.planningModel`, aktuell Opus 4.8) — der echte
+  Plan-Prompt braucht länger als 30s. Fix wäre ein schnelleres
+  Planning-Modell (z. B. Haiku 4.5) in local-k8s-values.yaml +
+  str-Rollout; für die Demo wird der Test-Tab nicht genutzt
+  (Talk Track 6.2 = normaler Chat).
 - **Event-Trigger → Workflow ist in 2.225.14 defekt**: mit
   `targetWorkflowName` liefert der Entrypoint eine LEERE A2A-
   Nachricht (per Sniff belegt: `parts[0].text == ""`), der
