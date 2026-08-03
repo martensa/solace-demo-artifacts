@@ -683,13 +683,6 @@ results carry the beat.)
 > the eval suite — is on my GitHub, and the retail use case is
 > written up on my blog. Thank you — questions?"
 
-**Fallback closer** (if time ran out and the incident is still
-running): skip 8.5/8.6, jump to slide 4, and close with:
-
-> "The incident report will land in the shop any second — that
-> is the nature of live systems. Everything else you saw is
-> measured, attributed and gated. Thank you — questions?"
-
 ---
 
 ## Notes for the rehearsal
