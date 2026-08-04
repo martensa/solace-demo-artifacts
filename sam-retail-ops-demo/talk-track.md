@@ -232,6 +232,20 @@ System access (create a MongoDB connector "retail-poslog"):
 - username: sam_ro, password: sam_ro (authSource retail_pos)
 
 Toolsets: data analysis and artifact tools. Model: reasoning.
+
+Build instructions (run without interruptions):
+- Everything you need is in this prompt. Do NOT ask clarifying
+  questions, do NOT pause for confirmation between phases, and
+  do NOT ask for credentials again - embed sam_ro/sam_ro in the
+  connector config. Run discovery, design and config generation
+  in one pass and stop only at the final Build & Activate step.
+- Use the exact name "Retail POS Analyst" for the agent config
+  AND the manifest entry (no slug variants).
+- Wire the connector through the manifest's connectors list. If
+  the config validator and the manifest validator disagree about
+  a `connectors` field in the agent config, that is a known
+  validator inconsistency in this build: keep the manifest-level
+  wiring, note it once, and proceed without retry loops.
 ```
 
 **SAY** (while pasting and sending):
@@ -247,6 +261,10 @@ Toolsets: data analysis and artifact tools. Model: reasoning.
 > doing data work gets the cost-efficient DeepSeek model, not
 > the premium tier. Credentials live in the connector, scoped
 > read-only.
+>
+> And my favorite paragraph is the last one: I told HR **not
+> to interrupt me with paperwork questions** — everything it
+> needs is in the posting, so it builds straight through.
 >
 > Hiring takes a minute or two — so while HR does the
 > paperwork, let me show you around the new colleague's
