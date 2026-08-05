@@ -191,6 +191,12 @@ question instead, answer in one line — it is
 non-deterministic). Then leave it running and move on to
 section 5.
 
+Click rule: as soon as BOTH configs have validated
+individually and the plan card is up, click **Build &
+Activate** yourself — do not wait for the Builder to keep
+validating. Deployment does not run the broken cross-component
+validator; clicking is what finishes the hire.
+
 **Break glass** (Builder fails or stalls — see Appendix C for
 the failure signature): run this in the terminal — it creates
 the identical connector + agent declaratively in ~20 s
@@ -241,11 +247,15 @@ Build instructions (run without interruptions):
   in one pass and stop only at the final Build & Activate step.
 - Use the exact name "Retail POS Analyst" for the agent config
   AND the manifest entry (no slug variants).
-- Wire the connector through the manifest's connectors list. If
-  the config validator and the manifest validator disagree about
-  a `connectors` field in the agent config, that is a known
-  validator inconsistency in this build: keep the manifest-level
-  wiring, note it once, and proceed without retry loops.
+- Wire the connector through the manifest's connectors list and
+  do NOT add a `connectors` field to the agent config.
+- Validate the connector config and the agent config
+  INDIVIDUALLY only. Do NOT run the full build-manifest
+  cross-component validation: its connectors check is broken in
+  this build and can never pass (it demands a field the config
+  schema rejects). Once both configs validate individually,
+  declare the build ready for Build & Activate and STOP -- no
+  further validation passes.
 ```
 
 **SAY** (while pasting and sending):
@@ -830,6 +840,20 @@ receipts plus the demo stories in the same document schema.
   Build with AI with the same prompt, or break glass (section
   4). Keep the Builder chat to ONE prompt; if it asks more
   than one clarifying question, break glass.
+- **Builder loops on full-manifest validation** (hit in the
+  live build 2026-08-04): the cross-component connectors check
+  is unsatisfiable (the manifest validator demands a
+  `connectors` field that the agent-config schema rejects), and
+  the Builder's finalize step re-runs it after every change --
+  it declares "ready" repeatedly without ever finishing. The
+  prompt now forbids the full validation outright; if it loops
+  anyway, click **Build & Activate** as soon as both configs
+  validated individually (deployment skips the broken
+  validator), or break glass. Bonus signature: if a "Builder"
+  reply suddenly lists retail tools ("I don't have a tool
+  called ValidateBuildManifest"), your message landed in a
+  NORMAL chat session -- the Builder session is gone; reopen
+  Build with AI or break glass.
 - **Never open the Builder's Test tab on stage**: its plan
   generator is killed at a hard 30 s while its LLM call needs
   ~106 s on the Opus tier it insists on using — no configurable
