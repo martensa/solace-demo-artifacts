@@ -1,0 +1,19 @@
+kind: connector
+name: Acme PDM DB
+description: >-
+  This connector generates dynamic SQL queries for the database of
+  the connected PDM (product data management) system of Acme
+  Manufacturing. Four tables: mfg_material_master (finished goods
+  and components with revision, status and EOL test spec), mfg_bom
+  (bill of materials), mfg_eco (engineering change orders) and
+  mfg_eco_distribution (per-plant ECO distribution and
+  acknowledgement status). Timestamps are in UTC.
+spec:
+  type: sql
+  subtype: postgres
+  values:
+    database: mfg_pdm
+    hostname: host.docker.internal
+    port: 5432
+    username: ${MFG_DB_USERNAME}
+    password: ${MFG_DB_PASSWORD}

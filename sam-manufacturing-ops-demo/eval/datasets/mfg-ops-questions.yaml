@@ -1,0 +1,7 @@
+kind: dataset
+name: mfg-ops-questions
+description: >-
+  Manufacturing operations questions against the PDM database --
+  the regression guard for the Acme PDM Query Expert.
+spec:
+  examples_file: mfg-ops-questions.csv

@@ -1,0 +1,29 @@
+# Demo overlay: the two event-driven movements on top of the
+# manufacturing core (../core). Installed and removed by
+# ../install.sh / ../uninstall.sh -- apply order matters: the
+# quality-incident-report and supply-replenishment workflows
+# reference the Shop Floor Analyst, which install.sh creates from
+# ../fallback BEFORE applying this manifest (xref validation
+# checks the platform for referenced agents).
+kind: manifest
+name: mfg-ops-demo-mesh
+description: >-
+  Event-driven manufacturing ops demo overlay: production
+  confirmation clerk (fast tier), quality incident reporter and
+  supply chain watcher (workflow tier), the two workflows and the
+  plant-events event-mesh entrypoint.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  agents:
+    - Production Confirmation Clerk
+    - Quality Incident Reporter
+    - Supply Chain Watcher
+  workflows:
+    - quality-incident-report
+    - supply-replenishment
+  entrypoints:
+    - plant-events

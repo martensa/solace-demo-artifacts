@@ -1,0 +1,19 @@
+kind: connector
+name: Acme CRM DB
+description: >-
+  This connector generates dynamic SQL queries for the database of
+  the connected CRM system of Acme Manufacturing. The database
+  holds one table (mfg_accounts) with B2B account master data:
+  account type (OEM, distributor, MRO), tier, industry, location
+  and region, primary contact, annual revenue, open claims and --
+  for OEM accounts -- the contractual line-down penalty in EUR per
+  hour. Timestamps are in UTC.
+spec:
+  type: sql
+  subtype: postgres
+  values:
+    database: mfg_crm
+    hostname: host.docker.internal
+    port: 5432
+    username: ${MFG_DB_USERNAME}
+    password: ${MFG_DB_PASSWORD}

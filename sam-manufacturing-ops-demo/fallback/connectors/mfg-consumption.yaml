@@ -1,0 +1,23 @@
+# Second collection of the same mfg_plant MongoDB (the connector
+# generates one tool per collection, so each collection needs its
+# own connector). Same demo-only read-only user as mfg-telemetry.
+kind: connector
+name: mfg-consumption
+description: >-
+  Material consumption from the plant material issue points
+  (MongoDB collection material_consumption): one document per
+  issue with plant, material, production order, line, issued
+  quantity and balance after. The OBSERVED burn rate that the
+  planned_daily_consumption in mfg_scm knows nothing about.
+spec:
+  type: document_db
+  subtype: mongodb
+  values:
+    scheme: mongodb
+    hostname: host.docker.internal
+    port: 27017
+    username: sam_ro
+    password: sam_ro
+    database: mfg_plant
+    collection: material_consumption
+    options: "authSource=mfg_plant"

@@ -1,0 +1,100 @@
+# Event-triggered quality incident workflow (movement 1): an EOL
+# test failure (published by the plant cockpit on the sam VPN) is
+# routed here by the plant-events event-mesh entrypoint. Fans out
+# to the OMS, PDM and Shop Floor specialists in parallel, then
+# merges into an incident report. fail_fast stays false: if the
+# Shop Floor Analyst does not exist yet (it is created LIVE in
+# the demo via the AI Builder), the report transparently notes
+# the missing telemetry section instead of failing.
+kind: workflow
+name: quality-incident-report
+description: >-
+  Quality incident analysis: fans an EOL test failure out to the
+  OMS, PDM and shop-floor specialists in parallel and merges
+  their findings into one incident report for the quality
+  manager.
+spec:
+  appConfig:
+    # Bump to force a redeploy (deploy phase fires on change only).
+    # NOTE: event-triggered runs deliver NO structured input keys
+    # (awe logs inputKeys: []), so nodes must reference the raw
+    # task text as {{workflow.input}} -- {{workflow.input.text}}
+    # stays an unresolved literal (verified 2026-07-31, retail).
+    version: "1.0.0"
+    display_name: Quality Incident Report
+    description: >-
+      EOL-failure analysis across OMS, PDM and shop-floor
+      telemetry, merged into one incident report.
+    workflow_timeout: "600s"
+    default_node_timeout: "240s"
+    fail_fast: false
+    skills:
+      - id: quality_incident_report
+        name: Quality Incident Report
+        description: >-
+          Analyze an EOL test failure across OMS, PDM and plant
+          telemetry and produce an incident report.
+    output_mapping:
+      report: "{{report.output}}"
+    nodes:
+      - id: oms
+        type: agent
+        agent_name: Acme OMS Query Expert
+        input:
+          message: >-
+            An end-of-line test failure stopped a production
+            order. Analyze the ORDER impact: find the production
+            order and its status/hold_reason in
+            mfg_production_orders, JOIN the customer order it
+            fulfils (account, qty, order value, requested
+            delivery) and check for other orders of the same
+            product. Concise markdown section with numbers.
+            Failure event: {{workflow.input}}
+      - id: pdm
+        type: agent
+        agent_name: Acme PDM Query Expert
+        input:
+          message: >-
+            An end-of-line test failure stopped a production
+            order. Analyze the PRODUCT MASTER DATA (mfg_pdm) for
+            the product: current revision and eol_test_spec in
+            mfg_material_master, released ECOs affecting it in
+            mfg_eco, and CRITICALLY the per-plant acknowledgement
+            in mfg_eco_distribution -- is an effective change
+            still PENDING at the failing plant? Concise markdown
+            section with numbers. Failure event:
+            {{workflow.input}}
+      - id: floor
+        type: agent
+        agent_name: Shop Floor Analyst
+        input:
+          message: >-
+            An end-of-line test failure stopped a production
+            order. Analyze the STATION TELEMETRY (mfg_plant
+            MongoDB, collection station_telemetry) for the
+            failing plant/line/station: fail rate over the last
+            two weeks, measured values vs spec_min/spec_max,
+            when the failures started, and which
+            station_spec_revision the station tests against.
+            Concise markdown section with numbers. Failure
+            event: {{workflow.input}}
+      - id: report
+        type: agent
+        agent_name: Quality Incident Reporter
+        depends_on:
+          - oms
+          - pdm
+          - floor
+        input:
+          message: |
+            Create the incident report for this EOL test failure:
+            {{workflow.input}}
+
+            ## OMS findings (order impact)
+            {{oms.output}}
+
+            ## PDM findings (master data / ECO status)
+            {{pdm.output}}
+
+            ## Shop floor findings (station telemetry)
+            {{floor.output}}

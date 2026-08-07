@@ -1,0 +1,21 @@
+# Break-glass fallback for the live Builder demo: creates the
+# MongoDB plant connectors + agent declaratively if the Builder
+# beat fails on stage.  Apply with:
+#   sam config apply -m manifest.yaml
+# NEVER --prune (unmanaged resources would be deleted).
+kind: manifest
+name: mfg-shopfloor-fallback
+description: >-
+  Fallback provisioning of the Shop Floor Analyst (MongoDB plant
+  telemetry + consumption) for the manufacturing demo.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  connectors:
+    - mfg-telemetry
+    - mfg-consumption
+  agents:
+    - Shop Floor Analyst

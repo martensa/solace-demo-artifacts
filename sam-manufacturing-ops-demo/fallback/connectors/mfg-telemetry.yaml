@@ -1,0 +1,27 @@
+# MongoDB connector to the local plant store (mfg-plant-mongo,
+# host port 27017 -- only one demo's mongo runs at a time; stop
+# retail-pos-mongo first).
+# sam_ro/sam_ro is a demo-only read-only user (repo convention).
+# The connector is EXPERIMENTAL in 2.225.14 and generates ONE
+# tool per collection (<collection>_mongo_query_<suffix>); schema
+# introspection samples up to 100 documents at startup.
+kind: connector
+name: mfg-telemetry
+description: >-
+  Station telemetry from the plant end-of-line test stations
+  (MongoDB collection station_telemetry): one document per test
+  with plant, line, station, production order, product, measured
+  value vs spec, station spec revision, result and failure code.
+  The OT reality behind the production orders in mfg_oms.
+spec:
+  type: document_db
+  subtype: mongodb
+  values:
+    scheme: mongodb
+    hostname: host.docker.internal
+    port: 27017
+    username: sam_ro
+    password: sam_ro
+    database: mfg_plant
+    collection: station_telemetry
+    options: "authSource=mfg_plant"

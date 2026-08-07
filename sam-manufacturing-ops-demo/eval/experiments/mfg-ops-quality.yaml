@@ -1,0 +1,19 @@
+kind: experiment
+name: mfg-ops-quality
+description: >-
+  Production quality gate: does the Acme PDM Query Expert answer
+  the manufacturing operations questions correctly on its
+  production model? Judged by the seeded LLM Judge plus
+  Factuality against the expected responses.
+spec:
+  datasetId: mfg-ops-questions
+  targetAgent: Acme PDM Query Expert
+  # Seeded evaluators (exact platform names; there is no "rouge"
+  # in 2.225.14 -- the heuristic overlap evaluator is called
+  # "Response Match").
+  evaluatorIds:
+    - LLM Judge
+    - Factuality
+  primaryEvaluatorId: LLM Judge
+  runsPerExample: 1
+  maxWorkers: 2

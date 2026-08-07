@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Acme Manufacturing — Plant Operations Cockpit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./solclient.js"></script>
+<style>
+  :root {
+    --bg: #0d1420; --panel: #16202f; --card: #1b2839;
+    --text: #e8eef5; --muted: #8aa0b5; --accent: #00c895;
+    --amber: #fca829; --red: #ff5d6c; --navy: #0a3b5e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text);
+         font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 14px;
+           padding: 18px 28px; background: var(--panel);
+           border-bottom: 2px solid var(--accent); }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  #led { width: 12px; height: 12px; border-radius: 50%;
+         background: var(--red); margin-left: auto;
+         box-shadow: 0 0 8px var(--red); transition: all .3s; }
+  #led.on { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  #ledlabel { font-size: 12px; color: var(--muted); }
+  main { max-width: 1180px; margin: 22px auto; padding: 0 20px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .card { background: var(--card); border-radius: 12px; padding: 16px 18px;
+          border: 1px solid #263a52; }
+  .card h3 { font-size: 14px; margin-bottom: 8px; }
+  .card .sub { color: var(--muted); font-size: 12px; }
+  .chip { font-size: 10.5px; padding: 2px 10px; border-radius: 10px;
+          background: #24405e; color: #bcd6ee; float: right; }
+  .chip.run  { background: #0e3b2c; color: var(--accent); }
+  .chip.warn { background: #4a3620; color: var(--amber); }
+  .chip.fail { background: #4a2028; color: var(--red); }
+  .kpis { display: flex; gap: 18px; margin-top: 10px; }
+  .kpi .v { font-size: 24px; font-weight: 700; }
+  .kpi .l { font-size: 11px; color: var(--muted); }
+  .kpi.fail .v { color: var(--red); }
+  .kpi.pass .v { color: var(--accent); }
+  #release { grid-column: 1 / -1; display: flex; align-items: center;
+             gap: 20px; }
+  #release .info { flex: 1; }
+  button { padding: 12px 18px; border: 0; border-radius: 8px;
+           background: var(--accent); color: #06281e; font-weight: 700;
+           cursor: pointer; font-size: 14px; }
+  button:hover { filter: brightness(1.12); }
+  button:disabled { background: #33475d; color: #7b8ea1; cursor: default; }
+  /* coverage gauge */
+  .gaugewrap { position: relative; height: 18px; border-radius: 9px;
+               background: #101a28; margin-top: 12px; overflow: hidden; }
+  #gaugebar { position: absolute; inset: 0 auto 0 0; width: 100%;
+              background: var(--accent); border-radius: 9px;
+              transition: width .8s linear, background .4s; }
+  #gaugemark { position: absolute; top: -3px; bottom: -3px; width: 2px;
+               background: var(--red); }
+  #gaugeval { font-size: 22px; font-weight: 700; margin-top: 8px; }
+  #gaugeval small { font-size: 12px; color: var(--muted); font-weight: 400; }
+  #log { margin-top: 20px; background: var(--panel); border-radius: 12px;
+         padding: 16px 18px; }
+  #log h2 { font-size: 13px; color: var(--muted); text-transform: uppercase;
+            letter-spacing: .08em; margin-bottom: 10px; }
+  .evt { padding: 10px 12px; border-left: 3px solid var(--accent);
+         background: #101a28; border-radius: 6px; margin-bottom: 8px;
+         font-size: 13px; animation: pop .25s ease; }
+  .evt.fail { border-color: var(--red); }
+  .evt.warn { border-color: var(--amber); }
+  .evt.result { border-color: var(--amber); }
+  .evt .topic { color: var(--muted); font-size: 11px; word-break: break-all; }
+  .evt pre { white-space: pre-wrap; word-break: break-word; color: #cfe3d9;
+             font-size: 12px; margin-top: 4px; max-height: 220px; overflow: auto; }
+  #telemline { font-size: 11.5px; color: var(--muted); margin-top: 8px;
+               font-family: ui-monospace, monospace; }
+  footer { max-width: 1180px; margin: 10px auto 30px; padding: 0 20px;
+           display: flex; gap: 10px; }
+  footer button { background: #24405e; color: #bcd6ee; font-size: 11px;
+                  padding: 6px 10px; font-weight: 400; }
+  @keyframes pop { from { transform: translateY(-4px); opacity: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <div style="font-size:28px">🏭</div>
+  <div>
+    <h1>Acme Manufacturing — Plant Operations Cockpit</h1>
+    <div class="sub">Plant events publish directly onto the Solace Event Mesh
+      (VPN <b>sam</b>) &rarr; Event-Mesh-Entrypoint &rarr; SAM agents</div>
+  </div>
+  <div id="led"></div><div id="ledlabel">connecting…</div>
+</header>
+<main>
+  <div class="row">
+    <div class="card" id="release">
+      <div style="font-size:34px">📋</div>
+      <div class="info">
+        <h3>OEM Program — release production orders</h3>
+        <div class="sub">PRD-118-4711 · CK-350 Clutch Kit · 4,000 pcs · Volta Motors ·
+          Plant 1 L2 &nbsp;|&nbsp; PRD-118-4718 · IX-450 Impact Driver · 1,200 pcs ·
+          ToolMart · Plant 2 L3</div>
+      </div>
+      <button id="btn-release">Release orders</button>
+    </div>
+
+    <div class="card" id="p-ham">
+      <span class="chip" id="ham-chip">IDLE</span>
+      <h3>🇩🇪 Plant 1 — Hamburg</h3>
+      <div class="sub">Automotive Components · L2 CK-350 · EOL-4</div>
+      <div class="kpis">
+        <div class="kpi"><div class="v" id="ham-total">0</div><div class="l">tested</div></div>
+        <div class="kpi pass"><div class="v" id="ham-pass">0</div><div class="l">pass</div></div>
+        <div class="kpi fail"><div class="v" id="ham-fail">0</div><div class="l">fail</div></div>
+      </div>
+    </div>
+
+    <div class="card" id="p-grz">
+      <span class="chip" id="grz-chip">IDLE</span>
+      <h3>🇦🇹 Plant 2 — Graz</h3>
+      <div class="sub">Power Tools · L3 IX-450 · EOL-2</div>
+      <div class="kpis">
+        <div class="kpi"><div class="v" id="grz-total">0</div><div class="l">tested</div></div>
+        <div class="kpi pass"><div class="v" id="grz-pass">0</div><div class="l">pass</div></div>
+        <div class="kpi fail"><div class="v" id="grz-fail">0</div><div class="l">fail</div></div>
+      </div>
+    </div>
+
+    <div class="card" id="p-stock">
+      <span class="chip run" id="stock-chip">OK</span>
+      <h3>📦 HD-22 Clutch Disc — Plant 1 coverage</h3>
+      <div class="sub">MAT_CLT_HD22 · on hand vs observed burn rate ·
+        red line = supplier lead time</div>
+      <div class="gaugewrap">
+        <div id="gaugebar"></div>
+        <div id="gaugemark"></div>
+      </div>
+      <div id="gaugeval">–<small> days of cover</small></div>
+    </div>
+  </div>
+
+  <div id="log">
+    <h2>Event stream (published / received)</h2>
+    <div id="telemline">telemetry: waiting for order release…</div>
+    <div id="events"></div>
+  </div>
+</main>
+<footer>
+  <span class="sub" style="font-size:11px;color:#5c7288">break-glass:</span>
+  <button id="bg-eol">fire EOL failure</button>
+  <button id="bg-stock">fire stock threshold</button>
+  <button id="bg-reset">reset</button>
+</footer>
+<script>
+"use strict";
+/* Scripted two-movement demo timeline (see ../talk-track.md):
+   T+0        release click -> 2 order-released events (PERSISTENT)
+   T+0..      station telemetry stream (DIRECT), both plants PASS
+   T+25s      Graz L3 starts testing HD-22 units against the OLD
+              spec -> FAILs; after 6 fails ONE eol-failed business
+              event (PERSISTENT) -> movement 1
+   T+0..      HD-22 consumption ticks drain the coverage gauge
+   T+~280s    gauge crosses the red line -> ONE threshold-crossed
+              business event (PERSISTENT) -> movement 2
+   Determinism beats realism on stage: the timings are fixed. */
+const CFG = {
+  telemetryMs: 1600,        // one test event per plant per tick
+  consumptionMs: 3000,
+  grzFailAfterS: 25,        // HD-22 units reach Graz EOL-2
+  failsBeforeIncident: 6,   // then ONE eol-failed event
+  coverStartDays: 6.0,
+  coverThreshold: 4.5,      // red line (alternate expedite ~3d + margin)
+  coverCrossAtS: 280,       // gauge crosses right after the incident lands
+  coverFloor: 3.6,
+};
+const T = {
+  released: (p, po) => `acmemfg/production/order/released/${p}/${po}`,
+  telemetry: (p, l, s, r) => `acmemfg/plant/telemetry/${p}/${l}/${s}/${r}`,
+  consumption: (p, m) => `acmemfg/plant/consumption/${p}/${m}`,
+  eolFailed: (p, sku) => `acmemfg/plant/quality/eol-failed/${p}/${sku}`,
+  threshold: (p, m) => `acmemfg/scm/stock/threshold-crossed/${p}/${m}`,
+  results: "acmemfg/plant/result/>",
+};
+
+let session = null, connected = false;
+let running = false, t0 = 0, timers = [];
+let eolFired = false, thresholdFired = false;
+let counters = { ham: {t:0,p:0,f:0}, grz: {t:0,p:0,f:0} };
+let grzFails = 0, serial = 41000, telemCount = 0;
+
+const $ = (s) => document.querySelector(s);
+const elapsedS = () => (Date.now() - t0) / 1000;
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+function logEvent(cls, topic, body) {
+  const div = document.createElement("div");
+  div.className = "evt " + cls;
+  div.innerHTML = `<div class="topic">${topic}</div><pre></pre>`;
+  div.querySelector("pre").textContent =
+    typeof body === "string" ? body : JSON.stringify(body, null, 1);
+  $("#events").prepend(div);
+  while ($("#events").children.length > 40) $("#events").lastChild.remove();
+}
+
+function publish(topic, payload, persistent) {
+  if (!connected) { logEvent("fail", "—", "Broker not connected"); return false; }
+  const msg = solace.SolclientFactory.createMessage();
+  msg.setDestination(solace.SolclientFactory.createTopicDestination(topic));
+  msg.setBinaryAttachment(JSON.stringify(payload));
+  msg.setDeliveryMode(persistent
+    ? solace.MessageDeliveryModeType.PERSISTENT
+    : solace.MessageDeliveryModeType.DIRECT);
+  try { session.send(msg); return true; }
+  catch (e) { logEvent("fail", topic, "Publish error: " + e.message); return false; }
+}
+
+/* ---------- movement triggers (business events) ---------- */
+function fireEol() {
+  if (eolFired) return; eolFired = true;
+  $("#grz-chip").textContent = "QUALITY ALERT";
+  $("#grz-chip").className = "chip fail";
+  const payload = {
+    event: "EOL_TEST_FAILED", ts: new Date().toISOString(),
+    plant_id: "PLANT_GRZ", plant_name: "Plant 2 - Graz",
+    line_id: "L3", station_id: "EOL-2",
+    prod_order_id: "PRD-118-4718",
+    product_id: "FG_IX450", sku: "IX-450",
+    product_name: "IX-450 Cordless Impact Driver 18V",
+    failure_code: "TORQUE_OUT_OF_SPEC",
+    fails_in_window: grzFails, window_min: 15,
+    measured_torque_nm: 22.1, station_spec: "17.5-18.5 Nm",
+    station_spec_revision: "B",
+    note: "Consecutive torque failures after HD-22 lot change",
+  };
+  const topic = T.eolFailed("PLANT_GRZ", "IX-450");
+  if (publish(topic, payload, true)) logEvent("fail", "➡ " + topic, payload);
+}
+
+function fireThreshold() {
+  if (thresholdFired) return; thresholdFired = true;
+  $("#stock-chip").textContent = "COVERAGE RISK";
+  $("#stock-chip").className = "chip warn";
+  const payload = {
+    event: "STOCK_THRESHOLD_CROSSED", ts: new Date().toISOString(),
+    plant_id: "PLANT_HAM", plant_name: "Plant 1 - Hamburg",
+    material_id: "MAT_CLT_HD22",
+    description: "HD-22 Clutch Disc (sintered)",
+    on_hand_qty: 1850, safety_stock: 800,
+    planned_daily_consumption: 120,
+    projected_days_cover: 4.4,
+    threshold_days: CFG.coverThreshold,
+    note: "Observed consumption exceeds plan since ECO-2025-118 " +
+          "ramp-up; verify actual burn rate in plant telemetry",
+  };
+  const topic = T.threshold("PLANT_HAM", "MAT_CLT_HD22");
+  if (publish(topic, payload, true)) logEvent("warn", "➡ " + topic, payload);
+}
+
+/* ---------- scripted streams ---------- */
+function telemetryTick() {
+  // Plant 1 Hamburg: CK-350 on the NEW spec -> PASS
+  const mHam = rnd(21.7, 22.3);
+  counters.ham.t++; counters.ham.p++;
+  publish(T.telemetry("PLANT_HAM", "L2", "EOL-4", "PASS"), {
+    plant_id: "PLANT_HAM", line_id: "L2", station_id: "EOL-2",
+    prod_order_id: "PRD-118-4711", product_id: "FG_CK350",
+    serial_no: "CK350-" + (++serial),
+    test: { type: "torque", measured: +mHam.toFixed(2), unit: "Nm",
+            spec_min: 21.5, spec_max: 22.5, station_spec_revision: "C" },
+    result: "PASS", ts: new Date().toISOString(),
+  });
+  // Plant 2 Graz: HD-20 rest stock passes, HD-22 units fail the OLD spec
+  const hd22 = elapsedS() > CFG.grzFailAfterS;
+  const mGrz = hd22 ? rnd(21.6, 22.4) : rnd(17.8, 18.4);
+  const fail = mGrz > 18.5 || mGrz < 17.5;
+  counters.grz.t++; fail ? counters.grz.f++ : counters.grz.p++;
+  if (fail) grzFails++;
+  publish(T.telemetry("PLANT_GRZ", "L3", "EOL-2", fail ? "FAIL" : "PASS"), {
+    plant_id: "PLANT_GRZ", line_id: "L3", station_id: "EOL-2",
+    prod_order_id: "PRD-118-4718", product_id: "FG_IX450",
+    serial_no: "IX450-" + (++serial),
+    test: { type: "torque", measured: +mGrz.toFixed(2), unit: "Nm",
+            spec_min: 17.5, spec_max: 18.5, station_spec_revision: "B" },
+    result: fail ? "FAIL" : "PASS",
+    ...(fail ? { failure_code: "TORQUE_OUT_OF_SPEC" } : {}),
+    ts: new Date().toISOString(),
+  });
+  telemCount += 2;
+  for (const p of ["ham", "grz"]) {
+    $("#" + p + "-total").textContent = counters[p].t;
+    $("#" + p + "-pass").textContent = counters[p].p;
+    $("#" + p + "-fail").textContent = counters[p].f;
+  }
+  if (counters.grz.f > 0 && !eolFired) {
+    $("#grz-chip").textContent = "FAILS: " + counters.grz.f;
+    $("#grz-chip").className = "chip warn";
+  }
+  $("#telemline").textContent =
+    `telemetry: ${telemCount} station events published (DIRECT) · ` +
+    `Graz L3 measured ${mGrz.toFixed(2)} Nm vs spec 17.5–18.5 (rev B)`;
+  if (grzFails >= CFG.failsBeforeIncident) fireEol();
+}
+
+function coverDays() {
+  const rate = (CFG.coverStartDays - CFG.coverThreshold) / CFG.coverCrossAtS;
+  return Math.max(CFG.coverFloor, CFG.coverStartDays - elapsedS() * rate);
+}
+
+function consumptionTick() {
+  const qty = Math.round(rnd(24, 34));
+  publish(T.consumption("PLANT_HAM", "MAT_CLT_HD22"), {
+    plant_id: "PLANT_HAM", material_id: "MAT_CLT_HD22",
+    prod_order_id: "PRD-118-4711", line_id: "L2",
+    qty_issued: qty, uom: "EA", ts: new Date().toISOString(),
+  });
+  const d = coverDays();
+  const pct = Math.max(0, Math.min(100,
+    (d - CFG.coverFloor) / (CFG.coverStartDays - CFG.coverFloor) * 100));
+  $("#gaugebar").style.width = pct + "%";
+  $("#gaugebar").style.background =
+    d <= CFG.coverThreshold ? "var(--red)"
+      : d <= CFG.coverThreshold + 0.5 ? "var(--amber)" : "var(--accent)";
+  $("#gaugeval").innerHTML = d.toFixed(1) +
+    "<small> days of cover @ observed rate</small>";
+  if (d <= CFG.coverThreshold) fireThreshold();
+}
+
+/* ---------- release (the ONE on-stage click) ---------- */
+function release() {
+  if (!connected || running) return;
+  running = true; t0 = Date.now();
+  $("#btn-release").disabled = true;
+  $("#btn-release").textContent = "Orders released";
+  $("#ham-chip").textContent = "RUNNING"; $("#ham-chip").className = "chip run";
+  $("#grz-chip").textContent = "RUNNING"; $("#grz-chip").className = "chip run";
+  const orders = [
+    { prod_order_id: "PRD-118-4711", order_id: "ORD-2025-30412",
+      plant_id: "PLANT_HAM", line_id: "L2", product_id: "FG_CK350",
+      product_name: "CK-350 Clutch Kit", qty: 4000,
+      account: "Volta Motors AG" },
+    { prod_order_id: "PRD-118-4718", order_id: "ORD-2025-30388",
+      plant_id: "PLANT_GRZ", line_id: "L3", product_id: "FG_IX450",
+      product_name: "IX-450 Cordless Impact Driver 18V", qty: 1200,
+      account: "ToolMart Distribution GmbH" },
+  ];
+  for (const o of orders) {
+    const payload = { event: "PRODUCTION_ORDER_RELEASED",
+                      ts: new Date().toISOString(), ...o };
+    const topic = T.released(o.plant_id, o.prod_order_id);
+    if (publish(topic, payload, true)) logEvent("", "➡ " + topic, payload);
+  }
+  timers.push(setInterval(telemetryTick, CFG.telemetryMs));
+  timers.push(setInterval(consumptionTick, CFG.consumptionMs));
+}
+
+function reset() {
+  for (const t of timers) clearInterval(t);
+  timers = []; running = false; eolFired = false; thresholdFired = false;
+  counters = { ham: {t:0,p:0,f:0}, grz: {t:0,p:0,f:0} };
+  grzFails = 0; telemCount = 0;
+  $("#btn-release").disabled = false;
+  $("#btn-release").textContent = "Release orders";
+  for (const p of ["ham", "grz"]) {
+    $("#" + p + "-total").textContent = 0;
+    $("#" + p + "-pass").textContent = 0;
+    $("#" + p + "-fail").textContent = 0;
+    $("#" + p + "-chip").textContent = "IDLE";
+    $("#" + p + "-chip").className = "chip";
+  }
+  $("#stock-chip").textContent = "OK"; $("#stock-chip").className = "chip run";
+  $("#gaugebar").style.width = "100%";
+  $("#gaugebar").style.background = "var(--accent)";
+  $("#gaugeval").innerHTML = "–<small> days of cover</small>";
+  $("#telemline").textContent = "telemetry: waiting for order release…";
+  $("#events").innerHTML = "";
+}
+
+/* ---------- broker session ---------- */
+function connect() {
+  const factoryProps = new solace.SolclientFactoryProperties();
+  factoryProps.profile = solace.SolclientFactoryProfiles.version10;
+  solace.SolclientFactory.init(factoryProps);
+  session = solace.SolclientFactory.createSession({
+    url: "ws://localhost:8008",
+    vpnName: "sam",
+    userName: "default",
+    password: "default",
+    publisherProperties: { enabled: true, acknowledgeMode:
+      solace.MessagePublisherAcknowledgeMode.PER_MESSAGE },
+  });
+  session.on(solace.SessionEventCode.UP_NOTICE, () => {
+    connected = true;
+    $("#led").classList.add("on");
+    $("#ledlabel").textContent = "sam VPN · ws://localhost:8008";
+    session.subscribe(
+      solace.SolclientFactory.createTopicDestination(T.results),
+      true, "result-sub", 10000);
+    logEvent("", "✔ connected", "Session up, subscribed to " + T.results);
+  });
+  session.on(solace.SessionEventCode.CONNECT_FAILED_ERROR, (e) => {
+    $("#ledlabel").textContent = "connection failed";
+    logEvent("fail", "—", "Connect failed: " + e.infoStr);
+  });
+  session.on(solace.SessionEventCode.MESSAGE, (msg) => {
+    let body = msg.getBinaryAttachment() || "";
+    try { body = JSON.parse(body); } catch (_) { /* keep text */ }
+    logEvent("result", "⬅ " + msg.getDestination().getName(), body);
+  });
+  session.connect();
+}
+
+$("#btn-release").onclick = release;
+$("#bg-eol").onclick = () => { grzFails = Math.max(grzFails, CFG.failsBeforeIncident); fireEol(); };
+$("#bg-stock").onclick = fireThreshold;
+$("#bg-reset").onclick = reset;
+$("#gaugemark").style.left = ((CFG.coverThreshold - CFG.coverFloor)
+  / (CFG.coverStartDays - CFG.coverFloor) * 100) + "%";
+$("#gaugebar").style.width = "100%";
+connect();
+</script>
+</body>
+</html>

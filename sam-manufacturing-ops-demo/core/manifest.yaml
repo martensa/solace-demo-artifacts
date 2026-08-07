@@ -1,0 +1,51 @@
+# Declarative manifest for the Acme Manufacturing CORE package:
+# CRM/OMS/PDM/SCM postgres connectors, schema skill bundles and
+# the four SQL query expert agents. This is the manufacturing
+# analog of agent-mesh-deployment/scripts/agents (retail core) --
+# it lives inside the demo overlay so the base deployment stays
+# retail-only, but like the retail core it SURVIVES uninstall.sh:
+# only the demo-specific resources in ../mesh are removed.
+#
+# Applied with:  sam config plan/apply -m manifest.yaml
+# (install.sh does this; order is handled by the CLI, connectors
+# before the agents that reference them.)
+#
+# NEVER pass --prune: the platform hosts resources this manifest
+# does not manage (Orchestrator, retail core, ...).
+kind: manifest
+name: mfg-core-agents
+description: >-
+  Acme Manufacturing core: CRM/OMS/PDM/SCM postgres connectors,
+  schema skill bundles and the four query expert agents.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+variables:
+  # Demo defaults (repo convention); override via environment at
+  # apply time, e.g. MFG_DB_PASSWORD=secret ./install.sh
+  MFG_DB_USERNAME: "postgres"
+  MFG_DB_PASSWORD: "postgres"
+resources:
+  connectors:
+    - Acme CRM DB
+    - Acme OMS DB
+    - Acme PDM DB
+    - Acme SCM DB
+  skills:
+    - mfg-crm-schema
+    - mfg-oms-schema
+    - mfg-pdm-schema
+    - mfg-scm-schema
+  agents:
+    - Acme CRM Query Expert
+    - Acme OMS Query Expert
+    - Acme PDM Query Expert
+    - Acme SCM Query Expert
+    # NOTE: demo-specific resources (Production Confirmation
+    # Clerk, Quality Incident Reporter, Supply Chain Watcher,
+    # the two workflows, plant-events entrypoint, Shop Floor
+    # Analyst) are NOT managed here -- they live in ../mesh and
+    # ../fallback and are installed/removed via install.sh /
+    # uninstall.sh.

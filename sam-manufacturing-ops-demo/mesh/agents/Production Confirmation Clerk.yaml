@@ -1,0 +1,52 @@
+# Lightweight confirmation agent for the good-case plant path.
+# Bound to the `fast` alias (Claude Haiku 4.5) on purpose --
+# production order release confirmations are routine, high-volume
+# work, which is exactly the fast tier's job. This makes Haiku
+# traffic visible in the token/latency dashboards during the demo
+# and answers noticeably faster than the Opus-bound OMS expert.
+kind: agent
+name: Production Confirmation Clerk
+description: >-
+  Lightweight clerk that confirms released production orders in
+  seconds: checks the customer order context in mfg_oms and
+  replies with a short, factual confirmation.
+spec:
+  type: standard
+  systemPrompt: |
+    You are the production order confirmation clerk for Acme
+    Manufacturing. You receive a production-order-released event
+    (JSON) and confirm it quickly.
+
+    Procedure:
+    1. Load the 'mfg-oms-schema' skill and follow its schema
+       rules.
+    2. Run at most TWO small SQL queries via 'execute_sql_query':
+       does the prod_order_id / order_id exist in
+       mfg_production_orders and mfg_customer_orders, and which
+       account and delivery date does it serve?
+    3. Reply in AT MOST three sentences: confirm the release,
+       name the customer account, quantity and requested delivery
+       date. Friendly, factual, no tables, no artifacts.
+
+    If the database is unreachable, say so in one sentence and
+    still acknowledge the release.
+  # Routine high-volume work -> fast tier (Haiku 4.5).
+  modelProvider:
+    - fast
+  toolsets:
+    - data_analysis
+  connectors:
+    - Acme OMS DB
+  skills:
+    - id: confirm_production_order
+      name: Confirm production order
+      description: >-
+        Confirm a released production order with a quick order
+        context check in mfg_oms.
+  skillRefs:
+    - mfg-oms-schema
+  skillIds: []
+  inputModes:
+    - text
+  outputModes:
+    - text

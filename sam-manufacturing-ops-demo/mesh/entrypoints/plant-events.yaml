@@ -1,0 +1,142 @@
+# Event-Mesh entrypoint: plant events on the sam VPN trigger SAM
+# without any human in the loop -- BOTH movements of the demo:
+#   eol-failed         -> quality incident (movement 1, react)
+#   threshold-crossed  -> replenishment (movement 2, prevent)
+#   order/released     -> Production Confirmation Clerk (good case)
+# All rules publish their result back onto the mesh
+# (acmemfg/plant/result/...), which the cockpit page subscribes
+# to -- the loop closes in the browser.
+#
+# The broker connection mirrors the SAM deployment values
+# (external broker solace-1, VPN sam). qos 1 + on_completion:
+# the event is only acknowledged after the workflow/agent
+# finishes (redelivery on crash).
+kind: entrypoint
+name: plant-events
+description: >-
+  Event-mesh entrypoint for the Acme Manufacturing cockpit demo:
+  EOL failures trigger the quality incident analysis, stock
+  threshold crossings trigger the replenishment analysis, and
+  released production orders get a confirmation from the clerk.
+spec:
+  type: event_mesh
+  deploy: true
+  values:
+    broker_url: "ws://host.docker.internal:8008"
+    broker_vpn: sam
+    broker_username: default
+    broker_password: default
+    tls_skip_verify: "false"
+    event_rules:
+      - name: eol_failures
+        subscriptions:
+          - topic: "acmemfg/plant/quality/eol-failed/>"
+            qos: 1
+        messageFormat: json
+        # NOTE (verified 2026-07-31, retail): with
+        # targetWorkflowName the entrypoint delivers an EMPTY A2A
+        # message -- promptTemplate is only rendered for AGENT
+        # targets. Therefore the incident path runs through the
+        # ORCHESTRATOR (only it can delegate to peer agents); the
+        # quality-incident-report workflow stays deployed and is
+        # used for the UI/Activities story.
+        targetAgent: Orchestrator
+        # Attribute event-triggered tasks to the power_user
+        # persona: without an identity the task runs under the
+        # bare gateway identity and is INVISIBLE in Activities.
+        # power_user is the demo's operations persona -- the
+        # incident runs show up in ITS Activities and under its
+        # name in the chargeback dashboard.
+        defaultUserIdentity: power_user@solace.lab
+        promptTemplate: >-
+          An end-of-line test failed in a plant. Delegate in
+          parallel: "Acme OMS Query Expert" for the production
+          order and the customer orders at risk in mfg_oms,
+          "Acme PDM Query Expert" for the product master data in
+          mfg_pdm (current revision, eol_test_spec, released ECOs
+          and their per-plant acknowledgement status -- is an
+          effective change still PENDING at the failing plant?)
+          and "Shop Floor Analyst" for the station telemetry in
+          the mfg_plant MongoDB (fail rate, measured vs spec,
+          since when, station_spec_revision). Then have "Quality
+          Incident Reporter" merge the findings into the incident
+          report and return that report as your answer. EOL
+          failure event JSON: {payload}
+        acknowledgmentPolicy:
+          mode: on_completion
+          timeoutSeconds: 600
+        successOutput:
+          enabled: true
+          topic: "acmemfg/plant/result/incident"
+          topicType: static
+          responseType: full
+        errorOutput:
+          enabled: true
+          topic: "acmemfg/plant/result/error"
+          topicType: static
+      - name: stock_thresholds
+        subscriptions:
+          - topic: "acmemfg/scm/stock/threshold-crossed/>"
+            qos: 1
+        messageFormat: json
+        # Same Orchestrator route as eol_failures (see NOTE above);
+        # the supply-replenishment workflow stays deployed for the
+        # UI/Activities story.
+        targetAgent: Orchestrator
+        defaultUserIdentity: power_user@solace.lab
+        promptTemplate: >-
+          A material crossed its stock coverage threshold at a
+          plant -- production must not stop. Delegate in parallel:
+          "Acme SCM Query Expert" for stock, open POs and
+          primary/alternate suppliers with expedite lead times in
+          mfg_scm, "Shop Floor Analyst" for the OBSERVED daily
+          consumption rate from material_consumption in the
+          mfg_plant MongoDB (last two weeks, when the ramp
+          started) and "Acme OMS Query Expert" for the customer
+          orders fulfilled by that plant (account, value,
+          delivery dates). Then have "Supply Chain Watcher" merge
+          the findings into the replenishment recommendation
+          (stockout horizon at observed vs planned rate, options,
+          ONE concrete action) and return that recommendation as
+          your answer. Threshold event JSON: {payload}
+        acknowledgmentPolicy:
+          mode: on_completion
+          timeoutSeconds: 600
+        successOutput:
+          enabled: true
+          topic: "acmemfg/plant/result/replenishment"
+          topicType: static
+          responseType: full
+        errorOutput:
+          enabled: true
+          topic: "acmemfg/plant/result/error"
+          topicType: static
+      - name: released_orders
+        subscriptions:
+          - topic: "acmemfg/production/order/released/>"
+            qos: 1
+        messageFormat: json
+        # Confirmations are routine, high-volume work -> the clerk
+        # runs on the `fast` alias (Haiku): visible cheap-tier
+        # traffic in the dashboards and fast replies in the
+        # cockpit.
+        targetAgent: Production Confirmation Clerk
+        defaultUserIdentity: power_user@solace.lab
+        promptTemplate: >-
+          A production order was released. Confirm it in 3
+          sentences: check in mfg_oms whether the production
+          order and its customer order exist, and which account
+          and requested delivery date it serves. Release event
+          JSON: {payload}
+        acknowledgmentPolicy:
+          mode: on_completion
+          timeoutSeconds: 300
+        successOutput:
+          enabled: true
+          topic: "acmemfg/plant/result/confirmation"
+          topicType: static
+          responseType: full
+        errorOutput:
+          enabled: true
+          topic: "acmemfg/plant/result/error"
+          topicType: static

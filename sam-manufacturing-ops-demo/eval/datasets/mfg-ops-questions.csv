@@ -1,0 +1,7 @@
+sequence_number,prompt,expected_response
+1,"How many materials are in the material master, split by type?","There are 14 materials: 6 finished goods and 8 components."
+2,"What does ECO-2025-118 change, and which products are affected?","ECO-2025-118 replaces the HD-20 clutch disc with the sintered HD-22 and raises the EOL torque test spec from 18.0 +/-0.5 Nm to 22.0 +/-0.5 Nm; it affects MAT_CLT_HD22, the IX-450 impact driver (FG_IX450) and the CK-350 clutch kit (FG_CK350)."
+3,"Which engineering changes have not been acknowledged by all plants?","ECO-2025-118 is still PENDING at Plant 2 (Graz); it was sent on 2025-07-18 and never acknowledged there."
+4,"Which finished products use the HD-22 clutch disc?","The HD-22 clutch disc (MAT_CLT_HD22) is used in the IX-450 Cordless Impact Driver (FG_IX450) and the CK-350 Clutch Kit (FG_CK350), both introduced by ECO-2025-118."
+5,"What is the status and successor of the HD-20 clutch disc?","MAT_CLT_HD20 (HD-20 Clutch Disc) is OBSOLETE at revision B and superseded by MAT_CLT_HD22."
+6,"What is the current EOL test spec of the IX-450, and which revision is it at?","FG_IX450 is at revision C with EOL test spec torque 22.0 +/-0.5 Nm per ECO-2025-118."

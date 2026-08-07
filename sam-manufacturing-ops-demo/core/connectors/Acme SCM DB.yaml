@@ -1,0 +1,19 @@
+kind: connector
+name: Acme SCM DB
+description: >-
+  This connector generates dynamic SQL queries for the database of
+  the connected supply chain system of Acme Manufacturing. Three
+  tables: mfg_inventory (on-hand stock, safety stock and planned
+  daily consumption per plant and material), mfg_suppliers
+  (primary/alternate suppliers with standard and expedite lead
+  times) and mfg_purchase_orders (open POs with quantity, ETA and
+  status). Timestamps are in UTC.
+spec:
+  type: sql
+  subtype: postgres
+  values:
+    database: mfg_scm
+    hostname: host.docker.internal
+    port: 5432
+    username: ${MFG_DB_USERNAME}
+    password: ${MFG_DB_PASSWORD}

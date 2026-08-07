@@ -1,0 +1,19 @@
+kind: connector
+name: Acme OMS DB
+description: >-
+  This connector generates dynamic SQL queries for the database of
+  the connected order management system of Acme Manufacturing. Two
+  tables: mfg_customer_orders (B2B orders with account, product,
+  quantity, value, status and fulfilling plant) and
+  mfg_production_orders (the plant production orders that fulfil
+  them, with line, status, hold reason and schedule). Timestamps
+  are in UTC.
+spec:
+  type: sql
+  subtype: postgres
+  values:
+    database: mfg_oms
+    hostname: host.docker.internal
+    port: 5432
+    username: ${MFG_DB_USERNAME}
+    password: ${MFG_DB_PASSWORD}

@@ -1,0 +1,27 @@
+# Model benchmark: the SAME agent, questions and judges as
+# mfg-ops-quality, but pinned to three alternative model configs
+# (schema: spec.models, max 3 entries, keyed by modelConfigId =
+# model alias name at apply time). Together with the unpinned
+# quality experiment (production model = Opus 4.8) this measures
+# all four demo model families on identical data -- rerun over
+# time to track quality per model as data changes.
+kind: experiment
+name: mfg-ops-model-benchmark
+description: >-
+  Model comparison for manufacturing operations: runs the Acme
+  PDM Query Expert under Sonnet 5, DeepSeek V3.2 and Haiku 4.5 on
+  the same questions and judges as the production quality gate --
+  measuring how model choice affects answer quality over time.
+spec:
+  datasetId: mfg-ops-questions
+  targetAgent: Acme PDM Query Expert
+  models:
+    - modelConfigId: workflow
+    - modelConfigId: reasoning
+    - modelConfigId: fast
+  evaluatorIds:
+    - LLM Judge
+    - Factuality
+  primaryEvaluatorId: LLM Judge
+  runsPerExample: 1
+  maxWorkers: 2

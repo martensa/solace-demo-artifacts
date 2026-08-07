@@ -1,0 +1,94 @@
+# Event-triggered replenishment workflow (movement 2, the
+# PROACTIVE beat): a stock-threshold-crossed event (published by
+# the plant cockpit on the sam VPN) is routed here by the
+# plant-events event-mesh entrypoint. Fans out to the SCM, Shop
+# Floor and OMS specialists in parallel, then merges into a
+# replenishment recommendation -- before the line stops.
+# fail_fast false for the same live-Builder reason as the
+# quality workflow.
+kind: workflow
+name: supply-replenishment
+description: >-
+  Supply replenishment analysis: fans a stock coverage risk out
+  to the SCM, shop-floor and OMS specialists in parallel and
+  merges their findings into one replenishment recommendation.
+spec:
+  appConfig:
+    # Bump to force a redeploy (deploy phase fires on change
+    # only). Event-triggered runs deliver NO structured input
+    # keys -> reference the raw task text as {{workflow.input}}.
+    version: "1.0.0"
+    display_name: Supply Replenishment
+    description: >-
+      Stock coverage risk analysis across SCM, plant telemetry
+      and the order book, merged into one recommendation.
+    workflow_timeout: "600s"
+    default_node_timeout: "240s"
+    fail_fast: false
+    skills:
+      - id: supply_replenishment
+        name: Supply Replenishment
+        description: >-
+          Analyze a stock coverage risk across SCM, plant
+          telemetry and the order book and produce a
+          replenishment recommendation.
+    output_mapping:
+      recommendation: "{{recommend.output}}"
+    nodes:
+      - id: scm
+        type: agent
+        agent_name: Acme SCM Query Expert
+        input:
+          message: >-
+            A material crossed its stock coverage threshold.
+            Analyze the SUPPLY position in mfg_scm: on-hand,
+            safety stock and PLANNED daily consumption in
+            mfg_inventory; open POs with ETA in
+            mfg_purchase_orders; primary and qualified alternate
+            suppliers with standard and expedite lead times in
+            mfg_suppliers. Concise markdown section with numbers.
+            Threshold event: {{workflow.input}}
+      - id: floor
+        type: agent
+        agent_name: Shop Floor Analyst
+        input:
+          message: >-
+            A material crossed its stock coverage threshold.
+            Analyze the OBSERVED consumption (mfg_plant MongoDB,
+            collection material_consumption) for the material at
+            the plant: daily issued quantities over the last two
+            weeks, the current burn rate, and when the ramp-up
+            started. Concise markdown section with numbers.
+            Threshold event: {{workflow.input}}
+      - id: oms
+        type: agent
+        agent_name: Acme OMS Query Expert
+        input:
+          message: >-
+            A material crossed its stock coverage threshold at a
+            plant. Analyze the BUSINESS impact in mfg_oms: which
+            in-production and open customer orders are fulfilled
+            by production orders at that plant (account, qty,
+            order value, requested delivery)? Concise markdown
+            section with numbers. Threshold event:
+            {{workflow.input}}
+      - id: recommend
+        type: agent
+        agent_name: Supply Chain Watcher
+        depends_on:
+          - scm
+          - floor
+          - oms
+        input:
+          message: |
+            Create the replenishment recommendation for this
+            stock coverage risk: {{workflow.input}}
+
+            ## SCM findings (stock, POs, sourcing options)
+            {{scm.output}}
+
+            ## Shop floor findings (observed consumption)
+            {{floor.output}}
+
+            ## OMS findings (orders at risk)
+            {{oms.output}}

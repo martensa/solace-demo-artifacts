@@ -1,0 +1,21 @@
+# Offline evaluation for the manufacturing ops demo (Improvement
+# phase). Apply once before the event, then run:
+#   sam config apply -m manifest.yaml
+#   sam eval run mfg-ops-quality --url https://sam.solace.lab --threshold 0.8
+#   sam eval run mfg-ops-model-benchmark --url https://sam.solace.lab
+kind: manifest
+name: mfg-ops-eval
+description: >-
+  Offline evaluation of the manufacturing demo agents for live
+  events (dataset + LLM-judge experiments).
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  datasets:
+    - mfg-ops-questions
+  experiments:
+    - mfg-ops-quality
+    - mfg-ops-model-benchmark
