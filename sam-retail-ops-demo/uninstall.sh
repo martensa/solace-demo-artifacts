@@ -15,14 +15,17 @@ set -euo pipefail
 # 360 Reporter, the three query experts, their connectors and
 # schema skills), eval experiments + dataset (INCLUDING their run
 # history!) and the demo dashboard.
+# The demo mongo container is removed INCLUDING its volume: the
+# data volume is anonymous and re-seeded from mongodb/seed on
+# every fresh `install.sh` anyway, so keeping it would only leave
+# a dangling volume behind.
 # Keeps: the 5 model aliases, RBAC, the developer-mcp entrypoint,
-# host containers (postgres/pgadmin and mongo stay up; use
-# --purge-data to also remove the mongo container + volume).
+# the shared host containers postgres/pgadmin (retail_* DBs stay
+# seeded; install.sh re-seeds them).
 #
 #   ./uninstall.sh               # remove overlay + retail core
 #   ./uninstall.sh --keep-core   # overlay only (fast demo switch)
 #   ./uninstall.sh --dry-run     # show what would be removed
-#   ./uninstall.sh --purge-data  # also mongo container + volume
 # =============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,11 +33,10 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 AMD="$REPO_DIR/agent-mesh-deployment"
 SAM_URL="https://sam.solace.lab"
 
-DRY=0; PURGE=0; KEEP_CORE=0
+DRY=0; KEEP_CORE=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run)    DRY=1 ;;
-    --purge-data) PURGE=1 ;;
     --keep-core)  KEEP_CORE=1 ;;
     -h|--help)    grep '^#   \./' "$0" | sed 's/^#   //'; exit 0 ;;
     *) echo "Unknown argument: $arg" >&2; exit 1 ;;
@@ -124,14 +126,12 @@ else
     --ignore-not-found | sed 's/^/   /'
 fi
 
-if [ "$PURGE" -eq 1 ]; then
-  echo "== MongoDB (container + volume)"
-  if [ "$DRY" -eq 1 ]; then
-    echo "   WOULD run: docker compose -f mongodb/docker-compose.yaml down -v"
-  else
-    docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" down -v \
-      | sed 's/^/   /' || true
-  fi
+echo "== MongoDB (container + anonymous volume)"
+if [ "$DRY" -eq 1 ]; then
+  echo "   WOULD run: docker compose -f mongodb/docker-compose.yaml down -v"
+else
+  docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" down -v 2>&1 \
+    | sed 's/^/   /' || true
 fi
 
 echo ""

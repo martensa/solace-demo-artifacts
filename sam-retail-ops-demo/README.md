@@ -28,12 +28,13 @@ stage); `--with-pos` keeps it for rehearsals.
 ```
 
 Removes the demo's platform resources (overlay AND the retail
-core, incl. the eval experiments and their run history) and the
-demo dashboard; `--keep-core` keeps the core for fast switching
-between demo overlays, `--dry-run` previews, `--purge-data` also
-removes the MongoDB container and volume. The SAM infrastructure
-(models, RBAC, developer-mcp, observability) stays -- ready for
-a different demo.
+core, incl. the eval experiments and their run history), the
+demo dashboard and the MongoDB container with its anonymous
+volume (a fresh `install.sh` re-seeds it in seconds);
+`--keep-core` keeps the core for fast switching between demo
+overlays, `--dry-run` previews. The SAM infrastructure (models,
+RBAC, developer-mcp, observability) and the shared
+postgres/pgadmin containers stay -- ready for a different demo.
 
 ## Contents
 
