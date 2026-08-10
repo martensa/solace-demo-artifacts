@@ -3,21 +3,26 @@ set -euo pipefail
 
 # =============================================================
 # uninstall.sh -- remove the Event-Driven Manufacturing Ops demo
-# from the platform, leaving agent-mesh-deployment's core AND the
-# manufacturing core (core/) untouched (idempotent; absent
-# resources are skipped silently).
+# from the platform, leaving the SAM infrastructure in
+# agent-mesh-deployment (models, RBAC, developer-mcp,
+# observability) untouched (idempotent; absent resources are
+# skipped silently).
 # =============================================================
-# Removes: plant-events entrypoint, quality-incident-report +
-# supply-replenishment workflows, Quality Incident Reporter,
-# Supply Chain Watcher, Production Confirmation Clerk, Shop Floor
-# Analyst + mfg-telemetry/mfg-consumption connectors, eval
-# experiments + dataset (INCLUDING their run history!), the demo
-# dashboard. Keeps: manufacturing core (Acme connectors/skills/
-# experts), the 5 model aliases, host containers (mfg mongo stays
-# up; use --purge-data to also remove the mongo container +
-# volume; the mfg_* postgres DBs stay seeded).
+# Removes the demo OVERLAY (plant-events entrypoint,
+# quality-incident-report + supply-replenishment workflows,
+# Quality Incident Reporter, Supply Chain Watcher, Production
+# Confirmation Clerk, Shop Floor Analyst +
+# mfg-telemetry/mfg-consumption connectors), the manufacturing
+# CORE (the four Acme query experts, their connectors and schema
+# skills), eval experiments + dataset (INCLUDING their run
+# history!) and the demo dashboard.
+# Keeps: the 5 model aliases, RBAC, the developer-mcp entrypoint,
+# host containers (postgres/pgadmin and mfg mongo stay up; use
+# --purge-data to also remove the mongo container + volume; the
+# mfg_* postgres DBs stay seeded).
 #
-#   ./uninstall.sh               # remove platform resources
+#   ./uninstall.sh               # remove overlay + mfg core
+#   ./uninstall.sh --keep-core   # overlay only (fast demo switch)
 #   ./uninstall.sh --dry-run     # show what would be removed
 #   ./uninstall.sh --purge-data  # also mongo container + volume
 # =============================================================
@@ -27,11 +32,12 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 AMD="$REPO_DIR/agent-mesh-deployment"
 SAM_URL="https://sam.solace.lab"
 
-DRY=0; PURGE=0
+DRY=0; PURGE=0; KEEP_CORE=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run)    DRY=1 ;;
     --purge-data) PURGE=1 ;;
+    --keep-core)  KEEP_CORE=1 ;;
     -h|--help)    grep '^#   \./' "$0" | sed 's/^#   //'; exit 0 ;;
     *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
@@ -77,7 +83,7 @@ if [ "${API_CODE:-}" != "200" ]; then
   exit 1
 fi
 
-echo "== Platform resources"
+echo "== Demo overlay"
 # Order: entrypoint first (stops event intake), then workflows,
 # then agents, then connectors.
 remove "entrypoint" /api/v1/platform/gateways      "plant-events"
@@ -89,6 +95,24 @@ remove "agent"      /api/v1/platform/agents        "Production Confirmation Cler
 remove "agent"      /api/v1/platform/agents        "Shop Floor Analyst"
 remove "connector"  /api/v1/platform/connectors    "mfg-telemetry"
 remove "connector"  /api/v1/platform/connectors    "mfg-consumption"
+
+if [ "$KEEP_CORE" -eq 0 ]; then
+  echo "== Manufacturing core"
+  remove "agent"      /api/v1/platform/agents      "Acme CRM Query Expert"
+  remove "agent"      /api/v1/platform/agents      "Acme OMS Query Expert"
+  remove "agent"      /api/v1/platform/agents      "Acme PDM Query Expert"
+  remove "agent"      /api/v1/platform/agents      "Acme SCM Query Expert"
+  remove "connector"  /api/v1/platform/connectors  "Acme CRM DB"
+  remove "connector"  /api/v1/platform/connectors  "Acme OMS DB"
+  remove "connector"  /api/v1/platform/connectors  "Acme PDM DB"
+  remove "connector"  /api/v1/platform/connectors  "Acme SCM DB"
+  remove "skill"      /api/v1/platform/skills      "mfg-crm-schema"
+  remove "skill"      /api/v1/platform/skills      "mfg-oms-schema"
+  remove "skill"      /api/v1/platform/skills      "mfg-pdm-schema"
+  remove "skill"      /api/v1/platform/skills      "mfg-scm-schema"
+else
+  echo "== Manufacturing core: kept (--keep-core)"
+fi
 
 echo "== Evaluation (deletes run history too!)"
 remove "experiment" /api/v1/platform/evaluations/experiments "mfg-ops-quality"
@@ -116,5 +140,12 @@ if [ "$PURGE" -eq 1 ]; then
 fi
 
 echo ""
-[ "$DRY" -eq 1 ] && echo "Dry run - nothing was changed." \
-  || echo "Demo removed. The manufacturing core, models, RBAC and platform stay."
+if [ "$DRY" -eq 1 ]; then
+  echo "Dry run - nothing was changed."
+elif [ "$KEEP_CORE" -eq 1 ]; then
+  echo "Demo overlay removed. Manufacturing core, models, RBAC and"
+  echo "the platform infrastructure stay."
+else
+  echo "Demo removed (overlay + manufacturing core). Models, RBAC,"
+  echo "developer-mcp and the platform infrastructure stay."
+fi

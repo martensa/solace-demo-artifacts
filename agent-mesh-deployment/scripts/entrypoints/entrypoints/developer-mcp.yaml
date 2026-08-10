@@ -28,14 +28,15 @@ spec:
   values:
     enableAuth: "true"
     serverName: Solace Lab Agent Mesh
-    # includeTools stays empty: ALL mesh agents are exposed (retail
-    # experts, Retail 360 Reporter, Orchestrator, Builder, external
-    # agents); tools/list is additionally RBAC-filtered per caller.
-    # Restrict with includeTools patterns (agent/skill/tool name,
-    # exact or regex) if a narrower surface is ever needed.
+    # includeTools stays empty: ALL mesh agents are exposed
+    # (Orchestrator, Builder, whatever demo experts are currently
+    # installed, external agents); tools/list is additionally
+    # RBAC-filtered per caller. Restrict with includeTools
+    # patterns (agent/skill/tool name, exact or regex) if a
+    # narrower surface is ever needed.
     serverDescription: >-
       All Solace Lab Agent Mesh agents exposed as MCP tools --
-      retail demo experts, Retail 360 Reporter, Orchestrator and
+      the Orchestrator, the currently installed demo experts and
       the external agents. The tool list is RBAC-filtered per
       caller.
     # Loopback hosts match any port (RFC 8252), but the PATH is

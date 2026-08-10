@@ -12,10 +12,10 @@ set -euo pipefail
 #   ./scripts/rbac/apply-rbac.sh
 #
 # What this installs on top:
-#   1. Host data stores: postgres+pgadmin (retail DBs), MongoDB
-#      (POSLOG) incl. first-run seed
-#   2. Retail core package (scripts/agents: connectors, skills,
-#      query experts, 360 reporter, developer-mcp)
+#   1. Host data stores: postgres+pgadmin (retail_* DBs seeded
+#      from postgres/), MongoDB (POSLOG) incl. first-run seed
+#   2. Retail core package (core/: CRM/OMS/PDM connectors, schema
+#      skills, query experts, Retail 360 Reporter + workflow)
 #   3. The 5 additional model aliases (idempotent re-apply; on a
 #      fresh install start.sh skipped them for lack of a login)
 #   4. Demo overlay (mesh/): clerk, incident reporter, incident
@@ -73,14 +73,19 @@ for c in postgres pgadmin; do
     docker start "$c" >/dev/null && echo "   $c: started"
   fi
 done
+"$SCRIPT_DIR/postgres/seed.sh" | sed 's/^/  /'
+# Only one demo's mongo runs at a time (both use standard 27017).
+if [ "$(docker inspect -f '{{.State.Running}}' mfg-plant-mongo 2>/dev/null)" = "true" ]; then
+  docker stop mfg-plant-mongo >/dev/null \
+    && echo "   mfg-plant-mongo: stopped (port 27017 for retail-pos-mongo)"
+fi
 docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" up -d 2>&1 \
   | grep -viE "Running|Started" || true
-echo "   mongodb: up (seed runs only on first volume init)"
+echo "   retail-pos-mongo: up (seed runs only on first volume init)"
 
-echo "== 2/6 Retail core (scripts/agents)"
-(cd "$AMD/scripts/agents" && ./create.sh --deploy 2>&1 \
-  | grep -viE "^time=|^Using sam CLI" | grep -E "\+|~|\*|error|fail" \
-  | head -20) || true
+echo "== 2/6 Retail core (core/)"
+(cd "$SCRIPT_DIR/core" && "$SAM_CLI" config apply 2>&1 \
+  | grep -viE "^time=" | grep -E "\+|~|\*|error|fail" | head -20) || true
 
 echo "== 3/6 Additional model aliases"
 "$AMD/scripts/models/apply-models.sh" 2>&1 | tail -8

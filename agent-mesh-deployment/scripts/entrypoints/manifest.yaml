@@ -1,0 +1,25 @@
+# Declarative manifest for the platform-level entrypoints. Part
+# of the SAM INFRASTRUCTURE (like models and RBAC), NOT of any
+# demo: the developer-mcp entrypoint is used by the desktop-app
+# wiring (scripts/desktop/) and by MCP clients such as Claude
+# Code across all demos.
+# Applied with:  sam config apply -m manifest.yaml  (see
+# apply-entrypoints.sh; hooked into start.sh after the models).
+#
+# NEVER pass --prune: the platform hosts entrypoints this
+# manifest does not manage (demo event_mesh entrypoints such as
+# shop-events / plant-events).
+kind: manifest
+name: platform-entrypoints
+description: >-
+  Platform-level entrypoints: the developer-mcp MCP endpoint for
+  developer clients (Claude Code, MCP Inspector, SAM desktop app).
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    # Token cache from `sam auth login solace-lab` (browser flow).
+    type: oauth
+resources:
+  entrypoints:
+    - developer-mcp

@@ -66,13 +66,12 @@ requires cluster-internal hostname resolution.
   (see [`../event-mesh-deployment/`](../event-mesh-deployment/))
   with the `sam` VPN on `solace-1`
 - **LLM Service** endpoint (e.g. a LiteLLM proxy) with an API key
-- **Retail demo databases** (for the retail demo agents): a
-  standalone postgres docker container on the host (containers
-  `postgres` + `pgadmin`, managed outside this repo) serving
-  `retail_crm`, `retail_oms` and `retail_pdm` on port 5432. The
-  connectors reach it via `host.docker.internal:5432`. Note: the
-  container stays `Exited` after a host restart -- start it with
-  `docker start postgres pgadmin`.
+- **Demo data stores** (only when a demo is installed): each
+  demo's `install.sh` starts its own host data stores -- the
+  standalone postgres container (`postgres` + `pgadmin`, managed
+  outside this repo, reached via `host.docker.internal:5432`)
+  and a demo-specific MongoDB. See the demo directories
+  (`../sam-retail-ops-demo/`, `../sam-manufacturing-ops-demo/`).
 
 ### Local CLI Tools
 
@@ -225,30 +224,7 @@ needs a browser login as `sam_admin`:
 sam auth login solace-lab --url https://sam.solace.lab
 ```
 
-### 7. Start the retail demo databases
-
-The retail demo agents query three postgres databases that live in
-a standalone docker container on the host (outside this repo):
-
-```bash
-docker start postgres pgadmin
-```
-
-The container serves `retail_crm`, `retail_oms` and `retail_pdm`
-on port 5432 and stays `Exited` after host restarts.
-
-### 8. Provision the retail demo (agents, workflow, MCP)
-
-```bash
-cd scripts/agents && ./create.sh --deploy
-```
-
-Creates and deploys the connectors, schema skills, query-expert
-agents, the `retail-360-report` workflow and the MCP entrypoint.
-See [`scripts/agents/README.md`](scripts/agents/README.md).
-Requires the `sam auth login` from step 6.
-
-### 9. Models: output limit and additional LLMs
+### 7. Models: output limit and additional LLMs
 
 ```bash
 cd scripts/models && ./set-max-tokens.sh
@@ -276,6 +252,44 @@ cd scripts/models && ./apply-models.sh --probe-only
 Note: the platform normalizes model aliases to lowercase on
 create, so all aliases are lowercase by design.
 
+### 8. Platform entrypoints (developer-mcp)
+
+`start.sh` also applies the `developer-mcp` MCP entrypoint from
+the declarative package in `scripts/entrypoints/` -- it exposes
+the mesh agents as MCP tools at `https://sam.solace.lab/gw/dev/`
+for developer clients (Claude Code, MCP Inspector, the SAM
+desktop app). Standalone runs:
+
+```bash
+cd scripts/entrypoints && ./apply-entrypoints.sh
+```
+
+```bash
+cd scripts/entrypoints && ./apply-entrypoints.sh --probe-only
+```
+
+See [`scripts/entrypoints/README.md`](scripts/entrypoints/README.md)
+for the MCP tool naming and the Claude Code connection guide.
+
+### 9. Install a demo
+
+The platform itself carries NO demo content. Demos are layered
+on top as self-contained packages with their own core (domain
+connectors, schema skills, query experts), overlay (event-driven
+workflows, entrypoints), eval package and dashboard:
+
+```bash
+cd ../sam-retail-ops-demo && ./install.sh
+```
+
+```bash
+cd ../sam-manufacturing-ops-demo && ./install.sh
+```
+
+Both are idempotent; the matching `uninstall.sh` removes the
+demo again (`--keep-core` keeps the demo's core agents for fast
+overlay switching). Requires the `sam auth login` from step 6.
+
 ### 10. Teardown
 
 ```bash
@@ -291,31 +305,30 @@ OIDC client.
 
 `stop.sh` destroys the platform database, and with it ALL
 DB-managed content: RBAC roles, claim mappings and default roles,
-the retail connectors, skills, agents, workflow and MCP
-entrypoint, and the model `max_tokens` tuning. The Keycloak
-client is deleted too, so the sam CLI login cache is invalid.
-To rebuild:
+the developer-mcp entrypoint, any installed demo (core + overlay)
+and the model `max_tokens` tuning. The Keycloak client is deleted
+too, so the sam CLI login cache is invalid. To rebuild:
 
-1. `docker start postgres pgadmin` (retail demo DBs, see step 7)
-2. `./scripts/setup-keycloak-client.sh` -- paste the NEW client
+1. `./scripts/setup-keycloak-client.sh` -- paste the NEW client
    secret into `.env`
-3. `./scripts/setup-keycloak-users.sh`
-4. `./scripts/start.sh` (`docker login` + `load-images.sh` are
+2. `./scripts/setup-keycloak-users.sh`
+3. `./scripts/start.sh` (`docker login` + `load-images.sh` are
    only needed if the private registry itself was rebuilt --
    images persist outside the namespace)
-5. `sam auth login solace-lab --url https://sam.solace.lab`
+4. `sam auth login solace-lab --url https://sam.solace.lab`
    (as `sam_admin`)
-6. `./scripts/rbac/apply-rbac.sh`
-7. `cd scripts/agents && ./create.sh --deploy`
-8. `cd scripts/models && ./set-max-tokens.sh` (plus
+5. `./scripts/rbac/apply-rbac.sh`
+6. `cd scripts/models && ./set-max-tokens.sh` (plus
    `--model-alias planning` and `--model-alias report_gen`),
-   then `./apply-models.sh` -- during the rebuild, `start.sh`
-   ran before the `sam auth login` existed, so the additional
-   models step was skipped with a warning
-9. Re-bind agents that use the additional models (e.g. the
-   Order Incident Reporter on `workflow`):
-   `cd scripts/agents && ./create.sh --deploy` covers this
-10. If the desktop app is connected:
+   then `./apply-models.sh` and
+   `cd ../entrypoints && ./apply-entrypoints.sh` -- during the
+   rebuild, `start.sh` ran before the `sam auth login` existed,
+   so both post-install hooks were skipped with a warning
+7. Reinstall the demo, e.g.
+   `cd ../sam-retail-ops-demo && ./install.sh` (starts the demo
+   data stores and re-creates core, overlay, eval package and
+   dashboard, including the model bindings)
+8. If the desktop app is connected:
    `cd scripts/desktop && ./generate-manifest.sh && ./connect.sh`
    (the MCP tool names embed platform-DB UUIDs, which the rebuild
    changed)
@@ -413,9 +426,12 @@ Consumed by the scripts only (never passed to Helm):
 - `SAM_APP_IMAGE_TAR`, `SAM_STR_IMAGE_TAR` -- image tarballs
   (load-images.sh)
 - `SAM_CLI_TAR` / `SAM_CLI_PATH` -- sam CLI (rbac/apply-rbac.sh,
-  agents/create.sh, models/set-max-tokens.sh via scripts/lib/)
-- `RETAIL_DB_USERNAME` / `RETAIL_DB_PASSWORD` -- retail connector
-  credentials (optional; manifest defaults postgres/postgres)
+  models/*, entrypoints/apply-entrypoints.sh and the demo
+  install/uninstall scripts, via scripts/lib/)
+- `RETAIL_DB_USERNAME` / `RETAIL_DB_PASSWORD` (and the `MFG_DB_*`
+  pair) -- demo connector credentials (optional; the demo core
+  manifests default to postgres/postgres; the demo install
+  scripts source this `.env`, so overrides set here apply)
 
 ### Helm Values (local-k8s-values.yaml)
 
@@ -499,8 +515,8 @@ agent-mesh-deployment/
     stop.sh                       Full teardown
     lib/                          Shared helpers (sam CLI, .env)
     rbac/                         Declarative RBAC (sam config)
-    agents/                       Retail demo provisioning
-                                  (declarative, sam config, v2)
+    entrypoints/                  Platform developer-mcp MCP
+                                  entrypoint (declarative, v2)
     models/                       Model tuning via sam CLI (v2)
     desktop/                      Connect the SAM desktop app to
                                   this deployment (MCP connector)

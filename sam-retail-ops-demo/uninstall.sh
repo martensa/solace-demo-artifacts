@@ -3,18 +3,24 @@ set -euo pipefail
 
 # =============================================================
 # uninstall.sh -- remove the Event-Driven Retail Ops demo from
-# the platform, leaving agent-mesh-deployment's core untouched
-# (idempotent; absent resources are skipped silently).
+# the platform, leaving the SAM infrastructure in
+# agent-mesh-deployment (models, RBAC, developer-mcp,
+# observability) untouched (idempotent; absent resources are
+# skipped silently).
 # =============================================================
-# Removes: shop-events entrypoint, order-incident-report
-# workflow, Order Incident Reporter, Order Confirmation Clerk,
-# Retail POS Analyst + retail-poslog connector, eval experiments
-# + dataset (INCLUDING their run history!), the demo dashboard.
-# Keeps: retail core (connectors/skills/experts/360/developer-
-# mcp), the 5 model aliases, host containers (mongo stays up;
-# use --purge-data to also remove the mongo container + volume).
+# Removes the demo OVERLAY (shop-events entrypoint,
+# order-incident-report workflow, Order Incident Reporter, Order
+# Confirmation Clerk, Retail POS Analyst + retail-poslog
+# connector), the retail CORE (retail-360-report workflow, Retail
+# 360 Reporter, the three query experts, their connectors and
+# schema skills), eval experiments + dataset (INCLUDING their run
+# history!) and the demo dashboard.
+# Keeps: the 5 model aliases, RBAC, the developer-mcp entrypoint,
+# host containers (postgres/pgadmin and mongo stay up; use
+# --purge-data to also remove the mongo container + volume).
 #
-#   ./uninstall.sh               # remove platform resources
+#   ./uninstall.sh               # remove overlay + retail core
+#   ./uninstall.sh --keep-core   # overlay only (fast demo switch)
 #   ./uninstall.sh --dry-run     # show what would be removed
 #   ./uninstall.sh --purge-data  # also mongo container + volume
 # =============================================================
@@ -24,11 +30,12 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 AMD="$REPO_DIR/agent-mesh-deployment"
 SAM_URL="https://sam.solace.lab"
 
-DRY=0; PURGE=0
+DRY=0; PURGE=0; KEEP_CORE=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run)    DRY=1 ;;
     --purge-data) PURGE=1 ;;
+    --keep-core)  KEEP_CORE=1 ;;
     -h|--help)    grep '^#   \./' "$0" | sed 's/^#   //'; exit 0 ;;
     *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
@@ -74,7 +81,7 @@ if [ "${API_CODE:-}" != "200" ]; then
   exit 1
 fi
 
-echo "== Platform resources"
+echo "== Demo overlay"
 # Order: entrypoint first (stops event intake), then workflow,
 # then agents, then connector.
 remove "entrypoint" /api/v1/platform/gateways      "shop-events"
@@ -83,6 +90,24 @@ remove "agent"      /api/v1/platform/agents        "Order Incident Reporter"
 remove "agent"      /api/v1/platform/agents        "Order Confirmation Clerk"
 remove "agent"      /api/v1/platform/agents        "Retail POS Analyst"
 remove "connector"  /api/v1/platform/connectors    "retail-poslog"
+remove "skill"      /api/v1/platform/skills        "retail-poslog-schema"
+
+if [ "$KEEP_CORE" -eq 0 ]; then
+  echo "== Retail core"
+  remove "workflow"   /api/v1/platform/workflows   "retail-360-report"
+  remove "agent"      /api/v1/platform/agents      "Retail 360 Reporter"
+  remove "agent"      /api/v1/platform/agents      "Retail CRM Query Expert"
+  remove "agent"      /api/v1/platform/agents      "Retail OMS Query Expert"
+  remove "agent"      /api/v1/platform/agents      "Retail PDM Query Expert"
+  remove "connector"  /api/v1/platform/connectors  "Retail CRM DB"
+  remove "connector"  /api/v1/platform/connectors  "Retail OMS DB"
+  remove "connector"  /api/v1/platform/connectors  "Retail PDM DB"
+  remove "skill"      /api/v1/platform/skills      "retail-crm-schema"
+  remove "skill"      /api/v1/platform/skills      "retail-oms-schema"
+  remove "skill"      /api/v1/platform/skills      "retail-pdm-schema"
+else
+  echo "== Retail core: kept (--keep-core)"
+fi
 
 echo "== Evaluation (deletes run history too!)"
 remove "experiment" /api/v1/platform/evaluations/experiments "retail-ops-quality"
@@ -110,5 +135,12 @@ if [ "$PURGE" -eq 1 ]; then
 fi
 
 echo ""
-[ "$DRY" -eq 1 ] && echo "Dry run - nothing was changed." \
-  || echo "Demo removed. The retail core, models, RBAC and platform stay."
+if [ "$DRY" -eq 1 ]; then
+  echo "Dry run - nothing was changed."
+elif [ "$KEEP_CORE" -eq 1 ]; then
+  echo "Demo overlay removed. Retail core, models, RBAC and the"
+  echo "platform infrastructure stay."
+else
+  echo "Demo removed (overlay + retail core). Models, RBAC,"
+  echo "developer-mcp and the platform infrastructure stay."
+fi

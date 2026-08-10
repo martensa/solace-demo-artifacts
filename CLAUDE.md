@@ -7,6 +7,14 @@ Solace demo environment. It includes a two-broker Solace Event
 Mesh with distributed tracing and Event Portal integration, and a
 Solace Agent Mesh deployment on Kubernetes.
 
+The Agent Mesh split: `agent-mesh-deployment/` is pure SAM
+INFRASTRUCTURE (platform, RBAC, models, developer-mcp
+entrypoint, observability) and carries no demo content. Demos
+live in their own top-level directories (`sam-retail-ops-demo/`,
+`sam-manufacturing-ops-demo/`), each self-contained (core +
+overlay + eval + dashboard + data stores) and layered on the
+infrastructure via idempotent `install.sh` / `uninstall.sh`.
+
 The Agent Mesh deployment depends on cluster infrastructure from
 the companion repository
 [`solace-lab-infrastructure`](https://github.com/martensa/solace-lab-infrastructure)
@@ -50,11 +58,9 @@ docker login registry.solace.lab     # once
 ./scripts/load-images.sh             # offline images -> registry
 ./scripts/start.sh                   # helm install (local chart)
 ./scripts/rbac/apply-rbac.sh         # roles + claim mappings
-docker start postgres pgadmin        # retail demo DBs (host)
-(cd scripts/agents && ./create.sh --deploy)  # retail core
 (cd scripts/models && ./set-max-tokens.sh)   # max_tokens tuning
-# five additional model aliases come from start.sh automatically
-(cd ../sam-retail-ops-demo && ./install.sh)  # demo overlay
+# five model aliases + developer-mcp come from start.sh
+(cd ../sam-retail-ops-demo && ./install.sh)  # demo (core+overlay)
 ./scripts/stop.sh                    # full teardown incl. Keycloak
 ```
 

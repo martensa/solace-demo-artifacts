@@ -44,13 +44,15 @@ creates it on stage); `--with-analyst` keeps it for rehearsals.
 ./uninstall.sh
 ```
 
-Removes the demo's platform resources (incl. the eval
-experiments and their run history) and the demo dashboard;
-`--dry-run` previews, `--purge-data` also removes the MongoDB
-container and volume. The manufacturing core, models and RBAC
-stay -- ready for a different demo overlay. The retail and
-manufacturing demos share the standard mongo port 27017: only
-one demo's mongo container runs at a time (stop
+Removes the demo's platform resources (overlay AND the
+manufacturing core, incl. the eval experiments and their run
+history) and the demo dashboard; `--keep-core` keeps the core
+for fast switching between demo overlays, `--dry-run` previews,
+`--purge-data` also removes the MongoDB container and volume.
+The SAM infrastructure (models, RBAC, developer-mcp,
+observability) stays -- ready for a different demo. The retail
+and manufacturing demos share the standard mongo port 27017:
+only one demo's mongo container runs at a time (stop
 `retail-pos-mongo` before starting `mfg-plant-mongo`, and vice
 versa); the postgres databases coexist without conflict.
 
@@ -61,9 +63,9 @@ versa); the postgres databases coexist without conflict.
   base platform (idempotent)
 - `core/` -- the manufacturing CORE package (`sam config
   apply`): Acme CRM/OMS/PDM/SCM postgres connectors, schema
-  skill bundles, four query expert agents. Survives
-  uninstall.sh, like the retail core in
-  `agent-mesh-deployment/scripts/agents`
+  skill bundles, four query expert agents. Removed by
+  uninstall.sh unless `--keep-core`; the retail analog is
+  `sam-retail-ops-demo/core/`
 - `mesh/` -- declarative demo resources (`sam config apply`):
   Production Confirmation Clerk (fast tier), Quality Incident
   Reporter + Supply Chain Watcher (workflow tier),

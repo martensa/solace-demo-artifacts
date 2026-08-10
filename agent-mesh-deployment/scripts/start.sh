@@ -202,3 +202,19 @@ if [ "$PODS_READY" -eq 1 ]; then
     echo "  ./scripts/models/apply-models.sh"
   fi
 fi
+
+# --- Platform entrypoints (declarative, idempotent) ----------------
+# Creates/updates the developer-mcp MCP endpoint (infrastructure,
+# used by the desktop wiring and Claude Code across all demos).
+# Same login caveat as the models above.
+if [ "$PODS_READY" -eq 1 ]; then
+  echo ""
+  echo "Applying platform entrypoints ..."
+  if ! "$PROJECT_DIR/scripts/entrypoints/apply-entrypoints.sh"; then
+    echo ""
+    echo "WARNING: platform entrypoints were not (fully) applied."
+    echo "If the sam CLI login is missing or expired, run:"
+    echo "  sam auth login solace-lab --url https://sam.solace.lab"
+    echo "  ./scripts/entrypoints/apply-entrypoints.sh"
+  fi
+fi

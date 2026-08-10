@@ -15,28 +15,37 @@ With the base platform running (one-click deployment plus
 ./install.sh
 ```
 
-Idempotent: starts the host data stores (postgres/pgadmin,
-MongoDB incl. first-run seed), applies the retail core package,
-the five model aliases, the demo mesh overlay, the eval package
-and the demo dashboard. By default it leaves the Retail POS
-Analyst REMOVED (the live Builder beat creates it on stage);
-`--with-pos` keeps it for rehearsals.
+Idempotent: starts the host data stores (postgres/pgadmin with
+the `retail_*` databases seeded from `postgres/`, MongoDB incl.
+first-run seed), applies the retail core package (`core/`), the
+five model aliases, the demo mesh overlay, the eval package and
+the demo dashboard. By default it leaves the
+Retail POS Analyst REMOVED (the live Builder beat creates it on
+stage); `--with-pos` keeps it for rehearsals.
 
 ```bash
 ./uninstall.sh
 ```
 
-Removes the demo's platform resources (incl. the eval
-experiments and their run history) and the demo dashboard;
-`--dry-run` previews, `--purge-data` also removes the MongoDB
-container and volume. The base platform, retail core, models
-and RBAC stay -- ready for a different demo overlay.
+Removes the demo's platform resources (overlay AND the retail
+core, incl. the eval experiments and their run history) and the
+demo dashboard; `--keep-core` keeps the core for fast switching
+between demo overlays, `--dry-run` previews, `--purge-data` also
+removes the MongoDB container and volume. The SAM infrastructure
+(models, RBAC, developer-mcp, observability) stays -- ready for
+a different demo.
 
 ## Contents
 
 - `talk-track.md` -- the complete demo script (English)
 - `install.sh` / `uninstall.sh` -- demo lifecycle on top of the
   base platform (idempotent)
+- `core/` -- the retail CORE package (`sam config apply`):
+  CRM/OMS/PDM postgres connectors, schema skill bundles, three
+  query expert agents, the Retail 360 Reporter and the
+  retail-360-report workflow. Removed by uninstall.sh unless
+  `--keep-core`; the manufacturing analog is
+  `sam-manufacturing-ops-demo/core/`
 - `mesh/` -- declarative demo resources (`sam config apply`):
   Order Confirmation Clerk (fast tier), Order Incident Reporter
   (workflow tier), order-incident-report workflow, shop-events
@@ -51,6 +60,9 @@ and RBAC stay -- ready for a different demo overlay.
 - `shop/index.html` -- the Acme online shop: publishes order
   events straight to the sam VPN via solclientjs
   (`ws://localhost:8008`) and displays agent responses live
+- `postgres/` -- seed package for the `retail_crm`, `retail_oms`
+  and `retail_pdm` databases in the host `postgres` container
+  (`seed.sh` + pg_dump SQL files; idempotent, run by install.sh)
 - `mongodb/` -- POSLOG store: `docker compose up -d` imports 57
   transactions -- the original blog artifact
   ([solace-sam-demos/sam-retail][repo], 20 receipts) plus the

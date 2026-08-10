@@ -1,7 +1,8 @@
 #!/bin/bash
 # =============================================================
 # common.sh -- shared helpers for the sam-CLI based scripts
-# (agents/create.sh, rbac/apply-rbac.sh, models/set-max-tokens.sh)
+# (rbac/apply-rbac.sh, models/*, entrypoints/apply-entrypoints.sh
+# and the demo install/uninstall scripts in ../../../sam-*-demo/)
 # =============================================================
 # Source this file; do not execute it. Provides:
 #   load_env  <project_dir>   source .env with export (set -a)

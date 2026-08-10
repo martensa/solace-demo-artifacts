@@ -1,5 +1,5 @@
 # Demo overlay: the event-driven incident story on top of the
-# retail core (agent-mesh-deployment/scripts/agents). Installed
+# retail core (../core). Installed
 # and removed by ../install.sh / ../uninstall.sh -- apply order
 # matters: the order-incident-report workflow references the
 # Retail POS Analyst, which install.sh creates from ../fallback

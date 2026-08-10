@@ -1,10 +1,16 @@
-# Retail Demo Provisioning (SAM v2)
+# Retail Core Provisioning (SAM v2)
 
-Declarative provisioning of the retail demo -- connectors, skill
-bundles, agents, a multi-agent workflow and an MCP entrypoint --
-via the sam CLI (`sam config plan/apply`). No REST calls, no
-tokens from the browser, no ID handling -- everything is
-referenced by name and reconciled idempotently.
+Declarative provisioning of the Acme Retail core -- connectors,
+skill bundles, agents and a multi-agent workflow -- via the sam
+CLI (`sam config plan/apply`). No REST calls, no tokens from the
+browser, no ID handling -- everything is referenced by name and
+reconciled idempotently.
+
+This package is applied by `../install.sh` (step 2) and removed
+by `../uninstall.sh`. The base platform in
+`agent-mesh-deployment/` stays demo-free: it provides the SAM
+infrastructure (models, RBAC, observability, the `developer-mcp`
+entrypoint) that this core builds on.
 
 ## Files
 
@@ -28,9 +34,6 @@ referenced by name and reconciled idempotently.
 - `workflows/` -- `retail-360-report`: fans a question out to
   the three query experts in parallel and merges their findings
   via the reporter agent.
-- `entrypoints/` -- `developer-mcp`: exposes the agents as MCP
-  tools at `https://sam.solace.lab/gw/dev/`.
-- `create.sh` -- thin wrapper: plan, then apply.
 
 ## What each agent gets
 
@@ -83,64 +86,10 @@ found". Workaround: open the card-name URL directly, e.g.
 the workflow's UUID in underscore form (get the UUID from
 `sam api /api/v1/platform/workflows`).
 
-## MCP entrypoint: developer-mcp
-
-Serves MCP (Streamable HTTP) at `https://sam.solace.lab/gw/dev/`
-on the same host as the WebUI. One MCP tool per agent-card skill,
-named `<card>_<skill name>` (both sanitized: lowercase,
-non-alphanumerics to `_`; the suffix comes from the skill NAME,
-not the skill id). DB-managed agents and workflows carry their
-UUID instance name as card name -- for example
-`agent_<uuid>_query_retail_crm` -- so tool names change with
-every platform rebuild.
-
-ALL mesh agents are exposed (`includeTools` is empty): the retail
-experts, the Retail 360 Reporter, Orchestrator, Builder and the
-external agents. Narrow the surface with `includeTools` patterns
-(matched against agent, skill and tool names; exact or regex) if
-needed.
-
-Auth is the cluster OIDC (Keycloak): OAuth 2.1 authorization
-code with PKCE and dynamic client registration -- clients
-discover everything from the 401 challenge. With RBAC on, `tools/list` is
-filtered to the caller's `agent:<name>:invoke` scopes.
-
-### Connecting Claude Code
-
-1. Provide the lab CA: Node-based clients (Claude Code included)
-   do not use the macOS keychain, so export the trust bundle once
-   and reference it in `~/.zshrc`:
-
-   ```bash
-   mkdir -p ~/.solace-lab
-   kubectl get configmap solace-lab-ca-trust-bundle -n default \
-     -o jsonpath='{.data.ca-certificates\.crt}' \
-     > ~/.solace-lab/ca-bundle.crt
-   echo 'export NODE_EXTRA_CA_CERTS="$HOME/.solace-lab/ca-bundle.crt"' \
-     >> ~/.zshrc
-   ```
-
-2. Register the MCP server (new terminal, so the env var is set):
-
-   ```bash
-   claude mcp add --transport http sam-lab https://sam.solace.lab/gw/dev
-   ```
-
-3. In Claude Code run `/mcp`, select `sam-lab` and choose
-   Authenticate -- the browser opens the Keycloak login (use a
-   demo user with agent invoke scopes, e.g. `sam_admin` or
-   `power_user`). After the login the agent tools appear and can
-   be used directly in chat.
-
-Notes: entrypoint tokens are minted in-memory per entrypoint --
-a restart invalidates them (clients re-auth silently via refresh
-token). Deployed workflows ARE exposed as MCP tools (named
-`workflow_<uuid>_<skill name>`, verified end-to-end); the tool's
-`message` argument lands in `{{workflow.input.text}}`.
-
 ## Prerequisites
 
-- The sam CLI (resolved by `../lib/common.sh`: `SAM_CLI_PATH`,
+- The sam CLI (resolved by
+  `agent-mesh-deployment/scripts/lib/common.sh`: `SAM_CLI_PATH`,
   then PATH, then auto-extract from `SAM_CLI_TAR`) and a login as
   a user with agent_builder + connector scopes:
 
@@ -151,45 +100,44 @@ token). Deployed workflows ARE exposed as MCP tools (named
 - The retail demo databases: a standalone postgres docker
   container on the HOST (containers `postgres` + `pgadmin`,
   managed outside this repo) serving `retail_crm`, `retail_oms`
-  and `retail_pdm` on port 5432. The connectors reach it via
-  `host.docker.internal:5432`. It stays `Exited` after host
-  restarts -- start it with `docker start postgres pgadmin`.
+  and `retail_pdm` on port 5432, seeded from `../postgres/`
+  (done by `../install.sh`; standalone:
+  `../postgres/seed.sh`). The connectors reach it via
+  `host.docker.internal:5432`. The container stays `Exited`
+  after host restarts -- `../install.sh` starts it
+  automatically.
 
 ## CLI usage
 
-Run from this directory:
+Normally `../install.sh` applies this package. Standalone, from
+this directory:
 
 ```bash
-# Create/update connectors + agents; agents stay NOT deployed
-./create.sh
-
-# Same, and deploy the agents
-./create.sh --deploy
-
 # Plan only, change nothing
-./create.sh --dry-run
+sam config plan
+
+# Create/update and deploy (resources carry deploy: true)
+sam config apply
 
 # Different DB credentials (defaults: postgres/postgres)
-RETAIL_DB_PASSWORD='secret' ./create.sh
+RETAIL_DB_PASSWORD='secret' sam config apply
 ```
 
 Re-running is safe: `sam config apply` reconciles creates and
-updates. Resources are created undeployed by default
-(`--no-deploy`); `--deploy` runs the deployment phase for the
-`deploy: true` resources.
+updates.
 
 CAUTION (2.225.14): the deploy phase only fires for resources
 whose config CHANGED in that apply. After a create-only run,
-re-running `--deploy` over unchanged resources is a silent no-op
--- bump any config field (e.g. the workflow `appConfig.version`)
-to force the deploy phase for that resource.
+re-running over unchanged resources is a silent no-op -- bump any
+config field (e.g. the workflow `appConfig.version`) to force the
+deploy phase for that resource.
 
 ## Notes
 
-- NEVER pass `--prune` here: the platform hosts agents this
-  manifest does not manage (for example the built-in
-  Orchestrator). The plan output lists them as `delete`
-  proposals; without `--prune` the apply skips them.
+- NEVER pass `--prune` here: the platform hosts resources this
+  manifest does not manage (for example the built-in Orchestrator
+  and the `developer-mcp` entrypoint). The plan output lists them
+  as `delete` proposals; without `--prune` the apply skips them.
 - Adding another agent: add `connectors/<name>.yaml`,
   `agents/<name>.yaml` and optionally `skills/<name>/SKILL.md`,
   then list the names in `manifest.yaml`.

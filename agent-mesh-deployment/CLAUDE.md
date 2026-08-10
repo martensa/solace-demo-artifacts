@@ -61,16 +61,26 @@ docker login registry.solace.lab    # once
 ./scripts/load-images.sh            # offline tarballs -> registry
 ./scripts/start.sh                  # helm install (local chart)
 ./scripts/rbac/apply-rbac.sh        # roles + claim mappings
-docker start postgres pgadmin       # retail demo DBs (host)
-(cd scripts/agents && ./create.sh --deploy)  # retail demo
 (cd scripts/models && ./set-max-tokens.sh)   # max_tokens 16384
-# additional models (workflow/reasoning/coding/expert/fast) are
-# applied by start.sh; standalone: scripts/models/apply-models.sh
+# additional models (workflow/reasoning/coding/expert/fast) AND
+# the developer-mcp entrypoint are applied by start.sh;
+# standalone: scripts/models/apply-models.sh and
+# scripts/entrypoints/apply-entrypoints.sh
 ./scripts/stop.sh                   # full teardown
 ```
 
+This deployment is pure SAM INFRASTRUCTURE (platform, RBAC,
+models, developer-mcp entrypoint, observability). It carries NO
+demo content: demos live in their own top-level directories
+(../sam-retail-ops-demo/, ../sam-manufacturing-ops-demo/), each
+with its own core (domain connectors/skills/experts), overlay,
+eval package and dashboard, installed/removed via idempotent
+install.sh / uninstall.sh (--keep-core keeps a demo's core for
+fast overlay switching; the demo install scripts also start the
+host data stores postgres/pgadmin + demo mongo).
+
 stop.sh destroys the platform DB and with it all DB-managed
-content (RBAC, agents, workflow, MCP entrypoint, model tuning) --
+content (RBAC, installed demos, developer-mcp, model tuning) --
 the README's "Rebuilding after teardown" section documents the
 re-provisioning order.
 
@@ -165,22 +175,26 @@ reference DB-managed roles, never the YAML `sam_admin`.
 - `scripts/stop.sh` -- Full teardown including Keycloak client
 - `scripts/lib/common.sh` -- shared helpers (.env loading, sam
   CLI resolution, SAM_AUTH_TOKEN export) sourced by the rbac,
-  agents and models scripts
+  models and entrypoints scripts and the demo install/uninstall
+  scripts
 - `scripts/rbac/` -- Declarative RBAC (manifest + roles + claim
   mappings + `apply-rbac.sh`; default roles via one REST call)
 - `scripts/setup-keycloak-client.sh` / `setup-keycloak-users.sh`
   and their teardown counterparts -- Keycloak client, groups,
   demo users
-- `scripts/agents/` -- Declarative retail CORE (connectors,
-  schema skills, CRM/OMS/PDM query experts, Retail 360 Reporter
-  - workflow, developer MCP entrypoint) applied via
-  `sam config plan/apply` by `create.sh`; NOT deployed by
-  default (`--deploy` to deploy; NEVER `--prune`). Demo-specific
-  resources (confirmation clerk, incident reporter/workflow,
-  shop-events entrypoint, POS analyst) are an OVERLAY in
-  ../sam-retail-ops-demo/ with idempotent install.sh /
-  uninstall.sh -- the base deployment stays reusable for other
-  demos.
+- `scripts/entrypoints/` -- Declarative package for the
+  platform-level `developer-mcp` MCP entrypoint (infrastructure,
+  used by the desktop wiring and Claude Code across all demos),
+  applied by `apply-entrypoints.sh` (start.sh hook;
+  `--probe-only` checks /gw/dev). NEVER `--prune` (demo
+  event_mesh entrypoints are not managed here). A config change
+  redeploys the entrypoint and invalidates its minted MCP tokens
+  (clients re-auth automatically).
+  NOTE: demo content (cores with domain connectors/skills/
+  experts, overlays, eval packages, dashboards) lives in
+  ../sam-retail-ops-demo/ and ../sam-manufacturing-ops-demo/,
+  managed by their idempotent install.sh / uninstall.sh
+  (NEVER `--prune` there either).
 - `scripts/models/` -- `set-max-tokens.sh` patches
   `modelParams.max_tokens` via `sam api` (SAM_AUTH_TOKEN from the
   CLI login cache) and restarts the awe deployment. Plus the
@@ -192,8 +206,8 @@ reference DB-managed roles, never the YAML `sam_admin`.
   aliases on create (declarative names must be lowercase); the
   Claude 5 family rejects temperature/top_p/top_k (HTTP 400); the
   proxy's azure-*/gemini-* routes have permanently broken backend
-  credentials. Both agents and models tooling are v2-native and
-  verified live.
+  credentials. The models and entrypoints tooling are v2-native
+  and verified live.
 - `scripts/observability/` -- overlays the image-baked component
   configs with a `management_server` block (metrics) via a Helm 4
   postrenderer/v1 plugin + kustomize (configMapGenerator hash =

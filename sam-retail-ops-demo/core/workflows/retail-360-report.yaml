@@ -13,7 +13,7 @@ description: >-
 spec:
   appConfig:
     # Bump this version to force a redeploy: the apply deploy phase
-    # only fires for resources whose config CHANGED (see create.sh).
+    # only fires for resources whose config CHANGED (see README).
     version: "1.0.4"
     display_name: Retail 360 Report
     description: >-

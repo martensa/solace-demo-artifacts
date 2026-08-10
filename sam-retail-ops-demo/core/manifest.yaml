@@ -1,0 +1,54 @@
+# Declarative manifest for the Acme Retail CORE package:
+# CRM/OMS/PDM postgres connectors, schema skill bundles, the three
+# SQL query expert agents, the Retail 360 Reporter and the
+# retail-360-report workflow. It lives inside the demo directory
+# so agent-mesh-deployment stays pure SAM infrastructure (models,
+# RBAC, observability, developer-mcp entrypoint) -- demos are
+# layered on top via install.sh / uninstall.sh.
+#
+# Applied with:  sam config plan/apply -m manifest.yaml
+# (install.sh does this; order is handled by the CLI, connectors
+# before the agents that reference them.)
+#
+# NEVER pass --prune: the platform hosts resources this manifest
+# does not manage (Orchestrator, developer-mcp, other demos ...).
+kind: manifest
+name: retail-core-agents
+description: >-
+  Acme Retail core: CRM/OMS/PDM postgres connectors, schema skill
+  bundles, the three query expert agents, the Retail 360 Reporter
+  and the retail-360-report workflow.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    # Token cache from `sam auth login solace-lab` (browser flow,
+    # log in as a user with agent_builder/connector scopes, e.g.
+    # the bootstrap admin sam_admin).
+    type: oauth
+variables:
+  # Demo defaults (see repo conventions); override via environment
+  # at apply time, e.g. RETAIL_DB_PASSWORD=secret ./install.sh
+  RETAIL_DB_USERNAME: "postgres"
+  RETAIL_DB_PASSWORD: "postgres"
+resources:
+  connectors:
+    - Retail CRM DB
+    - Retail OMS DB
+    - Retail PDM DB
+  skills:
+    - retail-crm-schema
+    - retail-oms-schema
+    - retail-pdm-schema
+  agents:
+    - Retail CRM Query Expert
+    - Retail OMS Query Expert
+    - Retail PDM Query Expert
+    - Retail 360 Reporter
+    # NOTE: demo-overlay resources (Order Incident Reporter,
+    # Order Confirmation Clerk, order-incident-report workflow,
+    # shop-events entrypoint, POS analyst) are NOT managed here.
+    # They live in ../mesh and ../fallback -- install.sh applies
+    # core and overlay in order, uninstall.sh removes both.
+  workflows:
+    - retail-360-report

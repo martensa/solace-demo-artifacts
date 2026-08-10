@@ -1,17 +1,18 @@
 # Declarative manifest for the Acme Manufacturing CORE package:
 # CRM/OMS/PDM/SCM postgres connectors, schema skill bundles and
 # the four SQL query expert agents. This is the manufacturing
-# analog of agent-mesh-deployment/scripts/agents (retail core) --
-# it lives inside the demo overlay so the base deployment stays
-# retail-only, but like the retail core it SURVIVES uninstall.sh:
-# only the demo-specific resources in ../mesh are removed.
+# analog of sam-retail-ops-demo/core -- every demo owns its core;
+# agent-mesh-deployment stays pure SAM infrastructure (models,
+# RBAC, observability, developer-mcp). uninstall.sh removes the
+# core together with the overlay; --keep-core keeps it for fast
+# switching between demo overlays.
 #
 # Applied with:  sam config plan/apply -m manifest.yaml
 # (install.sh does this; order is handled by the CLI, connectors
 # before the agents that reference them.)
 #
 # NEVER pass --prune: the platform hosts resources this manifest
-# does not manage (Orchestrator, retail core, ...).
+# does not manage (Orchestrator, developer-mcp, other demos ...).
 kind: manifest
 name: mfg-core-agents
 description: >-
