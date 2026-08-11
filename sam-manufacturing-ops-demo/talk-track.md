@@ -46,7 +46,7 @@ token lands on the right name in chapter 8.
 | 6 | ONBOARDING complete — deploy + first task | 7:30–9:30 |
 | 7 | TEAMWORK — the cockpit, two movements | 9:30–16:30 |
 | 8 | IMPROVEMENT — measure the workforce | 16:30–18:45 |
-| 9 | WRAP — the lifecycle, closed | 18:45–20:00 |
+| 9 | WRAP — slides 4 + 2, the lifecycle closed | 18:45–20:00 |
 
 ## 2. Scenario — slides 2+3 (1:00–2:30)
 
@@ -424,12 +424,15 @@ Cost beat, with the rehearsal's REAL numbers (task metadata):
 
 ## 9. WRAP (18:45–20:00)
 
-Close the lifecycle: hired live, onboarded with governed system
-access, teamwork triggered by events end to end — reactive AND
-proactive — measured to the token. **DO**: re-show slide 2 —
-the movement cards are now what the audience just watched
-happen, and the bottom strip is the closer: one click -> one
-event -> react + prevent -> no human in the loop.
+**DO**: show slide 4 ("The Demo in the Lifecycle") and walk
+the checkmarks stage by stage — hired live (Shop Floor
+Analyst), onboarded with governed system access, coached with
+versioned schema skills, teamwork event-driven (react +
+prevent, 8 agents on 4 models), improvement measured to the
+token. Then flip back to slide 2 as the final image — the
+movement cards are now what the audience just watched happen,
+and the bottom strip is the closer: one click -> one event ->
+react + prevent -> no human in the loop.
 
 > "One engineering change, badly propagated, and the same
 > platform caught both consequences: the quality incident it
