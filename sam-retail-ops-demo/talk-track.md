@@ -375,11 +375,13 @@ links) after every install.
 > This one handles a failed order: three specialists — OMS, PDM,
 > POS — investigate **in parallel**, and a fourth agent merges
 > their findings into one incident report. Three details worth
-> stealing. First: each specialist node carries an **output
-> contract** — a JSON schema the platform enforces; if the
-> agent's answer violates it, the platform **auto-retries**
-> before the merge ever sees it. Deterministic hand-offs in an
-> LLM workflow. Second: `fail_fast` is off — if one specialist
+> stealing. First: the workflow declares its **contracts** —
+> an input schema describing the exact shop event that triggers
+> this SOP (any system that can produce this event can use it),
+> and each specialist node carries an **output contract** — a
+> JSON schema the platform enforces; if the agent's answer
+> violates it, the platform **auto-retries** before the merge
+> ever sees it. Deterministic hand-offs in an LLM workflow. Second: `fail_fast` is off — if one specialist
 > is missing, the report says so transparently instead of
 > failing. Third: the whole thing is YAML in git — I apply it
 > with `sam config apply`, same as everything else you see

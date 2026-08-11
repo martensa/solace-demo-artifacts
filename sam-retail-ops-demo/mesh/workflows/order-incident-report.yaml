@@ -19,7 +19,7 @@ spec:
     # (awe logs inputKeys: []), so nodes must reference the raw
     # task text as {{workflow.input}} -- {{workflow.input.text}}
     # stays an unresolved literal here (verified 2026-07-31).
-    version: "1.1.1"
+    version: "1.1.2"
     display_name: Order Incident Report
     description: >-
       Failed-order analysis across OMS, PDM and POS, merged into
@@ -33,6 +33,56 @@ spec:
         description: >-
           Analyze a failed shop order across OMS, PDM and POS and
           produce an incident report.
+    # Workflow-level INPUT contract: describes the realtime
+    # shop event that (conceptually) triggers this SOP -- the
+    # exact payload shape shop/index.html publishes on
+    # acmeretail/shop/order/failed/>. Today the event PATH runs
+    # via the Orchestrator (promptTemplate quirk), so this
+    # schema is the published contract + the typed Run form in
+    # the UI, not a gate on the event flow. Loose by design:
+    # only the fields the SOP actually needs are required.
+    input_schema:
+      type: object
+      required: [order_id, status, failure_reason, lines]
+      properties:
+        order_id:
+          type: string
+          description: Shop order id, e.g. WEB-20260812-0001.
+        channel:
+          type: string
+        store_id:
+          type: string
+        ts:
+          type: string
+          description: Event timestamp (ISO 8601).
+        customer_id:
+          type: string
+        status:
+          type: string
+          enum: [FAILED]
+          description: This SOP handles failed orders only.
+        failure_reason:
+          type: string
+          enum: [OUT_OF_STOCK, OUT_OF_SEASON, DATA_QUALITY]
+        failure_detail:
+          type: string
+        total:
+          type: number
+        currency:
+          type: string
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [product_id, sku]
+            properties:
+              product_id: { type: string }
+              sku: { type: string }
+              description: { type: string }
+              qty: { type: number }
+              unit_price: { type: number }
+              extended_price: { type: number }
     # Workflow-level output contract: visible in the UI's
     # "I/O & Mapping" panel. Deliberately loose ({report:
     # string}) -- the report stays free-form markdown; the
