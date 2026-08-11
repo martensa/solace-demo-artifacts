@@ -6,6 +6,10 @@
 > rehearsal of 2026-08-11 (one click, 13/13 tasks completed,
 > real report texts).
 
+Conventions: **DO** = click path / stage direction (plain
+prose), **SAY** = spoken line — always a `>` blockquote;
+shorten freely, keep the bold claims.
+
 **Title slide:** Event-Driven Manufacturing Operations —
 *The Line Never Stops.*
 
@@ -84,14 +88,23 @@ the Shop Floor Analyst is ABSENT while the
 `mfg-telemetry`/`mfg-consumption` connectors are PRESENT
 (pre-provisioned workplace infrastructure).
 
-**SAY**: the team — Orchestrator (team lead), four query experts
-(CRM, OMS, PDM, SCM — one per system, each bound to its own
-connector), a confirmation clerk for routine work, and two
-specialists that only merge: the Quality Incident Reporter and
-the Supply Chain Watcher, whose standing brief is "production
-never stops". **The gap**: nobody can see the shop floor — all
-that station telemetry and material consumption streaming into
-MongoDB has no analyst. Let's hire one.
+**SAY**:
+
+> "This is the team we already hired — and note that I'm logged
+> in as the **admin**, the hiring manager; remember WHO does
+> what, it will show up on a bill later. An **Orchestrator** —
+> the team lead, the only agent that delegates to others. Four
+> query experts — **CRM**, **OMS**, **PDM**, **SCM** — one per
+> system, each bound to its own connector. A confirmation clerk
+> for routine work. And two specialists that only merge: the
+> **Quality Incident Reporter**, and the **Supply Chain
+> Watcher**, whose standing brief is 'production never stops'.
+> Job descriptions instead of prompts, if you like.
+>
+> Now notice who's **missing**: nobody on this team can see the
+> shop floor. All that station telemetry and material
+> consumption streaming into MongoDB — no analyst for it.
+> Let's fix that. Let's hire one, right now."
 
 ## 4. ONBOARDING — Build with AI (3:30–4:30)
 
@@ -354,10 +367,12 @@ Timings below are MEASURED (dress rehearsal 2026-08-11, all
   > minutes** after the first HD-22 lot issue" -- station still
   > on spec revision B. 1,800 units, 340,000 euros at risk.
 
-  **SAY**: "No engineer wrote that. Five systems, one story:
-  recalibrate the station, re-test the held units -- they are
-  very likely GOOD -- and have Graz acknowledge the change.
-  The parts were never the problem. The data was."
+  **SAY**:
+
+  > "No engineer wrote that. Five systems, one story:
+  > recalibrate the station, re-test the held units — they are
+  > very likely GOOD — and have Graz acknowledge the change.
+  > The parts were never the problem. The data was."
 - **~8:15** -- the replenishment recommendation lands.
 
   **READ ALOUD** (rehearsal wording):
@@ -369,9 +384,11 @@ Timings below are MEASURED (dress rehearsal 2026-08-11, all
   > from the qualified alternate TODAY, 3-day delivery** --
   > and reset the MRP parameters to the observed rate."
 
-  **SAY**: "784,000 euros of unshipped OEM orders behind that
-  material -- and remember Volta's 45,000-per-hour line-down
-  penalty. Nobody ran a report. The threshold event did."
+  **SAY**:
+
+  > "784,000 euros of unshipped OEM orders behind that
+  > material — and remember Volta's 45,000-per-hour line-down
+  > penalty. Nobody ran a report. The threshold event did."
 
   ELASTIC BRIDGE: after reading the incident report (~5:30),
   start chapter 8 on the dashboard and RETURN to the cockpit
