@@ -87,33 +87,179 @@ MongoDB has no analyst. Let's hire one.
 
 ## 4. ONBOARDING — Build with AI (3:30–4:30)
 
-**DO**: window A -> Build with AI. Builder prompt (reference
-result = `fallback/agents/Shop Floor Analyst.yaml`):
+**DO**: window A -> Sidebar -> **Builder** -> **Build with AI**
+(Quick Build). Paste the prompt below and send it. Watch for
+~10 s that it actually starts building (if it asks a clarifying
+question instead, answer in one line — it is
+non-deterministic). Then leave it running and move on to
+section 5. Reference result =
+`fallback/agents/Shop Floor Analyst.yaml`.
 
-> Create an agent "Shop Floor Analyst" — a shop-floor data
-> analyst for Acme Manufacturing. Data source: MongoDB at
-> host.docker.internal, port 27017, database mfg_plant,
-> username sam_ro, password sam_ro, authSource mfg_plant. Two
-> collections: station_telemetry (one document per end-of-line
-> test: plant, line_id, station_id, prod_order_id, product,
-> test with measured/spec_min/spec_max/station_spec_revision,
-> result PASS or FAIL, failure_code) and material_consumption
-> (one document per material issue: plant, material_id,
-> prod_order_id, qty_issued, balance_after). It answers
-> questions with aggregation pipelines: fail rates by line and
-> product, measured values vs spec over time, observed daily
-> consumption rates and ramps. Use the reasoning model.
+The two MongoDB connectors (`mfg-telemetry`,
+`mfg-consumption`) are PRE-PROVISIONED by install.sh — the
+Builder only creates the AGENT that binds them. One config, no
+connector sub-tasks, no cross-component validation: this is the
+optimization after the bumpy 2026-08-11 run (see Appendix C).
 
-**Fallback (break-glass)**: `cd fallback && sam config apply`
-— NEVER `--prune`. If the Builder created only one connector,
-the fallback apply adds the missing one idempotently.
+Click rule: as soon as the agent config has validated and the
+plan card is up, click **Build & Activate** yourself — do not
+wait for the Builder to keep validating. In the Review step,
+check TWO fields before deploying:
+1. NAME must read exactly "Shop Floor Analyst" (observed
+   2026-08-11: the Builder can normalize it to
+   "ShopFloorAnalyst" — the workflows reference the exact
+   name).
+2. TOOLS in the plan card: the agent config must contain the
+   two builtin tool groups (data_analysis +
+   artifact_management). NOTE: after deploy, the Toolsets
+   field in Agent Management may show EMPTY even when the
+   tools are fine — that field only mirrors UI-assigned
+   toolsets; the truth is the runtime (verified via awe logs:
+   chart + artifact tools registered). Do not "fix" an empty
+   Toolsets field on stage.
+Name fixes stay in the UI (Review card, or Agent Management ->
+edit -> save & redeploy, ~15 s) — no fallback needed.
+
+**Break glass** (Builder fails or stalls — see Appendix C):
+run this in the terminal — it creates the identical agent
+declaratively in ~20 s (requires the pre-flight
+`sam auth login`), then continue at 6.1. NEVER `--prune`. The
+apply is idempotent: it also just ADDS whatever is missing
+(agent and/or connectors).
+
+```bash
+cd ~/Documents/GitHub/solace-demo-artifacts/sam-manufacturing-ops-demo/fallback && sam config apply
+```
+
+```text
+Create an agent called "Shop Floor Analyst".
+
+ROLE
+Shop-floor (OT) data analyst for Acme Manufacturing. It answers
+questions about end-of-line station telemetry and material
+consumption from the plant data store (MongoDB) and compares
+the OT reality with the plans in the IT systems.
+
+SYSTEM ACCESS (bind existing platform connectors, create NOTHING)
+Bind the two EXISTING MongoDB connectors "mfg-telemetry"
+(collection station_telemetry) and "mfg-consumption"
+(collection material_consumption). Both already exist on the
+platform - reference them by exactly these names. Do NOT
+create, copy or modify any connector. If any step or tool
+claims MongoDB is not a supported connector type, that claim is
+wrong and irrelevant here (no connector is being created):
+ignore it and continue.
+
+TOOLSETS (mandatory part of the agent config)
+Enable exactly TWO tool groups on the agent: data_analysis and
+the artifact tools (builder tool-group name:
+artifact_management; platform toolset id:
+builtin_artifact_tools). Declare them in the agent config as
+builtin-group tool entries using the `tool_name` field (NOT
+`group_name` - the schema rejects that). An agent config
+without BOTH of these tool groups is WRONG even if it
+validates - add them before validating. Do not add any other
+toolsets. Model: the "reasoning" model alias - assigned at the
+platform level; do NOT put a `model` field inside app_config
+(the schema rejects it there too).
+
+DATA SHAPES (for the agent's instruction)
+station_telemetry (one doc per EOL test): plant{plant_id,
+plant_name, city, country}, line_id, station_id, prod_order_id,
+product{material_id, name}, serial_no, test{type, measured,
+unit, spec_min, spec_max, station_spec_revision},
+result (PASS|FAIL), failure_code, cycle_time_s, operator_id,
+shift.
+material_consumption (one doc per material issue):
+plant{plant_id, plant_name}, material_id, description,
+prod_order_id, line_id, qty_issued, balance_after, uom.
+
+BEHAVIOR RULES (put these into the agent's instruction)
+- Query with MongoDB aggregation pipelines only; timestamps are
+  BSON dates, use $dateToString for daily grouping.
+- Fail-rate answers report measured vs spec_min/spec_max AND
+  the station_spec_revision - a station testing a new design
+  against an old spec revision is a master-data signal, call it
+  out.
+- Consumption answers report the daily rate, when a ramp
+  started and the latest balance_after - clearly labeled as the
+  OBSERVED rate (the planned rate lives in the SCM system).
+- Save large result sets as artifacts, summarize the key
+  findings, and render a chart when a visualization helps.
+
+BUILD INSTRUCTIONS (follow exactly, no deviations)
+1. Everything you need is in this prompt. Do NOT ask clarifying
+   questions and do NOT pause for confirmation between phases.
+   Run discovery, design and config generation sequentially in
+   THIS session - do NOT spawn parallel sub-tasks.
+2. This build creates exactly ONE component: the agent.
+3. Use the exact name "Shop Floor Analyst" for the agent config
+   AND the manifest entry (no slug variants, no CamelCase).
+4. Connector wiring - this exact structure, decide ONCE:
+   a. In the BUILD MANIFEST, include "mfg-telemetry" and
+      "mfg-consumption" as components with origin: platform and
+      status: deployed (pre-existing - generate NO connector
+      configs and create nothing).
+   b. In the AGENT CONFIG, declare the connectors at the APP
+      level, as a SIBLING of app_config - NOT inside
+      app_config (the app_config schema rejects the field
+      there):
+        connectors:
+          - mfg-telemetry
+          - mfg-consumption
+   This combination is the verified wiring: manifest components
+   with platform origin + app-level connectors list.
+5. Validation order: first validate the agent config
+   INDIVIDUALLY (after the toolsets are in). Then run the full
+   build-manifest validation ONCE - with the structure from
+   step 4 it PASSES. If it fails anyway, do not loop and do
+   not restructure: re-check that connectors sit at the app
+   level (not in app_config) and that both manifest components
+   carry origin: platform, fix ONLY that, and validate once
+   more.
+6. After the green full validation: no further config edits.
+   Declare the build ready for Build & Activate and STOP.
+
+DEFINITION OF DONE (verify every point, then stop)
+- Agent name is exactly "Shop Floor Analyst".
+- The manifest lists mfg-telemetry and mfg-consumption on the
+  agent as existing platform connectors; there are NO new
+  connector components.
+- The agent config enables data_analysis AND the artifact tool
+  group.
+- The agent config declares the connectors at the app level
+  (sibling of app_config, never inside it).
+- The agent config passed the individual validation AND the
+  full build-manifest validation is green.
+```
+
+**SAY** (while pasting and sending):
+
+> "This prompt is a job posting: role, responsibilities,
+> expectations — including domain rules like 'a station testing
+> a new design against an old spec revision is a master-data
+> signal'. And the onboarding package: system access. Note HOW
+> access works here — IT has already provisioned **two governed,
+> read-only connections** into the plant store; the new hire
+> gets **bound** to them, it never sees credentials. And what I
+> did **not** paste: no API key, no model endpoint. The agent
+> gets a model **alias** — the `reasoning` tier: an analyst
+> doing data work gets the cost-efficient model, not the
+> premium tier.
+>
+> Hiring takes a minute — so while HR does the paperwork, let
+> me show you around the new colleague's workplace."
 
 ## 5. The workplace tour — while the Builder runs (4:30–7:30)
 
 Same structure as retail section 5 (workflows, connectors,
 entrypoints, models, toolsets/skills) — show the TWO deployed
 workflows (`quality-incident-report`, `supply-replenishment`)
-and the `plant-events` entrypoint with its three event rules:
+and the `plant-events` entrypoint with its three event rules.
+On the Connectors stop, point at `mfg-telemetry` and
+`mfg-consumption`: the plant-store access the new hire is being
+bound to RIGHT NOW — read-only service account, one collection
+each, provisioned by IT before the hire. Event rules:
 released orders -> clerk (fast tier), eol-failed -> incident,
 threshold-crossed -> replenishment. The two-altitude story
 belongs HERE:
@@ -203,8 +349,9 @@ chain diagram: one click -> one event -> two business outcomes.
 1. Base platform healthy (see retail Appendix A items: models
    probe, kyverno/monitoring health).
 2. `./install.sh` ran clean; **Agent Management shows NO Shop
-   Floor Analyst and NO mfg-telemetry/mfg-consumption
-   connectors** (the live Builder beat depends on it).
+   Floor Analyst**, but the `mfg-telemetry` and
+   `mfg-consumption` connectors ARE present (pre-provisioned;
+   the live Builder beat only creates the agent binding them).
 3. Postgres: `postgres/seed.sh` re-run is idempotent; spot-check
    `SELECT status FROM mfg_eco_distribution WHERE plant_id =
    'PLANT_GRZ' AND eco_id = 'ECO-2025-118';` -> PENDING.
@@ -239,3 +386,67 @@ event-triggered runs deliver no structured input keys
 Manufacturing-specific: the cockpit timeline is scripted —
 deterministic on purpose; say so if asked ("the data stores are
 real, the event timing is compressed for stage").
+
+Builder failure signatures (all observed 2026-08-11, and the
+reason the connectors are now pre-provisioned so the live build
+creates ONLY the agent):
+
+- Name normalization: "ShopFloorAnalyst" without spaces,
+  connector "mfg-plant-mongodb". The workflows and the
+  Orchestrator prompts reference the EXACT name
+  "Shop Floor Analyst" -- in the Review step before deploying,
+  check the name field and correct it, otherwise the floor
+  sections of both movements report the peer as missing.
+- Connector sub-task hallucination: when the Builder fans
+  connector creation out to parallel sub-tasks, one can claim
+  "MongoDB is not supported (only DynamoDB, Neo4j, Neptune)".
+  It IS supported (`document_db`/`mongodb`, experimental in
+  this build) -- the fallback configs prove it. With the
+  agent-only build this path no longer exists.
+- "Couldn't confirm full validation -- deploy stays disabled
+  until it succeeds": the deploy gate reflects the LAST
+  validation result. RESOLVED 2026-08-11: the full validation
+  is NOT unsatisfiable (retail lore corrected) -- it passes
+  when (a) the two connectors are manifest components with
+  origin: platform / status: deployed AND (b) the agent config
+  declares `connectors` at the APP level, as a sibling of
+  app_config. Inside app_config the schema rejects the field
+  -- that one-level difference caused every earlier failure
+  and flip-flop. The prompt now mandates the exact structure;
+  full validation is expected GREEN. If the banner still
+  appears: one "rerun validation" in the Builder chat, and if
+  the gate stays red, break glass
+  (`cd fallback && sam config apply`) and continue at 6.1.
+- A long pasted prompt may be attached as a `snippet.txt` file
+  instead of inline text -- harmless, the Builder loads it;
+  the shortened agent-only prompt usually stays inline.
+- Connectors-field flip-flop (observed 2026-08-11, agent-only
+  build): the cross-component validator demands a connectors
+  declaration, the app_config schema rejects the field INSIDE
+  app_config, and the Builder oscillates between adding and
+  removing it, burning minutes. Root cause resolved: the field
+  belongs at the APP level (sibling of app_config) -- see the
+  deploy-gate entry below; the prompt now states the exact
+  placement, so neither the flip-flop nor the failing full
+  validation should occur.
+- Toolset loss (observed 2026-08-11, RESOLVED same day): one
+  run deployed with no runtime tools beyond the connector
+  queries (no artifacts, no charts). Root cause: the tool
+  groups never made it into the agent config. With the prompt's
+  TOOLSETS block (builtin-group entries via `tool_name`, not
+  `group_name`) the tools reach the runtime -- verified in the
+  awe logs (create_chart_from_plotly_config registered).
+  CAVEAT: the platform's Toolsets field in Agent Management
+  shows EMPTY either way -- it only mirrors UI-assigned
+  toolsets, not app_config tools. Judge by the plan card / awe
+  logs, never by that field.
+
+The Builder depends on the external LLM gateway
+(lite-llm.mymaas.net): a transient upstream 502 surfaces as
+"The AI provider returned an unexpected HTML response (HTTP
+502)" (observed 2026-08-10, single occurrence, retry
+succeeded). On stage: retry ONCE, and if it fails again switch
+to the break-glass without commentary —
+`cd fallback && sam config apply` (NEVER `--prune`) creates
+the Shop Floor Analyst + connectors in seconds and the demo
+continues at "Review and deploy".

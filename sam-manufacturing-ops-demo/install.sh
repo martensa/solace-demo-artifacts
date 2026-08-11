@@ -111,21 +111,18 @@ fi
   | grep -viE "^time=" | grep -E "\+|~|\*|error|fail" | head -14)
 
 if [ "$WITH_ANALYST" -eq 0 ]; then
-  echo "   removing Shop Floor Analyst + connectors (live Builder demo)"
+  # The two MongoDB connectors STAY installed (workplace
+  # infrastructure, like the postgres connectors): the live
+  # Builder beat only creates the AGENT binding them -- one
+  # config, no connector sub-tasks, no cross-component
+  # validation (optimization after the bumpy 2026-08-11 run).
+  echo "   removing Shop Floor Analyst (live Builder demo; connectors stay)"
   SFA_ID=$(api GET /api/v1/platform/agents | python3 -c "
 import json,sys
 for a in json.load(sys.stdin).get('data',[]):
     if a['name']=='Shop Floor Analyst': print(a['id'])")
   [ -n "$SFA_ID" ] && api DELETE "/api/v1/platform/agents/$SFA_ID" >/dev/null \
     && echo "   Shop Floor Analyst deleted (HTTP $API_CODE)"
-  for con in mfg-telemetry mfg-consumption; do
-    CON_ID=$(api GET /api/v1/platform/connectors | python3 -c "
-import json,sys
-for c in json.load(sys.stdin).get('data',[]):
-    if c['name']=='$con': print(c['id'])")
-    [ -n "$CON_ID" ] && api DELETE "/api/v1/platform/connectors/$CON_ID" >/dev/null \
-      && echo "   $con connector deleted (HTTP $API_CODE)"
-  done
 else
   echo "   keeping Shop Floor Analyst (--with-analyst)"
 fi

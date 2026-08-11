@@ -37,8 +37,11 @@ the four seeded `mfg_*` databases, MongoDB `mfg-plant-mongo` on
 port 27017 incl. first-run seed), applies the manufacturing core
 package (`core/`), the five model aliases, the demo mesh
 overlay, the eval package and the demo dashboard. By default it
-leaves the Shop Floor Analyst REMOVED (the live Builder beat
-creates it on stage); `--with-analyst` keeps it for rehearsals.
+leaves the Shop Floor Analyst REMOVED while the two MongoDB
+connectors stay pre-provisioned: the live Builder beat creates
+only the agent binding them (one config, no connector
+sub-tasks -- fast and reliable on stage); `--with-analyst`
+keeps the agent for rehearsals.
 
 ```bash
 ./uninstall.sh
@@ -62,6 +65,9 @@ conflict.
 - `talk-track.md` -- the demo script (English)
 - `install.sh` / `uninstall.sh` -- demo lifecycle on top of the
   base platform (idempotent)
+- `demo-links.sh` -- prints direct SAM UI links for the demo
+  windows (workflows are name-based and stable; agent and
+  connector links are resolved by ID via the platform API)
 - `core/` -- the manufacturing CORE package (`sam config
   apply`): Acme CRM/OMS/PDM/SCM postgres connectors, schema
   skill bundles, four query expert agents. Removed by
