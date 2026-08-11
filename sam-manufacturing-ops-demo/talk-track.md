@@ -80,8 +80,9 @@ click -> one event -> react + prevent -> no human in the loop).
 ## 3. HIRING — the roster and the gap (2:30–3:30)
 
 **DO**: window A -> Agent Management. Verified during pre-flight:
-Shop Floor Analyst and the `mfg-telemetry`/`mfg-consumption`
-connectors are ABSENT.
+the Shop Floor Analyst is ABSENT while the
+`mfg-telemetry`/`mfg-consumption` connectors are PRESENT
+(pre-provisioned workplace infrastructure).
 
 **SAY**: the team — Orchestrator (team lead), four query experts
 (CRM, OMS, PDM, SCM — one per system, each bound to its own
