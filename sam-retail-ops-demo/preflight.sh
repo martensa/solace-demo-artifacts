@@ -227,11 +227,27 @@ else
       ok "experiment '$exp' has a completed run"
     else
       echo "          fix: running '$exp' (this is the ~15-min part) ..."
-      if "$SAM_CLI" eval run "$exp" --url "$SAM_URL" 2>&1 | tail -3 | sed 's/^/          /' \
-         && api GET "/api/v1/platform/evaluations/experiments/$EID/runs" | grep -q '"completed"'; then
+      # Refresh the short-lived token right before the run; the
+      # CLI does not refresh mid-run, so its polling can die with
+      # a 401 while the run continues on the platform. The run is
+      # the truth: after the CLI exits (either way), poll the
+      # platform with a FRESH token for up to 12 min.
+      (cd "$SCRIPT_DIR/eval" && "$SAM_CLI" config plan >/dev/null 2>&1) || true
+      sam_auth_token >/dev/null 2>&1
+      "$SAM_CLI" eval run "$exp" --url "$SAM_URL" 2>&1 \
+        | tail -3 | sed 's/^/          /' || true
+      DONE=0; END=$(( $(date +%s) + 720 ))
+      until [ $(date +%s) -ge $END ]; do
+        (cd "$SCRIPT_DIR/eval" && "$SAM_CLI" config plan >/dev/null 2>&1) || true
+        sam_auth_token >/dev/null 2>&1
+        if api GET "/api/v1/platform/evaluations/experiments/$EID/runs" \
+            | grep -q '"completed"'; then DONE=1; break; fi
+        sleep 30
+      done
+      if [ "$DONE" -eq 1 ]; then
         fixd "experiment '$exp' pre-run completed"
       else
-        bad "experiment '$exp' run did not complete"
+        bad "experiment '$exp' run did not complete (check the SAM UI)"
       fi
     fi
   done
