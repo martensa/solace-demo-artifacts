@@ -101,6 +101,11 @@ conflict.
   (same agent pinned to three models via `spec.models`)
 - `observability/` -- the "SAM Manufacturing Ops Demo" Grafana
   dashboard (ConfigMap)
+- `results/acme-workflow-results.html` -- self-contained,
+  theme-aware results page rendering both workflow reports
+  (KPIs, findings, options, the one concrete action) with the
+  rehearsal-verified numbers; the leave-behind / recap view of
+  what the audience watched happen
 - `cockpit/index.html` -- the Acme plant operations cockpit:
   publishes plant events straight to the sam VPN via
   solclientjs (`ws://localhost:8008`), runs the scripted

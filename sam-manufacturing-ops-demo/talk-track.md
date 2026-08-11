@@ -432,6 +432,11 @@ remain human steps.
 
 ## Appendix B — Extra queries and product stories
 
+- Results recap: `results/acme-workflow-results.html` renders
+  both reports as one polished page (KPIs, findings, the one
+  concrete action) -- open it after the movements as the
+  "here is what just happened" recap, or send it as the
+  leave-behind.
 - CRM: "Which OEM accounts have the highest line-down penalty?"
   (Volta 45k EUR/h — the number behind movement 2.)
 - SCM: "Days of cover for MAT_CLT_HD22 at PLANT_HAM at planned

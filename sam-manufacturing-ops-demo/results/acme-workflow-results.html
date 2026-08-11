@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acme Mfg — Agent Workflow Results</title>
+<style>
+  :root {
+    --bg: #f2f4f6;
+    --surface: #ffffff;
+    --surface-2: #f7f9fb;
+    --ink: #1b2430;
+    --muted: #59667a;
+    --line: #d7dee6;
+    --accent: #24549e;
+    --accent-soft: #e3ecf8;
+    --crit: #b3392f;
+    --crit-soft: #f9e9e7;
+    --warn: #96660a;
+    --warn-soft: #f7efdc;
+    --ok: #276b46;
+    --ok-soft: #e2f1e8;
+    --shadow: 0 1px 2px rgba(27, 36, 48, 0.06), 0 8px 24px rgba(27, 36, 48, 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10151c;
+      --surface: #182028;
+      --surface-2: #1e2833;
+      --ink: #e6ebf1;
+      --muted: #97a4b4;
+      --line: #2b3644;
+      --accent: #7cadec;
+      --accent-soft: #1d2c40;
+      --crit: #e07a6f;
+      --crit-soft: #3a2320;
+      --warn: #d9a84e;
+      --warn-soft: #362b16;
+      --ok: #6cbd8f;
+      --ok-soft: #1a2f24;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10151c;
+    --surface: #182028;
+    --surface-2: #1e2833;
+    --ink: #e6ebf1;
+    --muted: #97a4b4;
+    --line: #2b3644;
+    --accent: #7cadec;
+    --accent-soft: #1d2c40;
+    --crit: #e07a6f;
+    --crit-soft: #3a2320;
+    --warn: #d9a84e;
+    --warn-soft: #362b16;
+    --ok: #6cbd8f;
+    --ok-soft: #1a2f24;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+  :root[data-theme="light"] {
+    --bg: #f2f4f6;
+    --surface: #ffffff;
+    --surface-2: #f7f9fb;
+    --ink: #1b2430;
+    --muted: #59667a;
+    --line: #d7dee6;
+    --accent: #24549e;
+    --accent-soft: #e3ecf8;
+    --crit: #b3392f;
+    --crit-soft: #f9e9e7;
+    --warn: #96660a;
+    --warn-soft: #f7efdc;
+    --ok: #276b46;
+    --ok-soft: #e2f1e8;
+    --shadow: 0 1px 2px rgba(27, 36, 48, 0.06), 0 8px 24px rgba(27, 36, 48, 0.05);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .mono {
+    font-family: "SF Mono", ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  }
+  code {
+    font-family: "SF Mono", ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    font-size: 0.85em;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+    white-space: nowrap;
+  }
+
+  /* ---------- page header ---------- */
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 20px;
+  }
+  .masthead .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 24px;
+    font-size: 12px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .masthead h1 {
+    margin: 0;
+    font-size: clamp(26px, 4.5vw, 36px);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  .masthead p.sub {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  /* ---------- report card ---------- */
+  section.report {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .report-head {
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .eyebrow {
+    font-family: "SF Mono", ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .report-head h2 {
+    margin: 0;
+    font-size: clamp(20px, 3.4vw, 26px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: "SF Mono", ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .chip::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex: none;
+  }
+  .chip.crit { color: var(--crit); background: var(--crit-soft); border-color: transparent; }
+  .chip.crit::before { background: var(--crit); }
+  .chip.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+  .chip.warn::before { background: var(--warn); }
+  .chip.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+  .chip.ok::before { background: var(--ok); }
+  .chip.plain::before { display: none; }
+
+  /* ---------- KPI strip ---------- */
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .kpi {
+    background: var(--surface-2);
+    padding: 16px 20px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .kpi .label {
+    font-size: 11px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .kpi .value {
+    font-family: "SF Mono", ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .kpi .value.crit { color: var(--crit); }
+  .kpi .value.warn { color: var(--warn); }
+  .kpi .value.ok { color: var(--ok); }
+  .kpi .note { font-size: 12px; color: var(--muted); }
+
+  /* ---------- report body ---------- */
+  .report-body {
+    padding: 26px 28px 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .report-body h3 {
+    margin: 8px 0 0;
+    font-size: 13px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 6px;
+  }
+  .report-body p { margin: 0; max-width: 70ch; }
+  .lede { font-size: 17px; font-weight: 600; max-width: 65ch; }
+
+  .finding {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .finding .tag {
+    font-family: "SF Mono", ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 5px;
+    padding: 4px 0;
+    text-align: center;
+    margin-top: 3px;
+  }
+  .finding .body { max-width: 68ch; }
+  @media (max-width: 560px) {
+    .finding { grid-template-columns: 1fr; gap: 6px; }
+    .finding .tag { width: max-content; padding: 4px 10px; }
+  }
+
+  ol.recs {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: rec;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  ol.recs li {
+    counter-increment: rec;
+    position: relative;
+    padding-left: 42px;
+    max-width: 72ch;
+  }
+  ol.recs li::before {
+    content: counter(rec, decimal-leading-zero);
+    position: absolute;
+    left: 0;
+    top: 1px;
+    width: 30px;
+    font-family: "SF Mono", ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    font-size: 12px;
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+    text-align: center;
+    padding-bottom: 2px;
+  }
+
+  .artifact-row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .artifact {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "SF Mono", ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    font-size: 12.5px;
+    padding: 8px 14px;
+    border: 1px dashed var(--accent);
+    border-radius: 6px;
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .artifact .kind {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.75;
+  }
+
+  .callout {
+    border-left: 3px solid var(--warn);
+    background: var(--warn-soft);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    max-width: 72ch;
+  }
+  .callout.crit { border-left-color: var(--crit); background: var(--crit-soft); }
+  .callout.action { border-left-color: var(--ok); background: var(--ok-soft); }
+  .callout .callout-label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .callout.crit .callout-label { color: var(--crit); }
+  .callout .callout-label { color: var(--warn); }
+  .callout.action .callout-label { color: var(--ok); }
+  .callout p { max-width: none; }
+
+  /* ---------- tables ---------- */
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 520px;
+    font-size: 14.5px;
+  }
+  thead th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: var(--surface-2);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num {
+    font-family: "SF Mono", ui-monospace, "Cascadia Mono", "Consolas", monospace;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  tr.hot td { background: var(--crit-soft); }
+  tr.pick td { background: var(--ok-soft); }
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .pill.crit { color: var(--crit); background: var(--crit-soft); }
+  .pill.ok { color: var(--ok); background: var(--ok-soft); }
+  .pill.warn { color: var(--warn); background: var(--warn-soft); }
+  tr.hot .pill.crit, tr.pick .pill.ok { outline: 1px solid currentColor; }
+
+  .footnote {
+    font-size: 13.5px;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+    max-width: 74ch;
+  }
+  .page-foot {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: center;
+  }
+  strong { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="meta-row">
+      <span class="mono">Acme Manufacturing · Solace Agent Mesh</span>
+      <span class="mono">Session 2026-08-11</span>
+    </div>
+    <h1>Agent Workflow Results</h1>
+    <p class="sub">Merged outputs of two autonomous investigations: the
+    Quality Incident Report workflow (EOL torque failure, Plant 2 Graz)
+    and the Supply Chain Replenishment workflow (HD-22 clutch disc,
+    Plant 1 Hamburg).</p>
+  </header>
+
+  <!-- ============ WORKFLOW 1 ============ -->
+  <section class="report" id="quality">
+    <div class="report-head">
+      <span class="eyebrow">Workflow 01 · Quality Incident Report</span>
+      <h2>EOL Torque Failure — Production Order PRD-118-4718</h2>
+      <div class="chip-row">
+        <span class="chip plain">FG_IX450 · IX-450 Cordless Impact Driver</span>
+        <span class="chip plain">Plant 2 — Graz · Line L3 · Station EOL-2</span>
+        <span class="chip crit">QUALITY_HOLD</span>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi">
+        <span class="label">Root cause</span>
+        <span class="value" style="font-size:15px">ECO adoption gap</span>
+        <span class="note">Master data — not a product defect</span>
+      </div>
+      <div class="kpi">
+        <span class="label">Station fail rate</span>
+        <span class="value crit">100%</span>
+        <span class="note">up from ~1.25% · since 07-28 06:07 UTC</span>
+      </div>
+      <div class="kpi">
+        <span class="label">Units on hold</span>
+        <span class="value">1,200</span>
+        <span class="note">likely false rejects</span>
+      </div>
+      <div class="kpi">
+        <span class="label">Value exposed</span>
+        <span class="value warn">€340,200</span>
+        <span class="note">1,800 units across 2 orders</span>
+      </div>
+    </div>
+
+    <div class="report-body">
+      <p class="lede">Root cause — a master-data / ECO-adoption gap, not a
+      product defect. The measured 22.1&nbsp;Nm is in-spec against the
+      correct Rev-C limits and only fails against the outdated station
+      setting.</p>
+
+      <h3>Returned artifacts</h3>
+      <div class="artifact-row">
+        <span class="artifact"><span class="kind">report</span>Quality_Incident_PRD-118-4718.md</span>
+        <span class="artifact"><span class="kind">chart</span>eol2_torque_trend.png</span>
+      </div>
+      <p style="font-size:14px;color:var(--muted)">The telemetry chart shows the
+      mean-torque step change and daily fail rate, with the 2025-07-28
+      onset annotated.</p>
+
+      <h3>Executive summary of the investigation</h3>
+
+      <div class="finding">
+        <span class="tag">PDM</span>
+        <p class="body">Engineering change <strong>ECO-2025-118</strong>
+        (&ldquo;HD-22 sintered clutch disc introduction,&rdquo; effective
+        2025-07-20) raised the EOL torque spec from
+        <strong>18.0&nbsp;±&nbsp;0.5&nbsp;Nm → 22.0&nbsp;±&nbsp;0.5&nbsp;Nm</strong>
+        (current Rev&nbsp;C window <strong>21.5–22.5&nbsp;Nm</strong>). The ECO
+        is <strong>RELEASED and acknowledged at Hamburg</strong>, but
+        <strong>still PENDING — never acknowledged — at the failing plant
+        PLANT_GRZ</strong>. Station EOL-2 in Graz is therefore still enforcing
+        the obsolete <strong>Rev-B limits (17.5–18.5&nbsp;Nm)</strong> while the
+        line builds the new HD-22 hardware.</p>
+      </div>
+
+      <div class="finding">
+        <span class="tag">Telemetry</span>
+        <p class="body">A clean <strong>level shift from ~18.0&nbsp;Nm →
+        ~22.0&nbsp;Nm</strong> began <strong>2025-07-28 06:07 UTC</strong> (last
+        good unit 07-27 20:28), taking the station from ~1.25% to a
+        <strong>100% fail rate</strong> (69.6% of all L3 records overall —
+        181 of 260). Sustained failures begin <strong>three minutes after
+        the first HD-22 lot issue</strong> (06:04 → 06:07 UTC). <code>station_spec_revision</code> is confirmed
+        as <strong>&ldquo;B&rdquo;</strong> on all records. The measured
+        <strong>22.1&nbsp;Nm is in-spec against the correct Rev-C limits</strong>
+        and only fails against the outdated station setting — these are
+        almost certainly <strong>false rejects</strong>.</p>
+      </div>
+
+      <div class="finding">
+        <span class="tag">OMS</span>
+        <p class="body">PRD-118-4718 is on <strong>QUALITY_HOLD</strong>
+        (1,200 units). It directly fulfils <strong>ORD-2025-30388</strong>
+        (ACC_TOOLMART, €226,800, DACH autumn campaign, requested
+        2025-08-20 — only 4 days after scheduled build end). A cascading
+        order <strong>ORD-2025-30422</strong> (ACC_ORIENTT, €113,400) is
+        queued behind it on L3. <strong>Total value exposed: €340,200 /
+        1,800 units.</strong></p>
+      </div>
+
+      <h3>Top recommendations</h3>
+      <ol class="recs">
+        <li>Update EOL-2 (L3, Graz) torque spec and calibration to
+        <strong>22.0&nbsp;±&nbsp;0.5&nbsp;Nm</strong> and acknowledge
+        ECO-2025-118.</li>
+        <li>Quarantine and <strong>re-test units rejected under the wrong
+        spec</strong> to release PRD-118-4718 from hold.</li>
+        <li>Proactively notify ACC_TOOLMART given the tight 4-day delivery
+        buffer.</li>
+        <li>Fix the systemic gap that let HD-22 lots reach the line before
+        the ECO was closed at Graz.</li>
+      </ol>
+
+      <div class="callout action">
+        <span class="callout-label">Correlation closed</span>
+        <p>The <code>material_consumption</code> records confirm the lot
+        change: the first HD-22 issue to PRD-118-4718 is logged at
+        <strong>06:04 UTC</strong>, sustained torque failures begin at
+        <strong>06:07 UTC — three minutes later</strong>. Design change and
+        failure signature are causally linked; no open loop remains.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ WORKFLOW 2 ============ -->
+  <section class="report" id="replenishment">
+    <div class="report-head">
+      <span class="eyebrow">Workflow 02 · Supply Chain Replenishment</span>
+      <h2>Replenishment Recommendation — HD-22 Clutch Disc (MAT_CLT_HD22)</h2>
+      <div class="chip-row">
+        <span class="chip plain">Plant 1 — Hamburg</span>
+        <span class="chip crit">Coverage threshold crossed</span>
+        <span class="chip warn">Observed burn ≈4× plan</span>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi">
+        <span class="label">Projected cover</span>
+        <span class="value crit">4.4 days</span>
+        <span class="note">vs. 4.5-day threshold</span>
+      </div>
+      <div class="kpi">
+        <span class="label">On hand</span>
+        <span class="value">1,850</span>
+        <span class="note">safety stock 800</span>
+      </div>
+      <div class="kpi">
+        <span class="label">Value at risk</span>
+        <span class="value crit">€784,000</span>
+        <span class="note">100% in one OEM account</span>
+      </div>
+      <div class="kpi">
+        <span class="label">Fastest fix</span>
+        <span class="value ok">3 days</span>
+        <span class="note">FrictionWorks expedite</span>
+      </div>
+    </div>
+
+    <div class="report-body">
+      <p class="lede">Stock coverage threshold crossed: projected
+      4.4&nbsp;days vs. the 4.5-day threshold. On-hand 1,850 units against
+      a safety stock of 800 — the only inbound PO lands with barely a day
+      of margin while the burn rate is still climbing.</p>
+
+      <h3>Returned artifacts</h3>
+      <div class="artifact-row">
+        <span class="artifact"><span class="kind">chart</span>mat_clt_hd22_ham_consumption_trend.png</span>
+      </div>
+
+      <h3>Stockout horizon — observed vs. planned</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Scenario</th><th>Rate</th><th>Days of cover</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Planned (MRP) — to safety stock</td>
+              <td class="num">120/day</td>
+              <td class="num"><strong>≈8.8 days</strong> (1,050-unit usable buffer)</td>
+            </tr>
+            <tr>
+              <td>Planned (MRP) — to zero</td>
+              <td class="num">120/day</td>
+              <td class="num">≈15.4 days</td>
+            </tr>
+            <tr class="hot">
+              <td><strong>Observed (plant telemetry, still rising)</strong></td>
+              <td class="num">~424/day (14d) → ~474/day (7d) · ≈4× plan</td>
+              <td class="num"><strong>≈4.0–4.4 days</strong> <span class="pill crit">critical</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="callout-label">Burn rate confirmed</span>
+        <p>The <code>material_consumption</code> telemetry confirms the ramp:
+        <strong>~424/day over 14 days, ~474/day over the last 7 — and still
+        trending up</strong>, tracking the ECO-2025-118 adoption at Hamburg
+        since 2025-07-22. Planning still assumes 120/day: safety stock
+        (800) and reorder point (1,200) were sized for a pre-ECO world.
+        <strong>The MRP plan says two weeks of buffer; reality says four
+        days.</strong></p>
+      </div>
+
+      <h3>Does inbound supply close the gap?</h3>
+      <p><strong>Barely — and with no room for error.</strong> The only
+      open PO — <strong>PO-88213 (5,000 units, SinterTech)</strong> — is
+      confirmed for <strong>2025-08-14, ~3 days out</strong>: it lands just
+      ahead of the ≈4.0–4.4-day stockout horizon with only
+      <strong>~1–1.5 days of margin</strong>, while the 7-day burn is
+      running hotter than the 14-day. <strong>If the ETA slips a single
+      day or the rate keeps climbing, the buffer evaporates and the line
+      stops.</strong></p>
+
+      <h3>Options</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Option</th><th>Lead time</th><th>Cost</th><th>Closes the gap?</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Expedite PO-88213 with <strong>SinterTech</strong></td>
+              <td class="num">6 days</td>
+              <td class="num">€7.90/unit · 97% OTD</td>
+              <td><strong>No benefit</strong> — slower than the PO already
+              in transit (ETA 08-14)</td>
+            </tr>
+            <tr class="pick">
+              <td>Expedite order with alternate <strong>FrictionWorks</strong> (qualified)</td>
+              <td class="num"><strong>3 days</strong></td>
+              <td class="num">€8.55/unit (+~8%) · 94% OTD</td>
+              <td><span class="pill ok">Recommended</span><br>Lands
+              alongside PO-88213, absorbs further acceleration</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Business impact</h3>
+      <p><strong>€784,000 at risk</strong>, 100% concentrated in a single
+      strategic OEM account (<strong>ACC_VOLTA</strong>): ORD-2025-30412
+      (in production) + ORD-2025-30430 (open), ~8,000 CK-350 kits / discs
+      still to build under ECO-2025-118. A line stop directly threatens
+      both orders and the account relationship.</p>
+
+      <div class="callout action">
+        <span class="callout-label">One concrete action</span>
+        <p><strong>Place an expedited PO with FrictionWorks today (by end
+        of day) for ≥3,000 units</strong>, running in parallel with
+        PO-88213 — its 3-day lead removes the single-day-of-margin risk
+        entirely. <strong>Then reset the MRP planning parameters</strong>
+        for MAT_CLT_HD22 at Hamburg from 120/day to the observed
+        ~450/day, so safety stock and reorder point reflect the post-ECO
+        reality. Given €784k of single-account exposure and the
+        &ldquo;production must not stop&rdquo; mandate, this is cheap
+        insurance (+~8% on ~3,000 units).</p>
+      </div>
+
+      <p class="footnote"><em>Analysis caveats, stated by the agents
+      themselves: (a) the customer-order link to MAT_CLT_HD22 is inferred
+      via the CK-350 finished good (OMS carries no component key) and
+      confirmed through order notes referencing ECO-2025-118; (b) the
+      plant dataset reflects the 2025 program cycle and was treated as
+      the ramp window; (c) on-hand reads 1,850 (SCM) vs. ~2,035
+      (telemetry) — both imply ≈4 days of cover, so the recommendation is
+      unaffected. Follow-up on offer: size the exact FrictionWorks
+      quantity against the ~8,000 discs still to build.</em></p>
+    </div>
+  </section>
+
+  <footer class="page-foot mono">
+    Generated by Solace Agent Mesh · Event-Driven Manufacturing Operations Demo
+  </footer>
+
+</div>
+</body>
+</html>
