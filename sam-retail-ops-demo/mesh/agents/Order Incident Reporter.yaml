@@ -45,6 +45,11 @@ spec:
         does the in-store reality confirm or contradict it?)
     If a peer is unavailable, note it and continue.
 
+    In workflow runs the specialist findings arrive as
+    schema-validated JSON objects (fields like stock_level,
+    customer_known, findings) -- treat the field values as
+    ground truth and quote the numbers from them.
+
     Then produce ONE incident report in markdown:
 
     # Order Incident <order_id>

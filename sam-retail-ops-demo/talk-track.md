@@ -374,13 +374,19 @@ links) after every install.
 > "Workflows are the standard operating procedures of the team.
 > This one handles a failed order: three specialists — OMS, PDM,
 > POS — investigate **in parallel**, and a fourth agent merges
-> their findings into one incident report. Two details worth
-> stealing: `fail_fast` is off — if one specialist is missing,
-> the report says so transparently instead of failing. And the
-> whole thing is YAML in git — I apply it with
-> `sam config apply`, same as everything else you see today.
-> Notice the POS node: it references the analyst we're hiring
-> **right now**."
+> their findings into one incident report. Three details worth
+> stealing. First: each specialist node carries an **output
+> contract** — a JSON schema the platform enforces; if the
+> agent's answer violates it, the platform **auto-retries**
+> before the merge ever sees it. Deterministic hand-offs in an
+> LLM workflow. Second: `fail_fast` is off — if one specialist
+> is missing, the report says so transparently instead of
+> failing. Third: the whole thing is YAML in git — I apply it
+> with `sam config apply`, same as everything else you see
+> today. Notice the POS node: it references the analyst we're
+> hiring **right now** — and the final report node has NO
+> schema on purpose: facts arrive structured, the story stays
+> human."
 
 ### 5.2 Connectors, Entrypoints (30 s each)
 
