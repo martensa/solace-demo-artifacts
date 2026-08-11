@@ -292,20 +292,33 @@ sam VPN via ws://localhost:8008). ONE click: **Release orders**.
 Timeline after the click (scripted in the cockpit,
 deterministic):
 
+Timings below are MEASURED (dress rehearsal 2026-08-11, all
+13 tasks completed, zero failures):
+
 - **0:00** -- two order-released events; the clerk confirms both
-  (fast tier). The good case, 30 seconds.
+  in ~6 s each (fast tier). The good case, 30 seconds.
 - **0:25** -- Graz L3 starts failing (HD-22 units vs the old
   spec). Let the counters climb.
-- **~0:40** -- 6th fail publishes ONE `eol-failed` event; the
+- **~0:45** -- 6th fail publishes ONE `eol-failed` event; the
   incident analysis starts. Movement 1: narrate via Activities
-  in window B, like retail 7.3/7.4.
-- **~4:00** -- the incident report lands in the cockpit. Read
-  severity + root cause: ECO pending at Graz.
+  in window B, like retail 7.3/7.4. The Orchestrator delegates
+  OMS first, then PDM + Shop Floor Analyst -- the analyst runs
+  ~9 aggregation pipelines and renders a CHART live (say so:
+  the colleague hired 15 minutes ago is making charts).
 - **~4:40** -- the coverage gauge crosses the red line;
-  `threshold-crossed` fires, the replenishment analysis starts.
-  Movement 2: "nobody asked a question".
-- **~7:00** -- the replenishment recommendation lands. Read the
+  `threshold-crossed` fires, the replenishment analysis starts
+  -- this time the Orchestrator fans out to SCM + OMS + analyst
+  IN PARALLEL (visible in Activities). Movement 2: "nobody
+  asked a question".
+- **~5:15** -- the incident report lands in the cockpit. Read
+  severity + root cause: ECO pending at Graz. (Both movements
+  overlap for a minute -- that is fine and even makes the
+  point: the team walks and chews gum.)
+- **~8:15** -- the replenishment recommendation lands. Read the
   one action: expedite / alternate supplier before stockout.
+  ELASTIC BRIDGE: after reading the incident report (~5:30),
+  start chapter 8 on the dashboard and RETURN to the cockpit
+  when the recommendation arrives -- do not wait idle.
 
 **SAY** (the pivot between the movements):
 
@@ -440,6 +453,14 @@ creates ONLY the agent):
   shows EMPTY either way -- it only mirrors UI-assigned
   toolsets, not app_config tools. Judge by the plan card / awe
   logs, never by that field.
+
+Merge agents may WARN with a pseudo-tool `_continue_generation`
+(observed 2026-08-11 at the Quality Incident Reporter, three
+WARN lines): the model tries to continue a long answer via a
+tool that does not exist. NOT fatal -- the task completed and
+the report was delivered. Only if a report visibly ends
+mid-sentence, tighten the "under 25 lines" rule in the merge
+agent's prompt.
 
 The Builder depends on the external LLM gateway
 (lite-llm.mymaas.net): a transient upstream 502 surfaces as
