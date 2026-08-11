@@ -44,6 +44,9 @@ postgres/pgadmin containers stay -- ready for a different demo.
 - `talk-track.md` -- the complete demo script (English)
 - `install.sh` / `uninstall.sh` -- demo lifecycle on top of the
   base platform (idempotent)
+- `preflight.sh` -- automated Appendix A checklist with
+  auto-fix; ends READY / NOT READY (run ~15 min before going
+  live)
 - `core/` -- the retail CORE package (`sam config apply`):
   CRM/OMS/PDM postgres connectors, schema skill bundles, three
   query expert agents, the Retail 360 Reporter and the

@@ -66,6 +66,9 @@ conflict.
 - `talk-track.md` -- the demo script (English)
 - `install.sh` / `uninstall.sh` -- demo lifecycle on top of the
   base platform (idempotent)
+- `preflight.sh` -- automated Appendix A checklist with
+  auto-fix; ends READY / NOT READY (run ~15 min before going
+  live)
 - `demo-links.sh` -- prints direct SAM UI links for the demo
   windows (workflows are name-based and stable; agent and
   connector links are resolved by ID via the platform API)

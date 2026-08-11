@@ -396,6 +396,13 @@ chain diagram: one click -> one event -> two business outcomes.
 
 ## Appendix A — Pre-flight checklist (15 min before going live)
 
+**Automated: run `./preflight.sh`** — it checks every item
+below, applies the fix on failure (install.sh, seed, mongo
+reseed, analyst removal, dashboard apply, eval pre-run) and
+ends with READY / NOT READY. The list below is the manual
+reference; only the window setup and the break-glass rehearsal
+remain human steps.
+
 1. Base platform healthy (see retail Appendix A items: models
    probe, kyverno/monitoring health).
 2. `./install.sh` ran clean; **Agent Management shows NO Shop

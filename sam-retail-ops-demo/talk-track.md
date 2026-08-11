@@ -767,6 +767,13 @@ marked "not shown today").
 
 ## Appendix A — Pre-flight checklist (15 min before going live)
 
+**Automated: run `./preflight.sh`** — it checks every item
+below, applies the fix on failure (install.sh, seed, mongo
+reseed, analyst removal, dashboard apply, eval pre-run) and
+ends with READY / NOT READY. The list below is the manual
+reference; only the window setup (incl. Claude Code `/mcp`)
+and the shop LED glance remain human steps.
+
 1. `docker ps` — solace-1/2, otel-collector, generator,
    consumer, postgres, pgadmin, retail-pos-mongo all running
    (postgres/pgadmin are host containers and stay Exited after
