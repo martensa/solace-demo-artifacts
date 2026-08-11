@@ -20,8 +20,9 @@ click:
    lands before the line stops.
 
 Start with [talk-track.md](talk-track.md) -- the demo script
-(v0.1 skeleton; structure and beats final, SAY blocks not yet
-rehearsal-hardened).
+(v1.0, rehearsal-hardened: measured timings, READ-ALOUD quotes
+from the real reports, Builder green-path prompt, failure
+signatures with stage responses).
 
 ## Install / remove
 

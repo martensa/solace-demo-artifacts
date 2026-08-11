@@ -1,12 +1,12 @@
 # Event-Driven Manufacturing Operations — Live Demo Script
 
-> **Status: v0.1 skeleton.** Structure, beats, click paths and
-> the two event-driven movements are final; the verbatim SAY
-> blocks are drafted but not yet rehearsal-hardened the way
-> `sam-retail-ops-demo/talk-track.md` is. Rehearse, then refine
-> in place. Where a beat is identical to retail (tour, RBAC,
-> observability mechanics), this file references the retail
-> script instead of duplicating it.
+> **Status: v1.0 — rehearsal-hardened.** Structure, beats,
+> click paths, the Builder green-path prompt and the section-7
+> timings/READ-ALOUD quotes are verified against the full dress
+> rehearsal of 2026-08-11 (one click, 13/13 tasks completed,
+> real report texts). Where a beat is identical to retail
+> (tour, RBAC, observability mechanics), this file references
+> the retail script instead of duplicating it.
 
 **Title slide:** Event-Driven Manufacturing Operations —
 *The Line Never Stops.*
@@ -310,12 +310,38 @@ Timings below are MEASURED (dress rehearsal 2026-08-11, all
   -- this time the Orchestrator fans out to SCM + OMS + analyst
   IN PARALLEL (visible in Activities). Movement 2: "nobody
   asked a question".
-- **~5:15** -- the incident report lands in the cockpit. Read
-  severity + root cause: ECO pending at Graz. (Both movements
-  overlap for a minute -- that is fine and even makes the
-  point: the team walks and chews gum.)
-- **~8:15** -- the replenishment recommendation lands. Read the
-  one action: expedite / alternate supplier before stockout.
+- **~5:15** -- the incident report lands in the cockpit. (Both
+  movements overlap for a minute -- that is fine and even makes
+  the point: the team walks and chews gum.)
+
+  **READ ALOUD** (wording varies per run; the rehearsal run
+  produced these lines -- pick the bottom line + one kicker):
+
+  > "This is a **false-reject** caused by an ECO distribution
+  > gap, **not a defective product**." ... 69.6 % fail rate,
+  > 100 % from July 28 -- "sustained failures begin **three
+  > minutes** after the first HD-22 lot issue" -- station still
+  > on spec revision B. 1,800 units, 340,000 euros at risk.
+
+  **SAY**: "No engineer wrote that. Five systems, one story:
+  recalibrate the station, re-test the held units -- they are
+  very likely GOOD -- and have Graz acknowledge the change.
+  The parts were never the problem. The data was."
+- **~8:15** -- the replenishment recommendation lands.
+
+  **READ ALOUD** (rehearsal wording):
+
+  > "The safety-stock buffer was sized for a **120/day plan**,
+  > but the ECO ramp is burning **3.5 to 4 times** that --
+  > **~4 days of cover**, and if the PO slips a single day,
+  > the line stops." The ONE action: "**expedite 3,000 units
+  > from the qualified alternate TODAY, 3-day delivery** --
+  > and reset the MRP parameters to the observed rate."
+
+  **SAY**: "784,000 euros of unshipped OEM orders behind that
+  material -- and remember Volta's 45,000-per-hour line-down
+  penalty. Nobody ran a report. The threshold event did."
+
   ELASTIC BRIDGE: after reading the incident report (~5:30),
   start chapter 8 on the dashboard and RETURN to the cockpit
   when the recommendation arrives -- do not wait idle.
@@ -342,6 +368,17 @@ runs), audit stream, one Tempo trace of the incident run, and
 the offline evals (`mfg-ops-quality` gate + the three-model
 `mfg-ops-model-benchmark` on the PDM expert) — pre-run before
 the event.
+
+Cost beat, with the rehearsal's REAL numbers (task metadata):
+
+> "What did that just cost? The entire incident
+> investigation — five agents across five systems — was
+> **187,000 tokens**; the replenishment run **147,000**. At
+> list prices that is a couple of euros — versus a quality
+> engineer spending an afternoon reconciling OMS, PDM and
+> shop-floor exports, while the held order ages. And every
+> token is attributed: the chargeback table shows it all under
+> the operations persona that owns the event rules."
 
 ## 9. WRAP (18:45–20:00)
 
@@ -453,6 +490,23 @@ creates ONLY the agent):
   shows EMPTY either way -- it only mirrors UI-assigned
   toolsets, not app_config tools. Judge by the plan card / awe
   logs, never by that field.
+
+Artifact pass-through: charts rendered by a delegated agent
+(e.g. the analyst's torque-trend PNG) live in THAT agent's
+session; the merge report references them but may not embed
+them, and the final answer says so transparently. Not a bug to
+apologize for on stage -- if asked, open the analyst's task in
+Activities and show the chart there ("every artifact is
+session-scoped and auditable").
+
+Date reconciliation: the plant dataset lives in Jul/Aug 2025
+(matching the ECO-2025-118 numbering) while live events carry
+today's timestamp. The agents NOTICE and reconcile this
+transparently ("treated as the ramp window") -- observed in
+the rehearsal's replenishment caveats. If asked: "the dataset
+is historic, the event stream is live -- and the analyst
+reconciled the two on its own, which is exactly what you want
+an analyst to do."
 
 Merge agents may WARN with a pseudo-tool `_continue_generation`
 (observed 2026-08-11 at the Quality Incident Reporter, three
