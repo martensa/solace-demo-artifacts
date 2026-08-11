@@ -309,6 +309,16 @@ Build instructions (run without interruptions):
   origin: platform, fix ONLY that, and validate once more.
 - After the green full validation: no further config edits.
   Declare the build ready for Build & Activate and STOP.
+
+DEFINITION OF DONE (verify every point, then stop)
+- Agent name is exactly "Retail POS Analyst".
+- The manifest lists retail-poslog on the agent as an existing
+  platform connector; there is NO new connector component.
+- The agent config matches CONFIG SHAPE: app-level connectors,
+  builtin-group tools via tool_name, no model field, no
+  group_name keys.
+- The agent config passed the individual validation AND the
+  full build-manifest validation is green.
 ```
 
 **SAY** (while pasting and sending):
