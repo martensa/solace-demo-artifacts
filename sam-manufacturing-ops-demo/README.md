@@ -2,9 +2,8 @@
 
 *The Line Never Stops.* 20-minute live demo, layered as a
 removable overlay on top of the base platform in
-`agent-mesh-deployment/`. Manufacturing sibling of
-`sam-retail-ops-demo/` -- same AI Worker Lifecycle dramaturgy
-(hire, onboard, teamwork, improve), new stage: Acme
+`agent-mesh-deployment/`. Built on the AI Worker Lifecycle
+dramaturgy (hire, onboard, teamwork, improve). The stage: Acme
 Manufacturing, two divisions (power tools and automotive
 components), two plants, and TWO event-driven movements from one
 click:
@@ -41,25 +40,44 @@ overlay, the eval package and the demo dashboard. By default it
 leaves the Shop Floor Analyst REMOVED while the two MongoDB
 connectors stay pre-provisioned: the live Builder beat creates
 only the agent binding them (one config, no connector
-sub-tasks -- fast and reliable on stage); `--with-analyst`
-keeps the agent for rehearsals.
+sub-tasks -- fast and reliable on stage).
+
+Only ONE demo overlay runs at a time: `install.sh` refuses to
+install while another demo's entrypoint is on the platform
+(pointing at its `uninstall.sh`), and stops any other demo's
+mongo container occupying port 27017.
 
 ```bash
 ./uninstall.sh
 ```
 
-Removes the demo's platform resources (overlay AND the
-manufacturing core, incl. the eval experiments and their run
-history), the demo dashboard and the MongoDB container with its
-anonymous volume (a fresh `install.sh` re-seeds it in seconds);
-`--keep-core` keeps the core for fast switching between demo
-overlays, `--dry-run` previews. The SAM infrastructure (models,
-RBAC, developer-mcp, observability) and the shared
-postgres/pgadmin containers stay -- ready for a different demo.
-The retail and manufacturing demos share the standard mongo
-port 27017: each demo's install.sh stops the other demo's mongo
-container automatically; the postgres databases coexist without
-conflict.
+### Script flags
+
+`install.sh`:
+
+- (no flag) -- clean state for the live demo: Shop Floor
+  Analyst absent, connectors pre-provisioned
+- `--with-analyst` -- keep the Shop Floor Analyst agent
+  (rehearsals; skips the live Builder beat)
+
+`uninstall.sh`:
+
+- (no flag) -- removes the demo overlay AND the manufacturing
+  core (agents, connectors, skills), the eval experiments and
+  dataset (INCLUDING their run history), the demo dashboard,
+  and the `mfg-plant-mongo` container INCLUDING its anonymous
+  data volume
+- `--keep-core` -- remove only the overlay; keep the core for
+  fast re-install
+- `--dry-run` -- preview everything without changing anything
+- `--purge-data` -- additionally DROP the four `mfg_*` postgres
+  databases; combined with the default mongo removal this
+  deletes the demo COMPLETELY, data and volumes included (a
+  fresh `install.sh` re-seeds everything in seconds)
+
+Always kept: the SAM infrastructure (models, RBAC,
+developer-mcp, observability) and the shared postgres/pgadmin
+host containers.
 
 ## Contents
 
@@ -75,8 +93,7 @@ conflict.
 - `core/` -- the manufacturing CORE package (`sam config
   apply`): Acme CRM/OMS/PDM/SCM postgres connectors, schema
   skill bundles, four query expert agents. Removed by
-  uninstall.sh unless `--keep-core`; the retail analog is
-  `sam-retail-ops-demo/core/`
+  uninstall.sh unless `--keep-core`
 - `mesh/` -- declarative demo resources (`sam config apply`):
   Production Confirmation Clerk (fast tier), Quality Incident
   Reporter + Supply Chain Watcher (workflow tier),
@@ -134,7 +151,7 @@ kit) and raises the EOL torque spec from 18.0 to 22.0 Nm.
 ## Slides
 
 `slides/SAM v2 - AI Worker Lifecycle Manufacturing.pptx` --
-derived from the retail deck, four slides:
+four slides:
 
 1. AI Worker Lifecycle (unchanged)
 2. The Use Case: One Engineering Change, Two Movements -- the

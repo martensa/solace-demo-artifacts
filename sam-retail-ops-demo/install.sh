@@ -66,6 +66,19 @@ if [ "${API_CODE:-}" != "200" ]; then
   exit 1
 fi
 
+# Only ONE demo overlay runs at a time (shared host stores, one
+# mongo on 27017, one stage). Refuse to install over another one.
+OTHER_EP=$(api GET /api/v1/platform/gateways | python3 -c "
+import json,sys
+for g in json.load(sys.stdin).get('data',[]):
+    if g.get('name')=='plant-events': print(g['id'])")
+if [ -n "$OTHER_EP" ]; then
+  echo "ERROR: another demo overlay is installed (entrypoint" >&2
+  echo "'plant-events' found). Only one demo runs at a time." >&2
+  echo "Remove it first:  (cd ../sam-manufacturing-ops-demo && ./uninstall.sh)" >&2
+  exit 1
+fi
+
 echo "== 1/6 Host data stores"
 for c in postgres pgadmin; do
   if [ "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" = "true" ]; then

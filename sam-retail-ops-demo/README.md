@@ -26,18 +26,42 @@ agent binding it (one config, no connector sub-task -- fast and
 reliable on stage); `--with-pos` keeps the agent for
 rehearsals.
 
+Only ONE demo overlay runs at a time: `install.sh` refuses to
+install while another demo's entrypoint is on the platform
+(pointing at its `uninstall.sh`), and stops any other demo's
+mongo container occupying port 27017.
+
 ```bash
 ./uninstall.sh
 ```
 
-Removes the demo's platform resources (overlay AND the retail
-core, incl. the eval experiments and their run history), the
-demo dashboard and the MongoDB container with its anonymous
-volume (a fresh `install.sh` re-seeds it in seconds);
-`--keep-core` keeps the core for fast switching between demo
-overlays, `--dry-run` previews. The SAM infrastructure (models,
-RBAC, developer-mcp, observability) and the shared
-postgres/pgadmin containers stay -- ready for a different demo.
+### Script flags
+
+`install.sh`:
+
+- (no flag) -- clean state for the live demo: Retail POS
+  Analyst absent, `retail-poslog` connector pre-provisioned
+- `--with-pos` -- keep the POS analyst agent (rehearsals; skips
+  the live Builder beat)
+
+`uninstall.sh`:
+
+- (no flag) -- removes the demo overlay AND the retail core
+  (agents, connectors, skills), the eval experiments and
+  dataset (INCLUDING their run history), the demo dashboard,
+  and the `retail-pos-mongo` container INCLUDING its anonymous
+  data volume
+- `--keep-core` -- remove only the overlay; keep the core for
+  fast re-install
+- `--dry-run` -- preview everything without changing anything
+- `--purge-data` -- additionally DROP the three `retail_*`
+  postgres databases; combined with the default mongo removal
+  this deletes the demo COMPLETELY, data and volumes included
+  (a fresh `install.sh` re-seeds everything in seconds)
+
+Always kept: the SAM infrastructure (models, RBAC,
+developer-mcp, observability) and the shared postgres/pgadmin
+host containers.
 
 ## Contents
 
@@ -54,8 +78,7 @@ postgres/pgadmin containers stay -- ready for a different demo.
   CRM/OMS/PDM postgres connectors, schema skill bundles, three
   query expert agents, the Retail 360 Reporter and the
   retail-360-report workflow. Removed by uninstall.sh unless
-  `--keep-core`; the manufacturing analog is
-  `sam-manufacturing-ops-demo/core/`
+  `--keep-core`
 - `mesh/` -- declarative demo resources (`sam config apply`):
   Order Confirmation Clerk (fast tier), Order Incident Reporter
   (workflow tier), order-incident-report workflow, shop-events

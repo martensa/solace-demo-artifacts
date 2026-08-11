@@ -22,11 +22,12 @@ set -euo pipefail
 # a dangling volume behind.
 # Keeps: the 5 model aliases, RBAC, the developer-mcp entrypoint,
 # the shared host containers postgres/pgadmin (mfg_* DBs stay
-# seeded; install.sh re-seeds them).
+# seeded unless --purge-data; install.sh re-seeds them).
 #
 #   ./uninstall.sh               # remove overlay + mfg core
 #   ./uninstall.sh --keep-core   # overlay only (fast demo switch)
 #   ./uninstall.sh --dry-run     # show what would be removed
+#   ./uninstall.sh --purge-data  # also DROP the mfg_* postgres DBs
 # =============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,11 +35,12 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 AMD="$REPO_DIR/agent-mesh-deployment"
 SAM_URL="https://sam.solace.lab"
 
-DRY=0; KEEP_CORE=0
+DRY=0; KEEP_CORE=0; PURGE=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run)    DRY=1 ;;
     --keep-core)  KEEP_CORE=1 ;;
+    --purge-data) PURGE=1 ;;
     -h|--help)    grep '^#   \./' "$0" | sed 's/^#   //'; exit 0 ;;
     *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
@@ -136,6 +138,19 @@ if [ "$DRY" -eq 1 ]; then
 else
   docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" down -v 2>&1 \
     | sed 's/^/   /' || true
+fi
+
+if [ "$PURGE" -eq 1 ]; then
+  echo "== Postgres databases (--purge-data)"
+  for db in mfg_crm mfg_oms mfg_pdm mfg_scm; do
+    if [ "$DRY" -eq 1 ]; then
+      echo "   WOULD drop database $db"
+    else
+      docker exec postgres psql -U postgres -q -c \
+        "DROP DATABASE IF EXISTS $db;" \
+        && echo "   $db: dropped" || echo "   $db: drop failed"
+    fi
+  done
 fi
 
 echo ""

@@ -4,16 +4,14 @@
 > click paths, the Builder green-path prompt and the section-7
 > timings/READ-ALOUD quotes are verified against the full dress
 > rehearsal of 2026-08-11 (one click, 13/13 tasks completed,
-> real report texts). Where a beat is identical to retail
-> (tour, RBAC, observability mechanics), this file references
-> the retail script instead of duplicating it.
+> real report texts).
 
 **Title slide:** Event-Driven Manufacturing Operations —
 *The Line Never Stops.*
 
 The red thread is the AI Worker Lifecycle (HIRE -> ONBOARD ->
-TEAMWORK -> IMPROVE), identical to the retail demo. What is new:
-TEAMWORK has **two movements** from **one click** —
+TEAMWORK -> IMPROVE). The signature of this demo: TEAMWORK has
+**two movements** from **one click** —
 
 1. **React** — an end-of-line failure at Plant 2 (Graz) triggers
    the quality incident analysis. Root cause: ECO-2025-118
@@ -27,12 +25,14 @@ TEAMWORK has **two movements** from **one click** —
 
 ## Personas and RBAC — who is logged in when
 
-Same personas as retail (see retail talk-track section
-"Personas and RBAC"): window A `sam_admin` (hiring manager,
-Agent Management + Builder), window B `power_user@solace.lab`
-(operations persona; all event-triggered runs are attributed to
-it via `defaultUserIdentity` and show up in ITS Activities and
-the chargeback panel).
+| Persona | Where | Role in the demo |
+| --- | --- | --- |
+| `sam_admin` | Browser window A | Bootstrap admin, the "hiring manager": roster (3), Builder (4), tour (5), deploy + first task (6), evals (8) |
+| `power_user@solace.lab` | Browser window B | Operations persona: Activities (7). All event-triggered runs are attributed to it via the entrypoint's `defaultUserIdentity` — they appear in ITS Activities and under its name in the chargeback panel |
+
+The RBAC story tells itself: the admin hires and configures,
+the operations persona owns the event-driven work, and every
+token lands on the right name in chapter 8.
 
 ## Timing at a glance (20:00 total)
 
@@ -113,6 +113,7 @@ Click rule: as soon as the agent config has validated and the
 plan card is up, click **Build & Activate** yourself — do not
 wait for the Builder to keep validating. In the Review step,
 check TWO fields before deploying:
+
 1. NAME must read exactly "Shop Floor Analyst" (observed
    2026-08-11: the Builder can normalize it to
    "ShopFloorAnalyst" — the workflows reference the exact
@@ -125,6 +126,7 @@ check TWO fields before deploying:
    toolsets; the truth is the runtime (verified via awe logs:
    chart + artifact tools registered). Do not "fix" an empty
    Toolsets field on stage.
+
 Name fixes stay in the UI (Review card, or Agent Management ->
 edit -> save & redeploy, ~15 s) — no fallback needed.
 
@@ -260,10 +262,30 @@ DEFINITION OF DONE (verify every point, then stop)
 
 ## 5. The workplace tour — while the Builder runs (4:30–7:30)
 
-Same structure as retail section 5 (workflows, connectors,
-entrypoints, models, toolsets/skills) — show the TWO deployed
-workflows (`quality-incident-report`, `supply-replenishment`)
-and the `plant-events` entrypoint with its three event rules.
+Five stops, two or three sentences each; glance at the Builder
+tab between stops and do not comment on it until section 6. The
+tour is elastic filler: extend the models stop if the Builder
+is slow, cut toolsets/skills if it finished early.
+
+1. **Workflows** — open `quality-incident-report` (direct link
+   via `./demo-links.sh`): the standard operating procedure.
+   Three specialists investigate in parallel, a fourth merges;
+   `fail_fast` off — a missing specialist is reported
+   transparently instead of failing. All YAML in git, applied
+   with `sam config apply`. The floor node references the
+   analyst being hired RIGHT NOW.
+2. **Connectors** — the governed data access of the team.
+3. **Entrypoints** — `plant-events` with its three event rules.
+4. **Models** — the aliases: `fast` for routine confirmations,
+   `general` for the experts, `workflow` for the merges,
+   `reasoning` for the analyst — multi-model by task, no API
+   key ever visible.
+5. **Toolsets and skills** — versioned schema knowledge
+   (`mfg-*-schema`), first cut on overrun.
+
+Show the TWO deployed workflows (`quality-incident-report`,
+`supply-replenishment`) and the `plant-events` entrypoint with
+its three event rules.
 On the Connectors stop, point at `mfg-telemetry` and
 `mfg-consumption`: the plant-store access the new hire is being
 bound to RIGHT NOW — read-only service account, one collection
@@ -309,7 +331,8 @@ Timings below are MEASURED (dress rehearsal 2026-08-11, all
   spec). Let the counters climb.
 - **~0:45** -- 6th fail publishes ONE `eol-failed` event; the
   incident analysis starts. Movement 1: narrate via Activities
-  in window B, like retail 7.3/7.4. The Orchestrator delegates
+  in window B — open the running task and let the delegation
+  tree speak. The Orchestrator delegates
   OMS first, then PDM + Shop Floor Analyst -- the analyst runs
   ~9 aggregation pipelines and renders a CHART live (say so:
   the colleague hired 15 minutes ago is making charts).
@@ -368,14 +391,25 @@ business event without restarting the flow.
 
 ## 8. IMPROVEMENT — measure the workforce (16:30–18:45)
 
-Same mechanics as retail section 8, with the manufacturing
-dashboard ("SAM Manufacturing Ops Demo" in Grafana): health,
-speed (fast vs general tier visible from the clerk vs experts),
-cost + chargeback by user (power_user carries the event-driven
-runs), audit stream, one Tempo trace of the incident run, and
-the offline evals (`mfg-ops-quality` gate + the three-model
-`mfg-ops-model-benchmark` on the PDM expert) — pre-run before
-the event.
+**DO**: window D — Grafana dashboard "SAM Manufacturing Ops
+Demo". Walk the rows top to bottom; every number was produced
+by the run the audience just watched:
+
+1. **Health** — components up, broker connections, tasks in
+   flight: the workforce has an ops view like any other system.
+2. **Speed** — request duration p50/p95 and LLM latency per
+   model: the clerk's fast tier visibly answers in seconds
+   while the experts think.
+3. **Cost + chargeback** — token rate by model, and the
+   platform-DB table BY USER: the event-driven runs all landed
+   on `power_user` — chargeback works for AI workers.
+4. **Governance** — the audit stream from Loki: every tool
+   execution with its user; RBAC denies included.
+5. **The proof** — one Tempo trace of the incident run (every
+   A2A hop is a broker span), and the offline evals in the
+   Evaluations lab: the `mfg-ops-quality` gate plus the
+   three-model `mfg-ops-model-benchmark` on the PDM expert —
+   pre-run before the event.
 
 Cost beat, with the rehearsal's REAL numbers (task metadata):
 
@@ -413,8 +447,10 @@ ends with READY / NOT READY. The list below is the manual
 reference; only the window setup and the break-glass rehearsal
 remain human steps.
 
-1. Base platform healthy (see retail Appendix A items: models
-   probe, kyverno/monitoring health).
+1. Base platform healthy: models probe
+   (`agent-mesh-deployment/scripts/models/apply-models.sh
+   --probe-only`), all pods Running (kyverno, monitoring,
+   sam-solace-lab).
 2. `./install.sh` ran clean; **Agent Management shows NO Shop
    Floor Analyst**, but the `mfg-telemetry` and
    `mfg-consumption` connectors ARE present (pre-provisioned;
@@ -450,7 +486,7 @@ remain human steps.
 
 ## Appendix C — Known limits (moderate honestly)
 
-Inherited from the platform (see retail Appendix C): entrypoint
+Platform-level limitations (verified on this build): entrypoint
 promptTemplate renders only for AGENT targets, hence the
 Orchestrator route while the workflows carry the UI story;
 event-triggered runs deliver no structured input keys
@@ -478,7 +514,7 @@ creates ONLY the agent):
 - "Couldn't confirm full validation -- deploy stays disabled
   until it succeeds": the deploy gate reflects the LAST
   validation result. RESOLVED 2026-08-11: the full validation
-  is NOT unsatisfiable (retail lore corrected) -- it passes
+  is NOT unsatisfiable -- it passes
   when (a) the two connectors are manifest components with
   origin: platform / status: deployed AND (b) the agent config
   declares `connectors` at the APP level, as a sibling of

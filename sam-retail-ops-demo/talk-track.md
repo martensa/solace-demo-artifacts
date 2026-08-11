@@ -200,7 +200,7 @@ fixable in the UI (Review card or Agent Management -> edit),
 no fallback needed. NOTE: the Toolsets field in Agent
 Management shows EMPTY even on a correct build — it only
 mirrors UI-assigned toolsets; judge by the plan card, never by
-that field (verified 2026-08-11, manufacturing).
+that field (verified 2026-08-11).
 
 **Break glass** (Builder fails or stalls — see Appendix C for
 the failure signature): run this in the terminal — it creates
@@ -878,8 +878,8 @@ receipts plus the demo stories in the same document schema.
   4). Keep the Builder chat to ONE prompt; if it asks more
   than one clarifying question, break glass.
 - **Builder loops on full-manifest validation** (hit in the
-  live build 2026-08-04; RESOLVED 2026-08-11 in the
-  manufacturing demo): the check is NOT unsatisfiable -- it
+  live build 2026-08-04; RESOLVED
+  2026-08-11): the check is NOT unsatisfiable -- it
   demands a `connectors` declaration at the APP level of the
   agent config (sibling of app_config); INSIDE app_config the
   schema rejects the field, which is why every earlier attempt
