@@ -381,7 +381,8 @@ links) after every install.
 > and each specialist node carries an **output contract** — a
 > JSON schema the platform enforces; if the agent's answer
 > violates it, the platform **auto-retries** before the merge
-> ever sees it. Deterministic hand-offs in an LLM workflow. Second: `fail_fast` is off — if one specialist
+> ever sees it. Deterministic hand-offs in an LLM workflow.
+> Second: `fail_fast` is off — if one specialist
 > is missing, the report says so transparently instead of
 > failing. Third: the whole thing is YAML in git — I apply it
 > with `sam config apply`, same as everything else you see
