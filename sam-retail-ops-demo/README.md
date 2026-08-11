@@ -47,6 +47,9 @@ postgres/pgadmin containers stay -- ready for a different demo.
 - `preflight.sh` -- automated Appendix A checklist with
   auto-fix; ends READY / NOT READY (run ~15 min before going
   live)
+- `demo-links.sh` -- prints direct SAM UI links for the demo
+  windows (workflow display-name links are stable; agent and
+  connector links are resolved by ID via the platform API)
 - `core/` -- the retail CORE package (`sam config apply`):
   CRM/OMS/PDM postgres connectors, schema skill bundles, three
   query expert agents, the Retail 360 Reporter and the

@@ -6,8 +6,10 @@ set -euo pipefail
 # (talk-track click paths, window setup, rehearsal).
 #
 # The UI is hash-routed. Link patterns (verified against the app
-# bundle and the live deployment, 2026-08-10):
-#   workflow    #/agents/workflows/workflow_<platform-id, - -> _>
+# bundle and the live deployment, 2026-08-11):
+#   workflow    #/agents/workflows/<display name, URL-encoded>
+#               (STABLE across re-installs) and
+#               #/agents/workflows/workflow_<platform-id, - -> _>
 #   agent       #/agent-management?id=<platform-id>
 #   connector   #/connectors/<platform-id>
 #   entrypoint  #/entrypoints/<platform-id>
@@ -61,12 +63,12 @@ for n in want:
 fetch /api/v1/platform/agents >/dev/null
 
 echo "== Workflows (display-name links are STABLE across installs)"
-printf "   %-32s %s\n" "Quality Incident Report" \
-  "$SAM_URL/#/agents/workflows/Quality%20Incident%20Report"
-printf "   %-32s %s\n" "Supply Replenishment" \
-  "$SAM_URL/#/agents/workflows/Supply%20Replenishment"
+printf "   %-32s %s\n" "Order Incident Report" \
+  "$SAM_URL/#/agents/workflows/Order%20Incident%20Report"
+printf "   %-32s %s\n" "Retail 360 Report" \
+  "$SAM_URL/#/agents/workflows/Retail%20360%20Report"
 ids_by_name /api/v1/platform/workflows \
-    quality-incident-report supply-replenishment \
+    order-incident-report retail-360-report \
   | while IFS=$'\t' read -r name id; do
       if [ "$id" = "NOT-FOUND" ]; then
         printf "   %-32s (not on platform)\n" "$name"
@@ -79,14 +81,13 @@ ids_by_name /api/v1/platform/workflows \
 echo "== Agents"
 ids_by_name /api/v1/platform/agents \
     "Orchestrator" \
-    "Acme CRM Query Expert" "Acme OMS Query Expert" \
-    "Acme PDM Query Expert" "Acme SCM Query Expert" \
-    "Production Confirmation Clerk" \
-    "Quality Incident Reporter" "Supply Chain Watcher" \
-    "Shop Floor Analyst" \
+    "Retail CRM Query Expert" "Retail OMS Query Expert" \
+    "Retail PDM Query Expert" "Retail 360 Reporter" \
+    "Order Confirmation Clerk" "Order Incident Reporter" \
+    "Retail POS Analyst" \
   | while IFS=$'\t' read -r name id; do
       if [ "$id" = "NOT-FOUND" ]; then
-        if [ "$name" = "Shop Floor Analyst" ]; then
+        if [ "$name" = "Retail POS Analyst" ]; then
           printf "   %-32s (absent = live Builder beat ready)\n" "$name"
         else
           printf "   %-32s (not on platform -- ./install.sh)\n" "$name"
@@ -98,8 +99,8 @@ ids_by_name /api/v1/platform/agents \
 
 echo "== Connectors"
 ids_by_name /api/v1/platform/connectors \
-    "Acme CRM DB" "Acme OMS DB" "Acme PDM DB" "Acme SCM DB" \
-    "mfg-telemetry" "mfg-consumption" \
+    "Retail CRM DB" "Retail OMS DB" "Retail PDM DB" \
+    "retail-poslog" \
   | while IFS=$'\t' read -r name id; do
       if [ "$id" = "NOT-FOUND" ]; then
         printf "   %-32s (not on platform)\n" "$name"
@@ -109,7 +110,7 @@ ids_by_name /api/v1/platform/connectors \
     done
 
 echo "== Entrypoints"
-ids_by_name /api/v1/platform/gateways plant-events \
+ids_by_name /api/v1/platform/gateways shop-events developer-mcp \
   | while IFS=$'\t' read -r name id; do
       [ "$id" = "NOT-FOUND" ] \
         && printf "   %-32s (not on platform)\n" "$name" \

@@ -330,12 +330,10 @@ https://sam.solace.lab/#/agents/workflows/Order%20Incident%20Report
 ```
 
 Fallback if the display name ever changes — the mesh card name
-also works, but it embeds the platform UUID and therefore
-changes on every rebuild (current value):
-
-```text
-https://sam.solace.lab/#/agents/workflows/workflow_019fad02_c0cd_79df_b36e_86194a999133
-```
+(`workflow_<uuid>`) also works, but it embeds the platform UUID
+and therefore changes on every rebuild. `./demo-links.sh`
+regenerates the current ID-based links (and all agent/connector
+links) after every install.
 
 **SAY**:
 
