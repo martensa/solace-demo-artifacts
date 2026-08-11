@@ -52,6 +52,28 @@ token lands on the right name in chapter 8.
 | 8 | IMPROVEMENT — measure the workforce | 16:30–18:45 |
 | 9 | WRAP — slides 4 + 2, the lifecycle closed | 18:45–20:00 |
 
+## 1. The lifecycle — slide 1 (0:00–1:00)
+
+**DO**: Open on slide 1 (the AI Worker Lifecycle).
+
+**SAY**:
+
+> "We treat AI agents like employees, not like scripts. And
+> employees have a lifecycle: you **hire** them, you **onboard**
+> them with system access, they do **teamwork**, and you
+> **measure and improve** them. That lifecycle is the red
+> thread of this demo.
+>
+> Concretely, in the next nineteen minutes: I'll show you the
+> team we already have and hire a brand-new worker live. While
+> the platform onboards him, I'll give you a tour of his new
+> workplace. Then teamwork — and today it has TWO acts: a
+> production order fails and a team of agents investigates it,
+> triggered by the event itself. And while that happens, the
+> same team prevents the NEXT problem before it exists. At the
+> end we measure everything: latency, tokens, cost per user,
+> quality."
+
 ## 2. Scenario — slides 2+3 (1:00–2:30)
 
 **DO**: Start on slide 2 ("The Use Case: One Engineering
@@ -146,7 +168,8 @@ edit -> save & redeploy, ~15 s) — no fallback needed.
 **Break glass** (Builder fails or stalls — see Appendix C):
 run this in the terminal — it creates the identical agent
 declaratively in ~20 s (requires the pre-flight
-`sam auth login`), then continue at 6.1. NEVER `--prune`. The
+`sam auth login`), then continue at 6.2 — the fallback deploys
+the agent, so the Review step is skipped. NEVER `--prune`. The
 apply is idempotent: it also just ADDS whatever is missing
 (agent and/or connectors).
 
@@ -317,8 +340,22 @@ belongs HERE:
 
 ## 6. ONBOARDING complete — deploy and first task (7:30–9:30)
 
-Deploy the Shop Floor Analyst, then first task in window B
-(talk to the data), e.g.:
+### 6.1 Review and deploy
+
+**DO**: Back to the Builder tab. Apply the click rule from
+section 4 (name + tool groups in the plan card), then **Build &
+Activate**.
+
+**SAY**:
+
+> "HR is done. My job posting became a system prompt, the two
+> plant-store connectors are bound, the model alias attached —
+> and no credential ever crossed my screen. Deploy — and the
+> new colleague is on the team."
+
+### 6.2 First day at work — talk to the data
+
+**DO**: Window A, chat with the Shop Floor Analyst:
 
 > "What is the daily EOL fail rate for the IX-450 on Plant 2
 > line L3, and when did the failures start?"
@@ -326,6 +363,12 @@ Deploy the Shop Floor Analyst, then first task in window B
 Expected: fail rate jumps around 2025-07-28, measured ~22 Nm vs
 spec 17.5–18.5, station spec revision B. Leave the answer open —
 it foreshadows movement 1.
+
+**SAY**:
+
+> "First day at work, first analysis — nine aggregation
+> pipelines against the plant store, no SQL from me. Hold that
+> date, July 28. It is about to matter."
 
 ## 7. TEAMWORK — the cockpit, two movements (9:30–16:30)
 
@@ -544,7 +587,7 @@ creates ONLY the agent):
   full validation is expected GREEN. If the banner still
   appears: one "rerun validation" in the Builder chat, and if
   the gate stays red, break glass
-  (`cd fallback && sam config apply`) and continue at 6.1.
+  (`cd fallback && sam config apply`) and continue at 6.2.
 - A long pasted prompt may be attached as a `snippet.txt` file
   instead of inline text -- harmless, the Builder loads it;
   the shortened agent-only prompt usually stays inline.
