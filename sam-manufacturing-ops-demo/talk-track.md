@@ -39,7 +39,7 @@ the chargeback panel).
 | # | Beat | Time |
 | --- | --- | --- |
 | 1 | Lifecycle — slide 1 | 0:00–1:00 |
-| 2 | Scenario — slide 2 (Acme Manufacturing) | 1:00–2:30 |
+| 2 | Scenario — slides 2+3 (use case, architecture) | 1:00–2:30 |
 | 3 | HIRING — roster and the gap | 2:30–3:30 |
 | 4 | ONBOARDING kickoff — Build with AI | 3:30–4:30 |
 | 5 | Workplace tour (while the Builder runs) | 4:30–7:30 |
@@ -48,7 +48,14 @@ the chargeback panel).
 | 8 | IMPROVEMENT — measure the workforce | 16:30–18:45 |
 | 9 | WRAP — the lifecycle, closed | 18:45–20:00 |
 
-## 2. Scenario — slide 2 (1:00–2:30)
+## 2. Scenario — slides 2+3 (1:00–2:30)
+
+**DO**: Start on slide 2 ("The Use Case: One Engineering
+Change, Two Movements") for the story — company, plants, the
+ECO trigger and the two movement cards. Switch to slide 3 (the
+architecture stage) at "the interesting part". Slide 2 returns
+in the WRAP: its bottom strip IS the causal-chain closer (one
+click -> one event -> react + prevent -> no human in the loop).
 
 **SAY** (core of it):
 
@@ -384,8 +391,10 @@ Cost beat, with the rehearsal's REAL numbers (task metadata):
 
 Close the lifecycle: hired live, onboarded with governed system
 access, teamwork triggered by events end to end — reactive AND
-proactive — measured to the token. One slide with the causal
-chain diagram: one click -> one event -> two business outcomes.
+proactive — measured to the token. **DO**: re-show slide 2 —
+the movement cards are now what the audience just watched
+happen, and the bottom strip is the closer: one click -> one
+event -> react + prevent -> no human in the loop.
 
 > "One engineering change, badly propagated, and the same
 > platform caught both consequences: the quality incident it

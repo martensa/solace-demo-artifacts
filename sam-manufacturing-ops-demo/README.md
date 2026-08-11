@@ -129,13 +129,18 @@ kit) and raises the EOL torque spec from 18.0 to 22.0 Nm.
 ## Slides
 
 `slides/SAM v2 - AI Worker Lifecycle Manufacturing.pptx` --
-derived from the retail deck, same three-slide structure:
+derived from the retail deck, four slides:
 
 1. AI Worker Lifecycle (unchanged)
-2. Live Demo: Event-Driven Manufacturing Operations -- the
+2. The Use Case: One Engineering Change, Two Movements -- the
+   story slide: stage (company, plants, IT/OT, the ECO trigger)
+   plus one card per movement (React in ~5 min, Prevent in
+   ~8 min, with the real report quotes and EUR figures) and the
+   causal-chain strip; doubles as the WRAP closer
+3. Live Demo: Event-Driven Manufacturing Operations -- the
    architecture stage: four dynamic DB agents (PDM/OMS/CRM/SCM,
    `mfg_*`), the plant store (MongoDB `mfg_plant`), plants and
-   EOL stations streaming over the event mesh
-3. The Demo in the Lifecycle -- stage-by-stage checkmarks
+   EOL stations streaming over the event mesh, story beats 1-2-3
+4. The Demo in the Lifecycle -- stage-by-stage checkmarks
    (Shop Floor Analyst built live, mfg-*-schema skills,
    event-driven react + prevent with 8 agents on 4 models)
