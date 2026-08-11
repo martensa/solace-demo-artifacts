@@ -19,7 +19,7 @@ spec:
     # (awe logs inputKeys: []), so nodes must reference the raw
     # task text as {{workflow.input}} -- {{workflow.input.text}}
     # stays an unresolved literal here (verified 2026-07-31).
-    version: "1.1.0"
+    version: "1.1.1"
     display_name: Order Incident Report
     description: >-
       Failed-order analysis across OMS, PDM and POS, merged into
@@ -33,6 +33,18 @@ spec:
         description: >-
           Analyze a failed shop order across OMS, PDM and POS and
           produce an incident report.
+    # Workflow-level output contract: visible in the UI's
+    # "I/O & Mapping" panel. Deliberately loose ({report:
+    # string}) -- the report stays free-form markdown; the
+    # STRICT contracts sit on the specialist NODES below
+    # (UI shows those in the workflow's YAML view).
+    output_schema:
+      type: object
+      required: [report]
+      properties:
+        report:
+          type: string
+          description: The incident report in markdown.
     output_mapping:
       report: "{{report.output}}"
     nodes:
