@@ -934,6 +934,18 @@ receipts plus the demo stories in the same document schema.
   called ValidateBuildManifest"), your message landed in a
   NORMAL chat session -- the Builder session is gone; reopen
   Build with AI or break glass.
+- **Workflow I/O panel shows "No output schema defined"**
+  despite schemas being set (verified 2026-08-12): the detail
+  page reads schemas from the workflow agent's A2A card
+  extension (`solace.com/a2a/extensions/sam/schemas`), which
+  this build does not populate for declaratively applied
+  workflow configs -- while BOTH the workflow-level and the
+  node-level `output_schema` are persisted in the platform
+  config and active in the runtime (instance restarts on
+  apply). On stage: show the contracts in the workflow's
+  YAML/code view (the three specialist schemas read well) and
+  say enforcement happens at runtime with auto-retry; do not
+  hunt for the panel.
 - **Never open the Builder's Test tab on stage**: its plan
   generator is killed at a hard 30 s while its LLM call needs
   ~106 s on the Opus tier it insists on using — no configurable
