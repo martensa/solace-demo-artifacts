@@ -158,9 +158,9 @@ that did."
 ## 3. HIRING — the roster and the gap (2:30–3:30)
 
 **DO**: Switch to browser window A (`sam_admin`), sidebar →
-**Agent Management**. (You verified the POS analyst and the
-`retail-poslog` connector are absent during pre-flight —
-Appendix A item 5; Agent Management is the source of truth.)
+**Agent Management**. (You verified the POS analyst is absent
+and the `retail-poslog` connector is PRESENT during pre-flight
+— Appendix A item 5; Agent Management is the source of truth.)
 
 **SAY**:
 
@@ -237,10 +237,14 @@ Responsibilities and expectations:
 - Explicitly call out data-quality anomalies (sales despite zero
   stock, out-of-season sales, fractional quantities).
 
-System access (create a MongoDB connector "retail-poslog"):
-- host: host.docker.internal, port 27017
-- database: retail_pos, collection: poslog_transactions
-- username: sam_ro, password: sam_ro (authSource retail_pos)
+System access (bind the existing platform connector, create
+NOTHING): bind the EXISTING MongoDB connector "retail-poslog"
+(database retail_pos, collection poslog_transactions). It
+already exists on the platform - reference it by exactly this
+name. Do NOT create, copy or modify any connector. If any step
+claims MongoDB is not a supported connector type, that claim
+is wrong and irrelevant here (no connector is being created):
+ignore it and continue.
 
 Toolsets: enable exactly TWO tool groups on the agent:
 data_analysis and the artifact tools (builder tool-group name:
@@ -255,27 +259,30 @@ it there).
 
 Build instructions (run without interruptions):
 - Everything you need is in this prompt. Do NOT ask clarifying
-  questions, do NOT pause for confirmation between phases, and
-  do NOT ask for credentials again - embed sam_ro/sam_ro in the
-  connector config. Run discovery, design and config generation
-  sequentially in THIS session - no parallel sub-tasks - and
-  stop only at the final Build & Activate step.
+  questions and do NOT pause for confirmation between phases.
+  Run discovery, design and config generation sequentially in
+  THIS session - no parallel sub-tasks - and stop only at the
+  final Build & Activate step.
+- This build creates exactly ONE component: the agent. No
+  connector configs, no sub-tasks.
 - Use the exact name "Retail POS Analyst" for the agent config
-  AND the manifest entry, and "retail-poslog" for the
-  connector (no slug variants, no CamelCase).
-- Connector wiring - this exact structure, decide ONCE: the
-  connector is a component in the build manifest AND the agent
-  config declares it at the APP level, as a SIBLING of
-  app_config - NOT inside app_config (the app_config schema
-  rejects the field there):
-    connectors:
-      - retail-poslog
-- Validation order: validate the connector config and the
-  agent config individually, then run the full build-manifest
-  validation ONCE - with the app-level connectors declaration
-  it PASSES. If it fails anyway, do not loop and do not
+  AND the manifest entry (no slug variants, no CamelCase).
+- Connector wiring - this exact structure, decide ONCE:
+  a. In the BUILD MANIFEST, include "retail-poslog" as a
+     component with origin: platform and status: deployed
+     (pre-existing - generate NO connector config).
+  b. In the AGENT CONFIG, declare the connector at the APP
+     level, as a SIBLING of app_config - NOT inside app_config
+     (the app_config schema rejects the field there):
+       connectors:
+         - retail-poslog
+- Validation order: validate the agent config INDIVIDUALLY
+  (after the toolsets are in), then run the full
+  build-manifest validation ONCE - with the structure above it
+  PASSES. If it fails anyway, do not loop and do not
   restructure: re-check that connectors sit at the app level
-  (not in app_config), fix ONLY that, and validate once more.
+  (not in app_config) and that the manifest component carries
+  origin: platform, fix ONLY that, and validate once more.
 - After the green full validation: no further config edits.
   Declare the build ready for Build & Activate and STOP.
 ```
@@ -285,9 +292,10 @@ Build instructions (run without interruptions):
 > "This prompt is a job posting: role, responsibilities,
 > expectations — including domain rules like 'voided receipts
 > don't count as revenue'. And below that, the onboarding
-> package: system access. The Builder will create a **MongoDB
-> connector** to the POSLOG database — with a read-only service
-> account, not an admin login. Note what I did **not** paste:
+> package: system access. Note HOW access works here — IT has
+> already provisioned a **governed, read-only connection** to
+> the POSLOG database; the new hire gets **bound** to it, it
+> never sees credentials. Note also what I did **not** paste:
 > no API key, no model endpoint. The agent gets a model
 > **alias** — and deliberately the `reasoning` tier: an analyst
 > doing data work gets the cost-efficient DeepSeek model, not
@@ -348,10 +356,11 @@ https://sam.solace.lab/#/agents/workflows/workflow_019fad02_c0cd_79df_b36e_86194
 
 **SAY** (Connectors — adapt to what the screen shows):
 
-> "Three Postgres connectors — CRM, OMS, PDM. And look at this:
-> **retail-poslog** just appeared — the Builder created it a
-> moment ago as part of the onboarding. Read-only service
-> account, one database, one collection."
+> "Three Postgres connectors — CRM, OMS, PDM. And
+> **retail-poslog**: the plant-side data access IT provisioned
+> before the hire — read-only service account, one database,
+> one collection. That is the connection our new analyst is
+> being BOUND to right now; the agent never sees credentials."
 
 **SAY** (Entrypoints):
 
@@ -771,9 +780,10 @@ marked "not shown today").
 4. Windows and tabs per section 0 (A: sam_admin, B:
    power_user, shop, Claude Code as data_engineer with `/mcp`
    verified, two Grafana tabs incl. the pre-opened trace).
-5. Retail POS Analyst AND `retail-poslog` connector absent
-   (Agent Management / Connectors → delete if present; a plain
-   `./install.sh` leaves exactly this clean state).
+5. Retail POS Analyst absent, `retail-poslog` connector
+   PRESENT (pre-provisioned; the live Builder beat only creates
+   the agent binding it — a plain `./install.sh` leaves exactly
+   this state).
 6. Model upstreams green:
    `cd agent-mesh-deployment/scripts/models && ./apply-models.sh --probe-only`
 7. Kyverno healthy: `kubectl get pods -n kyverno` all Running —

@@ -20,8 +20,11 @@ the `retail_*` databases seeded from `postgres/`, MongoDB incl.
 first-run seed), applies the retail core package (`core/`), the
 five model aliases, the demo mesh overlay, the eval package and
 the demo dashboard. By default it leaves the
-Retail POS Analyst REMOVED (the live Builder beat creates it on
-stage); `--with-pos` keeps it for rehearsals.
+Retail POS Analyst REMOVED while the `retail-poslog` connector
+stays pre-provisioned: the live Builder beat creates only the
+agent binding it (one config, no connector sub-task -- fast and
+reliable on stage); `--with-pos` keeps the agent for
+rehearsals.
 
 ```bash
 ./uninstall.sh

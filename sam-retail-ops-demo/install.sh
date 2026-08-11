@@ -20,13 +20,14 @@ set -euo pipefail
 #      fresh install start.sh skipped them for lack of a login)
 #   4. Demo overlay (mesh/): clerk, incident reporter, incident
 #      workflow, shop-events entrypoint -- POS analyst is created
-#      first from fallback/ (workflow xref needs it), then
-#      removed again unless --with-pos (live Builder demo!)
+#      first from fallback/ (workflow xref needs it), then the
+#      AGENT is removed again unless --with-pos (live Builder
+#      demo!); the retail-poslog connector stays pre-provisioned
 #   5. Eval package (dataset + quality gate + model benchmark)
 #   6. Demo dashboard (Grafana ConfigMap)
 #
 #   ./install.sh              # clean state for the live demo
-#   ./install.sh --with-pos   # keep POS analyst + connector
+#   ./install.sh --with-pos   # keep the POS analyst agent too
 # =============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -106,19 +107,19 @@ fi
   | grep -viE "^time=" | grep -E "\+|~|\*|error|fail" | head -12)
 
 if [ "$WITH_POS" -eq 0 ]; then
-  echo "   removing POS analyst + connector (live Builder demo)"
+  # The retail-poslog connector STAYS installed (workplace
+  # infrastructure, like the postgres connectors): the live
+  # Builder beat only creates the AGENT binding it -- one
+  # config, no connector sub-task (pre-provisioning
+  # optimization backported from the manufacturing demo,
+  # 2026-08-11).
+  echo "   removing POS analyst (live Builder demo; connector stays)"
   POS_ID=$(api GET /api/v1/platform/agents | python3 -c "
 import json,sys
 for a in json.load(sys.stdin).get('data',[]):
     if a['name']=='Retail POS Analyst': print(a['id'])")
   [ -n "$POS_ID" ] && api DELETE "/api/v1/platform/agents/$POS_ID" >/dev/null \
     && echo "   POS agent deleted (HTTP $API_CODE)"
-  CON_ID=$(api GET /api/v1/platform/connectors | python3 -c "
-import json,sys
-for c in json.load(sys.stdin).get('data',[]):
-    if c['name']=='retail-poslog': print(c['id'])")
-  [ -n "$CON_ID" ] && api DELETE "/api/v1/platform/connectors/$CON_ID" >/dev/null \
-    && echo "   retail-poslog connector deleted (HTTP $API_CODE)"
 else
   echo "   keeping POS analyst (--with-pos)"
 fi
