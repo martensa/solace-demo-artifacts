@@ -257,6 +257,26 @@ without both groups is WRONG even if it validates. Model: the
 NOT put a `model` field inside app_config (the schema rejects
 it there).
 
+CONFIG SHAPE (the FIRST draft must already match this)
+Generate the agent config in exactly this structure - do not
+write a default draft first and fix it after validation:
+
+  apps:
+    - name: retail_pos_analyst
+      connectors:
+        - retail-poslog
+      app_config:
+        ...instruction, agent card, skills...
+        tools:
+          - tool_type: builtin-group
+            tool_name: data_analysis
+          - tool_type: builtin-group
+            tool_name: artifact_management
+
+No `model` field anywhere in app_config, no `group_name` keys,
+and no `connectors` field inside app_config (only at the app
+level as shown).
+
 Build instructions (run without interruptions):
 - Everything you need is in this prompt. Do NOT ask clarifying
   questions and do NOT pause for confirmation between phases.
@@ -265,6 +285,10 @@ Build instructions (run without interruptions):
   final Build & Activate step.
 - This build creates exactly ONE component: the agent. No
   connector configs, no sub-tasks.
+- Generate the agent config CORRECT ON THE FIRST DRAFT: before
+  the first validation, check it against CONFIG SHAPE and the
+  DEFINITION OF DONE below. Do not rely on validation errors to
+  discover these rules.
 - Use the exact name "Retail POS Analyst" for the agent config
   AND the manifest entry (no slug variants, no CamelCase).
 - Connector wiring - this exact structure, decide ONCE:

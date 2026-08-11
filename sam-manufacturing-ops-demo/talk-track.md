@@ -233,15 +233,40 @@ BEHAVIOR RULES (put these into the agent's instruction)
 - Save large result sets as artifacts, summarize the key
   findings, and render a chart when a visualization helps.
 
+CONFIG SHAPE (the FIRST draft must already match this)
+Generate the agent config in exactly this structure - do not
+write a default draft first and fix it after validation:
+
+  apps:
+    - name: shop_floor_analyst
+      connectors:
+        - mfg-telemetry
+        - mfg-consumption
+      app_config:
+        ...instruction, agent card, skills...
+        tools:
+          - tool_type: builtin-group
+            tool_name: data_analysis
+          - tool_type: builtin-group
+            tool_name: artifact_management
+
+No `model` field anywhere in app_config, no `group_name` keys,
+and no `connectors` field inside app_config (only at the app
+level as shown).
+
 BUILD INSTRUCTIONS (follow exactly, no deviations)
 1. Everything you need is in this prompt. Do NOT ask clarifying
    questions and do NOT pause for confirmation between phases.
    Run discovery, design and config generation sequentially in
    THIS session - do NOT spawn parallel sub-tasks.
 2. This build creates exactly ONE component: the agent.
-3. Use the exact name "Shop Floor Analyst" for the agent config
+3. Generate the agent config CORRECT ON THE FIRST DRAFT: before
+   the first validation, check it against CONFIG SHAPE and the
+   DEFINITION OF DONE below. Do not rely on validation errors
+   to discover these rules.
+4. Use the exact name "Shop Floor Analyst" for the agent config
    AND the manifest entry (no slug variants, no CamelCase).
-4. Connector wiring - this exact structure, decide ONCE:
+5. Connector wiring - this exact structure, decide ONCE:
    a. In the BUILD MANIFEST, include "mfg-telemetry" and
       "mfg-consumption" as components with origin: platform and
       status: deployed (pre-existing - generate NO connector
@@ -255,7 +280,7 @@ BUILD INSTRUCTIONS (follow exactly, no deviations)
           - mfg-consumption
    This combination is the verified wiring: manifest components
    with platform origin + app-level connectors list.
-5. Validation order: first validate the agent config
+6. Validation order: first validate the agent config
    INDIVIDUALLY (after the toolsets are in). Then run the full
    build-manifest validation ONCE - with the structure from
    step 4 it PASSES. If it fails anyway, do not loop and do
@@ -263,7 +288,7 @@ BUILD INSTRUCTIONS (follow exactly, no deviations)
    level (not in app_config) and that both manifest components
    carry origin: platform, fix ONLY that, and validate once
    more.
-6. After the green full validation: no further config edits.
+7. After the green full validation: no further config edits.
    Declare the build ready for Build & Activate and STOP.
 
 DEFINITION OF DONE (verify every point, then stop)
@@ -273,6 +298,8 @@ DEFINITION OF DONE (verify every point, then stop)
   connector components.
 - The agent config enables data_analysis AND the artifact tool
   group.
+- The agent config matches CONFIG SHAPE: builtin-group tools
+  via tool_name, no model field.
 - The agent config declares the connectors at the app level
   (sibling of app_config, never inside it).
 - The agent config passed the individual validation AND the
