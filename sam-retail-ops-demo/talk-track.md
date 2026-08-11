@@ -191,11 +191,16 @@ question instead, answer in one line — it is
 non-deterministic). Then leave it running and move on to
 section 5.
 
-Click rule: as soon as BOTH configs have validated
-individually and the plan card is up, click **Build &
-Activate** yourself — do not wait for the Builder to keep
-validating. Deployment does not run the broken cross-component
-validator; clicking is what finishes the hire.
+Click rule: as soon as the full validation is green and the
+plan card is up, click **Build & Activate** yourself — do not
+wait for the Builder to keep narrating. In the Review step,
+check the NAME field ("Retail POS Analyst", exactly) and that
+the agent config carries the two builtin tool groups; both are
+fixable in the UI (Review card or Agent Management -> edit),
+no fallback needed. NOTE: the Toolsets field in Agent
+Management shows EMPTY even on a correct build — it only
+mirrors UI-assigned toolsets; judge by the plan card, never by
+that field (verified 2026-08-11, manufacturing).
 
 **Break glass** (Builder fails or stalls — see Appendix C for
 the failure signature): run this in the terminal — it creates
@@ -237,25 +242,42 @@ System access (create a MongoDB connector "retail-poslog"):
 - database: retail_pos, collection: poslog_transactions
 - username: sam_ro, password: sam_ro (authSource retail_pos)
 
-Toolsets: data analysis and artifact tools. Model: reasoning.
+Toolsets: enable exactly TWO tool groups on the agent:
+data_analysis and the artifact tools (builder tool-group name:
+artifact_management; platform toolset id:
+builtin_artifact_tools). Declare them in the agent config as
+builtin-group tool entries using the `tool_name` field (NOT
+`group_name` - the schema rejects that). An agent config
+without both groups is WRONG even if it validates. Model: the
+"reasoning" model alias - assigned at the platform level; do
+NOT put a `model` field inside app_config (the schema rejects
+it there).
 
 Build instructions (run without interruptions):
 - Everything you need is in this prompt. Do NOT ask clarifying
   questions, do NOT pause for confirmation between phases, and
   do NOT ask for credentials again - embed sam_ro/sam_ro in the
   connector config. Run discovery, design and config generation
-  in one pass and stop only at the final Build & Activate step.
+  sequentially in THIS session - no parallel sub-tasks - and
+  stop only at the final Build & Activate step.
 - Use the exact name "Retail POS Analyst" for the agent config
-  AND the manifest entry (no slug variants).
-- Wire the connector through the manifest's connectors list and
-  do NOT add a `connectors` field to the agent config.
-- Validate the connector config and the agent config
-  INDIVIDUALLY only. Do NOT run the full build-manifest
-  cross-component validation: its connectors check is broken in
-  this build and can never pass (it demands a field the config
-  schema rejects). Once both configs validate individually,
-  declare the build ready for Build & Activate and STOP -- no
-  further validation passes.
+  AND the manifest entry, and "retail-poslog" for the
+  connector (no slug variants, no CamelCase).
+- Connector wiring - this exact structure, decide ONCE: the
+  connector is a component in the build manifest AND the agent
+  config declares it at the APP level, as a SIBLING of
+  app_config - NOT inside app_config (the app_config schema
+  rejects the field there):
+    connectors:
+      - retail-poslog
+- Validation order: validate the connector config and the
+  agent config individually, then run the full build-manifest
+  validation ONCE - with the app-level connectors declaration
+  it PASSES. If it fails anyway, do not loop and do not
+  restructure: re-check that connectors sit at the app level
+  (not in app_config), fix ONLY that, and validate once more.
+- After the green full validation: no further config edits.
+  Declare the build ready for Build & Activate and STOP.
 ```
 
 **SAY** (while pasting and sending):
@@ -841,15 +863,18 @@ receipts plus the demo stories in the same document schema.
   4). Keep the Builder chat to ONE prompt; if it asks more
   than one clarifying question, break glass.
 - **Builder loops on full-manifest validation** (hit in the
-  live build 2026-08-04): the cross-component connectors check
-  is unsatisfiable (the manifest validator demands a
-  `connectors` field that the agent-config schema rejects), and
-  the Builder's finalize step re-runs it after every change --
-  it declares "ready" repeatedly without ever finishing. The
-  prompt now forbids the full validation outright; if it loops
-  anyway, click **Build & Activate** as soon as both configs
-  validated individually (deployment skips the broken
-  validator), or break glass. Bonus signature: if a "Builder"
+  live build 2026-08-04; RESOLVED 2026-08-11 in the
+  manufacturing demo): the check is NOT unsatisfiable -- it
+  demands a `connectors` declaration at the APP level of the
+  agent config (sibling of app_config); INSIDE app_config the
+  schema rejects the field, which is why every earlier attempt
+  flip-flopped. The prompt now mandates the app-level
+  placement and full validation is expected GREEN (the deploy
+  gate mirrors the LAST validation result -- a failed full run
+  turns it red, so never leave a red full validation as the
+  last word; re-run after fixing the placement). If it still
+  loops: click **Build & Activate** once the configs are green,
+  or break glass. Bonus signature: if a "Builder"
   reply suddenly lists retail tools ("I don't have a tool
   called ValidateBuildManifest"), your message landed in a
   NORMAL chat session -- the Builder session is gone; reopen
