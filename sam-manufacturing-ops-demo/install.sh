@@ -145,8 +145,8 @@ echo "== 5/6 Eval package"
   | grep -viE "^time=" | grep -E "\+|~|=|error|fail" | head -8)
 echo "   NOTE: experiments have no runs yet on a fresh platform --"
 echo "   pre-run before the demo (~15 min):"
-echo "     sam eval run mfg-ops-quality --url $SAM_URL --threshold 0.8"
-echo "     sam eval run mfg-ops-model-benchmark --url $SAM_URL"
+echo "     sam eval run mfg-ops-quality --target solace-lab --threshold 0.8"
+echo "     sam eval run mfg-ops-model-benchmark --target solace-lab"
 
 echo "== 6/6 Demo dashboard"
 kubectl apply -f "$SCRIPT_DIR/observability/dashboard-sam-mfg-ops.yaml"
