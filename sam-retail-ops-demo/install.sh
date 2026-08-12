@@ -141,9 +141,9 @@ echo "== 5/6 Eval package"
 (cd "$SCRIPT_DIR/eval" && "$SAM_CLI" config apply 2>&1 \
   | grep -viE "^time=" | grep -E "\+|~|=|error|fail" | head -8)
 echo "   NOTE: experiments have no runs yet on a fresh platform --"
-echo "   pre-run before the demo (~15 min):"
-echo "     sam eval run retail-ops-quality --target solace-lab --threshold 0.8"
-echo "     sam eval run retail-ops-model-benchmark --target solace-lab"
+echo "   pre-run before the demo (~15 min): ./preflight.sh does it"
+echo "   automatically (the bare 'sam eval run' needs the token"
+echo "   exported -- see scripts/lib/common.sh sam_auth_token)."
 
 echo "== 6/6 Demo dashboard"
 kubectl apply -f "$SCRIPT_DIR/observability/dashboard-sam-retail-ops.yaml"
