@@ -947,6 +947,18 @@ receipts plus the demo stories in the same document schema.
   never show in this panel by design: they live in the DAG
   (workflow YAML view) and enforce at runtime on each
   specialist's answer, with auto-retry.
+- **Stale agent card after delete + rebuild** (observed
+  2026-08-12): after the POS analyst is deleted and rebuilt
+  (exactly the live Builder sequence), the mesh can keep the
+  DELETED instance's agent card; name-based resolution then
+  hits the dead instance -- symptom: WARN "multiple agent cards
+  advertise the same display name" in the awe log plus "peer
+  tool unavailable" on the pos node/delegation, while
+  fail_fast keeps the run alive with a noted gap. Fix (~1 min):
+  `kubectl rollout restart deployment
+  agent-mesh-solace-agent-mesh-awe -n sam-solace-lab` -- all
+  live agents re-register, stale cards vanish. Worth a
+  pre-flight glance after any rebuild rehearsal.
 - **Never open the Builder's Test tab on stage**: its plan
   generator is killed at a hard 30 s while its LLM call needs
   ~106 s on the Opus tier it insists on using — no configurable

@@ -656,6 +656,19 @@ is historic, the event stream is live -- and the analyst
 reconciled the two on its own, which is exactly what you want
 an analyst to do."
 
+- **Stale agent card after delete + rebuild** (observed
+  2026-08-12): after the Shop Floor Analyst is deleted and rebuilt
+  (exactly the live Builder sequence), the mesh can keep the
+  DELETED instance's agent card; name-based resolution then
+  hits the dead instance -- symptom: WARN "multiple agent cards
+  advertise the same display name" in the awe log plus "peer
+  tool unavailable" on the floor node/delegation, while
+  fail_fast keeps the run alive with a noted gap. Fix (~1 min):
+  `kubectl rollout restart deployment
+  agent-mesh-solace-agent-mesh-awe -n sam-solace-lab` -- all
+  live agents re-register, stale cards vanish. Worth a
+  pre-flight glance after any rebuild rehearsal.
+
 Merge agents may WARN with a pseudo-tool `_continue_generation`
 (observed 2026-08-11 at the Quality Incident Reporter, three
 WARN lines): the model tries to continue a long answer via a
