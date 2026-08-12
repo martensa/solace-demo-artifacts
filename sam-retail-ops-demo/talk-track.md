@@ -947,6 +947,20 @@ receipts plus the demo stories in the same document schema.
   never show in this panel by design: they live in the DAG
   (workflow YAML view) and enforce at runtime on each
   specialist's answer, with auto-retry.
+- **Direct workflow runs: one node may receive a literal
+  `{{workflow.input}}`** (observed once, 2026-08-12, on the
+  FIRST-starting node of a direct order-incident-report run,
+  while the sibling nodes rendered fine -- suspected rendering
+  race in input processing, possibly related to the
+  workflow-level input_schema). The run degrades exactly as
+  designed: fail_fast is off, the affected specialist reports
+  the placeholder transparently, the report ships with the gap
+  noted. Not demo-relevant (the scripted incident path runs via
+  the Orchestrator), but if it recurs in rehearsals, the first
+  lever is removing the workflow-level `input_schema` (keep the
+  NODE output contracts -- they are the demonstrated
+  capability and validated cleanly: PDM and POS delivered
+  schema-conforming fields in the same run).
 - **Stale agent card after delete + rebuild** (observed
   2026-08-12): after the POS analyst is deleted and rebuilt
   (exactly the live Builder sequence), the mesh can keep the
