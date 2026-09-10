@@ -1,0 +1,7 @@
+sequence_number,prompt,expected_response
+1,"How many claims does hail event HZ-0913 have, split by line and by severity?","HZ-0913 has 10,400 claims: 9,650 motor and 750 property. By severity: 6,200 MINOR, 3,600 MODERATE and 600 SEVERE."
+2,"As of Monday 2026-07-20 10:00, how many HZ-0913 claims have been waiting for a workshop slot for more than 4 hours, and which partner are they assigned to?","412 claims waiting more than 4 hours, all assigned to P-BRAENDLE (status AWAITING_WORKSHOP_SLOT since Sunday 2026-07-19 between 09:00 and 12:00)."
+3,"How many assignments does partner P-BRAENDLE have in status AWAITING_WORKSHOP_SLOT, and what is its daily scan capacity?","P-BRAENDLE has 640 assignments awaiting a slot against a daily scan capacity of 120 scans per day."
+4,"What is the contract status of partner P-DELLENDOC, since when, and what does the contract note say?","P-DELLENDOC is INACTIVE since 2026-01-01: tier renegotiation, parts-channel clause PC-4 unsigned."
+5,"How many motor policies in district LUDWIGSBURG are parked without a garage?","8,900 motor policies without garage parking in LUDWIGSBURG."
+6,"How many payment items are scheduled in payment run PR-2026-30, and what is the total amount?","PR-2026-30 has 3,900 items totalling EUR 14,200,000, all SCHEDULED for 2026-07-24 16:00."

@@ -1,0 +1,26 @@
+kind: connector
+name: Acme Insurance DB
+description: >-
+  This connector generates dynamic SQL queries for the claims
+  database of Acme Insurance (acme_insurance, hail event HZ-0913).
+  Six tables: ins_customers (policy holders with segment, channel
+  and complaint flag), ins_policies (motor and property policies
+  with VIN, garage parking, district, hail cover HC-7, deductible
+  and repair-network clause RN-3), ins_claims (10,400 FNOLs of
+  HZ-0913 with channel, severity, status, status_since, assigned
+  partner, estimate and reserve), ins_repair_partners (drive-ins,
+  body shops, assistance and rental partners with contract status,
+  daily scan capacity and contracted rates), ins_workshop_estimates
+  (estimates per claim and partner with hours, rates, total and
+  line-item text) and ins_payment_items (items of payment run
+  PR-2026-30). Timestamps carry no time zone; the data is a frozen
+  snapshot as of Monday 2026-07-20 10:00.
+spec:
+  type: sql
+  subtype: postgres
+  values:
+    database: acme_insurance
+    hostname: host.docker.internal
+    port: 5432
+    username: ${INS_DB_USERNAME}
+    password: ${INS_DB_PASSWORD}

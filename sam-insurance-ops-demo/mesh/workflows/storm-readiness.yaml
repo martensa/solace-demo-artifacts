@@ -1,0 +1,294 @@
+# Event-triggered storm readiness workflow (the PREVENT act): a
+# forecast_threshold_crossed event (published by the claims
+# cockpit on the sam VPN) is routed here by the claims-events
+# event-mesh entrypoint. Fans out to the Intake, Insurance DB
+# and Knowledge specialists in parallel, then merges into a
+# readiness recommendation -- before the forecast window opens.
+# fail_fast false for the same live-Builder reason as the
+# stalled-cohort workflow.
+kind: workflow
+name: storm-readiness
+description: >-
+  Storm readiness analysis: fans a forecast hail cell out to the
+  intake, Insurance DB and knowledge specialists in parallel and
+  merges their findings into one readiness recommendation.
+spec:
+  appConfig:
+    # Bump to force a redeploy (deploy phase fires on change
+    # only). Event-triggered runs deliver NO structured input
+    # keys -> reference the raw task text as {{workflow.input}}.
+    version: "1.0.0"
+    display_name: Storm Readiness
+    description: >-
+      Forecast-cell analysis across observed conversion, exposure
+      and partner capacity and the NatCat playbook, merged into
+      one readiness recommendation.
+    workflow_timeout: "600s"
+    default_node_timeout: "240s"
+    fail_fast: false
+    skills:
+      - id: storm_readiness
+        name: Storm Readiness
+        description: >-
+          Analyze a forecast hail cell across intake reality,
+          exposure and partner capacity and the NatCat playbook
+          and produce a readiness recommendation.
+    # Workflow-level INPUT contract: the realtime forecast event
+    # cockpit/index.html publishes on
+    # acmeins/weather/cell/forecast/threshold-crossed/>. The
+    # event PATH runs via the Orchestrator (promptTemplate
+    # quirk), so this schema is the published contract + the
+    # typed Run form in the UI, not a gate on the event flow.
+    # Loose by design: only the fields the SOP needs are required.
+    input_schema:
+      type: object
+      required: [cell_id, district, window_start, window_end]
+      properties:
+        event_type:
+          type: string
+          enum: [forecast_threshold_crossed]
+          description: This SOP handles forecast threshold crossings.
+        cell_id:
+          type: string
+          description: Forecast hail cell id, e.g. HZ-0914.
+        district:
+          type: string
+          description: Forecast district, e.g. LUDWIGSBURG.
+        window_start:
+          type: string
+          description: Forecast window start (ISO 8601).
+        window_end:
+          type: string
+          description: Forecast window end (ISO 8601).
+        hail_size_cm_forecast:
+          type: number
+        warning_level:
+          type: integer
+        exposure_vehicles_no_garage:
+          type: integer
+          description: Motor policies without garage in the polygon.
+        exposure_property:
+          type: integer
+          description: Property policies in the polygon.
+    # Workflow-level output contract: loose ({recommendation:
+    # string}), the recommendation stays free-form markdown; the
+    # STRICT contracts sit on the specialist NODES below.
+    output_schema:
+      type: object
+      required: [recommendation]
+      properties:
+        recommendation:
+          type: string
+          description: The storm readiness recommendation in markdown.
+    output_mapping:
+      recommendation: "{{recommend.output}}"
+    nodes:
+      # Output contracts (JSON Schema) on the three specialist
+      # nodes: schema-validated hand-offs; the recommendation
+      # node stays free-form markdown (it is read aloud).
+      - id: intake
+        type: agent
+        agent_name: Storm Intake Analyst
+        output_schema:
+          type: object
+          required: [observed_cell_id, observed_conversion,
+                     forecast_cell_id, forecast_exposure_no_garage,
+                     findings]
+          properties:
+            observed_cell_id:
+              type: string
+              description: The last OBSERVED cell, e.g. HZ-0913.
+            observed_motor_claims:
+              type: integer
+              description: MOTOR fnol_intake claims of the observed cell.
+            observed_exposure_no_garage:
+              type: integer
+              description: exposure_vehicles_no_garage of the observed cell.
+            observed_conversion:
+              type: number
+              description: observed_motor_claims / observed_exposure_no_garage.
+            observed_hail_size_cm:
+              type: number
+            forecast_cell_id:
+              type: string
+            forecast_window_start:
+              type: string
+            forecast_window_end:
+              type: string
+            forecast_hail_size_cm:
+              type: number
+            forecast_warning_level:
+              type: integer
+            forecast_exposure_no_garage:
+              type: integer
+              description: exposure_vehicles_no_garage of the forecast cell.
+            forecast_exposure_property:
+              type: integer
+              description: exposure_property of the forecast cell.
+            reference_cell_conversion:
+              type: number
+              description: Conversion of the small reference cell HZ-0907.
+            findings:
+              type: string
+              description: 2-4 sentences with the key numbers.
+        input:
+          message: >-
+            A forecast hail cell crossed the warning threshold.
+            Analyze the OBSERVED reality in the acme_claims
+            MongoDB (aggregation pipelines only): (1) the
+            observed conversion of the last OBSERVED cell in
+            weather_cells (the one preceding the forecast) --
+            COUNT of MOTOR fnol_intake claims of that event_id
+            (distinct claim_id, is_repeat_contact false, line =
+            'MOTOR'; fallback when the tool schema has no line
+            field: claim_id CLM-0913-00001..CLM-0913-09650)
+            divided by that cell's exposure_vehicles_no_garage;
+            (2) the forecast cell's
+            weather_cells document for the cell_id in the event
+            (window start/end, hail_size_cm_forecast,
+            warning_level, district, number of postal_codes,
+            exposure_vehicles_no_garage, exposure_property); (3)
+            the small reference cell HZ-0907 (hail_size_cm,
+            conversion) as the playbook's origin. Fill the
+            structured output contract; findings = 2-4 sentences
+            with numbers. Forecast event: {{workflow.input}}
+      - id: insurance
+        type: agent
+        agent_name: Acme Insurance Query Expert
+        output_schema:
+          type: object
+          required: [district, motor_policies, motor_policies_no_garage,
+                     property_policies, daily_scan_capacity,
+                     rental_cars_available, findings]
+          properties:
+            district:
+              type: string
+            motor_policies:
+              type: integer
+              description: ACTIVE motor policies in the district.
+            motor_policies_no_garage:
+              type: integer
+              description: Of those, garage_parking = false.
+            property_policies:
+              type: integer
+              description: ACTIVE PROPERTY policies in the district.
+            hail_cover_share:
+              type: number
+              description: Share of motor policies with hail_cover (0..1).
+            active_drive_in_partners:
+              type: array
+              items: { type: string }
+              description: partner_ids of ACTIVE DRIVE_IN partners there.
+            daily_scan_capacity:
+              type: integer
+              description: SUM daily_scan_capacity of those partners.
+            rental_partner_id:
+              type: string
+            rental_cars_available:
+              type: integer
+              description: rental_cars_available of the RENTAL partner.
+            assistance_partner_id:
+              type: string
+              description: The ACTIVE ASSISTANCE partner, e.g. P-ROADASSIST.
+            findings:
+              type: string
+              description: 2-4 sentences with the key numbers.
+        input:
+          message: >-
+            A forecast hail cell crossed the warning threshold
+            over a district. Analyze the EXPOSURE and CAPACITY in
+            acme_insurance (aggregate only, never SELECT *): (1)
+            exposure in ins_policies WHERE district matches the
+            event AND status = 'ACTIVE': COUNT of motor policies
+            (product IN ('MOTOR_COMPREHENSIVE', 'MOTOR_PARTIAL')),
+            of those garage_parking = false, the hail_cover share,
+            and COUNT of PROPERTY policies; (2) capacity in
+            ins_repair_partners for the district's cities (city =
+            the district's main city, e.g. Ludwigsburg for
+            LUDWIGSBURG): ACTIVE DRIVE_IN partners with
+            daily_scan_capacity (their SUM = district daily scan
+            capacity), the RENTAL partner's rental_cars_available,
+            and the ACTIVE ASSISTANCE partner (any city) with its
+            contract_status. Fill the structured output contract;
+            findings = 2-4 sentences with numbers. Forecast event:
+            {{workflow.input}}
+      - id: knowledge
+        type: agent
+        agent_name: Acme Claims Knowledge Expert
+        output_schema:
+          type: object
+          required: [planning_conversion, property_rate, mobile_units,
+                     mobile_unit_scans_per_day, sms_requires_human_release,
+                     findings]
+          properties:
+            planning_conversion:
+              type: number
+              description: SP-NATCAT-4 planning conversion (0..1).
+            property_rate:
+              type: number
+              description: SP-NATCAT-4 property claim rate (0..1).
+            mobile_units:
+              type: integer
+              description: Mobile scanner units at the Stuttgart hub.
+            mobile_unit_scans_per_day:
+              type: integer
+            mobile_unit_lead_hours:
+              type: integer
+            rental_prebook_max_cars:
+              type: integer
+              description: PC-RENTAFLEET-2026 maximum pre-booking.
+            rental_prebook_lead_hours:
+              type: integer
+            fastlane_pickups_per_day:
+              type: integer
+              description: PC-ROADASSIST-2025 pick-up capacity per day.
+            sms_requires_human_release:
+              type: boolean
+              description: Playbook rule -- a human releases the SMS batch.
+            documents:
+              type: array
+              items: { type: string }
+              description: doc_ids cited, e.g. SP-NATCAT-4.
+            findings:
+              type: string
+              description: 2-4 sentences quoting the decisive numbers.
+        input:
+          message: >-
+            A forecast hail cell crossed the warning threshold.
+            Retrieve the PLAYBOOK from the Acme Claims Knowledge
+            base: search_storm_playbooks for the NatCat hail
+            playbook SP-NATCAT-4 (planning conversion of no-garage
+            vehicles, property rate, mobile scanner units at the
+            Stuttgart hub with scans/day and lead time, the
+            customer warning SMS template and its human release
+            rule, Fastlane pre-staging, the capacity math example)
+            and the lessons learned SP-HZ-0907 and
+            SP-REUTLINGEN-2023 (how 3 cm+ cells convert);
+            search_partner_contracts for PC-RENTAFLEET-2026
+            (pre-booking lead time, maximum cars) and
+            PC-ROADASSIST-2025 (pick-up + remote valuation
+            capacity). Read SP-NATCAT-4, PC-RENTAFLEET-2026 and
+            PC-ROADASSIST-2025 in full via get_knowledge_document.
+            Cite doc_id + title. Fill the structured output
+            contract; findings = 2-4 sentences quoting the
+            decisive numbers. Forecast event: {{workflow.input}}
+      - id: recommend
+        type: agent
+        agent_name: Storm Readiness Planner
+        depends_on:
+          - intake
+          - insurance
+          - knowledge
+        input:
+          message: |
+            Create the storm readiness recommendation for this
+            forecast event: {{workflow.input}}
+
+            ## Intake findings (schema-validated JSON)
+            {{intake.output}}
+
+            ## Insurance DB findings (schema-validated JSON)
+            {{insurance.output}}
+
+            ## Knowledge findings (schema-validated JSON)
+            {{knowledge.output}}

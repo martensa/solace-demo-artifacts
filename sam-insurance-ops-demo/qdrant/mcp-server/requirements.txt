@@ -1,0 +1,15 @@
+# Acme Claims Knowledge MCP server + seed job (python 3.12).
+# mcp: official python SDK. >=1.10 resolves to 2.x on a fresh build;
+#      server.py supports both majors (2.x renamed FastMCP to
+#      MCPServer and moved host/port to run()).
+mcp[cli]>=1.10
+# qdrant-client: query_points / upsert / scroll (1.10+ API). Pinned
+# next to the server image (qdrant/qdrant:v1.15.4 in
+# ../docker-compose.yaml): the client warns "client version X is
+# incompatible with server version 1.15.4" when its minor version is
+# more than one ahead. server.py and seed.py additionally pass
+# check_compatibility=False, so the check never fires either way.
+qdrant-client>=1.15,<1.17
+# fastembed: TextEmbedding BAAI/bge-small-en-v1.5 (384 dims, ONNX)
+fastembed>=0.5
+pyyaml

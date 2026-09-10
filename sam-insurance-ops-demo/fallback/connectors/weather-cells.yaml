@@ -1,0 +1,25 @@
+# Second collection of the same acme_claims MongoDB (the connector
+# generates one tool per collection, so each collection needs its
+# own connector). Same demo-only read-only user as fnol-intake.
+kind: connector
+name: weather-cells
+description: >-
+  Hail cells observed and forecast by the weather service (MongoDB
+  collection weather_cells): one document per cell with hail size,
+  warning level, time window, district, affected postal codes,
+  track polygon and the insured exposure in the track (vehicles
+  without garage, property). Historic cells carry their claim
+  count and observed conversion. The cell facts behind the
+  storm-readiness math.
+spec:
+  type: document_db
+  subtype: mongodb
+  values:
+    scheme: mongodb
+    hostname: host.docker.internal
+    port: 27017
+    username: sam_ro
+    password: sam_ro
+    database: acme_claims
+    collection: weather_cells
+    options: "authSource=acme_claims"

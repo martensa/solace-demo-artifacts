@@ -1,0 +1,31 @@
+# Demo overlay: the event-driven acts on top of the insurance
+# core (../core). Installed and removed by ../install.sh /
+# ../uninstall.sh -- apply order matters: the stalled-cohort-
+# report, storm-readiness and cross-channel-fraud-report
+# workflows reference the Storm Intake Analyst, which install.sh
+# creates from ../fallback BEFORE applying this manifest (xref
+# validation checks the platform for referenced agents).
+kind: manifest
+name: ins-ops-demo-mesh
+description: >-
+  Event-driven claims operations demo overlay: fast lane clerk
+  (fast tier), claims incident reporter, storm readiness planner
+  and fraud case reporter (workflow tier), the three workflows
+  and the claims-events event-mesh entrypoint.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  agents:
+    - Fast Lane Clerk
+    - Claims Incident Reporter
+    - Storm Readiness Planner
+    - Fraud Case Reporter
+  workflows:
+    - stalled-cohort-report
+    - storm-readiness
+    - cross-channel-fraud-report
+  entrypoints:
+    - claims-events

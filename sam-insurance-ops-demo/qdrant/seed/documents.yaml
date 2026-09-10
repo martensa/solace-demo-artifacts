@@ -1,0 +1,1325 @@
+# Acme Insurance -- claims knowledge corpus (sam-insurance-ops-demo).
+#
+# Embedded into Qdrant collection acme_knowledge by
+# ../mcp-server/seed.py (one point per document, payload = all
+# fields below). Four doc_types, one MCP search tool each:
+#   policy_wordings    what the CUSTOMER is entitled to   (PW-*)
+#   claims_guidelines  how ACME handles a claim           (CG-*)
+#   partner_contracts  what a PARTNER owes / may activate (PC-*)
+#   storm_playbooks    how to PLAN for a hail cell        (SP-*)
+#
+# Story anchors (spec 3.3, ids and decisive sentences are a contract
+# with the talk track and the workflow prompts): PW-HC-7, PW-RN-3,
+# PW-TL-1, CG-FL-1, CG-TL-2, CG-BAFIN-30, CG-FR-5, CG-CX-3,
+# PC-BRAENDLE-2025, PC-DELLENDOC-2024, PC-IC-2, PC-ROADASSIST-2025,
+# PC-RENTAFLEET-2026, PC-RATES-2026, SP-NATCAT-4, SP-HZ-0907,
+# SP-REUTLINGEN-2023. The remaining documents are filler that make
+# the semantic search non-trivial. Every text is 80-250 words.
+#
+# Fictional carrier, fictional partners, no real company branding.
+documents:
+
+  # ---------------------------------------------------------------
+  # policy_wordings
+  # ---------------------------------------------------------------
+  - doc_id: PW-HC-7
+    doc_type: policy_wordings
+    title: Hail cover HC-7
+    section: Motor policy conditions, clause HC-7
+    effective_from: "2025-01-01"
+    tags: [hail, motor, deductible, glass, partner-network]
+    text: >
+      Clause HC-7 covers damage to the insured vehicle caused by hail.
+      It is part of every MOTOR_COMPREHENSIVE policy and of every
+      MOTOR_PARTIAL policy where the hail_cover flag is set. Covered
+      are dents on body panels, damaged glazing, broken lamps and
+      mirrors, and damage to attached equipment such as roof boxes,
+      provided the damage was caused by hailstones during a documented
+      weather event. The deductible stated in the policy schedule
+      applies once per hail event, regardless of the number of damaged
+      panels or repair steps. Glass damage repaired through the Acme
+      partner network is settled without deductible; the deductible is
+      waived only for the glass position, not for body repairs on the
+      same claim. A hail event is documented by the weather cell record
+      of the Acme NatCat desk (event_id) or by an official warning of
+      the national weather service. HC-7 does not cover damage that
+      existed before the event date, damage to unregistered vehicles,
+      or losses reported later than seven days after the customer
+      became aware of the damage without good reason.
+
+  - doc_id: PW-RN-3
+    doc_type: policy_wordings
+    title: Repair network steering clause RN-3
+    section: Motor policy conditions, clause RN-3
+    effective_from: "2025-01-01"
+    tags: [repair-network, discount, steering, workshop-choice, slot]
+    text: >
+      Clause RN-3 grants a premium discount of 15 percent in exchange
+      for the customer's agreement that Acme steers repairs to its
+      partner network of drive-in hail centers and contracted body
+      shops. With RN-3 active (repair_network_clause = true on the
+      policy), Acme proposes a partner and a repair slot after the
+      first notice of loss and the customer has the repair carried out
+      there. The steering obligation is limited in time: if no partner
+      slot is offered within 5 working days after FNOL, the customer's
+      free choice of workshop applies and the discount stays. A slot
+      proposal counts only when it names a partner, a date and a time
+      window that the customer can accept; a waiting list entry does
+      not count. Acme informs the customer in text form when the five
+      working days have passed without a proposal. Costs at a freely
+      chosen workshop are reimbursed up to the level of the partner
+      network rates published in the Acme rate card. RN-3 does not
+      restrict the choice of workshop for total losses or for repairs
+      that a partner declines for technical reasons.
+
+  - doc_id: PW-TL-1
+    doc_type: policy_wordings
+    title: Total loss definition
+    section: Motor policy conditions, clause TL-1
+    effective_from: "2025-01-01"
+    tags: [total-loss, replacement-value, fastlane, signature]
+    text: >
+      A vehicle is treated as a total loss under clause TL-1 when the
+      repair estimate exceeds 70 percent of the replacement value on
+      the day of loss, or when the intake evidence shows the hail
+      total-loss signature: glass shattered and roof deformed with more
+      than 150 dents. Either criterion is sufficient on its own. Claims
+      that meet a criterion are moved to the Total Loss Fastlane track
+      and are not queued for a drive-in scan or a body shop slot,
+      because a repair estimate would add days without changing the
+      outcome. The replacement value is the price of a vehicle of the
+      same make, model, age, mileage and condition on the regional
+      market (see PW-VAL-1). Acme settles the replacement value less
+      the residual value of the damaged vehicle and less the
+      deductible, unless the customer keeps the vehicle. A vehicle that
+      meets the signature but that an adjuster later assesses as
+      repairable is returned to the standard track with the customer's
+      consent; the assessment must be documented on the claim.
+
+  - doc_id: PW-GL-2
+    doc_type: policy_wordings
+    title: Glass damage handling
+    section: Motor policy conditions, clause GL-2
+    effective_from: "2025-01-01"
+    tags: [glass, windscreen, deductible, partner-network]
+    text: >
+      Clause GL-2 applies to glazing damage on motor vehicles,
+      including windscreen, rear window, side windows, panoramic roofs
+      and glass sunroofs. Repair of a stone chip or a small crack is
+      preferred to replacement whenever the damage is outside the
+      driver's primary field of view and smaller than a two-euro coin.
+      When repaired or replaced through a partner of the Acme network,
+      the deductible is waived for the glass position (see HC-7).
+      Outside the network, the deductible applies and reimbursement is
+      capped at partner rates. Panoramic roofs that are shattered by
+      hail are treated as glass; a deformed roof panel around them is
+      body damage and falls under the general deductible. Glass claims
+      under EUR 1,000 with an active policy and hail cover are handled
+      in the Fast Lane without an adjuster. Calibration of driver
+      assistance sensors after a windscreen replacement is part of the
+      covered repair when the vehicle manufacturer requires it.
+
+  - doc_id: PW-DED-1
+    doc_type: policy_wordings
+    title: Deductible rules
+    section: Motor policy conditions, deductibles
+    effective_from: "2025-01-01"
+    tags: [deductible, once-per-event, schedule, fast-lane]
+    text: >
+      The deductible is the amount the customer bears per insured
+      event; the policy schedule states it as deductible_eur, usually
+      EUR 150, 300 or 500 for hail cover. It is charged once per event,
+      not per damaged panel, not per repair visit and not per partner
+      involved. When one hail event damages several vehicles under one
+      fleet policy, each vehicle is a separate insured event with its
+      own deductible. When a claim is split between a glass repair at
+      a partner and a body repair elsewhere, only the body position
+      carries the deductible (see GL-2). The deductible is deducted
+      from the payment to the customer or, when the workshop is paid
+      directly, collected by the workshop on behalf of Acme. Fast Lane
+      confirmations must state the deductible amount so the customer
+      knows the net position before the repair starts. A deductible is
+      never waived by an automated decision; waivers require a claims
+      lead and a documented reason such as a goodwill case.
+
+  - doc_id: PW-PROP-HAIL
+    doc_type: policy_wordings
+    title: Property hail cover
+    section: Property policy conditions, hail
+    effective_from: "2025-01-01"
+    tags: [property, building, roof, skylight, photovoltaic]
+    text: >
+      Property policies cover hail damage to the insured building and
+      its permanently attached parts: roof tiles and roof windows,
+      skylights, gutters, facades, blinds and shutters, conservatories
+      and photovoltaic modules mounted on the building. Contents are
+      covered when hail entered the building through an opening caused
+      by the same event. Emergency measures such as tarpaulins to
+      prevent further water ingress are covered without prior approval
+      up to EUR 2,500 and must be reported with the claim. The
+      deductible stated in the schedule applies once per event and
+      building. Property claims are handled by the property desk, never
+      in the motor Fast Lane, because estimates require a roofer or
+      glazier inspection in most cases. During NatCat events the
+      property desk plans with the playbook rate of 18 percent of
+      exposed buildings in the warning polygon reporting a claim
+      within 48 hours. Photovoltaic modules are settled at replacement
+      value less a deduction for age when older than ten years.
+
+  - doc_id: PW-MC-1
+    doc_type: policy_wordings
+    title: Motor comprehensive and partial cover scope
+    section: Motor policy conditions, products
+    effective_from: "2025-01-01"
+    tags: [product, comprehensive, partial, scope, garage-parking]
+    text: >
+      Acme sells two motor products. MOTOR_PARTIAL covers loss or
+      damage caused by fire, theft, glass breakage, collision with
+      animals, and natural hazards including storm, hail, flood and
+      lightning. MOTOR_COMPREHENSIVE includes all partial cover
+      positions and adds damage caused by the driver, vandalism and
+      collision. Both products carry hail cover clause HC-7 when the
+      hail_cover flag is set in the policy record; a small share of
+      older partial-cover policies excluded it for a lower premium.
+      The repair network steering clause RN-3 can be combined with
+      either product. Vehicle data in the policy record (vehicle_vin,
+      vehicle_model, garage_parking) are the basis for the risk
+      assessment; the garage_parking flag drives the hail exposure used
+      by the NatCat desk. Policies with status ACTIVE on the day of the
+      event are covered; a policy that starts after the event date
+      gives no cover for that event. Fleet policies (customer segment
+      FLEET) may list several vehicles under one contract number.
+
+  - doc_id: PW-RENTAL-1
+    doc_type: policy_wordings
+    title: Replacement vehicle benefit
+    section: Motor policy conditions, mobility
+    effective_from: "2025-01-01"
+    tags: [rental, mobility, not-drivable, rentafleet, 14-days]
+    text: >
+      When the insured vehicle is not drivable after a covered event,
+      or is held at a partner for repair, the customer is entitled to
+      a replacement vehicle from the Acme rental partner for the
+      duration of the repair, up to 14 calendar days, extendable by
+      the claims handler when the partner confirms a longer repair
+      time. The replacement vehicle is one category below the insured
+      vehicle unless a same-category vehicle is available at no extra
+      cost. Customers who do not need a rental vehicle receive a daily
+      mobility allowance instead. The benefit applies to total losses
+      until the settlement is paid, at most 14 days from pick-up of
+      the vehicle. During NatCat events rental capacity is scarce; the
+      NatCat desk may pre-book cars with the rental partner (see
+      PC-RENTAFLEET-2026) and allocate them to customers without a
+      drivable vehicle first. The benefit does not cover fuel, tolls
+      or damage to the rental vehicle beyond the rental partner's own
+      excess.
+
+  - doc_id: PW-DUTY-1
+    doc_type: policy_wordings
+    title: Policyholder duties after a loss
+    section: Motor policy conditions, obligations
+    effective_from: "2025-01-01"
+    tags: [duties, fnol, photos, mitigation, seven-days]
+    text: >
+      After a loss the policyholder must report the damage to Acme
+      without undue delay, at the latest within seven days after
+      becoming aware of it, through one of the intake channels: app,
+      voice agent, workshop portal, drive-in scanner or agency. The
+      report must describe the damage truthfully and include photos of
+      every damaged area where possible. The customer must take
+      reasonable steps to prevent further damage, for example covering
+      a broken window, and must not have the vehicle repaired before
+      Acme has released the repair, except for emergency measures
+      needed to keep the vehicle safe. The damaged vehicle must be
+      made available for inspection at a drive-in center, a partner
+      workshop or by remote valuation when Acme requests it. Duties
+      are breached when facts are misrepresented on purpose, for
+      example when damage that existed before the event is presented
+      as hail damage; Acme may then reduce or refuse the payment
+      according to the degree of fault.
+
+  - doc_id: PW-FLEET-1
+    doc_type: policy_wordings
+    title: Fleet policy specifics
+    section: Motor policy conditions, fleets
+    effective_from: "2025-01-01"
+    tags: [fleet, segment, reporting, garage-parking]
+    text: >
+      Fleet policies cover several vehicles of one commercial customer
+      (segment FLEET). Each vehicle keeps its own policy_id in the
+      policy record, so claims are always assigned to a single vehicle
+      and a single policy. The fleet manager may report losses for all
+      vehicles through the workshop portal or the agency channel, and
+      Acme accepts one consolidated FNOL per vehicle. After a hail
+      event the fleet manager receives one status overview per fleet
+      instead of individual letters. Deductibles apply per vehicle
+      (see PW-DED-1). Fleet vehicles are usually parked in the open;
+      the garage_parking flag is therefore false for most fleet
+      vehicles, which raises the hail exposure of the fleet in the
+      NatCat planning. The repair network clause RN-3 applies to
+      fleets in the same way as to private customers, including the
+      five working day rule for the slot proposal. Fleet claims in the
+      MINOR severity band qualify for the Fast Lane.
+
+  - doc_id: PW-VAL-1
+    doc_type: policy_wordings
+    title: Replacement value determination
+    section: Motor policy conditions, valuation
+    effective_from: "2025-01-01"
+    tags: [replacement-value, valuation, total-loss, remote-valuation]
+    text: >
+      The replacement value is the amount the customer would have to
+      pay on the day of the loss for a vehicle of the same make,
+      model, equipment, age, mileage and condition on the regional
+      used-vehicle market. Acme determines it from market data
+      services and, where needed, from a remote valuation by the
+      assistance partner, who inspects the vehicle by video and photo
+      without moving it to a workshop. Remote valuations are the
+      standard for hail total losses because the damage pattern is
+      visible on the outside and the vehicle's mechanical condition is
+      not in question. The residual value of the damaged vehicle is
+      determined by offers from the Acme salvage exchange within two
+      working days. A customer who disagrees with the valuation may
+      present a written offer from a dealer; the claims handler
+      compares both and documents the decision. Replacement value,
+      residual value and deductible are stated in the settlement
+      letter of every total loss.
+
+  - doc_id: PW-EXCL-1
+    doc_type: policy_wordings
+    title: Exclusions and pre-existing damage
+    section: Motor policy conditions, exclusions
+    effective_from: "2025-01-01"
+    tags: [exclusions, pre-existing, event-date, photos]
+    text: >
+      Hail cover does not extend to damage that existed before the
+      event date of the weather cell recorded on the claim.
+      Pre-existing dents, corrosion, scratches or earlier hail damage
+      that was paid out and not repaired are excluded and are
+      separated from the new damage during the scan or the estimate.
+      Photos submitted with the FNOL must show the current condition;
+      the capture date stored in the photo metadata is compared with
+      the event date of the cell during intake validation. Wear and
+      tear, damage from improper repair attempts, and damage to loose
+      items inside the vehicle are not covered. Damage that occurred
+      while the vehicle was used for a purpose not declared in the
+      policy, for example commercial passenger transport under a
+      private policy, is excluded. The exclusions are not applied
+      automatically: a mismatch between the photo date and the event
+      date is an indicator for a specialist review, not a refusal in
+      itself (see CG-FR-5).
+
+  # ---------------------------------------------------------------
+  # claims_guidelines
+  # ---------------------------------------------------------------
+  - doc_id: CG-FL-1
+    doc_type: claims_guidelines
+    title: Fast Lane criteria
+    section: Claims handling manual, section 4.1
+    effective_from: "2026-01-01"
+    tags: [fast-lane, minor, auto-confirm, drive-in, no-adjuster]
+    text: >
+      The Fast Lane is the automated confirmation track for small hail
+      claims. A claim qualifies as MINOR and enters the Fast Lane when
+      all of the following hold: the damage is glass or dents only,
+      the estimate is below EUR 1,000, the policy is ACTIVE on the
+      event date, and hail cover HC-7 is set on the policy. Fast Lane
+      claims are auto-confirmed without an adjuster: the clerk checks
+      the policy, states the deductible, proposes a drive-in slot at
+      the nearest ACTIVE drive-in partner in the customer's district
+      and sends a short confirmation of at most three sentences to the
+      customer. No reserve review, no photo assessment and no workshop
+      estimate are required before the confirmation. The Fast Lane
+      never pays out; payment is released after the scan or the repair
+      invoice. A MINOR claim that later shows a total-loss signature,
+      a scanner mismatch or a fraud indicator leaves the Fast Lane and
+      is routed to the standard track or to a specialist. Fast Lane
+      confirmations are logged with the policy and clause references
+      used.
+
+  - doc_id: CG-TL-2
+    doc_type: claims_guidelines
+    title: Total Loss Fastlane
+    section: Claims handling manual, section 4.2
+    effective_from: "2026-01-01"
+    tags: [total-loss, fastlane, pick-up, remote-valuation, settlement]
+    text: >
+      The Total Loss Fastlane is the track for claims that meet a
+      criterion of clause TL-1. The customer is contacted within one
+      working day, the assistance partner picks up the vehicle or
+      inspects it where it stands, and a remote valuation determines
+      the replacement value and the residual value. The settlement
+      target is 5 working days from entry into the track. A claim in
+      the Fastlane is not assigned to a drive-in center or a body
+      shop; it must not sit in an AWAITING_WORKSHOP_SLOT queue, because
+      every day in that queue is a day lost against the settlement
+      target and against the BaFin processing clock. Claims handlers
+      move a claim into the Fastlane when the intake data show glass
+      shattered, roof deformed and more than 150 dents, or when an
+      estimate exceeds 70 percent of the replacement value. The
+      customer receives a replacement vehicle until the settlement is
+      paid (see PW-RENTAL-1). The Fastlane is pre-staged with the
+      assistance partner before a forecast cell arrives (see
+      SP-NATCAT-4) so that pick-up capacity is available on day one.
+
+  - doc_id: CG-BAFIN-30
+    doc_type: claims_guidelines
+    title: Processing-time rule
+    section: Claims handling manual, section 2.3
+    effective_from: "2026-01-01"
+    tags: [bafin, 30-days, escalation, day-20, kpi, supervision]
+    text: >
+      The supervisory authority BaFin treats the claims processing
+      time as a supervisory key figure and expects a decision on every
+      claim within 30 days after the first notice of loss. Volume is
+      no excuse: a NatCat event with ten thousand claims is subject to
+      the same clock as a single claim. Acme operationalises the rule
+      as follows. Day 0 is the FNOL date. On day 20 every claim without
+      a decision is escalated to the claims lead of the line, who must
+      document the cause and the planned decision date; for event
+      cohorts the escalation is raised once for the whole cohort with
+      the number of open claims. On day 25 open claims are reported to
+      the head of claims. Claims held for a fraud specialist are not
+      exempt; the hold must be lifted or turned into a decision within
+      the same 30 days. Complaints about processing time are answered
+      within seven days and recorded with the complaint flag on the
+      customer record. Cohort dashboards show the day-20 date of the
+      oldest claims.
+
+  - doc_id: CG-FR-5
+    doc_type: claims_guidelines
+    title: Fraud indicators guideline
+    section: Claims handling manual, section 7.1
+    effective_from: "2026-01-01"
+    tags: [fraud, indicators, exif, duplicate-vin, rates, scanner, gdv,
+           human-decision]
+    text: >
+      Hail events attract opportunistic fraud and leakage. Claims
+      handlers and the fraud analytics service watch for the following
+      indicators: photo EXIF timestamps before the event date of the
+      cell; the same VIN reported through two channels within 48
+      hours, typically app and voice agent with different dent counts;
+      a workshop estimate more than 25 percent above the contracted
+      hourly or paint rate; identical line-item texts across several
+      claims of one workshop; a drive-in scanner count that deviates
+      by more than 50 percent from the number of dents claimed by the
+      customer. Every indicator is a reason to look, not a verdict.
+      Acme follows the fraud handling principle of the German
+      Insurance Association (GDV): a single indicator proves nothing,
+      the overall picture decides, a human specialist decides; never
+      delay the honest majority.
+      Claims with indicators are set to ON_HOLD with the indicator
+      codes on the claim and passed to the fraud specialist; all other
+      claims of the event are released on the normal track. Payment
+      items of held claims are removed from the next payment run
+      before its cut-off. Findings are documented so that a customer
+      or a workshop can be told what was checked.
+
+  - doc_id: CG-CX-3
+    doc_type: claims_guidelines
+    title: Repeat contact and complaint handling
+    section: Claims handling manual, section 3.4
+    effective_from: "2026-01-01"
+    tags: [repeat-contact, complaint, voice-agent, customer-experience]
+    text: >
+      A repeat contact is a second intake document for a claim that
+      already exists, for example a customer who reported through the
+      app and then calls the voice agent two days later to ask for a
+      slot. Repeat contacts are marked is_repeat_contact on the intake
+      record and are not new claims. A rising share of repeat contacts
+      in an event cohort is the earliest signal that customers are
+      waiting too long; it appears days before formal complaints.
+      Customers who called twice must receive a proactive status
+      update within one working day. A formal complaint is recorded
+      with the complaint flag on the customer and on the intake
+      record, answered within seven days, and reported in the monthly
+      complaint statistics to the supervisory authority. During NatCat
+      events the claims lead reviews the repeat-contact and complaint
+      numbers of every stalled cohort daily. A customer with a
+      complaint flag must not be moved further down a queue by an
+      automated reassignment; the handler decides the new slot
+      personally.
+
+  - doc_id: CG-SEV-1
+    doc_type: claims_guidelines
+    title: Severity classification
+    section: Claims handling manual, section 3.1
+    effective_from: "2026-01-01"
+    tags: [severity, minor, moderate, severe, estimate]
+    text: >
+      Every hail claim receives a severity band at intake, derived
+      from the damage signals and the estimate. MINOR: glass damage or
+      dents only, drivable, estimate below EUR 1,000; these claims
+      enter the Fast Lane. MODERATE: dents on several panels or a
+      combination of glass and body damage, estimate between EUR 1,000
+      and EUR 6,000, vehicle usually drivable; these claims go to a
+      drive-in scan followed by a partner repair. SEVERE: extensive
+      damage, estimate above EUR 6,000, roof or pillar deformation, or
+      not drivable; these claims go to a body shop estimate or, when
+      the total-loss signature is present, directly to the Total Loss
+      Fastlane. The severity band steers the reserve, the partner type
+      and the customer communication. It is corrected when the scan or
+      the estimate shows a different picture; corrections are logged.
+      In a typical 3 cm hail cell about 60 percent of claims are
+      MINOR, 35 percent MODERATE and 5 percent SEVERE.
+
+  - doc_id: CG-STAT-2
+    doc_type: claims_guidelines
+    title: Claim status model and stall threshold
+    section: Claims handling manual, section 3.2
+    effective_from: "2026-01-01"
+    tags: [status, workflow, stalled, awaiting-slot, threshold, cohort]
+    text: >
+      Motor hail claims move through the following statuses: RECEIVED
+      (intake complete, not yet validated), CONFIRMED (cover
+      confirmed, customer informed), AWAITING_WORKSHOP_SLOT (assigned
+      to a partner, waiting for a scan or repair slot), IN_REPAIR
+      (vehicle at the partner), TOTAL_LOSS_FASTLANE (clause TL-1
+      track) and ON_HOLD (specialist review, fraud indicators or
+      missing documents). The status_since timestamp records the last
+      change. A claim is stalled when it has been in
+      AWAITING_WORKSHOP_SLOT for more than 4 hours without a confirmed
+      slot; the triage service groups stalled claims by partner and
+      district into a cohort and raises a triage event when a cohort
+      exceeds 100 claims. A stalled cohort is analysed for its root
+      cause: partner capacity, wrong track (total losses in a drive-in
+      queue), or an inactive fallback partner. ON_HOLD is not a
+      parking status; every hold needs a reason code and an owner.
+      Status counts per event are the daily steering figures of the
+      NatCat desk.
+
+  - doc_id: CG-RES-1
+    doc_type: claims_guidelines
+    title: Reserve setting for hail claims
+    section: Claims handling manual, section 5.1
+    effective_from: "2026-01-01"
+    tags: [reserve, estimate, severity, event-reserve]
+    text: >
+      A case reserve is set at intake for every claim from the
+      severity band and is refined when the estimate arrives. Initial
+      reserves: MINOR EUR 600, MODERATE EUR 2,800, SEVERE EUR 9,500;
+      total losses are reserved at the replacement value less the
+      expected residual value. The reserve is replaced by the workshop
+      estimate or the scanner estimate as soon as one exists, and by
+      the invoice amount when the repair is complete. Reserves are
+      reviewed weekly for event cohorts and the event total is
+      reported to the NatCat desk. Reserves must not be lowered
+      because a claim is on hold; a hold changes the timing, not the
+      expected cost. For estimates that deviate by more than 25
+      percent from contracted rates the reserve stays at the
+      contracted-rate level until the estimate review is complete. The
+      event reserve of a 3 cm cell with ten thousand motor claims is
+      typically in the range of EUR 25 to 30 million.
+
+  - doc_id: CG-DP-1
+    doc_type: claims_guidelines
+    title: Data protection note for claim photos
+    section: Claims handling manual, section 9.2
+    effective_from: "2026-01-01"
+    tags: [data-protection, photos, exif, gps, retention]
+    text: >
+      Photos submitted with a claim contain personal data: the vehicle
+      registration, sometimes persons, and metadata such as the
+      capture time and GPS position. Acme processes the metadata for
+      the purpose of validating the claim, in particular to compare
+      the capture time with the event date and the capture position
+      with the warning polygon. Customers are informed about this use
+      in the intake channels. Metadata is not used for any other
+      purpose and is not shared with partners; workshops receive the
+      images without EXIF data. Photos are retained for the life of
+      the claim plus the statutory retention period and are then
+      deleted. Persons visible in the background are not identified.
+      Where a photo shows a mismatch, for example a capture time
+      before the event, the customer is asked for an explanation
+      before a conclusion is drawn; the mismatch is recorded as an
+      indicator, not as a finding. Access to photo metadata is limited
+      to claims handlers, the fraud specialist and the intake
+      validation service.
+
+  - doc_id: CG-ESC-2
+    doc_type: claims_guidelines
+    title: Complaint escalation path
+    section: Claims handling manual, section 3.5
+    effective_from: "2026-01-01"
+    tags: [complaint, escalation, ombudsman, bafin, register]
+    text: >
+      Complaints are handled in three stages. Stage one: the claims
+      handler answers within seven days and offers a concrete next
+      step, usually a slot or a decision date. Stage two: complaints
+      not resolved after fourteen days, and every complaint that
+      mentions the supervisory authority, the ombudsman or a lawyer,
+      go to the complaint management team, which answers in writing
+      and records the case in the complaint register. Stage three:
+      cases with a systematic cause, for example a stalled cohort at
+      one partner, are escalated to the head of claims together with
+      the cohort figures and the planned remedy. The complaint
+      register is the source for the annual complaint report to BaFin;
+      motor complaints about processing time are reported separately.
+      Customers are told at every stage whom they are talking to and
+      what happens next. A complaint never worsens the position of the
+      customer in a queue. Complaint figures of NatCat cohorts are
+      reviewed daily during the event.
+
+  - doc_id: CG-PAY-1
+    doc_type: claims_guidelines
+    title: Payment run rules
+    section: Claims handling manual, section 6.1
+    effective_from: "2026-01-01"
+    tags: [payment-run, cut-off, hold, friday, controller]
+    text: >
+      Claim payments are bundled into weekly payment runs identified
+      as PR-YYYY-WW, executed on Fridays at 16:00. Items are scheduled
+      when a claim is approved for payment: customer payments for
+      settlements and deductible refunds, workshop payments for
+      invoices under direct settlement. Each item carries the claim,
+      the payee type, the payee partner where applicable, a hashed
+      IBAN reference and the amount. Items may be removed from a run
+      until its cut-off; removal is a hold, not a cancellation, and
+      the item is rescheduled when the claim is released. Holds must
+      be placed before the cut-off of the run; after 16:00 on Friday
+      the run is final and a wrong payment can only be recovered.
+      Fraud holds on a payment run are placed by the fraud specialist
+      or the claims lead with the indicator codes of the claim. The
+      run total and the number of items are confirmed by the claims
+      controller before execution. During NatCat events the run size
+      rises to several thousand items; the controller then reviews
+      the held items separately.
+
+  - doc_id: CG-HOLD-1
+    doc_type: claims_guidelines
+    title: Placing a claim on hold
+    section: Claims handling manual, section 7.2
+    effective_from: "2026-01-01"
+    tags: [on-hold, reason-code, specialist, honest-majority]
+    text: >
+      A claim is set to ON_HOLD only for a documented reason: fraud
+      indicators awaiting a specialist, missing documents requested
+      from the customer, an estimate under review, or a legal dispute.
+      The hold record names the reason code, the owner and the planned
+      review date, at most ten working days ahead. The customer is
+      informed that the claim is under review, without naming fraud
+      indicators. Holds never apply to a whole cohort or to a
+      partner's entire book: they are placed per claim, and the honest
+      majority of an event cohort continues on the normal track. A
+      hold suspends payment items in the next payment run but does not
+      change the reserve. Holds are reviewed daily during NatCat
+      events; a hold older than ten working days is escalated to the
+      claims lead. The BaFin 30-day clock keeps running during a hold.
+      When the review clears the claim, the status returns to the
+      previous track and the customer receives the next step within
+      one working day.
+
+  - doc_id: CG-AI-1
+    doc_type: claims_guidelines
+    title: AI-assisted decisions and human oversight
+    section: Claims handling manual, section 1.4
+    effective_from: "2026-06-01"
+    tags: [ai, human-oversight, transparency, eu-ai-act, no-payout]
+    text: >
+      Acme uses AI agents to read intake data, confirm small claims,
+      draft reports and propose actions. The rules: no agent may pay
+      out; payments are released by a human or by the payment
+      controller's approval. Customers are told when they interact
+      with an automated system and can ask for a human handler at any
+      time, in line with the transparency obligations of the EU AI
+      Act, Article 50, which apply from 2 August 2026 and which Acme
+      applies ahead of that date. Decisions with
+      legal effect for a customer, such as a refusal, a reduction for
+      breach of duty or a fraud finding, are made by a human who has
+      seen the evidence; the agent's analysis is an input, not the
+      decision. Every automated confirmation records the data and
+      rules used, so that the decision can be explained afterwards.
+      Recommendations for cohorts (reassignments, partner activations,
+      warning messages to customers) are executed only after a named
+      person approves them; the approval is published as a decision
+      event with the approver's identity. Model changes are tested
+      against the claims evaluation set before release.
+
+  - doc_id: CG-SC-1
+    doc_type: claims_guidelines
+    title: Drive-in scanner results handling
+    section: Claims handling manual, section 4.3
+    effective_from: "2026-01-01"
+    tags: [scanner, drive-in, dent-count, mismatch, calibration]
+    text: >
+      Drive-in hail centers scan the vehicle with an optical dent
+      scanner that counts dents per panel and produces an estimate
+      from the partner rate card. The scanner result is the reference
+      for the repair scope; the customer's dent estimate at intake is
+      an indication only. The scanner record stores the partner, the
+      scan time, the dent count, the panels and the estimate. A
+      mismatch flag is set when the scanned count deviates by more
+      than 50 percent from the count claimed at intake. A mismatch is
+      not a refusal: many customers overestimate small dents, and
+      scanners miss dents on dark or dirty panels. The claim is
+      settled on the scanned scope; when the customer disagrees, a
+      second scan at another partner is offered. A mismatch combined
+      with other indicators (see CG-FR-5), such as photos taken before
+      the event or an estimate far above contracted rates, routes the
+      claim to the fraud specialist. Mismatch rates per partner are
+      monitored; a rate above 10 percent triggers a calibration check
+      of the scanner.
+
+  - doc_id: CG-EST-1
+    doc_type: claims_guidelines
+    title: Workshop estimate review
+    section: Claims handling manual, section 5.2
+    effective_from: "2026-01-01"
+    tags: [estimate, rates, review, line-items, deviation, leakage]
+    text: >
+      Workshop estimates are checked against the contracted rates of
+      the partner (see PC-RATES-2026): hourly rate, paint rate, parts
+      prices from the manufacturer price list, and the standard times
+      for paintless dent repair. An estimate is released automatically
+      when hours, rates and parts are within the contracted values. An
+      estimate whose hourly or paint rate exceeds the contracted rate
+      by more than 25 percent, or whose total exceeds the scanner
+      estimate by more than 25 percent, is set to review and returned
+      to the partner with the deviation marked. Identical line-item
+      texts across several claims of one workshop are a leakage
+      indicator: real hail damage differs from car to car, so
+      identical texts suggest a template rather than an inspection.
+      Review findings are shared with the partner manager; repeated
+      deviations of one workshop lead to a rate audit under the
+      partner contract. Estimates in review do not stop the customer's
+      repair when the customer bears no extra cost; they stop the
+      workshop payment until the review is closed.
+
+  - doc_id: CG-NATCAT-1
+    doc_type: claims_guidelines
+    title: NatCat event coding
+    section: Claims handling manual, section 8.1
+    effective_from: "2026-01-01"
+    tags: [natcat, event-id, cohort, weather-cell, conversion]
+    text: >
+      Every weather-related loss is assigned to a NatCat event id when
+      the loss location and date fall into the track and time window
+      of a recorded weather cell. Hail cells are coded HZ-NNNN by the
+      NatCat desk in the order of occurrence; the cell record stores
+      the observed or forecast start and end time, the hail size, the
+      warning level, the district, the affected postal codes and the
+      exposure figures computed from the policy portfolio (motor
+      policies, vehicles without garage, property policies). Claims
+      outside the polygon or reported for a date outside the window
+      are assigned manually after a check. The event id ties together
+      claims, intake documents, scanner results, payment items and
+      cohort reports, so that all figures of an event can be
+      reproduced. Conversion, the number of motor claims divided by
+      the number of exposed vehicles without garage, is computed per
+      event and fed back into the playbook planning assumptions. Event
+      coding must be complete before the first cohort report.
+
+  # ---------------------------------------------------------------
+  # partner_contracts
+  # ---------------------------------------------------------------
+  - doc_id: PC-BRAENDLE-2025
+    doc_type: partner_contracts
+    title: Drive-in contract P-BRAENDLE (Braendle Drive-In Hail Center)
+    section: Partner contract, drive-in, Sindelfingen
+    effective_from: "2025-03-01"
+    tags: [drive-in, braendle, capacity, second-shift, overflow,
+           sindelfingen, boeblingen]
+    text: >
+      Partner P-BRAENDLE, Braendle Drive-In Hail Center, Sindelfingen,
+      is Acme's primary drive-in partner for Landkreis Boeblingen,
+      contract status ACTIVE, tier PREMIUM. The partner operates an
+      optical dent scanner lane and a paintless dent repair shop.
+      Contracted capacity is 120 scans per day in the standard single
+      shift, Monday to Saturday. Second-shift option: on 24 hours
+      notice by Acme the partner runs a second shift and adds 60 scans
+      per day, invoiced at the contracted rates plus a shift premium
+      of 12 percent on labour. Overflow clause: when the number of
+      Acme vehicles assigned to the partner and waiting for a slot
+      exceeds three days of capacity, the partner informs Acme within
+      four hours and Acme may reassign waiting vehicles to another
+      partner without penalty to either side. The partner confirms
+      slot proposals within 24 hours. Rates follow the Acme rate card
+      PC-RATES-2026. Scanner calibration is checked quarterly. The
+      contract runs until 2027-02-28 with automatic renewal.
+
+  - doc_id: PC-DELLENDOC-2024
+    doc_type: partner_contracts
+    title: Drive-in contract P-DELLENDOC (Dellen-Doktor Sindelfingen)
+    section: Partner contract, drive-in, Sindelfingen
+    effective_from: "2024-02-01"
+    tags: [drive-in, dellendoc, inactive, pc-4, ic-2, renewal,
+           sindelfingen, boeblingen]
+    text: >
+      Partner P-DELLENDOC, Dellen-Doktor Sindelfingen, is the fallback
+      drive-in partner for Landkreis Boeblingen with a contracted
+      capacity of 90 scans per day, tier STANDARD. Contract status:
+      INACTIVE since 2026-01-01. The renewal for 2026 is blocked
+      because the parts-channel clause PC-4 (mandatory sourcing of
+      glazing and trim parts through the Acme parts channel) remains
+      unsigned; the partner disputes the rebate split. Contract note
+      in the partner record: tier renegotiation, parts-channel clause
+      PC-4 unsigned. While inactive, the partner receives no
+      assignments and does not appear in slot proposals. The interim
+      contract template IC-2 allows a 48 hour activation under the old
+      terms for NatCat events: the NatCat desk issues the IC-2
+      activation, the partner confirms within 24 hours, the scanner
+      lane is operational within 48 hours, and the old 2024 rate card
+      applies for the duration of the event, at most 60 days. IC-2
+      activations do not prejudice the pending renewal negotiation.
+      The partner's scanner was last calibrated in December 2025.
+
+  - doc_id: PC-IC-2
+    doc_type: partner_contracts
+    title: Interim contract template IC-2
+    section: Partner contracts, templates
+    effective_from: "2025-06-01"
+    tags: [interim-contract, ic-2, natcat, activation, 48-hours,
+           old-terms]
+    text: >
+      The interim contract template IC-2 is used to activate a partner
+      whose regular contract is inactive, expired or under
+      renegotiation when a NatCat event requires additional capacity.
+      Trigger: a weather cell with warning level 3 or an event cohort
+      of more than 1,000 claims in the partner's district. Terms: the
+      partner works under the terms and rates of its last active
+      contract; the activation is valid for the duration of the event
+      and at most 60 days; either side may end it with five days
+      notice once the event cohort is cleared. Activation: the NatCat
+      desk sends the IC-2 activation notice, the partner confirms in
+      writing within 24 hours, and operations start within 48 hours of
+      the notice. Capacity under IC-2 is the capacity of the last
+      active contract, for example 90 scans per day for P-DELLENDOC.
+      Open commercial disputes of the regular renewal, such as an
+      unsigned clause, are explicitly parked and are not conditions of
+      the interim activation. The claims lead approves the activation;
+      the partner manager documents it in the partner record.
+
+  - doc_id: PC-ROADASSIST-2025
+    doc_type: partner_contracts
+    title: Assistance contract P-ROADASSIST
+    section: Partner contract, assistance
+    effective_from: "2025-01-15"
+    tags: [assistance, pick-up, remote-valuation, total-loss, capacity,
+           standby]
+    text: >
+      Partner P-ROADASSIST is Acme's assistance partner for the
+      Stuttgart region, contract status ACTIVE. Services: pick-up and
+      transport of vehicles that are not drivable or that are in the
+      Total Loss Fastlane, remote valuation by video and photo
+      inspection for total losses, secure storage of vehicles until
+      the residual value sale, and delivery of replacement vehicles in
+      cooperation with the rental partner. Contracted capacity: 200
+      vehicles per day for pick-up and remote valuation combined,
+      expandable to 300 per day with 48 hours notice by bringing in
+      subcontracted transporters. Service levels: first customer
+      contact within one working day of assignment, pick-up within two
+      working days, remote valuation report within one working day
+      after pick-up or inspection. Pre-staging: for a forecast cell
+      with warning level 3 the NatCat desk may reserve the partner's
+      capacity 24 hours ahead at a standby fee; the reservation is
+      converted into assignments as claims arrive. Rates are per
+      vehicle and distance band. The partner reports daily pick-up and
+      valuation figures to Acme during events.
+
+  - doc_id: PC-RENTAFLEET-2026
+    doc_type: partner_contracts
+    title: Rental contract P-RENTAFLEET
+    section: Partner contract, rental
+    effective_from: "2026-01-01"
+    tags: [rental, pre-booking, 24-hours, capacity, ludwigsburg]
+    text: >
+      Partner P-RENTAFLEET, contract status ACTIVE, provides
+      replacement vehicles to Acme customers under clause PW-RENTAL-1.
+      Standard availability is a pool of about 35 cars in Ludwigsburg
+      and comparable pools in Boeblingen and Stuttgart, allocated on
+      demand. Pre-booking clause: with 24 hours notice Acme may
+      pre-book up to 150 cars for a named event and district; the
+      partner relocates cars from its regional network and guarantees
+      availability from the start of the booking window. Pre-booked
+      cars that are not taken up within 72 hours are released without
+      charge; cars taken up are invoiced at the contracted daily rate
+      for the actual rental period. The partner delivers cars to
+      drive-in centers, partner workshops or the customer's home.
+      Priority during events: customers without a drivable vehicle
+      first, then Total Loss Fastlane customers, then repair
+      customers. The partner reports the number of cars available per
+      district daily during events. Rental periods beyond 14 days
+      require approval by the claims handler.
+
+  - doc_id: PC-RATES-2026
+    doc_type: partner_contracts
+    title: Partner network rate card 2026
+    section: Partner contracts, rates
+    effective_from: "2026-01-01"
+    tags: [rates, hourly, paint, deviation, 25-percent, review]
+    text: >
+      The rate card for the Acme partner network in 2026 sets the
+      contracted hourly rate for body and paintless dent repair labour
+      at EUR 118.00 and the contracted paint rate at EUR 96.00 per
+      hour. Parts are invoiced at the manufacturer price list less the
+      contracted rebate. Standard times for paintless dent repair
+      follow the network's time schedule per panel and dent class.
+      Deviation review threshold: an estimate or invoice whose hourly
+      or paint rate exceeds the contracted rate by more than 25
+      percent is set to review and not paid until the review is
+      closed; deviations below the threshold are paid and reported in
+      the monthly partner statistics. Repeated deviations of one
+      workshop trigger a rate audit under the partner contract.
+      Drive-in scans are invoiced at a flat fee per scan; the fee is
+      included in the repair invoice when the partner repairs the
+      vehicle. The rate card applies to all body shops and drive-in
+      centers of the network; assistance and rental partners have
+      their own price schedules.
+
+  - doc_id: PC-KAROSSERIE-2025
+    doc_type: partner_contracts
+    title: Body shop contract P-KAROSSERIE-SCHNELL (workshop W-0471)
+    section: Partner contract, body shop, Boeblingen
+    effective_from: "2025-04-01"
+    tags: [body-shop, karosserie-schnell, w-0471, estimates,
+           transparency, boeblingen]
+    text: >
+      Partner P-KAROSSERIE-SCHNELL, workshop code W-0471, Boeblingen,
+      is a contracted body shop of the Acme network, contract status
+      ACTIVE, tier STANDARD. The partner repairs MODERATE and SEVERE
+      hail claims assigned by Acme after a drive-in scan or a body
+      shop estimate. Contracted rates follow PC-RATES-2026: hourly
+      rate EUR 118.00, paint rate EUR 96.00. Estimate transparency
+      clause: every estimate lists the panels, the dent count per
+      panel, the repair method, the hours and the rates per line item,
+      so that Acme can compare the estimate with the scanner result.
+      Estimates must be individual to the vehicle; template texts are
+      not accepted. Acme may audit the partner's estimates and
+      invoices of the last twelve months on two weeks notice. Direct
+      settlement: Acme pays approved invoices through the weekly
+      payment run with the partner as payee. The partner offers slots
+      within five working days for assigned vehicles. Contract term
+      until 2027-03-31.
+
+  - doc_id: PC-AUTOWERK-2025
+    doc_type: partner_contracts
+    title: Body shop contract P-AUTOWERK-BB
+    section: Partner contract, body shop, Boeblingen
+    effective_from: "2025-04-01"
+    tags: [body-shop, autowerk, boeblingen, capacity, overflow]
+    text: >
+      Partner P-AUTOWERK-BB, Boeblingen, is a contracted body shop of
+      the Acme network, contract status ACTIVE, tier PREMIUM. The
+      partner has eight repair bays and a paint booth and accepts
+      MODERATE and SEVERE hail claims from the Boeblingen district,
+      including vehicles that need panel replacement after paintless
+      dent repair is ruled out. Contracted rates follow PC-RATES-2026.
+      The partner offers slots within five working days for assigned
+      vehicles and informs Acme within 24 hours when its order book
+      exceeds ten working days. The partner accepts overflow vehicles
+      reassigned from drive-in partners under their overflow clauses.
+      Estimates follow the transparency requirements of the network
+      and are compared with the scanner result. Direct settlement
+      through the weekly payment run applies. The partner provides a
+      replacement vehicle from the Acme rental partner's pool when the
+      repair takes longer than two days. Contract term until
+      2027-03-31 with automatic renewal.
+
+  - doc_id: PC-LACKPROFI-2025
+    doc_type: partner_contracts
+    title: Body shop contract P-LACKPROFI-LEO
+    section: Partner contract, body shop, Leonberg
+    effective_from: "2025-04-01"
+    tags: [body-shop, lackprofi, leonberg, paint, boeblingen]
+    text: >
+      Partner P-LACKPROFI-LEO, Leonberg, is a contracted body shop of
+      the Acme network with a focus on paint and panel work, contract
+      status ACTIVE, tier STANDARD. The partner accepts SEVERE hail
+      claims that require panel replacement and repainting, and
+      MODERATE claims with paint damage from the western part of
+      Landkreis Boeblingen (Leonberg, Weil der Stadt, Herrenberg).
+      Contracted rates follow PC-RATES-2026; the paint rate of EUR
+      96.00 per hour applies to all paint work including blending of
+      adjacent panels. Slots are offered within five working days. The
+      partner reports its open order book weekly and during events
+      daily. Estimates list panels, hours, rates and parts
+      individually. Direct settlement through the weekly payment run.
+      The partner cooperates with the drive-in partners for vehicles
+      that need both paintless dent repair and paint work. Contract
+      term until 2027-03-31.
+
+  - doc_id: PC-HAGELPOINT-2025
+    doc_type: partner_contracts
+    title: Drive-in contract P-HAGELPOINT-LB
+    section: Partner contract, drive-in, Ludwigsburg
+    effective_from: "2025-03-01"
+    tags: [drive-in, hagelpoint, ludwigsburg, capacity, second-shift,
+           mobile-units]
+    text: >
+      Partner P-HAGELPOINT-LB, Ludwigsburg, is Acme's primary drive-in
+      partner for Landkreis Ludwigsburg, contract status ACTIVE, tier
+      PREMIUM. Contracted capacity is 100 scans per day in a single
+      shift, Monday to Saturday. The partner operates one optical dent
+      scanner lane and a paintless dent repair shop with six
+      technicians. Second-shift option: on 24 hours notice the partner
+      adds 50 scans per day. Overflow clause as in the network
+      standard: when waiting vehicles exceed three days of capacity,
+      Acme may reassign without penalty. The partner hosts mobile
+      scanner units of the Stuttgart hub on its premises during
+      events, providing power and a marshalling area for up to two
+      units. Rates follow PC-RATES-2026 with the flat scan fee. Slot
+      proposals are confirmed within 24 hours. The partner reports
+      daily scan figures during events. Contract term until
+      2027-02-28.
+
+  - doc_id: PC-DELLENFIX-2025
+    doc_type: partner_contracts
+    title: Drive-in contract P-DELLENFIX-LB
+    section: Partner contract, drive-in, Ludwigsburg
+    effective_from: "2025-03-01"
+    tags: [drive-in, dellenfix, ludwigsburg, capacity]
+    text: >
+      Partner P-DELLENFIX-LB, Ludwigsburg, is the second drive-in
+      partner for Landkreis Ludwigsburg, contract status ACTIVE, tier
+      STANDARD. Contracted capacity is 80 scans per day in a single
+      shift. The partner has one scanner lane and four paintless dent
+      repair technicians and specialises in small and medium dent
+      counts; vehicles with more than 150 dents or with roof
+      deformation are referred to a body shop or, where clause TL-1
+      applies, to the Total Loss Fastlane. No second-shift option is
+      contracted; additional capacity during events comes from mobile
+      scanner units. Overflow clause as in the network standard. Rates
+      follow PC-RATES-2026 with the flat scan fee. The partner
+      confirms slot proposals within 24 hours and reports daily scan
+      figures during events. Together with P-HAGELPOINT-LB the
+      contracted drive-in capacity in Ludwigsburg is 180 scans per
+      day. Contract term until 2027-02-28.
+
+  - doc_id: PC-SLA-1
+    doc_type: partner_contracts
+    title: Partner network service levels
+    section: Partner contracts, network standard
+    effective_from: "2025-03-01"
+    tags: [sla, slot, 24-hours, five-working-days, reporting, overflow]
+    text: >
+      The network standard defines the service levels that every
+      drive-in and body shop contract of the Acme network includes.
+      Slot proposals: the partner confirms or rejects a slot proposal
+      within 24 hours of the assignment; a confirmed proposal names a
+      date and a time window. Slot offer: for assigned vehicles the
+      partner offers a slot within five working days; this mirrors
+      the customer's right under clause RN-3, where the absence of a
+      partner slot within 5 working days after FNOL restores the free
+      choice of workshop. Status reporting: partners update the claim
+      status when the vehicle arrives (IN_REPAIR) and when the repair
+      is complete, within four hours of the event. Event reporting:
+      during NatCat events partners report daily capacity, scans
+      performed, vehicles waiting and the oldest waiting assignment.
+      Overflow: when waiting vehicles exceed three days of capacity
+      the partner notifies Acme within four hours. Calibration of
+      scanners quarterly. Breaches of the service levels are recorded
+      in the partner scorecard and affect the tier.
+
+  - doc_id: PC-PC-4
+    doc_type: partner_contracts
+    title: Parts-channel clause PC-4
+    section: Partner contracts, standard clauses
+    effective_from: "2026-01-01"
+    tags: [parts-channel, pc-4, rebate, renewal, glazing, dellendoc]
+    text: >
+      Clause PC-4 is the parts-channel clause of the 2026 partner
+      contract generation. It obliges drive-in and body shop partners
+      to source glazing, trim and lamp parts for Acme claims through
+      the Acme parts channel, a framework agreement with two
+      distributors, and it shares the channel rebate between Acme and
+      the partner. The clause is mandatory for the 2026 renewal of all
+      drive-in contracts; a partner that does not sign PC-4 cannot be
+      renewed on the 2026 terms and its contract status becomes
+      INACTIVE at the end of the previous term. PC-4 is the open point
+      in the P-DELLENDOC renewal. PC-4 has no bearing on the interim
+      contract template IC-2: an IC-2 activation runs under the last
+      active contract, which for pre-2026 contracts contains no
+      parts-channel obligation. The partner manager reports open PC-4
+      negotiations monthly. Parts sourced outside the channel during
+      an IC-2 activation are reimbursed at the manufacturer price list
+      less the standard rebate.
+
+  - doc_id: PC-MOBILE-1
+    doc_type: partner_contracts
+    title: Mobile scanner unit framework (Stuttgart hub)
+    section: Partner contracts, mobile units
+    effective_from: "2025-05-01"
+    tags: [mobile-scanner, stuttgart-hub, capacity, lead-time, natcat]
+    text: >
+      Acme maintains a framework agreement with a scanner service
+      provider for three mobile scanner units stationed at the
+      Stuttgart hub. Each unit consists of a truck-mounted optical
+      dent scanner, two operators and a marshalling team, and delivers
+      90 scans per day. Lead time from call-off to operation is 24
+      hours; units are deployed to a partner site that provides power
+      and a marshalling area, typically a drive-in partner or a large
+      body shop. Call-off is by the NatCat desk with approval of the
+      claims lead; the daily rate per unit covers equipment and staff,
+      plus a mobilisation fee per deployment. Units can be deployed
+      for a minimum of three days and a maximum of thirty days per
+      event. Scan results are delivered in the same format as the
+      partner scanners and enter the scanner result store with the
+      host partner's id. The three units together add 270 scans per
+      day. The provider guarantees availability of at least two units
+      at any time.
+
+  # ---------------------------------------------------------------
+  # storm_playbooks
+  # ---------------------------------------------------------------
+  - doc_id: SP-NATCAT-4
+    doc_type: storm_playbooks
+    title: NatCat hail playbook v4
+    section: Storm playbooks, hail, version 4
+    effective_from: "2026-04-01"
+    tags: [natcat, playbook, conversion, planning, mobile-scanner, sms,
+           fastlane, capacity, rental]
+    text: >
+      Planning assumptions. For a forecast hail cell with warning
+      level 3 the NatCat desk plans with a conversion of 30 percent of
+      the vehicles parked without garage in the warning polygon
+      reporting a motor claim within 48 hours, and 18 percent of
+      exposed buildings reporting a property claim. The assumptions
+      come from the 2025 and 2026 small cells; they must be replaced
+      by the observed conversion of the current event when a cell of
+      the same season has already produced claims. Options. (a) Mobile
+      scanner units: 3 units at the Stuttgart hub, 90 scans per day
+      each, 24 hours lead time, deployed to a partner site in the
+      district. (b) Rental pre-booking with P-RENTAFLEET, 24 hours
+      notice, up to 150 cars. (c) Proactive warning SMS to customers
+      with vehicles without garage in the polygon; the batch is
+      prepared by the system and released by a human, never sent
+      automatically. (d) Pre-stage the Total Loss Fastlane with
+      P-ROADASSIST at standby. Capacity math example: 8,900 vehicles
+      without garage times 0.30 gives about 2,700 motor claims; at 180
+      scans per day the drive-in network needs about 15 scan-days to
+      clear them; three mobile units raise the district to 450 scans
+      per day and cut the clearing time to about six days. Rental
+      demand is estimated at one car per 45 motor claims.
+
+  - doc_id: SP-HZ-0907
+    doc_type: storm_playbooks
+    title: Lessons learned HZ-0907 (Ludwigsburg, 2026-07-04)
+    section: Storm playbooks, event reviews
+    effective_from: "2026-07-10"
+    tags: [lessons-learned, hz-0907, conversion, ludwigsburg,
+           small-cell, 2-cm]
+    text: >
+      Hail cell HZ-0907 crossed the northern part of Landkreis
+      Ludwigsburg on 2026-07-04 between 17:10 and 17:50 with
+      hailstones of 2.0 cm, warning level 2. Exposure in the track:
+      4,400 motor policies with vehicles parked without garage. Claims
+      within 48 hours: 1,240 motor claims, giving an observed
+      conversion of 0.28. The drive-in partners P-HAGELPOINT-LB and
+      P-DELLENFIX-LB cleared the scan queue in seven days at 180 scans
+      per day without additional units; rental demand stayed within
+      the standing pool of 35 cars. Lessons: the playbook assumption
+      of 0.30 held for a 2 cm cell; 62 percent of the claims were
+      MINOR and went through the Fast Lane; repeat contacts stayed
+      below 3 percent. Warning: the conversion of a 2 cm cell must not
+      be used for larger stones. Cells with 3 cm hail and more convert
+      far higher, because 3 cm stones dent roofs and bonnets on every
+      exposed vehicle instead of only the thinner panels; the
+      Reutlingen cell of 2023 converted at 0.58. Recommendation: at
+      hail sizes of 3 cm or more, plan with the observed conversion of
+      the most recent large cell, not with the 0.30 assumption.
+
+  - doc_id: SP-REUTLINGEN-2023
+    doc_type: storm_playbooks
+    title: Lessons learned Reutlingen cell 2023
+    section: Storm playbooks, event reviews
+    effective_from: "2023-09-15"
+    tags: [lessons-learned, reutlingen, 2023, conversion,
+           rental-shortage, large-cell, 3.5-cm]
+    text: >
+      On 2023-08-11 a hail cell with stones of 3.5 cm crossed the
+      Reutlingen area between 15:30 and 16:20, warning level 3.
+      Exposure: 12,100 motor policies with vehicles without garage.
+      Claims within 48 hours: 7,000 motor claims, an observed
+      conversion of 0.58, plus 310 property claims. What went wrong:
+      the drive-in capacity in the district was 150 scans per day, the
+      scan queue peaked at 3,900 waiting vehicles and took 26 days to
+      clear; rental cars ran out on day two because the standing pool
+      of 40 cars was not increased before the event; 480 total losses
+      were queued for drive-in scans for up to nine days before they
+      were recognised as total losses; complaint volume was five times
+      the normal level and the supervisory authority asked for a
+      report on processing times. What worked: the Fast Lane confirmed
+      4,100 small claims within minutes; the mobile scanner units,
+      called off on day three, added 270 scans per day. Lessons: call
+      off mobile units before the cell, not after; pre-book rental
+      cars; route total-loss signatures to the Fastlane at intake;
+      plan large cells with a conversion near 0.6.
+
+  - doc_id: SP-WARN-1
+    doc_type: storm_playbooks
+    title: Customer warning SMS procedure
+    section: Storm playbooks, customer communication
+    effective_from: "2026-04-01"
+    tags: [sms, warning, human-release, no-garage, polygon, decision]
+    text: >
+      When a forecast cell reaches warning level 3, the NatCat desk
+      prepares a warning SMS batch for customers whose vehicles are
+      parked without garage in the warning polygon (garage_parking =
+      false, postal code in the cell's list). The message template:
+      "Acme Insurance: hail warning level 3 for your area on <date>
+      between <start> and <end>. If you can, park your vehicle under
+      cover or away from trees. Your hail cover is active; report
+      damage in the app. Reply STOP to opt out." The batch is prepared
+      by the system with the recipient count and the polygon, and it
+      is released by a human: the claims lead or the NatCat duty
+      officer reviews the count, the wording and the time window and
+      releases the batch at least six hours before the forecast
+      window. Batches are never sent automatically. Customers who
+      opted out of service messages are excluded. The release is
+      recorded as a decision event with the approver's identity. A
+      warning SMS does not create a claim and does not change the
+      policy. Response rates and claim rates of warned and unwarned
+      customers are compared in the post-event review.
+
+  - doc_id: SP-CAP-1
+    doc_type: storm_playbooks
+    title: Capacity math worksheet
+    section: Storm playbooks, planning tools
+    effective_from: "2026-04-01"
+    tags: [capacity, scan-days, rental, formula, gap, mobile-units]
+    text: >
+      The capacity worksheet turns an exposure figure into a capacity
+      gap in three steps. Step one, expected volume: exposed vehicles
+      without garage times conversion gives expected motor claims
+      within 48 hours; exposed buildings times 0.18 gives expected
+      property claims. Use the playbook conversion of 0.30 for cells
+      below 3 cm and the observed conversion of the most recent large
+      cell for cells of 3 cm or more. Step two, scan demand: about 90
+      percent of motor claims need a drive-in scan (MINOR and
+      MODERATE); total losses and SEVERE body shop cases do not.
+      Scan-days needed equals scan demand divided by the district's
+      contracted daily scan capacity. Step three, gap: divide the scan
+      demand by the target clearing time in days, subtract the
+      contracted capacity, and divide the missing scans per day by 90
+      to get the number of mobile units. Rental demand: one car per
+      45 motor claims; compare with the partner's standing pool.
+      Example for Ludwigsburg: 180 scans per day contracted; at 2,700
+      claims about 15 scan-days; at 5,400 claims about 30 scan-days;
+      the standing rental pool of 35 cars covers about 1,600 claims.
+
+  - doc_id: SP-COMMS-1
+    doc_type: storm_playbooks
+    title: Storm communications and status page
+    section: Storm playbooks, communication
+    effective_from: "2026-04-01"
+    tags: [communication, status-page, agencies, workshops, media]
+    text: >
+      During a NatCat event Acme runs a single communication rhythm so
+      that customers, agencies and partners hear the same figures. The
+      NatCat desk publishes an event status at 08:00 and 16:00 with
+      the number of claims by status, the oldest waiting assignment
+      per partner and the expected slot horizon per district. Agencies
+      receive the status with a customer-facing summary they may
+      forward. The app shows the customer's own claim status and the
+      next step; a stalled claim shows the reason (waiting for partner
+      slot) and the expected date. Voice agents read from the same
+      status so that repeat callers get consistent answers. Partners
+      receive their assignment lists and the reassignment decisions of
+      the day. Media requests go to corporate communications with the
+      figures of the last status. Individual customer promises about
+      dates are made only by claims handlers. The status page is
+      archived per event for the post-event review and for
+      supervisory requests about processing times.
+
+  - doc_id: SP-TRIAGE-1
+    doc_type: storm_playbooks
+    title: First-contact triage script for intake channels
+    section: Storm playbooks, intake
+    effective_from: "2026-04-01"
+    tags: [triage, first-contact, voice-agent, app, signature, routing]
+    text: >
+      First-contact triage captures the facts that decide the track
+      within the first contact. Questions in order: is anyone hurt; is
+      the vehicle drivable; is glass shattered; is the roof deformed;
+      roughly how many dents (fewer than 20, 20 to 150, more than
+      150); where is the vehicle parked now; do you have photos. The
+      answers populate the damage signals of the intake record.
+      Routing: glass or dents only with an estimate below EUR 1,000
+      goes to the Fast Lane; glass shattered plus roof deformed plus
+      more than 150 dents is the total-loss signature and goes to the
+      Total Loss Fastlane with an assistance pick-up; everything else
+      goes to a drive-in scan. The customer receives the track and the
+      next step in the same contact, in plain language, at most three
+      sentences. Voice agents flag repeat callers and complaints for
+      the claims lead. Agencies and the workshop portal use the same
+      questions. A wrong track at first contact is the most expensive
+      triage error, because it puts vehicles into the wrong queue for
+      days.
+
+  - doc_id: SP-POST-1
+    doc_type: storm_playbooks
+    title: Post-event review checklist
+    section: Storm playbooks, review
+    effective_from: "2026-04-01"
+    tags: [review, lessons-learned, conversion, kpi, checklist]
+    text: >
+      Every NatCat event with more than 1,000 claims gets a post-event
+      review within 30 days after the cohort is cleared. The review
+      documents: the observed conversion (motor claims divided by
+      exposed vehicles without garage) and the property rate; the
+      share of MINOR, MODERATE and SEVERE claims and the share of
+      total losses; the time to first contact, the time to first
+      payment (median) and the share of claims decided within 30 days;
+      the largest stalled cohort, its root cause and the time to clear
+      it; partner capacity used, second shifts and mobile units called
+      off with their lead times; rental cars pre-booked and used;
+      repeat contacts and complaints; fraud indicators found, claims
+      held and released, and the amount recovered. The review ends
+      with the numbers that update the playbook: the conversion to
+      plan with for the hail size class, the rental demand per claim,
+      and the pre-staging steps to trigger before the next cell.
+      Reviews are filed as lessons-learned documents in the storm
+      playbook knowledge base.
+
+  - doc_id: SP-STAGE-1
+    doc_type: storm_playbooks
+    title: Readiness stages by lead time
+    section: Storm playbooks, readiness
+    effective_from: "2026-04-01"
+    tags: [readiness, stages, lead-time, warning-level, checklist,
+           t-24h]
+    text: >
+      Readiness for a forecast cell follows three stages by lead time.
+      Stage T-48 h (warning level 2 or higher forecast): compute the
+      exposure of the forecast polygon (motor policies, vehicles
+      without garage, property policies) and the expected volume at
+      the current conversion; check partner capacity and the standing
+      rental pool in the district; inform partners of the forecast.
+      Stage T-24 h (warning level 3): decide the playbook options,
+      call off mobile scanner units (24 hours lead), pre-book rental
+      cars (24 hours notice), put the assistance partner on standby,
+      activate inactive partners in the district under the interim
+      contract template IC-2 (48 hours to operation), prepare the
+      warning SMS batch for human release, and brief the claims lead
+      on the expected cohort size. Stage T-6 h: release
+      the warning SMS batch, confirm unit deployment sites with the
+      host partners, open the event id in the claims system and switch
+      the intake channels to the event triage script. After the cell:
+      monitor conversion hourly for the first 48 hours and re-plan
+      capacity when the observed conversion exceeds the planning
+      assumption by more than 20 percent.
+
+  - doc_id: SP-FASTLANE-STAGE
+    doc_type: storm_playbooks
+    title: Pre-staging the Total Loss Fastlane
+    section: Storm playbooks, total loss
+    effective_from: "2026-04-01"
+    tags: [fastlane, pre-staging, roadassist, total-loss, standby,
+           signature]
+    text: >
+      Total losses are the claims that suffer most from a wrong queue:
+      a vehicle with shattered glass, a deformed roof and more than
+      150 dents gains nothing from a drive-in scan, and every day in a
+      scan queue is a day lost against the five working day settlement
+      target. Before a forecast cell of 3 cm or more, the NatCat desk
+      pre-stages the Total Loss Fastlane: it reserves standby capacity
+      of the assistance partner P-ROADASSIST (200 vehicles per day for
+      pick-up and remote valuation), briefs the salvage exchange, and
+      activates the total-loss signature routing in the intake
+      channels so that qualifying claims are set to
+      TOTAL_LOSS_FASTLANE at first contact. For a large cell about 5
+      to 8 percent of motor claims are total losses. After the cell
+      the desk checks daily whether claims with the signature are
+      waiting in drive-in queues and moves them to the Fastlane; in
+      the Reutlingen cell of 2023, 480 such claims waited up to nine
+      days. The claims lead approves the move as one cohort decision.

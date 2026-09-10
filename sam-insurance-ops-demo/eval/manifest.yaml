@@ -1,0 +1,21 @@
+# Offline evaluation for the insurance ops demo (Improvement
+# phase). Apply once before the event, then run:
+#   sam config apply -m manifest.yaml
+#   sam eval run ins-ops-quality --url https://sam.solace.lab --threshold 0.8
+#   sam eval run ins-ops-model-benchmark --url https://sam.solace.lab
+kind: manifest
+name: ins-ops-eval
+description: >-
+  Offline evaluation of the insurance demo agents for live events
+  (dataset + LLM-judge experiments).
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  datasets:
+    - ins-ops-questions
+  experiments:
+    - ins-ops-quality
+    - ins-ops-model-benchmark

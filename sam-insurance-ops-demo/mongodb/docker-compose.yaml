@@ -1,0 +1,34 @@
+# Distinct compose project name: the retail and mfg demos' compose
+# files also live in a dir called mongodb/ -- without this all three
+# would share the project "mongodb" and see each other's container
+# as orphan.
+name: acme-claims
+
+networks:
+  solace_net:
+    name: solace_net
+    external: true
+
+services:
+  acme-claims-mongo:
+    image: mongo:7
+    container_name: acme-claims-mongo
+    hostname: acme-claims-mongo
+    networks:
+      - solace_net
+    ports:
+      # Standard port: only one demo's mongo runs at a time --
+      # stop retail-pos-mongo and mfg-plant-mongo before starting
+      # this container.
+      - "27017:27017"
+    environment:
+      # Demo-only credentials (repo convention, never production)
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+      MONGO_INITDB_DATABASE: acme_claims
+    volumes:
+      # 01-init.js (user + deterministic generator) and
+      # 02-anchors.js (story anchors + indexes) run once, on the
+      # first init of the data volume, in alphabetical order.
+      - ./seed:/docker-entrypoint-initdb.d:ro
+    restart: on-failure

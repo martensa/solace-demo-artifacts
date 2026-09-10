@@ -8,10 +8,11 @@ set -uo pipefail
 #
 # Every check that fails triggers its fix and re-checks:
 #   platform resources missing   -> ./install.sh (idempotent)
-#   Shop Floor Analyst present   -> deleted (live Builder beat)
+#   Storm Intake Analyst present -> deleted (live Builder beat)
 #   postgres data                -> postgres/seed.sh + spot-check
 #   wrong/empty mongo            -> compose down -v && up (reseed)
 #   other demos' mongo running   -> stopped (port 27017 rule)
+#   qdrant empty / MCP down      -> compose up --build + reseed
 #   broker WS down               -> docker start solace-1/2, retry
 #   dashboard ConfigMap missing  -> kubectl apply
 #   evals without completed runs -> sam eval run (the 15-min part)
@@ -27,40 +28,69 @@ AMD="$(cd "$SCRIPT_DIR/../agent-mesh-deployment" && pwd)"
 SAM_URL="https://sam.solace.lab"
 
 # ---- demo-specific configuration ----------------------------------
-REQUIRED_AGENTS=("Orchestrator" "Acme CRM Query Expert" \
-  "Acme OMS Query Expert" "Acme PDM Query Expert" \
-  "Acme SCM Query Expert" "Production Confirmation Clerk" \
-  "Quality Incident Reporter" "Supply Chain Watcher")
-FORBIDDEN_AGENT="Shop Floor Analyst"
-REQUIRED_CONNECTORS=("Acme CRM DB" "Acme OMS DB" "Acme PDM DB" \
-  "Acme SCM DB" "mfg-telemetry" "mfg-consumption")
-REQUIRED_WORKFLOWS=("quality-incident-report" "supply-replenishment")
-REQUIRED_ENTRYPOINT="plant-events"
-MY_MONGO="mfg-plant-mongo"
-OTHER_MONGOS=("retail-pos-mongo" "acme-claims-mongo")
-MONGO_DB="mfg_plant"
-EVAL_EXPERIMENTS=("mfg-ops-quality" "mfg-ops-model-benchmark")
-DASHBOARD_CM="dashboard-sam-mfg-ops"
-DASHBOARD_FILE="$SCRIPT_DIR/observability/dashboard-sam-mfg-ops.yaml"
+REQUIRED_AGENTS=("Orchestrator" "Acme Insurance Query Expert" \
+  "Acme Claims Knowledge Expert" "Fast Lane Clerk" \
+  "Claims Incident Reporter" "Storm Readiness Planner" \
+  "Fraud Case Reporter")
+FORBIDDEN_AGENT="Storm Intake Analyst"
+REQUIRED_CONNECTORS=("Acme Insurance DB" "Acme Claims Knowledge" \
+  "fnol-intake" "weather-cells" "scanner-results")
+REQUIRED_WORKFLOWS=("stalled-cohort-report" "storm-readiness" \
+  "cross-channel-fraud-report")
+REQUIRED_ENTRYPOINT="claims-events"
+MY_MONGO="acme-claims-mongo"
+OTHER_MONGOS=("retail-pos-mongo" "mfg-plant-mongo")
+MONGO_DB="acme_claims"
+MONGO_COMPOSE="$SCRIPT_DIR/mongodb/docker-compose.yaml"
+QDRANT_COMPOSE="$SCRIPT_DIR/qdrant/docker-compose.yaml"
+QDRANT_COLLECTION_URL="http://localhost:6333/collections/acme_knowledge"
+MCP_HEALTH_URL="http://localhost:8765/health"
+EVAL_EXPERIMENTS=("ins-ops-quality" "ins-ops-model-benchmark")
+DASHBOARD_CM="dashboard-sam-insurance-ops"
+DASHBOARD_FILE="$SCRIPT_DIR/observability/dashboard-sam-insurance-ops.yaml"
 
 mongo_counts_ok() {
   docker exec "$MY_MONGO" mongosh -u sam_ro -p sam_ro \
     --authenticationDatabase "$MONGO_DB" "$MONGO_DB" --quiet --eval '
-    const t=db.station_telemetry.countDocuments({});
-    const c=db.material_consumption.countDocuments({});
-    if (t>=900 && c>=250) print("OK "+t+"/"+c); else print("BAD "+t+"/"+c);' \
+    const f=db.fnol_intake.countDocuments({});
+    const w=db.weather_cells.countDocuments({});
+    const s=db.scanner_results.countDocuments({});
+    if (f>=10400 && w==3 && s>=1000) print("OK "+f+"/"+w+"/"+s);
+    else print("BAD "+f+"/"+w+"/"+s);' \
     2>/dev/null | grep -q '^OK'
 }
 
 sql_spot_ok() {
-  local eco hold hd22
-  eco=$(docker exec postgres psql -U postgres -d mfg_pdm -tAc \
-    "SELECT status FROM mfg_eco_distribution WHERE eco_id='ECO-2025-118' AND plant_id='PLANT_GRZ';" 2>/dev/null)
-  hold=$(docker exec postgres psql -U postgres -d mfg_oms -tAc \
-    "SELECT count(*) FROM mfg_production_orders WHERE prod_order_id='PRD-118-4718' AND status='QUALITY_HOLD';" 2>/dev/null)
-  hd22=$(docker exec postgres psql -U postgres -d mfg_scm -tAc \
-    "SELECT on_hand_qty FROM mfg_inventory WHERE plant_id='PLANT_HAM' AND material_id='MAT_CLT_HD22';" 2>/dev/null)
-  [ "$eco" = "PENDING" ] && [ "$hold" = "1" ] && [ "$hd22" = "1850" ]
+  # The demo's "now" is Mon 2026-07-20 10:00 (fixed in the data),
+  # so the > 4 h stalled cohort is measured against that instant.
+  local cohort braendle dellendoc nogarage payitems
+  cohort=$(docker exec postgres psql -U postgres -d acme_insurance -tAc \
+    "SELECT count(*) FROM ins_claims WHERE status='AWAITING_WORKSHOP_SLOT' AND assigned_partner_id='P-BRAENDLE' AND status_since < TIMESTAMP '2026-07-20 10:00:00' - INTERVAL '4 hours';" 2>/dev/null)
+  braendle=$(docker exec postgres psql -U postgres -d acme_insurance -tAc \
+    "SELECT count(*) FROM ins_claims WHERE status='AWAITING_WORKSHOP_SLOT' AND assigned_partner_id='P-BRAENDLE';" 2>/dev/null)
+  dellendoc=$(docker exec postgres psql -U postgres -d acme_insurance -tAc \
+    "SELECT contract_status FROM ins_repair_partners WHERE partner_id='P-DELLENDOC';" 2>/dev/null)
+  nogarage=$(docker exec postgres psql -U postgres -d acme_insurance -tAc \
+    "SELECT count(*) FROM ins_policies WHERE district='LUDWIGSBURG' AND product LIKE 'MOTOR%' AND garage_parking=false;" 2>/dev/null)
+  payitems=$(docker exec postgres psql -U postgres -d acme_insurance -tAc \
+    "SELECT count(*) FROM ins_payment_items WHERE payment_run_id='PR-2026-30';" 2>/dev/null)
+  [ "$cohort" = "412" ] && [ "$braendle" = "640" ] \
+    && [ "$dellendoc" = "INACTIVE" ] && [ "$nogarage" = "8900" ] \
+    && [ "$payitems" = "3900" ]
+}
+
+qdrant_points_ok() {  # acme_knowledge collection present with >= 40 points
+  local n
+  n=$(curl -s -m 5 "$QDRANT_COLLECTION_URL" 2>/dev/null | python3 -c "
+import json,sys
+try: print(json.load(sys.stdin)['result']['points_count'])
+except Exception: print(0)" 2>/dev/null)
+  [ "${n:-0}" -ge 40 ] 2>/dev/null
+}
+
+mcp_health_ok() {
+  [ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' "$MCP_HEALTH_URL" \
+    2>/dev/null)" = "200" ]
 }
 
 # ---- generic engine -----------------------------------------------
@@ -101,7 +131,7 @@ try:
         if x.get('name')=='$1': print(x['id'])
 except Exception: pass"; }
 
-echo "== 1/8 Platform login + API"
+echo "== 1/9 Platform login + API"
 (cd "$SCRIPT_DIR/eval" && "$SAM_CLI" config plan >/dev/null 2>&1)  # token refresh
 sam_auth_token >/dev/null 2>&1
 api GET /api/v1/platform/agents >/dev/null
@@ -112,7 +142,7 @@ else
   echo ""; echo "ABORT: everything else needs the API."; exit 1
 fi
 
-echo "== 2/8 Cluster health"
+echo "== 2/9 Cluster health"
 BADPODS=$(kubectl get pods -A --no-headers 2>/dev/null \
   | awk '$4!="Running" && $4!="Completed" && $4!="Succeeded" {print $1"/"$2" "$4}')
 if [ -z "$BADPODS" ]; then
@@ -122,7 +152,7 @@ else
   bad "unhealthy pods (no auto-fix -- see memory: clock wedge / stale IP runbooks)"
 fi
 
-echo "== 3/8 Model upstreams (1-token probes)"
+echo "== 3/9 Model upstreams (1-token probes)"
 if "$AMD/scripts/models/apply-models.sh" --probe-only >/tmp/preflight-models.log 2>&1; then
   ok "all model upstreams answered"
 else
@@ -130,7 +160,7 @@ else
   bad "model probe failed (no auto-fix -- external gateway; retry or demo without that alias)"
 fi
 
-echo "== 4/8 Platform resources (roster, connectors, workflows, entrypoint)"
+echo "== 4/9 Platform resources (roster, connectors incl. MCP, workflows, entrypoint)"
 missing=""
 AG=$(api GET /api/v1/platform/agents | names_of)
 CO=$(api GET /api/v1/platform/connectors | names_of)
@@ -167,31 +197,57 @@ else
   ok "'$FORBIDDEN_AGENT' absent (live Builder beat is free)"
 fi
 
-echo "== 5/8 Postgres storyline data"
+echo "== 5/9 Postgres storyline data"
 "$SCRIPT_DIR/postgres/seed.sh" >/tmp/preflight-seed.log 2>&1
-if sql_spot_ok; then ok "seeded + spot-checks (ECO PENDING, QUALITY_HOLD, HD-22 1850)"
+if sql_spot_ok; then ok "seeded + spot-checks (412 cohort > 4 h, 640 at P-BRAENDLE, P-DELLENDOC INACTIVE, 8,900 no-garage LB, 3,900 payment items)"
 else bad "spot-checks failed after seed (see /tmp/preflight-seed.log)"; fi
 
-echo "== 6/8 MongoDB plant store"
+echo "== 6/9 MongoDB claims store"
 for other in "${OTHER_MONGOS[@]}"; do
   if [ "$(docker inspect -f '{{.State.Running}}' "$other" 2>/dev/null)" = "true" ]; then
     docker stop "$other" >/dev/null && fixd "$other stopped (port 27017 rule)"
   fi
 done
-docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" up -d >/dev/null 2>&1
+docker compose -f "$MONGO_COMPOSE" up -d >/dev/null 2>&1
 sleep 3
 if mongo_counts_ok; then
-  ok "$MY_MONGO up, doc counts good"
+  ok "$MY_MONGO up, doc counts good (fnol_intake >= 10,400, weather_cells 3, scanner_results >= 1,000)"
 else
   echo "          fix: recreating $MY_MONGO with fresh seed ..."
-  docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" down -v >/dev/null 2>&1
-  docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" up -d >/dev/null 2>&1
+  docker compose -f "$MONGO_COMPOSE" down -v >/dev/null 2>&1
+  docker compose -f "$MONGO_COMPOSE" up -d >/dev/null 2>&1
   for _ in $(seq 1 12); do sleep 5; mongo_counts_ok && break; done
   if mongo_counts_ok; then fixd "$MY_MONGO reseeded"
   else bad "$MY_MONGO counts still wrong after reseed"; fi
 fi
 
-echo "== 7/8 Broker WebSocket (cockpit path)"
+echo "== 7/9 Qdrant knowledge base + MCP server"
+if qdrant_points_ok && mcp_health_ok; then
+  ok "acme_knowledge >= 40 points (REST 6333), MCP /health 200 (8765)"
+else
+  echo "          fix: compose up --build + re-running the corpus seed"
+  echo "          (first run downloads the embedding model; up to 6 min) ..."
+  docker compose -f "$QDRANT_COMPOSE" up -d --build >/tmp/preflight-qdrant.log 2>&1
+  # Qdrant REST must answer before the one-shot seed can write.
+  for _ in $(seq 1 24); do
+    curl -s -m 3 -o /dev/null http://localhost:6333/collections 2>/dev/null && break
+    sleep 5
+  done
+  docker compose -f "$QDRANT_COMPOSE" run --rm acme-knowledge-seed \
+    >>/tmp/preflight-qdrant.log 2>&1
+  END=$(( $(date +%s) + 360 ))
+  until [ "$(date +%s)" -ge "$END" ]; do
+    qdrant_points_ok && mcp_health_ok && break
+    sleep 5
+  done
+  if qdrant_points_ok && mcp_health_ok; then
+    fixd "acme_knowledge reseeded, MCP server healthy"
+  else
+    bad "knowledge base still not ready (see /tmp/preflight-qdrant.log; docker compose -f qdrant/docker-compose.yaml logs)"
+  fi
+fi
+
+echo "== 8/9 Broker WebSocket (cockpit path)"
 ws_ok() {  # pipefail-safe: curl exits 28 after the upgrade stream
   curl -si -m 5 -H "Connection: Upgrade" -H "Upgrade: websocket" \
     -H "Sec-WebSocket-Version: 13" \
@@ -213,7 +269,7 @@ else
   fi
 fi
 
-echo "== 8/8 Dashboard + eval pre-runs"
+echo "== 9/9 Dashboard + eval pre-runs"
 if kubectl get cm -n sam-solace-lab "$DASHBOARD_CM" >/dev/null 2>&1; then
   ok "Grafana dashboard ConfigMap present"
 else

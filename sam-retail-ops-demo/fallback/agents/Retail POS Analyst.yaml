@@ -63,23 +63,25 @@ spec:
     6. Report data-quality anomalies (sales despite zero stock,
        out-of-season sales, fractional quantities) explicitly
        when you encounter them.
-  agentCard:
-    welcome:
-      message: Ask me anything about in-store POS transactions
-      suggestions:
-        - label: Acai reality check
-          prompt: >-
-            How often was the Tropical Acai Smoothie Bowl sold at
-            the registers, and were any of those transactions
-            voided?
-          autoSend: true
-        - label: Channel split
-          prompt: >-
-            Compare POS revenue by store for Opus One Napa Valley
-            2019 across all business dates.
-          autoSend: true
-        - label: Tender mix
-          prompt: >-
-            What is the payment (tender) mix across all POS
-            transactions, by count and by revenue?
-          autoSend: true
+  additionalConfigurations:
+    agentCard:
+      welcome:
+        message: Ask me anything about in-store POS transactions
+        suggestions:
+          - label: Acai reality check
+            prompt: >-
+              How often was the Tropical Acai Smoothie Bowl sold at
+              the registers, and were any of those transactions
+              voided?
+            autoSend: true
+          - label: Channel split
+            prompt: >-
+              Compare POS revenue by store for Opus One Napa Valley
+              2019 across all business dates.
+            autoSend: true
+          - label: Tender mix
+            prompt: >-
+              What is the payment (tender) mix across all POS
+              transactions, by count and by revenue?
+            autoSend: true
+  deploy: true

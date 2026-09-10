@@ -1,0 +1,342 @@
+# Event-triggered stalled cohort workflow (the REACT act): a
+# triage_stalled event (published by the claims cockpit on the
+# sam VPN) is routed here by the claims-events event-mesh
+# entrypoint. Fans out to the Insurance DB and Knowledge
+# specialists in parallel; the Storm Intake Analyst follows the
+# Insurance DB node because fnol_intake carries no status or
+# partner -- it needs the cohort's claim_id range from the
+# claims data to select the cohort documents. Then merges into
+# a cohort report. fail_fast stays false: if the Storm Intake
+# Analyst does not exist yet (it is created LIVE in the demo via
+# the AI Builder), the report transparently notes the missing
+# intake section instead of failing.
+kind: workflow
+name: stalled-cohort-report
+description: >-
+  Stalled cohort analysis: fans a stalled triage cohort out to
+  the Insurance DB, knowledge and intake specialists and merges
+  their findings into one cohort report for the claims lead.
+spec:
+  appConfig:
+    # Bump to force a redeploy (deploy phase fires on change only).
+    # NOTE: event-triggered runs deliver NO structured input keys
+    # (awe logs inputKeys: []), so nodes must reference the raw
+    # task text as {{workflow.input}} -- {{workflow.input.text}}
+    # stays an unresolved literal (verified 2026-07-31, retail).
+    version: "1.0.0"
+    display_name: Stalled Cohort Report
+    description: >-
+      Stalled-cohort analysis across claims data, policy wordings
+      and guidelines and the intake documents, merged into one
+      cohort report.
+    workflow_timeout: "600s"
+    default_node_timeout: "240s"
+    fail_fast: false
+    skills:
+      - id: stalled_cohort_report
+        name: Stalled Cohort Report
+        description: >-
+          Analyze a stalled claim cohort across claims data,
+          knowledge base and intake documents and produce a
+          cohort report.
+    # Workflow-level INPUT contract: describes the realtime
+    # claims event that (conceptually) triggers this SOP -- the
+    # exact payload shape cockpit/index.html publishes on
+    # acmeins/claims/triage/stalled/>. Today the event PATH runs
+    # via the Orchestrator (promptTemplate quirk), so this
+    # schema is the published contract + the typed Run form in
+    # the UI, not a gate on the event flow. Loose by design:
+    # only the fields the SOP actually needs are required.
+    input_schema:
+      type: object
+      required: [event_id, status, threshold_hours, partner_id]
+      properties:
+        event_type:
+          type: string
+          enum: [triage_stalled]
+          description: This SOP handles stalled triage cohorts only.
+        event_id:
+          type: string
+          description: Weather cell / claims event id, e.g. HZ-0913.
+        district:
+          type: string
+          description: District of the cohort, e.g. BOEBLINGEN.
+        status:
+          type: string
+          enum: [AWAITING_WORKSHOP_SLOT]
+          description: The claim status the cohort is stuck in.
+        threshold_hours:
+          type: number
+          description: Hours in status that define "stalled".
+        cohort_size:
+          type: integer
+          description: Cohort size as seen by the triage monitor.
+        partner_id:
+          type: string
+          description: Repair partner the cohort is assigned to.
+        detected_at:
+          type: string
+          description: >-
+            Detection timestamp (ISO 8601): the demo clock instant
+            2026-07-20T10:00:00Z as published by the cockpit. Ages
+            are computed against the data snapshot (Mon 2026-07-20
+            10:00), never against detected_at or NOW().
+    # Workflow-level output contract: visible in the UI's
+    # "I/O & Mapping" panel. Deliberately loose ({report:
+    # string}) -- the report stays free-form markdown; the
+    # STRICT contracts sit on the specialist NODES below
+    # (UI shows those in the workflow's YAML view).
+    output_schema:
+      type: object
+      required: [report]
+      properties:
+        report:
+          type: string
+          description: The stalled cohort report in markdown.
+    output_mapping:
+      report: "{{report.output}}"
+    nodes:
+      # Output contracts (JSON Schema) on the three specialist
+      # nodes: the platform validates the agent's answer against
+      # the schema and auto-retries on violation -- deterministic
+      # hand-offs mid-workflow. The final report node stays
+      # free-form markdown on purpose (it is read aloud).
+      - id: insurance
+        type: agent
+        agent_name: Acme Insurance Query Expert
+        output_schema:
+          type: object
+          required: [cohort_size, cohort_age_hours, cohort_claim_id_min,
+                     cohort_claim_id_max, rn3_share, braendle_assignments,
+                     braendle_capacity, received_unassigned,
+                     fallback_partner_status, findings]
+          properties:
+            cohort_size:
+              type: integer
+              description: Claims in the event's status at the partner, stalled.
+            cohort_age_hours:
+              type: number
+              description: >-
+                Hours from the oldest status_since to the demo clock
+                2026-07-20 10:00 (the data snapshot instant).
+            cohort_age_hours_min:
+              type: number
+              description: Age of the YOUNGEST cohort claim in hours.
+            cohort_claim_id_min:
+              type: string
+              description: Lowest claim_id of the cohort (ids are contiguous).
+            cohort_claim_id_max:
+              type: string
+              description: Highest claim_id of the cohort.
+            cohort_fnol_date:
+              type: string
+              description: Earliest reported_at of the cohort (ISO date).
+            rn3_count:
+              type: integer
+              description: Cohort claims whose policy has repair_network_clause.
+            rn3_share:
+              type: number
+              description: rn3_count / cohort_size (0..1).
+            braendle_assignments:
+              type: integer
+              description: ALL AWAITING_WORKSHOP_SLOT claims at the partner.
+            braendle_capacity:
+              type: integer
+              description: daily_scan_capacity of the event's partner.
+            received_unassigned:
+              type: integer
+              description: >-
+                COUNT of the event's claims in status RECEIVED (no
+                partner yet) -- they join the drive-in queue.
+            fallback_partner_id:
+              type: string
+              description: The other DRIVE_IN partner nearby, e.g. P-DELLENDOC.
+            fallback_partner_status:
+              type: string
+              description: contract_status of the fallback partner.
+            fallback_partner_since:
+              type: string
+              description: contract_status_since of the fallback partner.
+            fallback_partner_note:
+              type: string
+              description: contract_note of the fallback partner.
+            fallback_partner_capacity:
+              type: integer
+              description: daily_scan_capacity of the fallback partner.
+            complaint_flag_count:
+              type: integer
+              description: Cohort customers with complaint_flag = true.
+            findings:
+              type: string
+              description: 2-4 sentences with the key numbers.
+        input:
+          message: >-
+            A triage cohort stalled in AWAITING_WORKSHOP_SLOT.
+            The data is a frozen snapshot as of Monday 2026-07-20
+            10:00 (the demo clock): compute every age against
+            TIMESTAMP '2026-07-20 10:00:00' -- NOT against the
+            event's detected_at and NOT against NOW(). Analyze
+            the CLAIMS side in acme_insurance (aggregate only,
+            never SELECT *): (1) the cohort -- ins_claims WHERE
+            event_id, status and assigned_partner_id match the
+            event AND status_since < TIMESTAMP '2026-07-20 10:00:00'
+            - threshold_hours * INTERVAL '1 hour': COUNT, MIN/MAX
+            claim_id, MIN/MAX status_since (age in hours against
+            the demo clock), MIN reported_at, split by severity;
+            (2) the RN-3 share -- JOIN ins_policies ON policy_id,
+            COUNT repair_network_clause = true and its share of
+            the cohort; (3) partner load -- ALL
+            AWAITING_WORKSHOP_SLOT assignments of the partner vs
+            its daily_scan_capacity, contract_status and tier in
+            ins_repair_partners, plus the event's unassigned
+            RECEIVED claims (ins_claims WHERE event_id matches
+            AND status = 'RECEIVED') that will join the drive-in
+            queue; (4) the fallback -- the other DRIVE_IN partner
+            in the same city as the busy one (ins_repair_partners
+            partner_type = 'DRIVE_IN', same city; the table has
+            no district column): contract_status,
+            contract_status_since, contract_note,
+            daily_scan_capacity; (5) complaint_flag count of the
+            cohort customers via ins_policies -> ins_customers.
+            Fill the structured output contract; findings = 2-4
+            sentences with numbers. Stalled event:
+            {{workflow.input}}
+      - id: knowledge
+        type: agent
+        agent_name: Acme Claims Knowledge Expert
+        output_schema:
+          type: object
+          required: [rn3_slot_rule, ic2_activation_hours,
+                     bafin_day20_rule, findings]
+          properties:
+            rn3_slot_rule:
+              type: string
+              description: >-
+                The decisive PW-RN-3 sentence: what applies when no
+                partner slot is offered within 5 working days.
+            rn3_slot_deadline_days:
+              type: integer
+              description: Working days after FNOL before steering lapses.
+            total_loss_definition:
+              type: string
+              description: The PW-TL-1 signature (glass, roof, dents).
+            fastlane_settlement_days:
+              type: integer
+              description: CG-TL-2 settlement target in working days.
+            ic2_activation_hours:
+              type: integer
+              description: PC-IC-2 activation lead time in hours.
+            second_shift_extra_scans:
+              type: integer
+              description: PC-BRAENDLE-2025 second-shift option (+scans/day).
+            bafin_day20_rule:
+              type: string
+              description: CG-BAFIN-30 day-20 escalation and 30-day rule.
+            documents:
+              type: array
+              items: { type: string }
+              description: doc_ids cited, e.g. PW-RN-3, PC-IC-2.
+            findings:
+              type: string
+              description: 2-4 sentences quoting the decisive rules.
+        input:
+          message: >-
+            A triage cohort stalled in AWAITING_WORKSHOP_SLOT at
+            a drive-in partner. Retrieve the RULES that govern it
+            from the Acme Claims Knowledge base:
+            search_policy_wordings for the repair-network
+            steering clause RN-3 (what happens when no partner
+            slot is offered within 5 working days after FNOL --
+            quote the decisive sentence) and the total-loss
+            definition TL-1; search_claims_guidelines for the
+            BaFin processing-time rule (30-day decision, day-20
+            escalation) and the Total Loss Fastlane track;
+            search_partner_contracts for the interim contract
+            template IC-2 (activation lead time under NatCat
+            terms), the busy partner's second-shift option and
+            the inactive fallback partner's renewal blocker. Read
+            PW-RN-3, PW-TL-1, CG-BAFIN-30, CG-TL-2, PC-IC-2,
+            PC-BRAENDLE-2025 and PC-DELLENDOC-2024 in full via
+            get_knowledge_document. Cite doc_id + title. Fill the
+            structured output contract; findings = 2-4 sentences
+            quoting the decisive rules. Stalled event:
+            {{workflow.input}}
+      # The intake node runs AFTER the insurance node on purpose:
+      # fnol_intake has no status/partner field, so the cohort is
+      # selected by the claim_id range the Insurance DB returned.
+      - id: intake
+        type: agent
+        agent_name: Storm Intake Analyst
+        depends_on:
+          - insurance
+        output_schema:
+          type: object
+          required: [cohort_claims, total_loss_signature_count,
+                     total_loss_signature_share, repeat_contact_count,
+                     findings]
+          properties:
+            cohort_claims:
+              type: integer
+              description: Distinct claim_ids in the cohort range.
+            total_loss_signature_count:
+              type: integer
+              description: >-
+                Cohort claims with glass_shattered AND roof_deformed
+                AND dent_count_est > 150.
+            total_loss_signature_share:
+              type: number
+              description: total_loss_signature_count / cohort_claims.
+            repeat_contact_count:
+              type: integer
+              description: Cohort claims with a second intake document.
+            complaint_flag_count:
+              type: integer
+              description: Cohort intake documents with complaint_flag.
+            findings:
+              type: string
+              description: 2-4 sentences with the key numbers.
+        input:
+          message: |
+            A triage cohort stalled in AWAITING_WORKSHOP_SLOT.
+            Analyze the INTAKE side in the acme_claims MongoDB
+            (collection fnol_intake, aggregation pipelines only)
+            for the cohort: select the documents with event_id
+            from the event and claim_id between
+            cohort_claim_id_min and cohort_claim_id_max from the
+            Insurance DB findings below (ids are zero-padded, a
+            string range comparison works). Count claims, not
+            documents (distinct claim_id; the primary document
+            has is_repeat_contact false): (1) the total-loss
+            signature -- damage_signals.glass_shattered = true AND
+            damage_signals.roof_deformed = true AND
+            damage_signals.dent_count_est > 150, and its share of
+            the cohort: these belong in the Total Loss Fastlane,
+            not in a drive-in queue; (2) repeat contacts --
+            claims with a second document is_repeat_contact =
+            true (the second VOICE_AGENT call); (3) complaint_flag
+            = true. Fill the structured output contract; findings
+            = 2-4 sentences with numbers. Stalled event:
+            {{workflow.input}}
+
+            ## Insurance DB findings (schema-validated JSON)
+            {{insurance.output}}
+      - id: report
+        type: agent
+        agent_name: Claims Incident Reporter
+        depends_on:
+          - insurance
+          - knowledge
+          - intake
+        input:
+          message: |
+            Create the stalled cohort report for this triage event:
+            {{workflow.input}}
+
+            ## Insurance DB findings (schema-validated JSON)
+            {{insurance.output}}
+
+            ## Knowledge findings (schema-validated JSON)
+            {{knowledge.output}}
+
+            ## Intake findings (schema-validated JSON)
+            {{intake.output}}

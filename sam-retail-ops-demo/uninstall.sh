@@ -48,6 +48,11 @@ done
 # shellcheck source=../agent-mesh-deployment/scripts/lib/common.sh
 . "$AMD/scripts/lib/common.sh"
 load_env "$AMD"
+resolve_sam_cli >/dev/null 2>&1 || true
+# The cached access token is short-lived; any real CLI call refreshes
+# it via the stored refresh token (same trick as preflight/demo-links),
+# so a stale cache does not 401 the raw curl calls below.
+(cd "$SCRIPT_DIR/eval" && "${SAM_CLI:-sam}" config plan >/dev/null 2>&1) || true
 sam_auth_token
 
 api() {

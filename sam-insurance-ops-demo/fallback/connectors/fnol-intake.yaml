@@ -1,0 +1,33 @@
+# MongoDB connector to the local claims intake store
+# (acme-claims-mongo, host port 27017 -- only one demo's mongo
+# runs at a time; stop retail-pos-mongo and mfg-plant-mongo
+# first).
+# sam_ro/sam_ro is a demo-only read-only user (repo convention).
+# The connector is EXPERIMENTAL in 2.225.14 and generates ONE
+# tool per collection (<collection>_mongo_query_<suffix>); schema
+# introspection samples up to 100 documents at startup.
+kind: connector
+name: fnol-intake
+description: >-
+  First notice of loss intake messages of Acme Insurance (MongoDB
+  collection fnol_intake): one document per intake message across
+  the five channels APP, VOICE_AGENT, WORKSHOP_PORTAL,
+  DRIVE_IN_SCANNER and AGENCY_EMAIL with claim id, event id,
+  vehicle (VIN, model, garage parking), location, narrative,
+  photos (EXIF timestamp, GPS, estimated dent count, image hash),
+  damage signals (glass shattered, roof deformed, dent count,
+  drivable), severity estimate, repeat-contact and complaint flags
+  and the voice transcript. The raw customer reality behind the
+  claim rows in acme_insurance.
+spec:
+  type: document_db
+  subtype: mongodb
+  values:
+    scheme: mongodb
+    hostname: host.docker.internal
+    port: 27017
+    username: sam_ro
+    password: sam_ro
+    database: acme_claims
+    collection: fnol_intake
+    options: "authSource=acme_claims"

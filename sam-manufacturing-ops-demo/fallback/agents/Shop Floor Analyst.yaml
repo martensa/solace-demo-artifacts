@@ -70,24 +70,26 @@ spec:
     6. Report anomalies (sudden fail-rate jumps, consumption
        outrunning plan, spec-revision mismatches) explicitly
        when you encounter them.
-  agentCard:
-    welcome:
-      message: Ask me anything about plant telemetry and consumption
-      suggestions:
-        - label: IX-450 fail rate
-          prompt: >-
-            What is the daily EOL fail rate for the IX-450 on
-            Plant 2 line L3, and when did the failures start?
-          autoSend: true
-        - label: Torque evidence
-          prompt: >-
-            Compare measured torque values against the test spec
-            on Plant 2 station EOL-2 before and after 2025-07-28,
-            including the station spec revision.
-          autoSend: true
-        - label: HD-22 burn rate
-          prompt: >-
-            What is the observed daily consumption of MAT_CLT_HD22
-            at Plant 1 over the last two weeks, and when did the
-            ramp start?
-          autoSend: true
+  additionalConfigurations:
+    agentCard:
+      welcome:
+        message: Ask me anything about plant telemetry and consumption
+        suggestions:
+          - label: IX-450 fail rate
+            prompt: >-
+              What is the daily EOL fail rate for the IX-450 on
+              Plant 2 line L3, and when did the failures start?
+            autoSend: true
+          - label: Torque evidence
+            prompt: >-
+              Compare measured torque values against the test spec
+              on Plant 2 station EOL-2 before and after 2025-07-28,
+              including the station spec revision.
+            autoSend: true
+          - label: HD-22 burn rate
+            prompt: >-
+              What is the observed daily consumption of MAT_CLT_HD22
+              at Plant 1 over the last two weeks, and when did the
+              ramp start?
+            autoSend: true
+  deploy: true

@@ -2,32 +2,35 @@
 set -euo pipefail
 
 # =============================================================
-# uninstall.sh -- remove the Event-Driven Manufacturing Ops demo
-# from the platform, leaving the SAM infrastructure in
-# agent-mesh-deployment (models, RBAC, developer-mcp,
-# observability) untouched (idempotent; absent resources are
-# skipped silently).
+# uninstall.sh -- remove the Event-Driven Claims Operations demo
+# (Acme Insurance) from the platform, leaving the SAM
+# infrastructure in agent-mesh-deployment (models, RBAC,
+# developer-mcp, observability) untouched (idempotent; absent
+# resources are skipped silently).
 # =============================================================
-# Removes the demo OVERLAY (plant-events entrypoint,
-# quality-incident-report + supply-replenishment workflows,
-# Quality Incident Reporter, Supply Chain Watcher, Production
-# Confirmation Clerk, Shop Floor Analyst +
-# mfg-telemetry/mfg-consumption connectors), the manufacturing
-# CORE (the four Acme query experts, their connectors and schema
-# skills), eval experiments + dataset (INCLUDING their run
-# history!) and the demo dashboard.
+# Removes the demo OVERLAY (claims-events entrypoint,
+# stalled-cohort-report + storm-readiness +
+# cross-channel-fraud-report workflows, Claims Incident Reporter,
+# Storm Readiness Planner, Fraud Case Reporter, Fast Lane Clerk,
+# Storm Intake Analyst + fnol-intake/weather-cells/scanner-results
+# connectors), the insurance CORE (the two Acme experts, their
+# connectors and skills), eval experiments + dataset (INCLUDING
+# their run history!) and the demo dashboard.
 # The demo mongo container is removed INCLUDING its volume: the
 # data volume is anonymous and re-seeded from mongodb/seed on
 # every fresh `install.sh` anyway, so keeping it would only leave
-# a dangling volume behind.
+# a dangling volume behind. The knowledge base stack (Qdrant +
+# MCP server) goes the same way INCLUDING its named volumes
+# (acme-knowledge-data AND the acme-knowledge-models embedding
+# cache -- the next install.sh downloads the model again).
 # Keeps: the 5 model aliases, RBAC, the developer-mcp entrypoint,
-# the shared host containers postgres/pgadmin (mfg_* DBs stay
-# seeded unless --purge-data; install.sh re-seeds them).
+# the shared host containers postgres/pgadmin (acme_insurance
+# stays seeded unless --purge-data; install.sh re-seeds it).
 #
-#   ./uninstall.sh               # remove overlay + mfg core
+#   ./uninstall.sh               # remove overlay + insurance core
 #   ./uninstall.sh --keep-core   # overlay only (fast demo switch)
 #   ./uninstall.sh --dry-run     # show what would be removed
-#   ./uninstall.sh --purge-data  # also DROP the mfg_* postgres DBs
+#   ./uninstall.sh --purge-data  # also DROP the acme_insurance DB
 # =============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -94,46 +97,43 @@ fi
 echo "== Demo overlay"
 # Order: entrypoint first (stops event intake), then workflows,
 # then agents, then connectors.
-remove "entrypoint" /api/v1/platform/gateways      "plant-events"
-remove "workflow"   /api/v1/platform/workflows     "quality-incident-report"
-remove "workflow"   /api/v1/platform/workflows     "supply-replenishment"
-remove "agent"      /api/v1/platform/agents        "Quality Incident Reporter"
-remove "agent"      /api/v1/platform/agents        "Supply Chain Watcher"
-remove "agent"      /api/v1/platform/agents        "Production Confirmation Clerk"
-remove "agent"      /api/v1/platform/agents        "Shop Floor Analyst"
-remove "connector"  /api/v1/platform/connectors    "mfg-telemetry"
-remove "connector"  /api/v1/platform/connectors    "mfg-consumption"
+remove "entrypoint" /api/v1/platform/gateways      "claims-events"
+remove "workflow"   /api/v1/platform/workflows     "stalled-cohort-report"
+remove "workflow"   /api/v1/platform/workflows     "storm-readiness"
+remove "workflow"   /api/v1/platform/workflows     "cross-channel-fraud-report"
+remove "agent"      /api/v1/platform/agents        "Claims Incident Reporter"
+remove "agent"      /api/v1/platform/agents        "Storm Readiness Planner"
+remove "agent"      /api/v1/platform/agents        "Fraud Case Reporter"
+remove "agent"      /api/v1/platform/agents        "Fast Lane Clerk"
+remove "agent"      /api/v1/platform/agents        "Storm Intake Analyst"
+remove "connector"  /api/v1/platform/connectors    "fnol-intake"
+remove "connector"  /api/v1/platform/connectors    "weather-cells"
+remove "connector"  /api/v1/platform/connectors    "scanner-results"
 
 if [ "$KEEP_CORE" -eq 0 ]; then
-  echo "== Manufacturing core"
-  remove "agent"      /api/v1/platform/agents      "Acme CRM Query Expert"
-  remove "agent"      /api/v1/platform/agents      "Acme OMS Query Expert"
-  remove "agent"      /api/v1/platform/agents      "Acme PDM Query Expert"
-  remove "agent"      /api/v1/platform/agents      "Acme SCM Query Expert"
-  remove "connector"  /api/v1/platform/connectors  "Acme CRM DB"
-  remove "connector"  /api/v1/platform/connectors  "Acme OMS DB"
-  remove "connector"  /api/v1/platform/connectors  "Acme PDM DB"
-  remove "connector"  /api/v1/platform/connectors  "Acme SCM DB"
-  remove "skill"      /api/v1/platform/skills      "mfg-crm-schema"
-  remove "skill"      /api/v1/platform/skills      "mfg-oms-schema"
-  remove "skill"      /api/v1/platform/skills      "mfg-pdm-schema"
-  remove "skill"      /api/v1/platform/skills      "mfg-scm-schema"
+  echo "== Insurance core"
+  remove "agent"      /api/v1/platform/agents      "Acme Insurance Query Expert"
+  remove "agent"      /api/v1/platform/agents      "Acme Claims Knowledge Expert"
+  remove "connector"  /api/v1/platform/connectors  "Acme Insurance DB"
+  remove "connector"  /api/v1/platform/connectors  "Acme Claims Knowledge"
+  remove "skill"      /api/v1/platform/skills      "acme-insurance-schema"
+  remove "skill"      /api/v1/platform/skills      "acme-knowledge-guide"
 else
-  echo "== Manufacturing core: kept (--keep-core)"
+  echo "== Insurance core: kept (--keep-core)"
 fi
 
 echo "== Evaluation (deletes run history too!)"
-remove "experiment" /api/v1/platform/evaluations/experiments "mfg-ops-quality"
-remove "experiment" /api/v1/platform/evaluations/experiments "mfg-ops-model-benchmark"
-remove "dataset"    /api/v1/platform/evaluations/datasets    "mfg-ops-questions"
+remove "experiment" /api/v1/platform/evaluations/experiments "ins-ops-quality"
+remove "experiment" /api/v1/platform/evaluations/experiments "ins-ops-model-benchmark"
+remove "dataset"    /api/v1/platform/evaluations/datasets    "ins-ops-questions"
 
 echo "== Demo dashboard"
 if [ "$DRY" -eq 1 ]; then
-  kubectl get cm -n sam-solace-lab dashboard-sam-mfg-ops >/dev/null 2>&1 \
-    && echo "   WOULD delete ConfigMap dashboard-sam-mfg-ops" \
+  kubectl get cm -n sam-solace-lab dashboard-sam-insurance-ops >/dev/null 2>&1 \
+    && echo "   WOULD delete ConfigMap dashboard-sam-insurance-ops" \
     || echo "   dashboard: not present"
 else
-  kubectl delete cm -n sam-solace-lab dashboard-sam-mfg-ops \
+  kubectl delete cm -n sam-solace-lab dashboard-sam-insurance-ops \
     --ignore-not-found | sed 's/^/   /'
 fi
 
@@ -145,9 +145,17 @@ else
     | sed 's/^/   /' || true
 fi
 
+echo "== Knowledge base (Qdrant + MCP server + data/model volumes)"
+if [ "$DRY" -eq 1 ]; then
+  echo "   WOULD run: docker compose -f qdrant/docker-compose.yaml down -v"
+else
+  docker compose -f "$SCRIPT_DIR/qdrant/docker-compose.yaml" down -v 2>&1 \
+    | sed 's/^/   /' || true
+fi
+
 if [ "$PURGE" -eq 1 ]; then
-  echo "== Postgres databases (--purge-data)"
-  for db in mfg_crm mfg_oms mfg_pdm mfg_scm; do
+  echo "== Postgres database (--purge-data)"
+  for db in acme_insurance; do
     if [ "$DRY" -eq 1 ]; then
       echo "   WOULD drop database $db"
     else
@@ -162,9 +170,9 @@ echo ""
 if [ "$DRY" -eq 1 ]; then
   echo "Dry run - nothing was changed."
 elif [ "$KEEP_CORE" -eq 1 ]; then
-  echo "Demo overlay removed. Manufacturing core, models, RBAC and"
+  echo "Demo overlay removed. Insurance core, models, RBAC and"
   echo "the platform infrastructure stay."
 else
-  echo "Demo removed (overlay + manufacturing core). Models, RBAC,"
+  echo "Demo removed (overlay + insurance core). Models, RBAC,"
   echo "developer-mcp and the platform infrastructure stay."
 fi

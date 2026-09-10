@@ -401,7 +401,14 @@ function connect() {
     logEvent("fail", "—", "Connect failed: " + e.infoStr);
   });
   session.on(solace.SessionEventCode.MESSAGE, (msg) => {
-    let body = msg.getBinaryAttachment() || "";
+    // solclientjs hands the attachment over as a byte string; the
+    // agents publish UTF-8 (EUR signs, dashes) -> decode explicitly.
+    const raw = msg.getBinaryAttachment() || "";
+    let body = raw;
+    try {
+      body = new TextDecoder("utf-8").decode(
+        Uint8Array.from(raw, (c) => c.charCodeAt(0) & 0xff));
+    } catch (_) { /* keep the byte string */ }
     try { body = JSON.parse(body); } catch (_) { /* keep text */ }
     logEvent("result", "⬅ " + msg.getDestination().getName(), body);
   });

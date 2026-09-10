@@ -1,0 +1,49 @@
+# Declarative manifest for the Acme Insurance CORE package: the
+# acme_insurance postgres connector, the Qdrant knowledge base
+# (reached through an MCP server -- the platform has no native
+# Qdrant connector), the two skill bundles and the two expert
+# agents. This is the insurance analog of
+# sam-manufacturing-ops-demo/core -- every demo owns its core;
+# agent-mesh-deployment stays pure SAM infrastructure (models,
+# RBAC, observability, developer-mcp). uninstall.sh removes the
+# core together with the overlay; --keep-core keeps it for fast
+# switching between demo overlays.
+#
+# Applied with:  sam config plan/apply -m manifest.yaml
+# (install.sh does this; order is handled by the CLI, connectors
+# before the agents that reference them.)
+#
+# NEVER pass --prune: the platform hosts resources this manifest
+# does not manage (Orchestrator, developer-mcp, other demos ...).
+kind: manifest
+name: ins-core-agents
+description: >-
+  Acme Insurance core: acme_insurance postgres connector, claims
+  knowledge base (Qdrant via MCP), skill bundles and the two
+  expert agents (SQL + knowledge).
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+variables:
+  # Demo defaults (repo convention); override via environment at
+  # apply time, e.g. INS_DB_PASSWORD=secret ./install.sh
+  INS_DB_USERNAME: "postgres"
+  INS_DB_PASSWORD: "postgres"
+resources:
+  connectors:
+    - Acme Insurance DB
+    - Acme Claims Knowledge
+  skills:
+    - acme-insurance-schema
+    - acme-knowledge-guide
+  agents:
+    - Acme Insurance Query Expert
+    - Acme Claims Knowledge Expert
+    # NOTE: demo-specific resources (Fast Lane Clerk, Claims
+    # Incident Reporter, Storm Readiness Planner, Fraud Case
+    # Reporter, the three workflows, claims-events entrypoint,
+    # Storm Intake Analyst) are NOT managed here -- they live in
+    # ../mesh and ../fallback and are installed/removed via
+    # install.sh / uninstall.sh.

@@ -48,6 +48,10 @@ esac
 . "$AMD/scripts/lib/common.sh"
 load_env "$AMD"
 resolve_sam_cli
+# The cached access token is short-lived; any real CLI call refreshes
+# it via the stored refresh token (same trick as preflight/demo-links),
+# so a stale cache does not 401 the raw curl calls below.
+(cd "$SCRIPT_DIR/eval" && "$SAM_CLI" config plan >/dev/null 2>&1) || true
 sam_auth_token
 
 api() {  # api METHOD PATH -> body on stdout, code in API_CODE
@@ -68,16 +72,21 @@ fi
 
 # Only ONE demo overlay runs at a time (shared host stores, one
 # mongo on 27017, one stage). Refuse to install over another one.
-OTHER_EP=$(api GET /api/v1/platform/gateways | python3 -c "
+OTHER_EPS=$(api GET /api/v1/platform/gateways | python3 -c "
 import json,sys
 for g in json.load(sys.stdin).get('data',[]):
-    if g.get('name')=='plant-events': print(g['id'])")
-if [ -n "$OTHER_EP" ]; then
-  echo "ERROR: another demo overlay is installed (entrypoint" >&2
-  echo "'plant-events' found). Only one demo runs at a time." >&2
-  echo "Remove it first:  (cd ../sam-manufacturing-ops-demo && ./uninstall.sh)" >&2
-  exit 1
-fi
+    if g.get('name') in ('plant-events','claims-events'): print(g['name'])")
+# entrypoint:demo-dir pairs (macOS bash 3.2: no associative arrays)
+for pair in "plant-events:sam-manufacturing-ops-demo" \
+            "claims-events:sam-insurance-ops-demo"; do
+  ep="${pair%%:*}"; dir="${pair#*:}"
+  if grep -qxF "$ep" <<<"$OTHER_EPS"; then
+    echo "ERROR: another demo overlay is installed (entrypoint" >&2
+    echo "'$ep' found). Only one demo runs at a time." >&2
+    echo "Remove it first:  (cd ../$dir && ./uninstall.sh)" >&2
+    exit 1
+  fi
+done
 
 echo "== 1/6 Host data stores"
 for c in postgres pgadmin; do
@@ -88,11 +97,13 @@ for c in postgres pgadmin; do
   fi
 done
 "$SCRIPT_DIR/postgres/seed.sh" | sed 's/^/  /'
-# Only one demo's mongo runs at a time (both use standard 27017).
-if [ "$(docker inspect -f '{{.State.Running}}' mfg-plant-mongo 2>/dev/null)" = "true" ]; then
-  docker stop mfg-plant-mongo >/dev/null \
-    && echo "   mfg-plant-mongo: stopped (port 27017 for retail-pos-mongo)"
-fi
+# Only one demo's mongo runs at a time (all use standard 27017).
+for other in mfg-plant-mongo acme-claims-mongo; do
+  if [ "$(docker inspect -f '{{.State.Running}}' "$other" 2>/dev/null)" = "true" ]; then
+    docker stop "$other" >/dev/null \
+      && echo "   $other: stopped (port 27017 for retail-pos-mongo)"
+  fi
+done
 docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" up -d 2>&1 \
   | grep -viE "Running|Started" || true
 echo "   retail-pos-mongo: up (seed runs only on first volume init)"

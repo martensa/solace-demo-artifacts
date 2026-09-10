@@ -1,0 +1,32 @@
+# MCP connector to the Acme claims knowledge base. SAM 2.225.14
+# has NO native Qdrant (vector store) connector, so the demo runs
+# a small MCP server (../../qdrant/mcp-server/server.py, FastMCP,
+# Streamable HTTP on host port 8765, endpoint path /mcp) that
+# fronts the Qdrant collection acme_knowledge and exposes five
+# tools: search_policy_wordings, search_claims_guidelines,
+# search_partner_contracts, search_storm_playbooks (semantic
+# search filtered by doc_type, top_k results with doc_id, title,
+# section, score, text) and get_knowledge_document (full text by
+# doc_id). The server is unauthenticated (auth_type none), so no
+# static tool manifest is needed: the platform lists the tools
+# directly at connector create/update. SAM pods reach the host
+# container via host.docker.internal (same as postgres/mongo).
+kind: connector
+name: Acme Claims Knowledge
+description: >-
+  Semantic search over Acme Insurance's claims knowledge base in
+  Qdrant (via MCP): policy wordings (hail cover HC-7, repair
+  network clause RN-3, total loss definition TL-1), claims
+  guidelines (Fast Lane criteria, Total Loss Fastlane, BaFin
+  30-day rule, fraud indicators, repeat contact handling), partner
+  contracts (drive-ins, assistance, rental, interim contract IC-2,
+  contracted rates) and storm playbooks (NatCat hail playbook v4,
+  lessons learned from earlier cells). One search tool per
+  document type plus a lookup by doc_id.
+spec:
+  type: mcp
+  subtype: remote
+  values:
+    server_url: http://host.docker.internal:8765/mcp
+    connection_type: streamable-http
+    auth_type: none

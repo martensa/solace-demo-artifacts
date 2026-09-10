@@ -11,7 +11,7 @@ set -uo pipefail
 #   Retail POS Analyst present   -> deleted (live Builder beat)
 #   postgres data                -> postgres/seed.sh + spot-check
 #   wrong/empty mongo            -> compose down -v && up (reseed)
-#   other demo's mongo running   -> stopped (port 27017 rule)
+#   other demos' mongo running   -> stopped (port 27017 rule)
 #   broker WS down               -> docker start solace-1/2, retry
 #   dashboard ConfigMap missing  -> kubectl apply
 #   evals without completed runs -> sam eval run (the 15-min part)
@@ -36,7 +36,8 @@ REQUIRED_CONNECTORS=("Retail CRM DB" "Retail OMS DB" \
   "Retail PDM DB" "retail-poslog")
 REQUIRED_WORKFLOWS=("order-incident-report" "retail-360-report")
 REQUIRED_ENTRYPOINT="shop-events"
-MY_MONGO="retail-pos-mongo"; OTHER_MONGO="mfg-plant-mongo"
+MY_MONGO="retail-pos-mongo"
+OTHER_MONGOS=("mfg-plant-mongo" "acme-claims-mongo")
 MONGO_DB="retail_pos"
 EVAL_EXPERIMENTS=("retail-ops-quality" "retail-ops-model-benchmark")
 DASHBOARD_CM="dashboard-sam-retail-ops"
@@ -171,9 +172,11 @@ if sql_spot_ok; then ok "seeded + spot-checks (customers, orders, product master
 else bad "spot-checks failed after seed (see /tmp/preflight-seed.log)"; fi
 
 echo "== 6/8 MongoDB POSLOG store"
-if [ "$(docker inspect -f '{{.State.Running}}' "$OTHER_MONGO" 2>/dev/null)" = "true" ]; then
-  docker stop "$OTHER_MONGO" >/dev/null && fixd "$OTHER_MONGO stopped (port 27017 rule)"
-fi
+for other in "${OTHER_MONGOS[@]}"; do
+  if [ "$(docker inspect -f '{{.State.Running}}' "$other" 2>/dev/null)" = "true" ]; then
+    docker stop "$other" >/dev/null && fixd "$other stopped (port 27017 rule)"
+  fi
+done
 docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" up -d >/dev/null 2>&1
 sleep 3
 if mongo_counts_ok; then

@@ -187,7 +187,15 @@ function connect() {
     logEvent("fail", "—", "Connect failed: " + e.infoStr);
   });
   session.on(solace.SessionEventCode.MESSAGE, (msg) => {
-    let body = msg.getBinaryAttachment() || "";
+    // solclientjs liefert das Attachment als Byte-String; die Agenten
+    // publizieren UTF-8 (Euro-Zeichen, Gedankenstriche) -> explizit
+    // dekodieren.
+    const raw = msg.getBinaryAttachment() || "";
+    let body = raw;
+    try {
+      body = new TextDecoder("utf-8").decode(
+        Uint8Array.from(raw, (c) => c.charCodeAt(0) & 0xff));
+    } catch (_) { /* Byte-String belassen */ }
     try { body = JSON.parse(body); } catch (_) { /* Text belassen */ }
     logEvent("result", `⬅ ${msg.getDestination().getName()}`, body);
   });

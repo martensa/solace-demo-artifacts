@@ -1,0 +1,119 @@
+# Distinct compose project name: the other demos' compose projects
+# are retail-pos and mfg-plant; this one is the knowledge stack of
+# the insurance demo (Qdrant + the MCP server in front of it + a
+# one-shot seed job). Without the name the project would be called
+# "qdrant" after the directory.
+#
+# SAM has no native Qdrant connector, so the platform reaches the
+# knowledge base through the MCP server (connector "Acme Claims
+# Knowledge", mcp/remote, streamable-http,
+# server_url http://host.docker.internal:8765/mcp, no auth).
+#
+#   docker compose -f qdrant/docker-compose.yaml up -d --build
+#   docker compose -f qdrant/docker-compose.yaml down -v   # incl. model cache
+name: acme-knowledge
+
+networks:
+  solace_net:
+    name: solace_net
+    external: true
+
+volumes:
+  # Qdrant storage (collection acme_knowledge, ~52 points)
+  acme-knowledge-data:
+    name: acme-knowledge-data
+  # fastembed model cache: BAAI/bge-small-en-v1.5 (~67 MB) is
+  # downloaded ONCE by the seed job and reused by the MCP server.
+  acme-knowledge-models:
+    name: acme-knowledge-models
+
+services:
+  acme-knowledge-qdrant:
+    image: qdrant/qdrant:v1.15.4
+    container_name: acme-knowledge-qdrant
+    hostname: acme-knowledge-qdrant
+    networks:
+      - solace_net
+    ports:
+      # REST (preflight.sh: GET /collections/acme_knowledge) + gRPC
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - acme-knowledge-data:/qdrant/storage
+    healthcheck:
+      # The qdrant image ships bash but no curl/wget: a /dev/tcp
+      # connect to the REST port is the documented liveness probe.
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  acme-knowledge-mcp:
+    build: ./mcp-server
+    # Explicit image name: the seed service is built from the same
+    # context and shares the image (one build, two commands).
+    image: acme-knowledge-mcp:local
+    container_name: acme-knowledge-mcp
+    hostname: acme-knowledge-mcp
+    networks:
+      - solace_net
+    ports:
+      # MCP streamable-http endpoint /mcp + GET /health
+      - "8765:8765"
+    environment:
+      QDRANT_URL: http://acme-knowledge-qdrant:6333
+      COLLECTION: acme_knowledge
+      EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
+      FASTEMBED_CACHE_DIR: /app/models
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8765"
+      MCP_PATH: /mcp
+    volumes:
+      - acme-knowledge-models:/app/models
+    depends_on:
+      acme-knowledge-qdrant:
+        condition: service_healthy
+      # Serve only after the corpus is in place -- the model cache is
+      # then warm as well (no concurrent first download by two
+      # containers). install.sh waits for the seed exit code and
+      # for GET /health anyway.
+      acme-knowledge-seed:
+        condition: service_completed_successfully
+    healthcheck:
+      # python:3.12-slim has no curl -- probe /health with urllib.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=3).status == 200 else 1)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+  acme-knowledge-seed:
+    build: ./mcp-server
+    image: acme-knowledge-mcp:local
+    container_name: acme-knowledge-seed
+    networks:
+      - solace_net
+    # One-shot: recreates collection acme_knowledge from
+    # seed/documents.yaml and exits 0. Re-running "compose up"
+    # re-seeds (idempotent install).
+    command: ["python", "seed.py"]
+    environment:
+      QDRANT_URL: http://acme-knowledge-qdrant:6333
+      COLLECTION: acme_knowledge
+      EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
+      FASTEMBED_CACHE_DIR: /app/models
+      SEED_FILE: /app/seed/documents.yaml
+    volumes:
+      - ./seed:/app/seed:ro
+      - acme-knowledge-models:/app/models
+    depends_on:
+      acme-knowledge-qdrant:
+        condition: service_healthy
+    restart: "no"
