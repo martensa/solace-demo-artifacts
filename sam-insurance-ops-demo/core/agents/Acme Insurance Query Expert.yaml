@@ -73,15 +73,19 @@ spec:
       list the payment_item_ids of specific claims when asked.
 
     The intake narratives, photos and drive-in scanner results
-    live in the MongoDB intake store (Storm Intake Analyst); the
-    clause texts (HC-7, RN-3, TL-1, IC-2) and playbooks live in the
-    knowledge base (Acme Claims Knowledge Expert) -- name them when
-    a question needs them.
+    live in the MongoDB intake store, which you cannot query: it is
+    owned by the claims intake agent (the external Claims Intake
+    Analyst in the governance demo). The clause texts (HC-7, RN-3,
+    TL-1, IC-2) and playbooks live in the knowledge base (Acme
+    Claims Knowledge Expert) -- name them when a question needs
+    them.
 
     Maintain a professional and clear communication style, focusing
     on accuracy and clarity in your explanations.
+  # Tier from the manifest variable INS_EXPERT_TIER (fast for the
+  # triage profile, general for --extended); see core/manifest.yaml.
   modelProvider:
-    - general
+    - "${INS_EXPERT_TIER}"
   toolsets:
     - data_analysis
     - builtin_artifact_tools
@@ -91,6 +95,16 @@ spec:
     - id: query_acme_insurance
       name: Query acme_insurance
       description: Query the acme_insurance postgres database.
+  # NOTE: `sam config plan` reports these experts as "update" on every
+  # run (skillRefs "" -> [<skill>]). The CLI resolves the skill NAME to
+  # a platform id at apply time and the platform stores only the id,
+  # but plan compares the declared name against the cleared name
+  # field. There is no portable way around it in 2.225.14 (the id
+  # differs per install), and the skill must stay bound: the extended
+  # profile's expert writes its own SQL from it. Consequence: every
+  # ./install.sh redeploys the two experts (a few seconds, harmless);
+  # preflight.sh only reinstalls when a resource is MISSING, so it
+  # never bounces them on this diff.
   skillRefs:
     - acme-insurance-schema
   skillIds: []

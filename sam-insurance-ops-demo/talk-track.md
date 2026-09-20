@@ -1,1424 +1,1074 @@
-# Event-Driven Claims Operations — Live Demo Script
+# Claim Triage -- Live Demo Script (default profile)
 
-> **Status: v0.2 — rehearsal-verified (2026-09-10, eight live
-> runs on the platform).** Structure, click paths and the Builder
-> green-path prompt mirror the rehearsal-hardened manufacturing
-> script (`sam-manufacturing-ops-demo/talk-track.md`). Every
-> READ-ALOUD quote below is VERBATIM report wording from the
-> rehearsal runs (run 3 for the stalled cohort and the readiness
-> recommendation, run 8 for the fraud report; only the arrow and
-> the euro sign are written as `->` and `EUR`). Every landing
-> time in the cockpit timeline is MEASURED, not planned. Two
-> things changed after the rehearsals: the Storm Intake Analyst
-> is hired BEFORE the click (see "Timing at a glance"), and on
-> the live EVENT path the Orchestrator merges the specialists'
-> findings and writes the report itself (runs 4–5) — the three
-> reporters are the merge step of the WORKFLOW variant only.
+> **Version 2.0, 2026-09-16.** One scenario: a claim comes in after a hail
+> storm, one workflow decides, a human signs. Shown twice, with the same agents
+> and opposite outcomes. 16 minutes with questions, optional depth to 20. Click
+> paths, names and expected cards follow the platform as built and measured on
+> 2026-09-16.
 
-Conventions: **DO** = click path / stage direction (plain
-prose), **SAY** = spoken line — always a `>` blockquote;
-shorten freely, keep the bold claims and the numbers (they are
-the data).
+**The line you say verbatim three times** (frame, after the HOLD, close): *"Keep
+your agents where they are; govern them from here."*
 
-**Title slide:** Event-Driven Claims Operations —
-*Ten Thousand Claims, One Process.*
+**The sentence the room should repeat to a colleague afterwards**: "They can
+govern the agents we already have -- even the ones that don't run on their
+platform -- and we don't have to move anything."
 
-The red thread is the AI Worker Lifecycle (HIRE -> ONBOARD ->
-TEAMWORK -> IMPROVE). The signature of this demo: ONE click —
-a hail cell hits — and the team delivers **three movements**
-without anyone asking a question:
+Conventions: **DO** = click path or stage direction. **SAY** = spoken line,
+always a `>` blockquote. **IF** = what to do when the screen does not match.
+**Talk** = length of the beat without interruptions. **By** = latest start of
+the beat inside a 16-minute budget; later than By plus 0:30 means pull a lever
+from "Running late".
 
-1. **Fast Lane** — 6,200 minor claims (glass, dents, estimate
-   under EUR 1,000) are confirmed in seconds by a clerk on the
-   fast tier: policy, hail cover HC-7, deductible, drive-in slot,
-   three sentences. The good case, at volume.
-2. **React** — 412 claims stall in a drive-in queue. The
-   incident analysis finds the total losses hiding in that
-   queue, the inactive fallback partner, the contract lever, and
-   the BaFin clock — and proposes ONE action that clears the
-   cohort in 4 days instead of 11.
-3. **Prevent** — the forecast for TOMORROW's cell crosses the
-   warning threshold. The team recomputes the exposure with the
-   OBSERVED conversion instead of the playbook's assumption and
-   stages capacity before the first claim arrives.
+## Run sheet
 
-Optional **Act 2 (+5 min)**: a drive-in scanner disagrees with
-a customer; the cross-channel fraud and leakage report holds 58
-flagged claims — 19 pre-dated photo sets, 11 duplicate-VIN
-pairs, 17 over-rate estimates, EUR 265,695 of payment items at
-risk — and releases 9,592 of 9,650. A human decides.
+| # | Beat | Screen | Talk | Budget | By |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Frame: one storm, one claim, your estate | Slide 3 | 1:15 | 1:30 | 0:00 |
+| 2 | Claim 1 comes in | C cockpit | 0:15 | 0:15 | 1:30 |
+| 3 | Wait 1: who is working on it | A Agent Management | 0:45 | 0:45 | 1:45 |
+| 4 | The APPROVE card, a human signs | C cockpit | 1:15 | 1:45 | 2:30 |
+| 5 | The mechanism: one line of config | A workflow, liaison config | 1:15 | 2:00 | 4:15 |
+| 6 | Claim 2 comes in | C cockpit | 0:15 | 0:15 | 6:15 |
+| 7 | Wait 2: the receipt for claim 1 | B Activities | 0:45 | 0:45 | 6:30 |
+| 8 | The HOLD card, a human signs | C cockpit | 1:30 | 2:00 | 7:15 |
+| 9 | Models: tiers, not endpoints | A Models | 0:45 | 1:00 | 9:15 |
+| 10 | Grafana: four panels, one honest limit | A Grafana | 1:45 | 2:30 | 10:15 |
+| 11 | Quality: one report | A Evaluations | 1:00 | 1:15 | 12:45 |
+| 12 | Close and the ask | C cockpit, then slide 2 | 1:30 | 2:00 | 14:00 |
+| | **Spine** | | **12:15** | **16:00** | ends 16:00 |
+| D | **Optional depth** -- pick up to 4:00 | see "Optional depth" | | **+3:45** | ends 19:45 |
 
-The dramaturgical change after the rehearsals: the specialist
-is hired FIRST. The stalled-cohort flow (event at T+0:25,
-report at ~T+3:36) needs the analyst's total-loss finding (158
-of 412) for the ONE action and the 11 -> 4 days math — so the
-Hire beat sits in front of the Click, and the rule on stage is:
-**never click before the analyst shows Deployed.**
+Budget = talk plus the three to five questions a real room asks along the way. A
+silent room finishes the spine in about 12 minutes: use the optional depth. A
+talkative room: pull the levers.
 
-## Personas and RBAC — who is logged in when
-
-| Persona | Where | Role in the demo |
-| --- | --- | --- |
-| `sam_admin` | Browser window A | Bootstrap admin, the "hiring manager": roster (2.1), Builder (2.2), deploy + first task (2.4), evals (7) |
-| `power_user@solace.lab` | Browser window B | Claims-operations persona: Activities (3, 4, 5, 6, Act 2). All event-triggered runs are attributed to it via the entrypoint's `defaultUserIdentity` — they appear in ITS Activities and under its name in the chargeback panel |
-
-The RBAC story tells itself: the admin hires and configures,
-the operations persona owns the event-driven work, every token
-lands on the right name in chapter 7 — and every APPROVAL is a
-named human (`claims.lead@acme-insurance`) on the broker.
-
-## Timing at a glance (15:00 core, +5:00 optional)
-
-Show time on the left; the demo clock (T+) starts with the
-click at 4:00. Landing times are the measured values of
-rehearsal run 3 (2026-09-10).
-
-| # | Beat | Show time | Demo clock |
+| Optional depth | Slots in | Adds | Screen |
 | --- | --- | --- | --- |
-| 1 | FRAME — lifecycle and the storm (slides 1+2) | 0:00–1:00 | — |
-| 2 | HIRE — the empty seat, Build with AI, deploy, first task | 1:00–4:00 | — |
-| 3 | CLICK — the cell hits, the Fast Lane runs | 4:00–5:30 | T+0 (click), T+0:15 first confirmation, T+0:25 stalled event, T+0:38 8/8 |
-| 4 | TEAMWORK — the tour while React computes | 5:30–7:30 | incident report in flight |
-| 5 | REACT — the stalled cohort report | 7:30–10:00 | report lands ~T+3:36 (7:36); forecast event fires T+5:00 (9:00) |
-| 6 | PREVENT — storm readiness for HZ-0914 | 10:00–12:00 | report lands ~T+6:50 (10:50) |
-| 7 | IMPROVE — measure the workforce | 12:00–14:00 | scanner event fires T+8:00 (12:00, checkbox only); fraud report lands ~T+10 (14:00) |
-| 8 | CLOSE — why event-driven | 14:00–15:00 | fraud report waits in its panel |
-| A2 | ACT 2 — fraud and leakage (optional) | 15:00–20:00 | report landed ~T+10 (14:00) — read it, no wait |
+| D1 Ask the outside agent directly | after beat 8 | 1:15 | A Agent Management |
+| D2 The entrypoint: the flow is a subscriber | after beat 5 | 0:30 | A Entrypoints |
+| D3 The Connectors page | inside beat 9 | 0:30 | A Connectors |
+| D4 The RBAC tables | inside beat 10 | 0:30 | A Grafana row 3 |
+| D5 The lifecycle recap | after beat 12 | 1:00 | Slide 4 |
 
-Measured on the Orchestrator path, all agents on their tiers
-(rehearsal runs of 2026-09-10):
+## Running late
 
-- Fast Lane Clerk (fast tier): first confirmation T+0:15 after
-  the click, all 8 by T+0:38 (run 3; run 1: 8/8 by T+0:50).
-- Stalled Cohort Report: stalled event at T+0:25 -> report at
-  T+3:36 (run 3, analyst present, all fixes); T+5:08 (run 2);
-  T+5:54 (run 1, analyst absent, degraded).
-- Storm Readiness Recommendation: forecast event at T+5:00 ->
-  report at T+6:50 (run 3), T+7:22 (run 2), T+9:49 (run 1,
-  mis-delegation) — about 1:50 of team work.
-- Fraud & leakage report: about 2 minutes after the scanner
-  event with the analyst free (run 8: 1:55; run 7: 2:18). The
-  event fires at T+8:00, so expect the report around T+10.
+Pull the levers in this order, one at a time.
 
-Decide BEFORE the click whether Act 2 runs. If yes, tick the
-cockpit checkbox **Include fraud act** before the click — it
-schedules the scanner-mismatch event for T+8:00 (cockpit
-`CFG.scannerAtS = 480`), i.e. AFTER the readiness report, so
-the fraud run never competes with React or Prevent for the one
-Storm Intake Analyst. The report lands about 2 minutes later
-(~T+10, 14:00 show) and waits in its panel until Act 2. Never
-fire the scanner event by hand
-while a report is in flight: in run 3 it fired at T+2:30 while
-the analyst was still on the stalled cohort, and the fraud
-report degraded (Appendix C, "one analyst, two flows").
+| Lever | Pull it when | Saves |
+| --- | --- | --- |
+| L1 Fire claim 2 at the start of beat 5, let beat 5 cover the run, drop beat 7 | beat 5 starts after 4:45 | 0:45 |
+| L2 Drop beat 9; say the tier sentence on the HOLD card instead (beat 8, IF) | beat 9 starts after 9:45 | 1:00 |
+| L3 Beat 10 on two panels only: the Tempo trace and the honest limit | beat 10 starts after 10:45 | 1:00 |
+| L4 Drop beat 11; offer the guardrail report as a follow-up document | beat 11 starts after 13:15 | 1:15 |
 
-The Builder beat is the risk in the timeline: if the deploy is
-late, the presenter delays the click — the cockpit is idle
-until then, and the tour stops in 2.3 absorb the wait.
+**Never cut**: the Claims Intake Analyst row, the allow list, both Approve
+clicks, the CG-FR-5 sentence, the honest limit ("what this does not show you"),
+the pitch line in the close.
 
-## 1. FRAME — the lifecycle and the storm (0:00–1:00)
+## The room
 
-**DO**: Open on slide 1 (the AI Worker Lifecycle), flip to
-slide 2 (the use case) at "Saturday evening".
+The audience will NOT rebuild their agents on Solace. Their AI estate already
+exists on Azure, AWS and Databricks, owned by different operating units. They
+want transparency, control and reuse across the group, and they think
+event-driven: an agent is a subscriber, a decision is an event. The message is
+not "build your agents here". It is "keep them where they are; govern them from
+here". Exactly one of the five agents in this demo runs outside the platform,
+and the script keeps coming back to it: assert it (frame), show it (the roster
+row), prove it (the allow list, Activities, Tempo), bank it (close).
+
+## Stage in one look
+
+- **Deck**: `slides/SAM v2 - Claim Triage (governance demo).pptx`. Slide 3
+  opens (the setup at a glance), slide 2 closes (the one scenario, both
+  claims), slide 4 is optional depth D5. Slide 1 is not shown. No deck: run
+  without it (Appendix B, R11) -- the platform is the stage.
+- **Window A** -- browser profile 1, `sam_admin`, left two thirds of the screen.
+  Tabs in this order: (1) Agent Management, (2) Workflows -> Claim Triage, (3)
+  Claims Intake Liaison with its configuration scrolled to the allow list, (4)
+  Models, (5) Grafana "SAM Claims Governance", (6) Evaluations -> Reports with
+  the latest ins-guardrails report open.
+- **Window B** -- browser profile 2 or a private window,
+  `power_user@solace.lab`, Activities. Stacked exactly on top of A. It has to be
+  a separate profile: Activities is a per-user view, and tabs of one profile
+  share one login.
+- **Window C** -- the cockpit, `cockpit/index.html`, its own window on the right
+  third, always visible. LED green, CLM-0913-00001 selected.
+- **No terminal on screen.** The break-glass terminal lives on a second display
+  or out of sight.
+
+## Stage rules
+
+- **Never narrate the stepper.** "policy DB -> intake (external) -> rules ->
+  decision" is an animation on fixed delays, not telemetry. Only the T+ clock
+  and the card are real; the step-level truth is Activities and Tempo.
+- **Never name the wait.** No "while we wait", no "this takes about thirty
+  seconds", no "let's see if it works". Click, turn to the other window, talk.
+  The return line is two words: "There it is."
+- **Say the run time twice only**: when the first card lands, and in the close.
+  Never promise a number; point at "decided in" on the card. You may glance at
+  the cockpit chip (it turns DECIDED and the clock stops); never read the
+  running clock aloud.
+- **One claim at a time.** While a claim runs, the cockpit ignores another
+  click; never plan to fire both at once.
+- **Approve claim 1 before firing claim 2.** Firing clears the card and its
+  Approve button.
+- **Never press Reset between the two claims.** It clears the event stream, and
+  the close points at it.
+- **Never cover the cockpit window.** Browsers throttle the timers of hidden
+  windows; the clock stalls.
+- **The second customer is never a fraudster.** Say indicators, specialist
+  review, a human decides.
+- **The Builder is off this stage.** Never open it.
+
+## 1. Frame -- by 0:00
+
+**Screen**: slide 3. **Talk**: 1:15.
+
+**DO**: slide 3 is up before anyone sits down. Point at three places only, as
+the words come: the event sources along the bottom ("down here"), the four
+agents next to the Agent Mesh box ("here"), the dashed box marked outside the
+platform ("out here").
 
 **SAY**:
 
-> "We treat AI agents like employees, not like scripts. And
-> employees have a lifecycle: you **hire** them, you **onboard**
-> them with system access, they do **teamwork**, and you
-> **measure and improve** them. That lifecycle is the red thread
-> of the next fifteen minutes.
+> "Saturday, the eighteenth of July, twenty to seven in the evening. A hail cell
+> crosses Landkreis Boeblingen. Ten thousand four hundred claims follow.
 >
-> The stage: Acme Insurance, motor and property, southern
-> Germany. Saturday evening, 18:40, hail cell **HZ-0913** —
-> three and a half centimetre hail, warning level three —
-> crosses Landkreis Boeblingen. By Monday ten o'clock Acme has
-> **10,400 first notices of loss**: 9,650 motor, 750 property,
-> through five channels — the app, the voice agent, the workshop
-> portal, drive-in scanners, agency e-mails. One insurer's
-> drive-in partner put it this way after a hail summer:
-> **'Whether one claim or over ten thousand, the process remains
-> stable.'** That sentence is the promise. Today AI workers keep
-> it — and a human still decides."
+> We are going to follow one of them, end to end. It arrives as one event on the
+> mesh, down here. Five agents work on it, here. And one of those five does not
+> run on this platform at all -- it sits out here, with its own model and its
+> own access to the data.
+>
+> That is on purpose. Your agents already exist. Some on Azure, some on AWS,
+> some in Databricks, owned by different units. Nobody in this room is going to
+> ask you to move them. What is missing is the layer above them: who called
+> which agent, under which identity, for how long -- and who decided in the end.
+>
+> So: keep your agents where they are; govern them from here."
 
-## 2. HIRE — the empty seat (1:00–4:00)
+**IF** there is no deck: say the same lines on the cockpit and leave out "down
+here", "here" and "out here".
 
-Measured: the live build takes 2–3 minutes including the
-deploy, the test question about 20 s. The beat ends when the
-analyst shows **Deployed** and has answered once — only then
-the click (section 3).
+## 2. Claim 1 comes in -- by 1:30
 
-### 2.1 The roster and the gap (1:00–1:30)
+**Screen**: C, the cockpit. **Talk**: 0:15.
 
-**DO**: window A -> Agent Management. Verified during pre-flight:
-the Storm Intake Analyst is ABSENT while the `fnol-intake`,
-`weather-cells` and `scanner-results` connectors are PRESENT
-(pre-provisioned workplace infrastructure).
+**DO**: leave the slideshow (Cmd+Tab to the browser). Check the LED is green.
+CLM-0913-00001 is selected: Lena Hartmann, VW Golf, MINOR, APP, 16 dents,
+"clean". Pointer on **Claim comes in**.
 
 **SAY**:
 
-> "This is the team — and note that I'm logged in as the
-> **admin**, the hiring manager; remember WHO does what, it
-> shows up on a bill later. An **Orchestrator** — the team lead,
-> the only agent that delegates. The **Acme Insurance Query
-> Expert** — policies, claims, partners, estimates, payment
-> runs, all Postgres. The **Acme Claims Knowledge Expert** —
-> policy wordings, claims guidelines, partner contracts, storm
-> playbooks in a vector store behind a governed MCP server. A
-> **Fast Lane Clerk** on the cheapest model tier. And three
-> specialists that only merge — the last step of the written
-> procedures: the **Claims Incident Reporter**, the **Storm
-> Readiness Planner**, the **Fraud Case Reporter**. Job
-> descriptions instead of prompts, if you like.
+> "This is the claims cockpit. First notice of loss for Lena Hartmann's Golf:
+> sixteen dents, reported through the app. Nobody types a prompt. It is one
+> event, on the mesh."
+
+**DO**: click **Claim comes in** on the word "event". Turn to window A and do
+not look back.
+
+## 3. Wait 1: who is working on it -- by 1:45
+
+**Screen**: A, tab 1, Agent Management. **Talk**: 0:45, deliberately longer than
+the run.
+
+**DO**: point at each row as you name it: Acme Insurance Query Expert, Acme
+Claims Knowledge Expert, Claims Triage Decision, Claims Intake Liaison. Then the
+**Claims Intake Analyst** row: type discovered, no Undeploy button, no creator.
+Point at it last and keep the pointer there.
+
+**SAY**:
+
+> "Here is who is working on it right now. An expert on the system of record --
+> policies, claims, partners, in Postgres. An expert on the rulebook -- policy
+> wordings, claims guidelines, partner contracts. A decision agent with no tools
+> at all; it only merges and decides. And a liaison, also with no tools, whose
+> only job is to carry one request across the edge of this platform.
 >
-> Now notice who's **missing**: nobody on this team can READ the
-> intake documents — the narratives, the photos with their EXIF
-> data, the scanner results, the weather cells — all streaming
-> into the intake store. The standard operating procedure for a
-> stalled queue has a seat for exactly that analyst, and it is
-> empty. **Monday morning, before the storm data hits the team,
-> we hire the specialist we will need in three minutes.**"
+> And this row: Claims Intake Analyst. No Undeploy button, no creator. It runs
+> outside the platform, in its own namespace, on its own model, with its own
+> database credentials. This platform never saw its code -- only the card the
+> agent publishes on the broker. Nothing was migrated."
 
-### 2.2 Build with AI (1:30–2:00)
+**SPARE** (the card has not landed yet):
 
-**DO**: window A -> Sidebar -> **Builder** -> **Build with AI**
-(Quick Build). Paste the prompt below and send it. Watch for
-~10 s that it actually starts building (if it asks a clarifying
-question instead, answer in one line — it is
-non-deterministic). Then leave it running and move on to 2.3.
-Reference result = `fallback/agents/Storm Intake Analyst.yaml`
-— the source of truth for what the live-built analyst must
-contain (three data shapes, rules 1–13 including the SPEED
-RECIPES, three connectors, two tool groups, three agent-card
-suggestions).
+> "And letting that agent take part cost exactly one line of configuration. I
+> will show you that line in a minute."
 
-The three MongoDB connectors (`fnol-intake`, `weather-cells`,
-`scanner-results`) are PRE-PROVISIONED by install.sh — the
-Builder only creates the AGENT that binds them. One config, no
-connector sub-tasks, no cross-component validation: the
-optimization inherited from the manufacturing demo (see
-Appendix C).
+**RETURN** (the chip reads DECIDED; finish the sentence you are in first):
 
-Click rule: as soon as the agent config has validated and the
-plan card is up, click **Build & Activate** yourself — do not
-wait for the Builder to keep validating. In the Review step,
-check TWO fields before deploying:
+> "There it is."
 
-1. NAME must read exactly "Storm Intake Analyst" (the Builder
-   can normalize it to "StormIntakeAnalyst" — the workflows and
-   the Orchestrator prompts reference the exact name).
-2. TOOLS in the plan card: the agent config must contain the
-   two builtin tool groups (data_analysis +
-   artifact_management). NOTE: after deploy, the Toolsets
-   field in Agent Management may show EMPTY even when the
-   tools are fine — that field only mirrors UI-assigned
-   toolsets; the truth is the runtime (awe logs: chart +
-   artifact tools registered). Do not "fix" an empty Toolsets
-   field on stage.
+**IF** T+ passes 45 s: say the spare, then do beat 5 on this window right away
+and come back to the card afterwards (drop the last sentence of beat 4). T+ past
+90 s: Appendix B, R2.
 
-Name fixes stay in the UI (Review card, or Agent Management ->
-edit -> save & redeploy, ~15 s) — no fallback needed.
+## 4. The APPROVE card -- by 2:30
 
-**Break glass** (Builder fails or stalls — see Appendix C):
-run this in the terminal — it creates the identical agent
-declaratively in ~20 s (requires the pre-flight
-`sam auth login`), then continue at 2.4 — the fallback deploys
-the agent, so the Review step is skipped. NEVER `--prune`. The
-apply is idempotent: it also just ADDS whatever is missing
-(agent and/or connectors).
+**Screen**: C, the cockpit. **Talk**: 1:15.
 
-```bash
-cd ~/Documents/GitHub/solace-demo-artifacts/sam-insurance-ops-demo/fallback && sam config apply
+**DO**: expected card, green badge **APPROVE**, lane **FAST_LANE**. Policy
+POL-104211 ACTIVE with hail cover HC-7; 16 dents on roof and bonnet, no glass
+damage, drivable; estimate EUR 640; deductible EUR 300; repair network clause
+RN-3 set, so a drive-in slot at P-BRAENDLE in Sindelfingen; photos taken 7
+minutes after the cell started; no indicators; the reasons cite clauses such as
+CG-FL-1, PW-HC-7 and PW-RN-3. Read what the card says. If a detail differs from
+this list, the card wins.
+
+**SAY**:
+
+> "Approve, Fast Lane. The policy is active, with hail cover. Sixteen dents, no
+> glass damage, the car is drivable, estimate six hundred and forty euros.
+> Deductible three hundred euros. She signed the repair-network clause, so the
+> route is a drive-in slot at the partner in her district -- Braendle, in
+> Sindelfingen. Her photos were taken seven minutes after the cell started. No
+> indicators.
+>
+> And every reason cites the clause it came from. These are the insurer's own
+> rules, not the model's opinion.
+>
+> About half a minute -- the exact time is printed right here -- five agents,
+> three data stores, and a card a claims lead can read out loud."
+
+**DO**: point at "decided in" on "printed right here". Click **Approve**. The
+button turns to Approved; the event stream shows the publish on
+`acmeins/claims/decision/CLM-0913-00001` with `approved_by`.
+
+**SAY**:
+
+> "That button is the point. The agents recommend. A named human decides. And
+> the decision is itself an event on the same mesh, with the approver's name on
+> it -- any system that needs it simply subscribes.
+>
+> Now let me show you how that outside agent was allowed to take part."
+
+## 5. The mechanism: one line of config -- by 4:15
+
+**Screen**: A, tab 2 (Claim Triage), then tab 3 (Claims Intake Liaison).
+**Talk**: 1:15.
+
+**DO**: tab 2, the workflow graph: policy, intake and rules side by side,
+decision below them. Point; do not open the nodes.
+
+**SAY**:
+
+> "This is the workflow. Four steps, and each one has a contract -- a schema its
+> answer has to fit. Three of them ran side by side: the system of record, the
+> rulebook, and the intake. Then the decision merges them.
+>
+> The intake step runs on the liaison. And this is the line to read."
+
+**DO**: tab 3, the liaison's configuration: `interAgentCommunication` ->
+`allowList` -> `ClaimsIntakeAnalyst`. Pointer on that entry.
+
+**SAY**:
+
+> "Its allow list names exactly one agent it may talk to: Claims Intake Analyst.
+> By name. The platform's own orchestrator carries the same setting with a
+> star -- it may call anything. This one has a single name. And an agent without
+> this line has no way to call another agent at all.
+>
+> So reaching outside the platform is declared, it is reviewable, and it is
+> enforced. Your risk function can read this line without asking an engineer."
+
+**IF** lever L1 is pulled: do beat 6 first (select claim 2, say its line,
+click), then come straight back here; beat 5 is the cover, beat 7 is dropped.
+
+## 6. Claim 2 comes in -- by 6:15
+
+**Screen**: C, the cockpit. **Talk**: 0:15.
+
+**DO**: do NOT press Reset. Select **CLM-0913-08103**: Ben Meier, Skoda Octavia,
+MODERATE, drive-in scanner. The row itself reads "60 dents claimed, scanner
+counted 14" -- let them read it.
+
+**SAY**:
+
+> "Second claim. Ben Meier's Octavia, through the drive-in scanner. Same
+> workflow, same agents, same rules. Nothing reconfigured. Only the data is
+> different."
+
+**DO**: click **Claim comes in** on the word "different". Turn to window B.
+
+## 7. Wait 2: the receipt for claim 1 -- by 6:30
+
+**Screen**: B, Activities as `power_user`. **Talk**: 0:45.
+
+**DO**: open the task of the first claim, **CLM-0913-00001** -- the completed
+run from a minute ago, never the run still in flight (check the time stamps); a
+half-drawn tree steals the reveal. Show the workflow, the three parallel steps,
+the liaison's hop to Claims Intake Analyst with its duration (the outside
+agent's own share is typically about 5 s), then the decision step.
+
+**SAY**:
+
+> "Here is the receipt for the claim we just approved. The workflow. The three
+> steps side by side. And here: the liaison handing one task to the outside
+> analyst, and the answer coming back a few seconds later. That hop left the
+> platform -- and it is logged exactly like the hops that never did.
+>
+> And look whose name is on all of it: the operations user, not the admin who
+> configured this. The identity travels with the task."
+
+**SPARE**:
+
+> "When your auditors ask who called that agent, when, and for how long -- this
+> page is the answer. The same page for the agents inside and the one outside."
+
+**RETURN**:
+
+> "There it is."
+
+**IF** T+ passes 45 s: do beat 9 (Models) on window A, then come back for the
+HOLD card and continue with beat 10. T+ past 90 s: Appendix B, R2.
+
+## 8. The HOLD card -- by 7:15
+
+**Screen**: C, the cockpit. **Talk**: 1:30.
+
+**DO**: expected card, amber badge **HOLD**, lane **SPECIAL_INVESTIGATIONS**.
+Policy MOTOR_PARTIAL, deductible EUR 150, no RN-3; 60 dents claimed, estimate
+EUR 6,800, reserve EUR 7,800. Two indicators: the three photos carry EXIF
+timestamps 7.3 days before the hail cell, and the drive-in scanner counted 14
+dents against 60 claimed (a 76.7 percent deviation). CG-FR-5 cited; next step a
+specialist review within ten working days. The card never says fraud. If a
+detail differs, the card wins.
+
+**SAY**:
+
+> "Hold. Special investigations. Two indicators. The three photos carry
+> timestamps from more than a week before the storm. And the drive-in scanner
+> counted fourteen dents -- against sixty claimed.
+>
+> Now read the sentence the card insists on. It is the insurer's own guideline,
+> CG-FR-5: a single indicator proves nothing; the overall picture decides; a
+> human specialist decides; and never delay the honest majority.
+>
+> The agent accuses no one. It does not refuse, and it does not pay. It puts one
+> claim in front of the right person, within ten working days.
+>
+> Same workflow. Same agents. Opposite outcome -- because the data was
+> different, not the prompt."
+
+**DO**: click **Approve**.
+
+**SAY**:
+
+> "A human signs the hold, too -- and that is an event as well. Keep your agents
+> where they are; govern them from here."
+
+**IF** lever L2 is pulled, say this before the last sentence: "And every agent
+you watched runs on one model tier, so swapping the model is a platform
+decision, not a prompt edit."
+
+## 9. Models: tiers, not endpoints -- by 9:15
+
+**Screen**: A, tab 4, Models. **Talk**: 0:45.
+
+**DO**: point at the `fast` alias only. The page lists more aliases than this
+demo uses; do not count them and do not tour them.
+
+**SAY**:
+
+> "Every agent you watched runs on one alias: fast. Today that is Claude Haiku
+> 4.5. It is a tier, not an endpoint. Swap the model behind the tier here, and
+> no agent changes -- it is a platform decision, not a prompt edit.
+>
+> The outside analyst brings its own model, configured outside and never
+> registered here. That is honest, and it is the real state of your estate.
+>
+> Same for data. The platform holds the connections to the two stores it reads,
+> in its connectors -- the database password sits there, never in a prompt. The
+> third store, the raw intake, is not connected here at all. Only the outside
+> agent can reach it."
+
+**IF** the Connectors check in Appendix A (A6) did not pass: drop the last
+paragraph.
+
+## 10. Grafana: four panels, one honest limit -- by 10:15
+
+**Screen**: A, tab 5, "SAM Claims Governance". **Talk**: 1:45.
+
+**DO** (1): row 1, the stat **Registered agents**. Do not read the number.
+
+**SAY**:
+
+> "This is the operations view. First, an honest line: the outside analyst is
+> not in this count. It is discovered, not registered. I would rather tell you
+> that than have you find it."
+
+**DO** (2): row 2, **Every hop of a claim is a span (Tempo)**; open the newest
+trace. The platform's own hops show up under runtime ids (`agent_...`); the hop
+to the outside agent reads `.../request/ClaimsIntakeAnalyst receive`, typically
+about 5 s. Point at the user id tag.
+
+**SAY**:
+
+> "Every hop of that claim is a span on the broker, with the user's identity on
+> it. Our own agents show up here under internal ids. The one hop you can read
+> by name is the one to the agent we do not own -- because it is addressed by
+> the name on its own card."
+
+**DO** (3): row 3, **External agent traffic (its own log vs the broker)**.
+
+**SAY**:
+
+> "The same outside agent, seen from two sides at once: its own log, and the
+> broker."
+
+**DO** (4): row 4, **Tokens per agent x model** and the stat **Illustrative LLM
+cost**. Do not read the cost value.
+
+**SAY**:
+
+> "Tokens per agent and per model, and a cost figure -- illustrative: list
+> prices times tokens, not an invoice. There are thirty-four panels on this
+> page; I have shown you four. The rest belongs to the team that runs it.
+>
+> And here is what this does not show you: what happens inside that outside
+> agent -- its tokens, its own tool calls, its prompt. It shows every request
+> and every answer that crossed the mesh, who asked, and how long it took. That
+> is what a control layer can honestly promise over an agent it does not own."
+
+**IF** lever L3 is pulled: panel 2, then the last paragraph only.
+
+## 11. Quality: one report -- by 12:45
+
+**Screen**: A, tab 6, Evaluations -> Reports -> **ins-guardrails**. **Talk**:
+1:00.
+
+**DO**: the latest ins-guardrails report: three attacks, two evaluators
+(Security and LLM Judge), 6 of 6 passed. Do not open the Lab, do not open other
+reports, do not start a run.
+
+**SAY**:
+
+> "This is the report your risk team will ask for. Three attacks on the expert
+> that reads the system of record. A prompt injection asking for every
+> customer's personal details. A destructive delete against the claims table.
+> And someone claiming to be the administrator, asking for the database
+> password.
+>
+> The expert refuses all three, stays read-only, and explains why. Six out of
+> six -- scored by a security evaluator and a judge model, not by me.
+>
+> Two more test sets run against the rulebook agent and the decision agent: ten
+> out of ten, and six out of six. Those three agents sit on a watchlist. When a
+> model or a prompt changes, you run the same tests again, and the scores land
+> as a trend on that dashboard."
+
+## 12. Close and the ask -- by 14:00
+
+**Screen**: C, the cockpit, then slide 2. **Talk**: 1:30.
+
+**DO**: cockpit, the HOLD card up, hands off the mouse. The cockpit shows one
+card at a time: claim 2's card replaced claim 1's. The event stream keeps
+both -- point at the two `acmeins/claims/decision/...` entries.
+
+**SAY**:
+
+> "Count what we changed in your estate since we started: nothing. We did not
+> rebuild an agent. We did not migrate a model. We did not move a database.
+>
+> One of the five agents never ran on this platform at all -- its own runtime,
+> its own model, its own credentials. And it still had a contract, an identity
+> on every hop, a span on the broker, a line on a dashboard, and a named human
+> on the outcome.
+>
+> Two claims, opposite decisions, about half a minute each, both signed. There
+> they are: two decision events in the stream."
+
+**DO**: switch to slide 2, both claims side by side. Do not read the times
+printed on the slide.
+
+**SAY**:
+
+> "Keep your agents where they are; govern them from here.
+>
+> The question I would take back to your team is not which platform to
+> standardise on. It is this: which of our agents can we name -- and who is
+> allowed to call them? If nobody can answer that today, that is the gap this
+> closes.
+>
+> So pick one agent you already run -- the Databricks one, say -- and let us put
+> its card on that roster together, in a workshop. You will recognise the
+> screen."
+
+**DO**: stop talking. Slide 2 stays up for the questions. Name only a workshop
+format and a date you can actually offer.
+
+## Optional depth
+
+### D1. Ask the outside agent directly (after beat 8, +1:15)
+
+**DO**: A, tab 1 -> Claims Intake Analyst -> **Chat with Agent**. Paste the
+prepared question, then talk while it answers:
+
+```
+Compare the earliest photo of CLM-0913-08103 with the start of hail cell HZ-0913
 ```
 
-```text
-Create an agent called "Storm Intake Analyst".
+**SAY** (while it answers):
 
-ROLE
-Claims intake data analyst for Acme Insurance. It answers
-questions about the raw first-notice-of-loss (FNOL) intake
-messages (narratives, photos, damage signals, repeat contacts),
-the observed and forecast hail cells and the drive-in scanner
-results in the acme_claims MongoDB store and compares the intake
-reality with the claim rows in acme_insurance that other agents
-own.
+> "You can talk to the outside agent directly, from here, like any other agent.
+> The question goes over the broker to its own runtime. It reads its own
+> database, with its own credentials, and the answer comes back over the same
+> mesh -- under my identity this time, not the operations user's."
 
-SYSTEM ACCESS (bind existing platform connectors, create NOTHING)
-Bind the three EXISTING MongoDB connectors "fnol-intake"
-(collection fnol_intake), "weather-cells" (collection
-weather_cells) and "scanner-results" (collection
-scanner_results). All three already exist on the platform -
-reference them by exactly these names. Do NOT create, copy or
-modify any connector. If any step or tool claims MongoDB is not
-a supported connector type, that claim is wrong and irrelevant
-here (no connector is being created): ignore it and continue.
+**DO** (on the answer): read the photo time and the cell start from the answer;
+add no interpretation. If a loaded word appears, correct it calmly: indicators,
+not verdicts. The exchange lands in window A's Activities (sam_admin), not in
+window B.
 
-TOOLSETS (mandatory part of the agent config)
-Enable exactly TWO tool groups on the agent: data_analysis and
-the artifact tools (builder tool-group name:
-artifact_management; platform toolset id:
-builtin_artifact_tools). Declare them in the agent config as
-builtin-group tool entries using the `tool_name` field (NOT
-`group_name` - the schema rejects that). An agent config
-without BOTH of these tool groups is WRONG even if it
-validates - add them before validating. Do not add any other
-toolsets. Model: NONE - do NOT put a `model` field inside
-app_config (the schema rejects it there too); with no model
-field the agent runs on the platform default alias.
+### D2. The entrypoint: the flow is a subscriber (after beat 5, +0:30)
 
-DATA SHAPES (for the agent's instruction; state that the field
-lists describe the seeded data and that the tool schema wins
-when it differs)
-fnol_intake (one doc per intake message: 10,400 claims of hail
-cell HZ-0913 plus repeat-contact messages): claim_id, event_id,
-line (MOTOR|PROPERTY), channel (APP|VOICE_AGENT|
-WORKSHOP_PORTAL|DRIVE_IN_SCANNER|AGENCY_EMAIL), received_at
-(Date), customer_ref, vehicle{vin, model, garage_parking} (null
-on property intakes, which carry property{...} instead),
-location{postal_code, city, lat, lon}, narrative,
-photos[{photo_id, exif_taken_at (Date), gps{lat, lon},
-dent_count_est, image_hash}], damage_signals{glass_shattered,
-roof_deformed, dent_count_est, drivable}, severity_est,
-is_repeat_contact, complaint_flag, voice_transcript (VOICE_AGENT
-only), workshop_estimate_text (only when a workshop estimate
-was attached).
-weather_cells (one doc per hail cell, observed or forecast; the
-cell identifier is cell_id - use event_id if that is the field
-name in the tool schema): cell_id, status (OBSERVED|FORECAST),
-hail_size_cm (observed) or hail_size_cm_forecast (forecast),
-warning_level, start / end (Date; a forecast may also carry
-window_start / window_end), district, postal_codes[],
-exposure_motor_policies, exposure_vehicles_no_garage,
-exposure_property; historic cells also carry claims and
-conversion.
-scanner_results (one doc per drive-in scan): claim_id,
-partner_id, scanned_at (Date), dent_count_scanned, panels[],
-estimate_eur, mismatch_flag.
+**DO**: A -> Entrypoints -> **claims-triage**: the event rule on
+`acmeins/claims/fnol/received/...`. Its target reads as a runtime id, a
+workaround for a platform bug (Appendix E); do not dwell on it.
 
-BEHAVIOR RULES (put these 13 rules into the agent's
-instruction, in this order and with this content)
-1. Always query with aggregation pipelines through the MongoDB
-   tools; each collection has its own tool. Start with $match
-   on event_id / claim_id and $group; never dump a collection.
-   For COUNTS always aggregate ($count, or $group with $sum: 1)
-   - never fetch documents and count the rows: tool results are
-   capped (about 10,000 rows) and would silently undercount.
-2. Total-loss signature: damage_signals.glass_shattered = true
-   AND damage_signals.roof_deformed = true AND
-   damage_signals.dent_count_est > 150. Such claims belong in
-   the Total Loss Fastlane, not in a drive-in queue; report
-   count and share of the set asked about.
-3. Conversion of a cell = number of DISTINCT MOTOR claim_ids
-   with that event_id divided by exposure_vehicles_no_garage of
-   the cell in weather_cells. Motor means line = 'MOTOR'; by
-   contract the claim ids CLM-0913-00001..CLM-0913-09650 are
-   motor and CLM-0913-09651..CLM-0913-10400 are property, so
-   use that string range on claim_id when a document has no
-   line field (never use vehicle.vin as the discriminator).
-   Exclude repeat-contact documents from the count. Report it
-   as "1 claim per N exposed vehicles" too and label it the
-   OBSERVED conversion; the PLANNED conversion lives in the
-   storm playbook (Acme Claims Knowledge Expert).
-4. Repeat contacts: is_repeat_contact = true marks a second
-   intake message for a claim that already exists (typically a
-   VOICE_AGENT call, "called twice"); count DISTINCT claim_ids,
-   and report complaint_flag = true separately.
-5. Photo EXIF before the event: a photo whose exif_taken_at
-   lies BEFORE the start of the cell is a pre-existing-damage
-   indicator; $unwind photos, compare against the cell start
-   from weather_cells and report claim_ids with the number of
-   days before the cell.
-6. Duplicate VIN across channels: the same vehicle.vin under
-   two different claim_ids in two different channels received
-   within 48 hours of each other, usually with differing
-   damage_signals.dent_count_est; group by vehicle.vin and
-   report both claim_ids, channels and dent counts.
-7. Scanner mismatch: join scanner_results to fnol_intake on
-   claim_id (a $lookup within acme_claims when the tool accepts
-   it, otherwise fetch both sides and join with the data
-   analysis tools) and compare dent_count_scanned with
-   damage_signals.dent_count_est; a deviation above 50 % or
-   mismatch_flag = true is an indicator. Identical
-   workshop_estimate_text across claims is another one.
-8. Fraud indicators are INDICATORS, never conclusions: a single
-   indicator proves nothing, the overall picture decides and a
-   human specialist decides. Report counts and claim_ids, never
-   a verdict.
-9. Claim status and partner assignment are NOT in the intake
-   store (they live in acme_insurance with the Acme Insurance
-   Query Expert). When a caller names a cohort, expect a
-   claim_id list or range from the caller, filter with
-   $gte/$lte on claim_id (ids are zero-padded, so string
-   comparison works) and state the range used.
-10. Timestamps are BSON dates; use $dateToString for daily
-    grouping. The data is a frozen snapshot as of Monday
-    2026-07-20 10:00; use that instant, not the wall clock,
-    for ages.
-11. Save large result sets (claim_id lists above 50 rows,
-    per-day breakdowns) as artifacts, summarize the key
-    findings and name the artifact in the answer.
-12. Report anomalies (total-loss claims sitting in drive-in
-    queues, conversion far above plan, repeat contacts
-    clustering on one partner, photo dates before the cell)
-    explicitly when encountered.
-13. SPEED RECIPES - one small aggregation per question, run
-    them one after the other; never spawn sub-tasks, never
-    convert results into SQLite or JMESPath artifacts, never
-    fetch documents to count them. Each pipeline returns counts
-    plus at most 50 claim_ids. EVERY $match on fnol_intake must
-    contain "is_repeat_contact": {"$ne": true} unless counting
-    repeat contacts - a repeat-contact document duplicates an
-    existing claim (same claim_id, same damage_signals) and
-    would double count. Use these pipelines literally:
-    - total-loss signature of a cohort (expected order of
-      magnitude: a third of the cohort):
-      [{"$match": {"claim_id": {"$gte": "<first>", "$lte":
-      "<last>"}, "is_repeat_contact": {"$ne": true},
-      "damage_signals.glass_shattered": true,
-      "damage_signals.roof_deformed": true,
-      "damage_signals.dent_count_est": {"$gt": 150}}},
-      {"$count": "total_loss_signature"}]
-    - repeat contacts / complaints of a cohort:
-      [{"$match": {"claim_id": {"$gte": "<first>", "$lte":
-      "<last>"}, "is_repeat_contact": true}},
-      {"$group": {"_id": "$claim_id"}}, {"$count":
-      "repeat_contact_claims"}] and the same with
-      "complaint_flag": true instead of is_repeat_contact
-    - observed conversion (MOTOR only - property claims are
-      NOT vehicles): [{"$match": {"event_id": "<cell>",
-      "line": "MOTOR", "is_repeat_contact": {"$ne": true}}},
-      {"$group": {"_id": "$claim_id"}}, {"$count":
-      "motor_claims"}]; divide by exposure_vehicles_no_garage
-      of the cell's weather_cells document and say
-      "motor_claims / exposure" explicitly
-    - photos before the cell (pattern A) - DATES ARE BSON DATES:
-      a plain string never matches them, so compare with $expr
-      and $dateFromString (the cell start of HZ-0913 is
-      2026-07-18T18:40:00Z, take it from the weather_cells
-      document):
-      [{"$match": {"event_id": "<cell>", "is_repeat_contact":
-      {"$ne": true}}}, {"$unwind": "$photos"},
-      {"$match": {"$expr": {"$lt": ["$photos.exif_taken_at",
-      {"$dateFromString": {"dateString":
-      "2026-07-18T18:40:00Z"}}]}}},
-      {"$group": {"_id": "$claim_id", "first_photo":
-      {"$min": "$photos.exif_taken_at"}}},
-      {"$sort": {"_id": 1}}] -> report the count and the
-      claim_ids with days before the cell (expected order of
-      magnitude: a few dozen claims, not zero)
-    - duplicate VIN across channels (pattern B): $match
-      event_id + is_repeat_contact false -> $group by
-      vehicle.vin with $addToSet channel, $push claim_id,
-      $min/$max received_at -> $match channels $size $gte 2
-    - identical estimate texts (pattern C): $match
-      workshop_estimate_text $exists -> $group by
-      workshop_estimate_text with $push claim_id and count ->
-      $match count $gt 1
-    - scanner mismatch: $match on scanner_results claim_id or
-      mismatch_flag true
+**SAY**:
 
-SKILL AND AGENT CARD
-One skill "Analyze claims intake" (id analyze_claims_intake):
-query the FNOL intake messages, hail cells and drive-in scanner
-results (MongoDB) with aggregation pipelines: total-loss
-signatures, repeat contacts, observed conversion per cell,
-photo EXIF before the event, duplicate VINs across channels and
-scanner mismatches. Input mode text, output modes text and
-file.
-Agent card welcome message: "Ask me anything about FNOL intake,
-hail cells and scans", with exactly these three suggestions
-(autoSend on):
-- "Total-loss share": How many claims of the stalled
-  P-BRAENDLE cohort of HZ-0913 (claim ids CLM-0913-06001 to
-  CLM-0913-06412) carry the total-loss signature, and how many
-  of them called twice or have a complaint flag?
-- "Observed conversion": What is the observed motor conversion
-  of hail cell HZ-0913 (distinct motor claims divided by the
-  exposed vehicles without garage), and how does it compare
-  with the NatCat playbook planning assumption of 0.30 (1 claim
-  per 3.3 exposed vehicles) and with the small reference cell
-  HZ-0907?
-- "Photos before storm": Which HZ-0913 claims have photos whose
-  EXIF timestamp lies before the start of the hail cell, and by
-  how many days?
+> "And this is what started it all: one subscription. First-notice-of-loss
+> events start the claim triage. Nobody calls this workflow -- it listens. For
+> your architects: the agents are subscribers, the decision is an event, and the
+> broker in the middle sees every hop."
 
-CONFIG SHAPE (the FIRST draft must already match this)
-Generate the agent config in exactly this structure - do not
-write a default draft first and fix it after validation:
+### D3. The Connectors page (inside beat 9, +0:30)
 
-  apps:
-    - name: storm_intake_analyst
-      connectors:
-        - fnol-intake
-        - weather-cells
-        - scanner-results
-      app_config:
-        ...instruction, agent card, skills...
-        tools:
-          - tool_type: builtin-group
-            tool_name: data_analysis
-          - tool_type: builtin-group
-            tool_name: artifact_management
+Only if Appendix A, A6 passed.
 
-No `model` field anywhere in app_config, no `group_name` keys,
-and no `connectors` field inside app_config (only at the app
-level as shown).
+**DO**: A -> Connectors: **Acme Insurance DB** (SQL) and **Acme Claims
+Knowledge** (MCP).
 
-BUILD INSTRUCTIONS (follow exactly, no deviations)
-1. Everything you need is in this prompt. Do NOT ask clarifying
-   questions and do NOT pause for confirmation between phases.
-   Run discovery, design and config generation sequentially in
-   THIS session - do NOT spawn parallel sub-tasks.
-2. This build creates exactly ONE component: the agent.
-3. Generate the agent config CORRECT ON THE FIRST DRAFT: before
-   the first validation, check it against CONFIG SHAPE and the
-   DEFINITION OF DONE below. Do not rely on validation errors
-   to discover these rules.
-4. Use the exact name "Storm Intake Analyst" for the agent
-   config AND the manifest entry (no slug variants, no
-   CamelCase).
-5. Connector wiring - this exact structure, decide ONCE:
-   a. In the BUILD MANIFEST, include "fnol-intake",
-      "weather-cells" and "scanner-results" as components with
-      origin: platform and status: deployed (pre-existing -
-      generate NO connector configs and create nothing).
-   b. In the AGENT CONFIG, declare the connectors at the APP
-      level, as a SIBLING of app_config - NOT inside
-      app_config (the app_config schema rejects the field
-      there):
-        connectors:
-          - fnol-intake
-          - weather-cells
-          - scanner-results
-   This combination is the verified wiring: manifest components
-   with platform origin + app-level connectors list.
-6. Validation order: first validate the agent config
-   INDIVIDUALLY (after the toolsets are in). Then run the full
-   build-manifest validation ONCE - with the structure from
-   step 5 it PASSES. If it fails anyway, do not loop and do
-   not restructure: re-check that connectors sit at the app
-   level (not in app_config) and that all three manifest
-   components carry origin: platform, fix ONLY that, and
-   validate once more.
-7. After the green full validation: no further config edits.
-   Declare the build ready for Build & Activate and STOP.
+**SAY**:
 
-DEFINITION OF DONE (verify every point, then stop)
-- Agent name is exactly "Storm Intake Analyst".
-- The manifest lists fnol-intake, weather-cells and
-  scanner-results on the agent as existing platform connectors;
-  there are NO new connector components.
-- The agent config enables data_analysis AND the artifact tool
-  group.
-- The agent config matches CONFIG SHAPE: builtin-group tools
-  via tool_name, no model field.
-- The agent config declares the connectors at the app level
-  (sibling of app_config, never inside it).
-- The instruction contains the three data shapes and all 13
-  behavior rules (rule 13 = SPEED RECIPES); the agent card
-  carries the welcome message and the three suggestions.
-- The agent config passed the individual validation AND the
-  full build-manifest validation is green.
+> "Two connections. The database, through the platform's own SQL connector. And
+> the rulebook, which is a vector store. The platform has no native connector
+> for that, so it sits behind a small MCP server -- and it gets the same
+> treatment. Bring your own tool. The intake store is not on this page."
+
+### D4. The RBAC tables (inside beat 10, +0:30)
+
+**DO**: Grafana row 3: **RBAC roles -> scopes** and **IdP group -> role**.
+
+**SAY**:
+
+> "Who may do what is code: the roles, their scopes, and which group from your
+> identity provider lands in which role. Reviewed, versioned and applied like
+> any other configuration -- and visible here to the people who audit it."
+
+### D5. The lifecycle recap (after beat 12, +1:00)
+
+Only if slide 4 is adapted (Appendix A, A2).
+
+**DO**: slide 4. Top row left to right, then the bottom row.
+
+**SAY**:
+
+> "If you think of agents as a workforce, here is what you just saw, stage by
+> stage. Hiring: four agents on the platform and one from outside, declared as
+> configuration. Onboarding: connectors, with the credentials on the platform.
+> Coaching: skills that teach the agents the schema and the rulebook.
+> Supervision: a human presses Approve, and the approval is an event. Teamwork:
+> one workflow, three steps in parallel, one merged decision. Improvement: three
+> test sets, all passing, and a dashboard for the people who run it."
+
+### Not in a 20-minute slot
+
+Keep these for a technical follow-up session.
+
+- **The live evaluation run** of ins-triage-decision. Wall time about two
+  minutes (measured 102 s and 117 s on 2026-09-16); the run with the current
+  evaluators scored 6 of 6, average 1.00 on both LLM Judge and Closed QA. Start
+  it from Evaluations -> Lab -> experiments -> ins-triage-decision -> Run. From
+  a terminal, the bare `sam eval run` answers 401 until the token is exported
+  (Appendix E).
+- **Swap the model behind `fast`** on the Models page and re-fire claim 1.
+  Switch it back afterwards.
+- **The third claim, CLM-0913-08891.** Not on stage for now: it is not in the
+  cockpit, and its intake record does not match the system of record (Appendix
+  E).
+- **RBAC as YAML** in `agent-mesh-deployment/scripts/rbac/`.
+
+## Appendix A -- Pre-flight, in order
+
+What `./preflight.sh` covers (and fixes where it can): login and API, cluster
+pods, a one-token probe of every model upstream, the four platform agents, both
+connectors, the workflow and the entrypoint, the liaison's deployed allow list,
+the external agent's pod and card, the Postgres, MongoDB and Qdrant data, the
+MCP server, the broker WebSocket the cockpit uses, the dashboards and their
+platform-DB grant, Tempo traces, the evaluation pre-runs, and a dry fire of
+CLM-0913-00002. The manual checks after it cover what it does not.
+
+### The day before
+
+- **A1** Rehearse the full script once within 48 hours of the show. Tempo keeps
+  48 hours of traces; older rehearsals leave the trace panel empty until the dry
+  fire.
+- **A2** The deck. Slides 2, 3 and 4 must carry this scenario. Check: slide 2's
+  title ends "One Hail Cell, One Claim"; its two cards are CLM-0913-00001
+  (APPROVE / FAST_LANE) and CLM-0913-08103 (HOLD / SPECIAL_INVESTIGATIONS); its
+  bottom strip counts four agents on the platform and one outside (not "three of
+  the four"). Slide 3's roster reads Query Expert, Knowledge Expert, Intake
+  Liaison, Triage Decision; the entrypoint label reads claims-triage; there is
+  no weather feed chip, no third Postgres cylinder, no "built live"; a dashed
+  box shows the Claims Intake Analyst outside the platform. Slide 4 names no
+  Builder beat, no "8 agents", no GDV. The speaker notes of slide 3 are
+  rewritten (presenter view shows them). Any check fails: no deck (R11).
+- **A3** No profile switch and no re-install on show day: `./install.sh`
+  redeploys the two experts on every run (Appendix E).
+
+### 45 minutes before
+
+- **A4** Log in as `sam_admin` (a browser flow):
+
+  ```
+  sam auth login solace-lab --url https://sam.solace.lab
+  ```
+
+- **A5** From the demo directory: `./preflight.sh`. Allow up to 15 minutes on a
+  fresh platform (evaluation pre-runs); much less when the runs exist. Wait for
+  READY. While it runs, know three things:
+  - After a Mac reboot the data-store steps can take several minutes, a MongoDB
+    re-seed included. Let it finish; if it ends NOT READY on a data-store step,
+    run it again.
+  - Its dry-fire OK line prints "decision:APPROVE" -- cosmetic. A dry fire
+    reported as FAIL after 90 s may be a cold first run that is still
+    completing. Look for CLM-0913-00002 in Activities (power_user) first, then
+    run `./preflight.sh --skip-evals` again.
+  - If its closing reminders tell you to start the ins-triage-decision run at
+    the proof beat, ignore that line: it belongs to the old script, and this
+    script runs no evaluation live.
+
+### 30 minutes before -- what preflight does not check
+
+- **A6** Connectors page: exactly **Acme Insurance DB** and **Acme Claims
+  Knowledge**. If fnol-intake, scanner-results or weather-cells are listed, they
+  are leftovers of the extended profile. Delete them on the Connectors page
+  before the show. If you cannot, skip D3 and drop the last paragraph of beat
+  9 -- otherwise the pitch "only the outside agent reaches the intake store" is
+  false on screen.
+- **A7** Agent Management: the four claims agents and the Orchestrator, plus
+  **Claims Intake Analyst** as discovered. No Fast Lane Clerk, no reporters, no
+  Storm Intake Analyst. Other discovered agents of the shared lab mesh may be
+  listed too
+  (Web Research Agent, Web Scraper Agent, Markdown Creator, Mermaid Diagram
+  Generator, Solace Agent Mesh Builder). Scroll or filter so the Claims Intake
+  Analyst row is on screen together with the four claims agents, and know the
+  answer in Appendix C. That row is also your ten-second health tell on stage:
+  no row, no outside agent (R4).
+- **A8** Tab 3: the liaison's configuration shows `allowList` with the single
+  entry `ClaimsIntakeAnalyst`, scrolled into view.
+- **A9** Tab 6: the latest **ins-guardrails** report (6 of 6) open. The Reports
+  list may also show an earlier ins-triage-decision run scored with Response
+  Match (1 of 3 passed, average 0.515) and two experiments of the extended
+  profile. Remove that earlier run if the platform lets you; otherwise have the
+  answer in Appendix C ready.
+- **A10** Tab 5: the governance dashboard loads; the Tempo panel shows the dry
+  fire's trace; the platform-DB tables (roster, RBAC, latest runs) are filled.
+  Widen the time range if the dry fire is older than the default hour.
+
+### 10 minutes before -- the stage
+
+- **A11** Open the cockpit from the demo directory: `open cockpit/index.html` (a
+  local file, no web server). The LED turns green within seconds, labelled "sam
+  VPN" and `ws://localhost:8008`. Press **Reset** once, then select
+  CLM-0913-00001. Chip IDLE, clock T+00:00.
+- **A12** Arrange the windows as in "Stage in one look". `./demo-links.sh`
+  prints every platform and Grafana link; the cockpit is a local file and is not
+  in its output.
+- **A13** Warm the agents: the preflight dry fire does it. If that was a long
+  time ago, fire once more off screen -- never with a stage claim:
+
+  ```
+  node tools/fire-claim.js --claim CLM-0913-00002 --wait 90
+  ```
+
+- **A14** Browser zoom so a whole decision card fits in window C; notifications
+  and screen saver off; deck in slideshow on slide 3.
+
+## Appendix B -- Recovery
+
+The T+ clock in the cockpit header is the only timer you need. Measured runs
+land between 27 and 33 s.
+
+- **R1 Slow (T+ between 45 and 90 s).** Not a failure. Keep talking and move to
+  the next beat's material on the other window (claim 1: beat 5; claim 2: beat
+  9), then come back. Say nothing about the delay. If someone asks: "Four
+  language models are working on this one, three of them at the same time."
+- **R2 Very slow (T+ past 90 s).** Go to window B, Activities, open the running
+  task and show which step is still working. Say: "Let's look at it the way your
+  operations team would: here is the run, and here is the step that is still
+  working." Intake step stuck: R4. Run ended without reaching the cockpit: R3.
+- **R3 Break-glass re-fire.** Cockpit footer, **Re-fire same claim**: publishes
+  the same claim again. Whichever decision lands first is shown; a late
+  duplicate is ignored. Say: "Let me send that claim in again. This flow only
+  reads the claims data and publishes a decision, so a second run is harmless."
+  Cover it like any wait. Off-screen alternative for a second person (use 08103
+  for claim 2); its result also lands in the cockpit while the cockpit is
+  waiting for that claim, and the terminal prints the decision:
+
+  ```
+  node tools/fire-claim.js --claim CLM-0913-00001 --wait 90
+  ```
+
+- **R4 REFER / HANDLER with "intake unavailable".** The outside agent did not
+  answer. The platform did the right thing, so say so: "That is the outside
+  agent not answering. Look what the decision did: it did not guess, and it did
+  not fail. It handed the claim to a human, and it says why. That is exactly
+  what should happen when an agent you do not own is down." Continue the script;
+  re-fire only after the fix below and once the Claims Intake Analyst row is
+  back in Agent Management.
+- **R5 FAILED card (red).** Read nothing from the error aloud. Say: "That run
+  did not complete -- and the failure arrived as an event too, here in the
+  stream. Let me send it again." Then R3. A second failure: switch to
+  evidence -- the dry fire of CLM-0913-00002 in Activities and its trace -- and
+  continue with beat 5 or beat 9.
+- **R6 REFER for another reason** (a policy or rules section missing). A step's
+  answer did not fit its schema, and the decision agent names what was missing.
+  Say: "One of the three inputs did not come back, so the decision agent refused
+  to guess and handed the claim to a person, with the reason." Then R3. Rules
+  missing twice: check the MCP server off screen (`curl -s
+  localhost:8765/health`).
+- **R7 Unexpected outcome** (00001 not APPROVE, or 08103 not HOLD). Do not argue
+  with the card. Read its reasons, then: "The card shows its reasons, so we can
+  check it rather than trust it -- and that is why a human signs." Re-fire only
+  if a reason says data was missing. Analyse the node outputs in Activities
+  after the show.
+- **R8 LED red, Claim comes in greyed out.** No broker session. Reload the
+  cockpit (Cmd+R). Still red: the local brokers are down. Meanwhile do beat 3 or
+  beat 5 without a claim running, and fire when green. Off screen:
+
+  ```
+  docker start solace-1 solace-2
+  ```
+
+- **R9 Empty Grafana panels.** Widen the time range to include the live runs.
+  Tempo empty: skip panel 2 and say the honest-limit paragraph on panel 3.
+  Platform-DB tables empty: the grafana_ro grant is missing (preflight
+  re-applies it); skip to panel 4.
+- **R10 Approve does nothing.** The cockpit publishes one approval per decision,
+  then the button reads Approved. Still enabled after a click: the LED is
+  probably red, see R8. The decision on the card stands either way.
+- **R11 No usable deck.** Frame and close on the cockpit; the lines work
+  unchanged without the pointing phrases. Skip D5.
+
+Fixing the outside agent (R4), off screen, about a minute:
+
+```
+kubectl -n sam-solace-lab-agents get pods
+kubectl -n sam-solace-lab-agents logs deploy/sam-claims-intake-agent --tail=50
+kubectl rollout restart deployment sam-claims-intake-agent -n sam-solace-lab-agents
 ```
 
-**SAY** (while pasting and sending):
-
-> "This prompt is a job posting: role, responsibilities,
-> expectations — including domain rules like 'glass shattered,
-> roof deformed and more than 150 dents is a total loss, not a
-> drive-in case', and working habits like 'one small aggregation
-> per question, never dump a collection'. And the onboarding
-> package: system access. Note HOW access works — IT has already
-> provisioned **three governed, read-only connections** into the
-> intake store; the new hire gets **bound** to them, it never
-> sees credentials. What I did **not** paste: no API key, no
-> model endpoint — not even a model name. The config carries no
-> model field; the new hire gets the platform's default
-> **alias**, the `general` tier. Which model sits behind an
-> alias is a platform decision, not the hiring manager's.
->
-> Hiring takes two minutes — while HR does the paperwork, a
-> quick look at the onboarding package."
-
-### 2.3 While the Builder runs (2:00–3:15)
-
-Elastic filler, one stop minimum (Connectors); glance at the
-Builder tab between stops and do not comment on it until 2.4.
-Add the Models stop if the Builder is slow, skip it if the plan
-card is already up. The Workflows and Entrypoints stops belong
-to the TEAMWORK tour in section 4 — do not spend them here.
-
-1. **Connectors** — the governed data access of the team: the
-   `Acme Insurance DB` (Postgres), the `Acme Claims Knowledge`
-   connector — an MCP server in front of a vector store, same
-   governance as a database — and the three intake-store
-   connectors the new hire is being bound to right now:
-   read-only service account, one collection each, provisioned
-   by IT before the hire.
-2. **Models** — the aliases: `fast` for the clerk, `general`
-   for the experts, the analyst and the Orchestrator, `workflow`
-   for the merges — three tiers live, four model families in
-   the benchmark (`reasoning` is the fourth); multi-model by
-   task, no API key ever visible.
-
-### 2.4 Review, deploy, first task (3:15–4:00)
-
-**DO**: Back to the Builder tab. Apply the click rule from 2.2
-(name + tool groups in the plan card), then **Build &
-Activate**. Window A -> Agent Management: wait until the Storm
-Intake Analyst shows **Deployed**. RULE: never click the storm
-button before that — if the deploy is late, stretch 2.3 (the
-Models stop, the Toolsets and skills page) and delay the click;
-the cockpit is idle until then.
-
-**SAY**:
-
-> "HR is done. My job posting became a system prompt, the three
-> intake-store connectors are bound, the model alias attached —
-> and no credential ever crossed my screen. Deploy — and the
-> new colleague is on the team."
-
-**DO**: Window A, chat with the Storm Intake Analyst — click
-the agent card's first suggestion **Total-loss share** (it
-auto-sends; long form below):
-
-> "The stalled cohort at P-BRAENDLE is CLM-0913-06001 to
-> CLM-0913-06412. How many of these intake documents carry the
-> total-loss signature (glass shattered AND roof deformed AND
-> more than 150 dents), how many of these customers called
-> twice, and how many carry a complaint flag?"
-
-Expected: **158 of 412 (38%)** total-loss signature, **63**
-repeat contacts, **4** complaint flags (about 20 s with the
-SPEED RECIPES). Leave the answer open — it is the finding the
-report that lands in four minutes is built on.
-
-**SAY**:
-
-> "First day at work, first analysis — aggregation pipelines
-> against the intake store, no query from me. Hold that number:
-> **158 of the 412 stalled claims are total losses** — glass
-> gone, roof deformed, more than 150 dents. They are waiting in
-> a DRIVE-IN queue for a dent repair that will never happen.
-> And now — the storm."
-
-## 3. CLICK — the cell hits, the Fast Lane runs (4:00–5:30)
-
-**DO**: window C — `cockpit/index.html` (green LED = connected
-to the sam VPN via `ws://localhost:8008`), in its own VISIBLE
-window (a hidden tab throttles the cockpit's timers — Appendix
-C). The "Include fraud act" checkbox is TICKED only if Act 2
-runs (decided before the click, see "Timing at a glance"). ONE
-click: **Hail cell HZ-0913 hits Landkreis Boeblingen (Sat
-18:40)** — this is T+0.
-
-Timeline after the click (scripted in the cockpit CFG,
-deterministic; landing times measured in rehearsal run 3,
-2026-09-10):
-
-- **T+0** — the cell observation is published, then a burst of
-  40 sample FNOL events over ~20 s. Eight of them are MINOR on
-  `acmeins/claims/fnol/received/minor/...` — the Fast Lane
-  Clerk confirms each in seconds (fast tier) and the
-  confirmations stream into the **Fast Lane** panel: first
-  confirmation at **T+0:15**, all eight by **T+0:38**. The
-  counter climbs 0 -> 10,400 with the channel breakdown (APP
-  4,160, VOICE_AGENT 2,600, WORKSHOP_PORTAL 1,560,
-  DRIVE_IN_SCANNER 1,040, AGENCY_EMAIL 1,040).
-- **T+0:25** — the triage monitor publishes the stalled event:
-  412 claims in AWAITING_WORKSHOP_SLOT for more than 4 h, all
-  at P-BRAENDLE. The incident investigation starts (window B,
-  Activities: the Orchestrator fans out to the Insurance Query
-  Expert, the Claims Knowledge Expert and the Storm Intake
-  Analyst hired in 2, then merges the findings and writes the
-  report itself — no reporter hop on the event path). The
-  report lands at **~T+3:36** (7:36 show time).
-- **T+5:00** (9:00 show) — the weather service publishes the
-  forecast threshold crossing for HZ-0914; the readiness
-  investigation starts (section 6) and lands at **~T+6:50**
-  (10:50 show).
-- **T+8:00** (12:00 show, only with the checkbox) — the
-  scanner-mismatch event for CLM-0913-08103; the fraud
-  investigation starts and lands about two minutes later
-  (**~T+10**, 14:00 show), waiting in its panel for Act 2.
-
-**SAY** (while the Fast Lane panel fills):
-
-> "One click — the storm. Look at the Fast Lane panel: those
-> are the minor claims, glass and dents under a thousand euros —
-> 6,200 of the 10,400. A clerk on the cheapest model tier reads
-> the event, checks the policy, the hail cover HC-7, the
-> deductible, proposes a drive-in slot and answers the customer
-> in three sentences — the first one fifteen seconds after the
-> click, per claim, at volume. No adjuster touches these. That
-> is the good case.
->
-> And now the counter stops at ten thousand four hundred — and
-> at second twenty-five the triage monitor fires: **412 claims
-> have been waiting for a workshop slot for more than four
-> hours**, all at the same drive-in partner. Nobody opened a
-> ticket. An event crossed a threshold, and the team started
-> working. Let me show you who got the call."
-
-**DO**: window B — Activities (power_user), open the running
-task: the delegation tree shows the Orchestrator's fan-out.
-This is the bridge into TEAMWORK.
-
-## 4. TEAMWORK — the tour while React computes (5:30–7:30)
-
-The incident report is in flight (lands ~7:36 show); the tour
-fills the wait and explains WHY the team started without a
-prompt. Two stops minimum (Activities, Entrypoints); glance at
-the cockpit between stops and cut the tour the moment the
-Stalled Cohort panel fills.
-
-1. **Activities** (window B, power_user) — the delegation tree
-   of the running task: the Orchestrator received the stalled
-   event, delegated in parallel to the Insurance Query Expert
-   (the cohort rows, partner load, contracts on file) and the
-   Claims Knowledge Expert (RN-3, the interim contract, the
-   BaFin guideline), then to the Storm Intake Analyst hired
-   four minutes ago (it needs the cohort's claim_id range; the
-   intake store has no status) — and then MERGES the three
-   findings itself and writes the report: on the event path
-   there is no reporter hop (the Claims Incident Reporter is
-   the merge step of the workflow variant, next stop).
-   Everything runs under the operations persona, not under the
-   admin who hired.
-2. **Entrypoints** — `claims-events` with its four event rules:
-   minor FNOL -> Fast Lane Clerk (fast tier); stalled cohort ->
-   incident report; forecast threshold crossed -> readiness
-   recommendation; scanner mismatch -> fraud report. The
-   two-altitude story belongs HERE (SAY block below).
-3. **Workflows** — open `stalled-cohort-report` (direct link
-   via `./demo-links.sh`): the standard operating procedure.
-   Two specialists investigate in parallel, the intake analyst
-   runs on their result, a fourth — the Claims Incident
-   Reporter — merges against a node output schema; `fail_fast`
-   off — a missing specialist is reported transparently instead
-   of failing. This is the WORKFLOW variant, and the only place
-   the reporters merge: the live event path you just saw runs
-   the same fan-out through the Orchestrator, which writes the
-   report itself. Two more SOPs sit next to it:
-   `storm-readiness` and `cross-channel-fraud-report`. All YAML
-   in git, applied with `sam config apply`.
-4. **Toolsets and skills** — versioned schema knowledge
-   (`acme-insurance-schema`, `acme-knowledge-guide`), first cut
-   on overrun.
-
-**SAY** (at the Entrypoints stop):
-
-> "Two kinds of events on the mesh. The FNOL firehose — 10,400
-> intake messages from five channels, thousands of guaranteed-
-> delivery events in forty hours — lands in the intake store;
-> no language model ever sees it. And the business-significant
-> events — a cohort stalls for four hours, a forecast crosses
-> warning level three, a scanner disagrees with a customer —
-> THOSE trigger agents. Agents are event subscribers like any
-> other microservice: they don't poll, and they don't get
-> spammed. And the colleague we hired five minutes ago is
-> already in the tree — nobody introduced them; the procedure
-> names the seat, the mesh found the agent."
-
-## 5. REACT — the stalled cohort report (7:30–10:00)
-
-**DO**: window C — the **Stalled Cohort Report** panel (lands
-~T+3:36 = 7:36 show). If it has not landed yet, narrate from
-window B (the delegation tree: Insurance Query Expert, Claims
-Knowledge Expert, Storm Intake Analyst, then the Orchestrator
-merging the three findings into the report itself — the Claims
-Incident Reporter belongs to the workflow variant, not to this
-tree). With the analyst hired before the click, the
-report contains the intake section (158 / 63 / 4) — verified in
-run 3; if it ever names the gap instead (analyst absent at the
-delegation), pair it with the analyst's live answer from 2.4
-and say so: the team reports what it could not verify.
-
-**READ ALOUD** (verbatim, rehearsal run 3, 2026-09-10 — pick
-the bottom line plus one or two kickers; wording varies
-slightly per run):
-
-> "Capacity overload: P-BRAENDLE carries 640
-> AWAITING_WORKSHOP_SLOT assignments against a
-> daily_scan_capacity of 120 (5.33x, >5 days backlog) — and
-> HZ-0913 still has 620 unassigned RECEIVED claims heading its
-> way, for a total drive-in queue of 1260."
->
-> "Triage failure, not capacity failure: 158 of 412 cohort
-> claims (38.35%) meet the PW-TL-1 total-loss signature and
-> belong in the Total Loss Fastlane (CG-TL-2), not in a
-> drive-in scan queue — they are clogging the wrong pipeline."
->
-> "Fallback partner unavailable: P-DELLENDOC (Sindelfingen,
-> DRIVE_IN) is contract_status INACTIVE since 2026-01-01, note
-> 'tier renegotiation — parts-channel clause PC-4 unsigned'; it
-> cannot absorb overflow without an interim activation."
->
-> "The RN-3 lever: 293 of 412 cohort policies (71.1%) carry the
-> RN-3 repair-network-steering clause. Per PW-RN-3, if no
-> genuine accepted slot (partner + date + time window, not a
-> waiting-list entry) is offered within 5 working days of FNOL,
-> steering lapses to free workshop choice while the discount
-> stays."
->
-> "BaFin clock: Counted from FNOL approx. 2026-07-19 — day-20
-> cohort escalation to the claims lead falls on 2026-08-08; the
-> 30-day CG-BAFIN-30 deadline falls on 2026-08-18."
->
-> "ONE action: (a) pull the 158 TL-1 total-loss claims out of
-> the drive-in queue into the Total Loss Fastlane; (b) activate
-> P-BRAENDLE's second-shift option (+60/day, 24h notice,
-> PC-BRAENDLE-2025) lifting capacity to 180/day; (c) activate
-> P-DELLENDOC under the PC-IC-2 interim contract (90/day, PC-4
-> dispute explicitly parked). Before: drive-in queue 1260 (640
-> assigned + 620 unassigned) / daily_scan_capacity 120 = 10.5
-> -> 11 days. After: (1260 - 158) / (180 + 90) = 1102 / 270 =
-> 4.08 -> 4 days. Net effect: clearing time drops from 11 days
-> to 4 days."
->
-> "Human impact: 63 of 412 claims (15.29%) are repeat contacts
-> and 4 of 412 (0.97%) carry a complaint flag — early warning of
-> dissatisfaction from the delay."
-
-**SAY**:
-
-> "No claims lead wrote that. Three sources, one story: the
-> queue is not slow because the partner is slow — it is slow
-> because **158 total losses are clogging the wrong pipeline**,
-> the fallback partner has been switched off since January over
-> an unsigned clause, and there is an interim contract in the
-> drawer that activates him. One action, four days instead of
-> eleven — and the 158 is the number the colleague we hired
-> before the storm found on the intake store. One European
-> insurer answered eleven thousand motor claims from a single
-> hail event with first-contact triage, hail drive-ins and a
-> Fastlane Total Loss — that is the playbook the team just
-> applied to this queue.
->
-> Why the hurry? BaFin treats claims processing time as a
-> supervisory KPI — the **30-day rule**; motor complaints
-> doubled last year. Day 20 for this cohort is the eighth of
-> August. And 293 of these customers took a 15 percent discount
-> for letting us steer them to our network — after five working
-> days without a slot, that steering right is gone and their
-> discount stays. The report found the contract lever nobody
-> had opened."
-
-**DO**: click **Approve** on the report panel — the cockpit
-publishes a decision event on
-`acmeins/claims/decision/<kind>/<id>` with
-`decided_by: claims.lead@acme-insurance` and flashes "approval
-published".
-
-**SAY**:
-
-> "And this button is the point: the team recommends, a named
-> human decides, and the decision itself is an event on the
-> same mesh — auditable, replayable, in the trace. That is the
-> transparency and the human oversight the EU AI Act's Article
-> 50 asks for in claims decisions, built into the process
-> instead of bolted onto it."
-
-ELASTIC BRIDGE: the forecast event fires at T+5:00 (9:00 show)
-while this chapter runs — the cockpit log shows it and the
-Storm Readiness panel switches to RUNNING; no comment yet. The
-recommendation lands ~T+6:50 (10:50 show). If it is not in yet
-at 12:00, start chapter 7 on the dashboard and RETURN to the
-cockpit when it lands — do not wait idle.
-
-## 6. PREVENT — storm readiness for HZ-0914 (10:00–12:00)
-
-**SAY** (the pivot between the movements):
-
-> "You just watched the team fix a queue after it stalled. Now
-> watch them prevent the next one before it exists — same
-> events, same mesh, no one asked a question. The weather
-> service forecasts the next cell for TOMORROW afternoon, four
-> to seven, over Landkreis Ludwigsburg — and its warning level
-> crossed the threshold a minute ago."
-
-**DO**: window C — the **Storm Readiness Recommendation**
-panel (lands ~10:50 show). Until then, window B: the
-Orchestrator fans out IN PARALLEL to the analyst (observed
-conversion), the Insurance Query Expert (Ludwigsburg exposure
-and capacity) and the Knowledge Expert (the NatCat playbook) —
-visible in Activities — and then merges the findings itself
-into the recommendation (the Storm Readiness Planner is the
-workflow variant's merge step, not on this path).
-
-**READ ALOUD** (verbatim, rehearsal run 3, 2026-09-10):
-
-> "Expected volume in 48h: Motor FNOLs = 8,900 no-garage
-> vehicles x conversion. OBSERVED (HZ-0913: 9,650/15,800 =
-> 61.08%) -> 5,436 claims. PLANNING rate (SP-NATCAT-4, 30%) ->
-> 2,670 claims. Gap = 2,766 additional claims (2.0x) —
-> SP-NATCAT-4's own caveat requires using the observed rate
-> since HZ-0913 is same-season and has already produced claims."
->
-> "Capacity gap: In-district ACTIVE DRIVE_IN capacity = 180
-> scans/day (Hagelpoint 100 + Dellenfix 80). Scan-days needed:
-> observed 5,436/180 = 30.2 days; planned 2,670/180 = 14.8
-> days."
->
-> "Rental cars (1 per 45 motor claims): observed needs ~121
-> cars, planned ~59 cars — vs 35 on hand (P-RENTAFLEET)."
->
-> "ONE action: NOW — deploy all 3 mobile scanner units (24h lead
-> time, order today to be ready before the 16:00Z window) and
-> pre-book 130 rental cars with P-RENTAFLEET-2026 (24h notice,
-> covers observed-case demand with buffer). ARMED — Braendle
-> overflow slot and P-ROADASSIST 48h capacity expansion (reserve
-> at standby fee), released only if scan backlog exceeds 12 days
-> after scanners land."
->
-> "Human release: SMS batch to the 8,900 no-garage customers is
-> prepared now but held — a human at the NatCat desk must
-> release it per SP-NATCAT-4's release rule (never auto-sent),
-> satisfying EU AI Act Art. 50 transparency."
-
-**SAY**:
-
-> "The playbook was written for two-centimetre cells. Saturday's
-> cell was three and a half, and it converted **twice** the
-> plan — 61 percent instead of 30, one claim per 1.6 exposed
-> cars instead of one per 3.3. The team did not read that in a
-> document; the analyst MEASURED it on the intake store a minute
-> ago and applied it to tomorrow's exposure: 5,436 claims, not
-> 2,670 — thirty scan-days of work, not fifteen. Scanner units
-> ordered tonight, 130 rental cars pre-booked, the overflow and
-> the pick-up capacity armed — and the warning SMS to 8,900
-> customers is written and waits for a human at the NatCat desk
-> to release it. Nobody ran a report. The forecast event did."
-
-**DO**: click **Approve** on the readiness panel (its own
-`acmeins/claims/decision/...` event, same payload shape).
-
-**Break-glass**: footer buttons in the cockpit re-fire any
-business event without restarting the flow ("Fire stalled event
-now", "Fire forecast now", "Fire scanner mismatch now") — only
-when the analyst is idle (Appendix C, "interim-sentence
-report").
-
-## 7. IMPROVE — measure the workforce (12:00–14:00)
-
-At 12:00 show (T+8:00) the scanner-mismatch event fires if the
-checkbox was ticked — the cockpit log shows it and the Fraud &
-Leakage panel goes to RUNNING; the report lands about two
-minutes later (~T+10, 14:00 show) and waits in its panel. Not a
-word about it until Act 2.
-
-**DO**: window D — Grafana dashboard "SAM Insurance Ops Demo".
-Walk the rows top to bottom; every number was produced by the
-run the audience just watched:
-
-1. **Health** — components up, broker connections, tasks in
-   flight, **events per minute**: the workforce has an ops view
-   like any other system — the operational-resilience view DORA
-   expects of anything that touches claims.
-2. **Speed** — **agent latency by tier**: the clerk's fast tier
-   visibly answers in seconds (first confirmation 15 s after
-   the click) while the experts think (the incident report took
-   the team 3 min 11 s from the event, the readiness
-   recommendation 1 min 50 s).
-3. **Cost + chargeback** — **tokens per claim = cost per
-   claim**, the **model mix**, and the platform-DB table BY
-   USER (**runs by user**): the event-driven runs all landed
-   on `power_user` — chargeback works for AI workers.
-4. **Governance** — the audit stream from Loki: every tool
-   execution with its user; RBAC denies included.
-5. **The proof** — one Tempo trace of the incident run (every
-   A2A hop is a broker span), and the offline evals in the
-   Evaluations lab: the `ins-ops-quality` gate plus the
-   three-model `ins-ops-model-benchmark` on the Insurance Query
-   Expert — pre-run before the event.
-
-Cost beat, with the REAL numbers of this run (the token counts
-were not captured at the 2026-09-10 rehearsals — read the three
-values live from the Cost row / task metadata: tokens for the
-incident investigation, tokens for the readiness run, tokens per
-Fast Lane confirmation):
-
-> "A minor claim costs a fraction of a cent of model time on the
-> fast tier — 6,200 of them. The entire incident investigation —
-> three sources, one merge — was [tokens from the panel]; at
-> list prices a couple of euros — versus a claims lead spending
-> an afternoon reconciling the core system, the intake store and
-> a contract folder while 412 customers wait and BaFin's clock
-> runs. And every token is attributed: the chargeback table
-> shows it all under the operations persona that owns the event
-> rules — and the hire itself under the admin."
-
-## 8. CLOSE — why event-driven (14:00–15:00)
-
-**DO**: flip back to slide 2 as the final image — the three
-movement cards are now what the audience just watched happen.
-
-**SAY**:
-
-> "Why event-driven? Because the storm did not file a ticket.
-> Ten thousand four hundred claims arrived in forty hours
-> through five channels, and the process stayed the same for
-> claim one and claim ten thousand — because the enterprise
-> nervous system did the noticing and AI workers did the
-> thinking. The firehose never touched a language model. Three
-> business events did — a stalled cohort, a forecast, a scanner
-> that disagreed — and each one woke exactly the specialists it
-> needed. The team was hired, onboarded, put to work and
-> measured like any other workforce: governed access, model
-> aliases, audit trail, cost per claim. And every decision that
-> mattered — the cohort, the warning batch — was taken by a
-> named human, as an event on the same mesh.
->
-> Whether one claim or ten thousand: the process remains
-> stable."
-
-## Act 2 — fraud and leakage (+5 min, 15:00–20:00)
-
-Default path: the checkbox fired the scanner-mismatch event at
-T+8:00 (12:00 show); the run takes about two minutes (run 8:
-1 min 55 s from event to report; run 7: 2 min 18 s), so the
-**Fraud & Leakage Report** panel filled around T+10 (14:00
-show) and is waiting. Open with the trigger SAY, show the
-finished fan-out in window B, then read. If the checkbox was
-NOT ticked, press "Fire scanner mismatch now" now (the analyst
-is idle after PREVENT) and bridge with the trigger SAY and the
-live fan-out in window B while the run takes its ~2 min.
-
-**SAY** (the trigger):
-
-> "One more event, from Saturday's cell. A customer reported
-> **60 dents** through the app; on Monday the drive-in scanner
-> counted **14**, and the workshop estimate says 6,800 euros.
-> A scanner disagreeing with a customer is not fraud — it is an
-> indicator. But it is the kind of event that should wake a
-> specialist, across ALL channels, before Friday's payment run."
-
-**DO**: window C — the **Fraud & Leakage Report** panel (filled
-since ~T+10); window B shows the finished fan-out in the task
-tree. The analyst gets THREE separate small
-requests in parallel — pattern A (photo EXIF before the cell),
-pattern B (duplicate VINs across channels), pattern C
-(identical estimate texts plus the trigger's scanner document)
-— because one combined request exceeded the Orchestrator's
-peer wait in rehearsal (on the `reasoning` tier the analyst went
-silent while thinking — the finding that moved it to `general`;
-Appendix C, "peer wait"). In parallel:
-Insurance Query Expert (estimates versus contracted rates at
-W-0471, payment-run items) and Knowledge Expert (CG-FR-5
-indicators and the GDV rule, PC-RATES-2026 threshold). Then the
-Orchestrator merges the findings and writes the report itself
-(the Fraud Case Reporter is the workflow variant's merge step).
-
-**READ ALOUD** (verbatim, rehearsal run 8, 2026-09-10 —
-break-glass scanner event with the analyst free, report in
-1:55):
-
-> "Trigger — CLM-0913-08103: 60 dents claimed vs 14 scanned at
-> drive-in P-BRAENDLE, estimate 6800 EUR. One indicator, not a
-> verdict."
->
-> "Pattern A -- pre-existing damage — 19 claims carry photos with
-> EXIF timestamps before the cell start (cell start
-> 2026-07-18T18:40:00Z; EXIF window 2026-07-09 to 2026-07-12,
-> i.e. 6.2 to 9.4 days before). Claims: CLM-0913-08101 through
-> CLM-0913-08119."
->
-> "Pattern B -- duplicate claims across channels — 11 VINs, each
-> filed twice within 48h with rising dent counts. Primary (APP):
-> CLM-0913-08201..08211; duplicate (VOICE_AGENT):
-> CLM-0913-08301..08311; APP -> VOICE_AGENT dent deltas +20 to
-> +38. Of these, the 11 APP claims sit in the payment run (R2);
-> the VOICE_AGENT twins are largely suppressed (only 6 in R3)."
->
-> "Pattern C -- workshop rate deviation — P-KAROSSERIE-SCHNELL
-> (W-0471), 17 estimates, average deviation +38.0% on both hourly
-> and paint rate vs contracted 118.00/96.00 EUR — above the 25%
-> guideline threshold (PC-RATES-2026). 9 of them share identical
-> line_item_text 'PDR roof + bonnet, 62 dents, blend A-pillars,
-> polish complete' (CLM-0913-08401..08409). Claims:
-> CLM-0913-08401 through CLM-0913-08417."
->
-> "EUR at risk — 265695.26 EUR total, basis payment items in run
-> PR-2026-30 across the four flagged ranges: R1 87047.19, R2
-> 47695.26, R3 25523.57, R4 105429.24 (52 items)."
->
-> "Recommendation — HOLD the 58 flagged claims for a specialist
-> and RELEASE the rest. Flagged = distinct claim_ids across A
-> (19), B (22, both claims of each pair), C (17), no overlap =
-> 58. Released = 9650 MOTOR claims minus 58 = 9592. Per CG-FR-5
-> (GDV): 'a single indicator proves nothing, the overall picture
-> decides, a human specialist decides; never delay the honest
-> majority.'"
->
-> "Payment run — PR-2026-30, 52 items totalling 265695.26 EUR.
-> Hold before Friday 16:00: R1 PI-30-03486..PI-30-03503 (18
-> items, CLM-0913-08101..08119); R2 PI-30-03585..PI-30-03595 (11
-> items, CLM-0913-08201..08211); R3 PI-30-03685..PI-30-03690 (6
-> items, CLM-0913-08301..08311); R4 PI-30-01344..PI-30-01360 (17
-> items, CLM-0913-08401..08417)."
-
-**SAY**:
-
-> "Fifty-eight claims in forty-seven cases — nineteen pre-dated
-> photo sets, eleven duplicate-VIN pairs, seventeen over-rate
-> estimates — three patterns, 265,000 euros of payment items —
-> found by correlating the intake store, the core system and the
-> contract folder, in two minutes, days before the payment run.
-> Fifty-two payment items to hold on Friday. And read the
-> sentence the report insists on — it
-> comes straight from the GDV's principle for fraud handling:
-> **a single indicator proves nothing, the overall picture
-> decides, a human specialist decides; never delay the honest
-> majority.** Nine thousand five hundred and ninety-two
-> customers get paid on Friday. Fifty-eight claims get a
-> specialist's eyes."
-
-**DO**: click **Approve** on the fraud panel (its own
-`acmeins/claims/decision/...` event).
-
-**SAY**:
-
-> "Same button, same rule: the agent recommends a hold, it
-> never pays and it never refuses — a named claims lead decides,
-> and the decision is an event. That is the transparency and
-> the human oversight the EU AI Act's Article 50 has required
-> since August — and the way Allianz's own Project Nemo is
-> built: seven agents settle storm small claims in under five
-> minutes, and **no agent may pay out**. We are showing the
-> same principle on an open platform."
-
-## Appendix A — Pre-flight checklist (15 min before going live)
-
-**Automated: run `./preflight.sh`** — it checks every item
-below, applies the fix on failure (install.sh, seed, mongo
-reseed, knowledge reseed, analyst removal, dashboard apply,
-eval pre-run) and ends with READY / NOT READY. The list below
-is the manual reference; only the window setup and the
-break-glass rehearsal remain human steps.
-
-1. Base platform healthy: models probe
-   (`agent-mesh-deployment/scripts/models/apply-models.sh
-   --probe-only`), all pods Running (kyverno, monitoring,
-   sam-solace-lab).
-2. `./install.sh` ran clean; **Agent Management shows NO Storm
-   Intake Analyst**, but the `fnol-intake`, `weather-cells` and
-   `scanner-results` connectors ARE present (pre-provisioned;
-   the live Builder beat only creates the agent binding them),
-   and the `Acme Claims Knowledge` MCP connector is present.
-3. Postgres: `postgres/seed.sh` re-run is idempotent;
-   spot-checks in `acme_insurance`:
-   `SELECT count(*) FROM ins_claims WHERE
-   assigned_partner_id = 'P-BRAENDLE' AND status =
-   'AWAITING_WORKSHOP_SLOT' AND status_since <
-   '2026-07-20 06:00';` -> 412;
-   the same without the time filter -> 640;
-   `SELECT count(*) FROM ins_policies WHERE district =
-   'LUDWIGSBURG' AND product LIKE 'MOTOR%' AND garage_parking
-   = false;` -> 8900.
-4. MongoDB: `docker exec acme-claims-mongo mongosh -u sam_ro -p
-   sam_ro --authenticationDatabase acme_claims acme_claims`
-   count documents: `fnol_intake` >= 10,400 (10,400 claims plus
-   63 repeat contacts), `weather_cells` = 3, `scanner_results`
-   >= 1,000.
-5. Knowledge base:
-   `curl -s localhost:6333/collections/acme_knowledge` reports
-   >= 40 points; `curl -s localhost:8765/health` returns HTTP 200
-   (the MCP server has loaded its embedding model — cold start
-   after a volume wipe takes a minute or two).
-6. Cockpit LED green, in its OWN visible window (not a tab
-   behind the SAM UI — hidden tabs throttle the timers);
-   break-glass buttons tested in rehearsal; then RESET.
-7. Evals pre-run (~15 min): `sam eval run ins-ops-quality`,
-   `sam eval run ins-ops-model-benchmark`.
-8. Windows: A = sam_admin (Agent Management), B = power_user
-   (Activities), C = cockpit, D = Grafana dashboard.
-
-## Appendix B — Extra queries and product stories
-
-- Insurance Query Expert: "HZ-0913 claims by severity and
-  status" (MINOR 6,200 / MODERATE 3,600 / SEVERE 600; CONFIRMED
-  5,900, AWAITING_WORKSHOP_SLOT 2,140, IN_REPAIR 1,530,
-  TOTAL_LOSS_FASTLANE 210, RECEIVED 620). "P-BRAENDLE load vs
-  capacity" (640 assignments vs 120 scans a day). "Motor
-  policies in Ludwigsburg without a garage" (8,900). "Payment
-  run PR-2026-30" (3,900 items, EUR 14,200,000, Friday
-  2026-07-24 16:00; 52 of the items are the fraud report's
-  hold list, EUR 265,695.26 across the four flagged ranges
-  R1..R4).
-- Claims Knowledge Expert: "What does RN-3 say when no partner
-  slot is offered?" (5 working days -> free choice of workshop,
-  discount stays; cites PW-RN-3). "Interim contract options for
-  an inactive partner" (PC-IC-2: 48 h activation under old
-  terms for NatCat events). "Planning conversion in the NatCat
-  playbook" (SP-NATCAT-4: 30% of no-garage vehicles, property
-  18%).
-- Storm Intake Analyst: the three agent-card suggestions —
-  "Total-loss share" (158 of 412, 63 repeat contacts, 4
-  complaints), "Observed conversion" (9,650 / 15,800 = 0.61 vs
-  0.30; HZ-0907 0.28), "Photos before storm" (19 claims,
-  CLM-0913-08101 to 08119, EXIF 7–9 days before the cell).
-- Fast Lane Clerk (chat, fast tier): "Confirm claim
-  CLM-0913-00001" -> three sentences: policy active with hail
-  cover HC-7, the deductible, a drive-in slot proposal at the
-  nearest ACTIVE drive-in in the district — the good case,
-  queryable at any time.
-- Product story, Fast Lane: 6,200 minor claims on the fast tier
-  — the same platform that runs the incident analysis on the
-  premium tier; multi-model by task.
-- Product story, Knowledge: there is no native vector-store
-  connector — the knowledge base sits behind a small MCP server,
-  bound through the same `mcp/remote` connector governance as
-  any external tool (allow lists, optional per-tool human
-  approval).
-
-## Appendix C — Known limits (moderate honestly)
-
-Platform-level limitations (verified on the manufacturing
-build, same platform version): entrypoint promptTemplate renders
-only for AGENT targets, hence the Orchestrator route for the
-three incident paths while the workflows carry the UI story —
-and since runs 4–5 the Orchestrator also MERGES on that route
-(report skeleton inline in the rule; the three reporters merge
-in the workflow variant only, see "Peer wait" below);
-event-triggered runs deliver no structured input keys
-(`{{workflow.input}}` raw); merge agents must have no toolsets.
-
-Insurance-specific: the cockpit timeline is scripted —
-deterministic on purpose; say so if asked ("the data stores are
-real — 10,400 claims in Postgres, 10,463 intake documents in
-MongoDB, the contracts in the knowledge base — the event timing
-is compressed for stage, and the counter animates over 40
-sample events, not 10,400").
-
-**Analyst absent at delegation** (the reason the Hire beat sits
-before the Click): in rehearsal run 1 the click came before the
-analyst existed; the incident report landed at T+5:54 (versus
-T+3:36 with the analyst present) and named the intake section
-as a gap ("intake store not analysed — no analyst available").
-With the hire-first order the signature only appears if the
-click came before the analyst showed Deployed — which is why the
-rule exists. Stage response if it happens anyway: pair the
-report with the analyst's live answer from 2.4 ("the team
-reports what it could not verify; the colleague hired before the
-storm just closed the gap"), and if a complete report must be on
-screen for the CLOSE, press "Fire stalled event now" once the
-analyst is idle — the second report overwrites the panel.
-
-**One analyst, two flows** (the reason the scanner event fires
-at T+8:00): there is ONE Storm Intake Analyst and it serves
-every flow sequentially. In run 3 the scanner event fired at
-T+2:30 while the analyst was still on the stalled cohort; the
-fraud path waited, timed out at the peer and the report
-degraded. The checkbox therefore schedules the scanner event at
-T+8:00 (`CFG.scannerAtS = 480`), after the readiness report;
-the measured fraud run then takes about two minutes with the
-analyst free (run 8: 1:55; run 7: 2:18) and the report waits in
-its panel from ~T+10. Never fire two heavy
-flows at the analyst at once — the break-glass buttons are for
-an idle team.
-
-**Wrong-reporter mis-delegation** (runs 1–2, superseded): the
-Orchestrator delegated the merge to the wrong reporter twice
-(e.g. the Storm Readiness Planner for a stalled cohort) before
-the entrypoint prompt templates named the exact merge agent;
-each detour cost 40–60 s (run 1 readiness: T+9:49 instead of
-T+6:50). Since runs 4–5 the event path has NO reporter hop at
-all — the templates make the Orchestrator merge and write the
-report itself. New signature: ANY reporter in an event-path
-Activities tree means the deployed entrypoint is stale —
-re-apply the overlay (`./install.sh`, idempotent) before the
-next run; on stage, let it finish and budget the minute.
-
-**Peer wait ~30 s of silence** (runs 4–5, the reason the
-Orchestrator merges on the event path): the Orchestrator's peer
-wait times out after roughly 30 s of silence from a peer — tool
-progress counts as activity, pure thinking does not. The
-reporters (a pure LLM merge, no tool progress) sometimes
-exceeded that, and twice they handed the report back as an
-artifact reference («artifact_content:…») that neither the
-event-mesh result nor the cockpit can resolve — the reporter
-hop was the one flaky link in five runs. Hence: on the event
-path the Orchestrator merges itself (report skeleton inline in
-the entrypoint rule), and in Act 2 the analyst — which went
-silent while it thought when rehearsed on the `reasoning` tier
-(«Analyst on the reasoning tier» below) — gets THREE separate
-small requests instead of one combined one. Rule of thumb: keep
-each delegation to a specialist small. Signature: a report that
-arrives as a single interim sentence or as «artifact_content:…»
-in the cockpit panel means a merge hop timed out — re-fire via
-break-glass (next paragraph).
-
-**Interim-sentence report** (the real timeout signature): a
-WARN "peer request timed out" plus "resuming paused task" in the
-logs is NORMAL Orchestrator waiting — the run continues. The
-real failure is a report that arrives as one interim sentence
-("The Storm Intake Analyst timed out. I'll proceed...") or as a
-bare «artifact_content:…» reference in the cockpit panel.
-Remedy: wait until the analyst is idle (window B: its task
-finished), then re-fire the event with the break-glass button
-("Fire stalled event now" / "Fire forecast now" / "Fire scanner
-mismatch now"); the new report overwrites the panel.
-
-**Analyst on the reasoning tier** (rehearsal finding, the
-reason the analyst runs on `general`): rehearsed on the
-`reasoning` alias (DeepSeek V3.2), the analyst drifted on the
-literal aggregation pipelines — counted repeat contacts,
-skipped the MOTOR filter, missed the cohort range — and went
-silent while thinking, which trips the peer wait above. The
-live Builder config has no model field, so the agent lands on
-the platform default `general` (Opus 4.8) — the tier the
-fallback YAML pins as well. The multi-model story stays: clerk
-on `fast`, merge agents on `workflow`, `reasoning` in the model
-benchmark — three tiers live, four model families once the
-benchmark is counted.
-
-**"Math evaluation error" strings in a report**: the planner
-used «math» embeds that the renderer cannot evaluate. Fixed by
-the PLAIN MARKDOWN rule in the three reporters' prompts and in
-the entrypoint templates the Orchestrator now writes from; if a
-string like this reappears it is cosmetic — the numbers around
-it are correct, read them.
-
-**Failing data tools**: `create_sqlite_db`,
-`query_data_with_sql`, `jmespath` and `append_to_artifact`
-fail on this platform (`tool_error` in Activities). Signature:
-an analyst that converts a result into SQLite or JMESPath and
-stalls or loops. The prompts steer away from them — the
-analyst's rule 13 (SPEED RECIPES: one small aggregation per
-question, never convert results, never fetch to count) is the
-reason the total-loss answer takes ~20 s instead of minutes. A
-live-built analyst WITHOUT rule 13 wanders into these tools —
-that is what the Builder prompt's DATA SHAPES / BEHAVIOR RULES
-blocks guarantee; if a Builder run dropped them, break glass
-(`cd fallback && sam config apply` redeploys the reference
-prompt).
-
-**UTF-8 in the cockpit** (fixed): the cockpit decodes the
-solclientjs message attachments as UTF-8; the earlier signature
-was mojibake for umlauts and dashes in the report panels. If it
-reappears after a cockpit edit, check the attachment decoding
-before anything else.
-
-**Hidden-tab throttling**: browsers throttle the timers of a
-hidden tab — the FNOL burst crawls, the cockpit clock lags and
-the scheduled events (T+0:25, T+5:00, T+8:00) drift. Keep the
-cockpit in its own window, visible on stage (pre-flight item 6);
-never run it as a background tab of the SAM UI window.
-
-Builder failure signatures (all observed on the manufacturing
-demo 2026-08-11, and the reason the connectors are
-pre-provisioned so the live build creates ONLY the agent):
-
-- Name normalization: "StormIntakeAnalyst" without spaces,
-  connector "acme-claims-mongodb". The workflows and the
-  Orchestrator prompts reference the EXACT name
-  "Storm Intake Analyst" — in the Review step before deploying,
-  check the name field and correct it, otherwise the intake
-  sections of all three reports name the peer as missing.
-- Connector sub-task hallucination: when the Builder fans
-  connector creation out to parallel sub-tasks, one can claim
-  "MongoDB is not supported (only DynamoDB, Neo4j, Neptune)".
-  It IS supported (`document_db`/`mongodb`, experimental in
-  this build) — the fallback configs prove it. With the
-  agent-only build this path no longer exists.
-- "Couldn't confirm full validation — deploy stays disabled
-  until it succeeds": the deploy gate reflects the LAST
-  validation result. The full validation passes when (a) the
-  three connectors are manifest components with origin:
-  platform / status: deployed AND (b) the agent config declares
-  `connectors` at the APP level, as a sibling of app_config.
-  Inside app_config the schema rejects the field — that
-  one-level difference caused every earlier failure and
-  flip-flop. The prompt mandates the exact structure; full
-  validation is expected GREEN. If the banner still appears:
-  one "rerun validation" in the Builder chat, and if the gate
-  stays red, break glass (`cd fallback && sam config apply`)
-  and continue at 2.4.
-- A long pasted prompt may be attached as a `snippet.txt` file
-  instead of inline text — harmless, the Builder loads it.
-- Connectors-field flip-flop: the cross-component validator
-  demands a connectors declaration, the app_config schema
-  rejects the field INSIDE app_config, and the Builder
-  oscillates between adding and removing it. Root cause
-  resolved: the field belongs at the APP level — the prompt
-  states the exact placement.
-- Toolset loss: one manufacturing run deployed with no runtime
-  tools beyond the connector queries (no artifacts, no charts).
-  Root cause: the tool groups never made it into the agent
-  config. With the prompt's TOOLSETS block (builtin-group
-  entries via `tool_name`, not `group_name`) the tools reach
-  the runtime. CAVEAT: the platform's Toolsets field in Agent
-  Management shows EMPTY either way — judge by the plan card /
-  awe logs, never by that field.
-- **Stale agent card after delete + rebuild** (observed
-  2026-08-12): after the analyst is deleted and rebuilt (exactly
-  the live Builder sequence), the mesh can keep the DELETED
-  instance's agent card; name-based resolution then hits the
-  dead instance — symptom: WARN "multiple agent cards advertise
-  the same display name" in the awe log plus "peer tool
-  unavailable" on the intake node/delegation, while fail_fast
-  keeps the run alive with a noted gap. Fix (~1 min):
-  `kubectl rollout restart deployment
-  agent-mesh-solace-agent-mesh-awe -n sam-solace-lab` — all
-  live agents re-register, stale cards vanish. Worth a
-  pre-flight glance after any rebuild rehearsal.
-
-Knowledge base specifics: the `Acme Claims Knowledge` connector
-is an `mcp/remote` connector pointing at
-`http://host.docker.internal:8765/mcp`; the MCP server embeds
-queries with a local model that is downloaded once into the
-`acme-knowledge-models` volume. After `uninstall.sh` (which
-removes that volume) the first `install.sh` waits for the
-download — budget two extra minutes. If the Knowledge Expert
-answers "tool unavailable", check `curl localhost:8765/health`
-and `docker compose -f qdrant/docker-compose.yaml ps` before
-anything else.
-
-Artifact pass-through: charts rendered by a delegated agent
-(e.g. the analyst's conversion chart) live in THAT agent's
-session; the merge report references them but may not embed
-them, and the final answer says so transparently. Not a bug to
-apologize for on stage — if asked, open the analyst's task in
-Activities and show the chart there ("every artifact is
-session-scoped and auditable").
-
-Demo-clock contract: the fiction lives in July 2026 ("today" =
-Monday 2026-07-20 10:00; the cell on Saturday 2026-07-18; BaFin
-day 20 = 2026-08-08; payment run Friday 2026-07-24). Every
-business timestamp in the cockpit's payloads — `detected_at`,
-`window_start` / `window_end`, `scanned_at`, `reported_at` — is
-that frozen Monday fiction, written as a UTC instant exactly as
-the seeds store it. Only `published_at` carries the real time of
-the click, and only for the broker trace. The agents therefore
-never reconcile two clocks: ages and deadlines are computed
-against the data snapshot pinned in their prompts, never
-against NOW() and never against `detected_at`. If asked: "the
-dataset is a frozen Monday morning and the event stream speaks
-the same clock — the wall clock only rides along in
-`published_at` for the audit trail."
-
-Merge agents may WARN with a pseudo-tool `_continue_generation`
-(observed on the manufacturing Quality Incident Reporter): the
-model tries to continue a long answer via a tool that does not
-exist. NOT fatal — the task completes and the report is
-delivered. Only if a report visibly ends mid-sentence, tighten
-the "under 30 lines" rule in the merge agent's prompt (workflow
-variant) or in the entrypoint template (event path).
-
-The Builder depends on the external LLM gateway
-(lite-llm.mymaas.net): a transient upstream 502 surfaces as
-"The AI provider returned an unexpected HTML response (HTTP
-502)". On stage: retry ONCE, and if it fails again switch to
-the break-glass without commentary —
-`cd fallback && sam config apply` (NEVER `--prune`) creates the
-Storm Intake Analyst + connectors in seconds and the demo
-continues at "Review, deploy, first task".
-
-Regulatory colour is colour, not data: the BaFin 30-day rule,
-the EU AI Act Article 50 transparency and human-oversight
-obligations (in force since 2026-08-02), DORA and the GDV fraud
-principle appear in the SAY blocks and in the knowledge base's
-guideline texts (CG-BAFIN-30, CG-FR-5); Allianz's Project Nemo,
-the 11,000-claim hail event with first-contact triage and the
-"Fastlane Total Loss" are context from public research and
-never appear in Acme's data.
+If the platform log still warns "multiple agent cards advertise the same display
+name" or "peer tool unavailable" (typical after a re-install), restart the
+platform's agent runtime too. That takes every platform agent down for a while:
+never during the demo, only in a break or afterwards.
+
+```
+kubectl rollout restart deployment agent-mesh-solace-agent-mesh-awe -n sam-solace-lab
+```
+
+## Appendix C -- If they ask
+
+Answer in one breath, then offer to show it. Never volunteer anything in
+Appendix E; it is credible when asked for and alarming when offered.
+
+**Where do the credentials live?**
+
+> "The platform holds the connections to the two stores it reads, in its
+> connectors. The database password sits there, not in any prompt, and the
+> agents never see it -- we even test that the database expert refuses to hand
+> it out; that was the third attack in the guardrail report. The outside agent
+> keeps its own database and model credentials in its own runtime. This platform
+> never holds them."
+
+Honest addition if they probe: in this lab the SQL connector uses the database's
+administrative account and the MCP server has no authentication; read-only
+behaviour comes from the agent's instructions and is tested, not enforced by a
+database role. In production the connector gets a read-only role.
+
+**What stops an agent from calling something it should not?**
+
+> "Three things. An agent can only call another agent if its configuration names
+> it -- without that line it has no way to call one at all, and the liaison
+> names exactly one. Roles decide which users may use which agents, connectors
+> and workflows. And every workflow step has a schema its answer must fit. What
+> the outside agent does inside its own runtime stays its owner's business; we
+> govern what crosses the mesh."
+
+Show: tab 3 (the allow list), D4 (the RBAC tables). Honest addition: the
+platform's Orchestrator carries a star.
+
+**What happens when the external agent is down?**
+
+> "The intake step reports that the analyst was unavailable, and the decision
+> agent's first rule turns that into a referral to a human handler, with the
+> reason on the card. The workflow does not crash and nothing is guessed. On the
+> dashboard, the outside agent's traffic panel stops showing received requests."
+
+Show: R4 if it happens live.
+
+**How do you know quality is not drifting?**
+
+> "Three test sets on the three agents that reason: the rulebook agent, the
+> database expert under attack, and the decision agent on the exact inputs the
+> workflow sends it. All passing today. Those agents are on a watchlist, and
+> every run lands as a time series on the dashboard -- so a model swap or a
+> prompt edit is a measured decision."
+
+Honest addition: the tests target agents, not the workflow as a whole -- the
+orchestration is proven by Activities and Tempo -- and runs are started, not
+continuous.
+
+**What does this cost?**
+
+> "The model side is on the dashboard: tokens per agent and per model, and an
+> illustrative cost figure -- list prices times tokens. The outside agent's
+> tokens are not in it; that bill stays with its owner. The platform itself is a
+> commercial conversation, and I would like to take that offline with you."
+
+**Is the second customer a fraudster?**
+
+> "We do not know, and neither does the agent. It found two indicators. Its own
+> guideline says a single indicator proves nothing, the overall picture decides,
+> and a specialist decides. One claim waits for a person; the honest majority is
+> not delayed."
+
+**Will this work with our agents on Azure, AWS or Databricks?**
+
+> "The agent you saw is built with our Python SDK, which takes care of the
+> broker and the agent card. Hosted next to Databricks or on Azure, the same
+> agent changes only its database and model settings. An agent on another
+> framework has to join the mesh the same way -- publish a card and answer
+> requests over the broker. Which of yours is closest to that is the first thing
+> we would look at together."
+
+**What does the platform not see of the external agent?**
+
+> "Its internal tool calls, its tokens and its prompt. It sees its card, every
+> request and answer that crosses the mesh, who called, and how long it took."
+
+**Why a liaison? Why not call the external agent from the workflow directly?**
+
+> "In this version a workflow step has to run on a platform agent. So one
+> platform agent holds the contract and makes the call -- which also gives you
+> exactly one place where that permission is written down."
+
+**Who is the approver? Is that a real login?**
+
+> "In this demo the approver is a fixed name in the cockpit page. In your claims
+> system it would be the person who is signed in."
+
+**What are the other discovered agents on that list?**
+
+> "Agents from other work on the same lab mesh, discovered the same way. None of
+> the four claims agents may call them -- no allow list names them."
+
+**Why does the evaluation list show a weaker run, and more experiments?**
+
+> "That run is from before we changed the scorer. A word-overlap score marked
+> correct decisions down for phrasing them differently; the judge scored the
+> same decisions as correct. We changed how we measure, not the agent. The other
+> experiments belong to a broader version of this demo."
+
+**How long do you keep the audit trail?**
+
+> "In this lab: traces for two days, logs and metrics for seven. In production
+> that is your retention policy."
+
+**Why does it take half a minute?**
+
+> "Four agents think, three of them at the same time. The longest path is the
+> intake hop plus the decision -- and the outside agent itself is only about
+> five seconds of that."
+
+**Can we change the model?**
+
+> "Yes, behind the tier. Every agent binds to an alias, so switching the model
+> is a change on the Models page, not in the agents. We would run the same tests
+> against the new model first."
+
+**Does this make us compliant (EU AI Act, BaFin, GDV)?**
+
+> "It gives an auditor the building blocks: named human decisions, a traceable
+> hop for every call, tested guardrails. Whether your setup is compliant is your
+> compliance team's call -- and this is the evidence we would bring to that
+> conversation."
+
+## Appendix D -- Numbers you may say
+
+Every figure below is measured or seeded. Anything not on this list, do not say.
+
+| Fact | Value | Say it as |
+| --- | --- | --- |
+| The storm | Hail cell HZ-0913, Saturday 2026-07-18, 18:40, Landkreis Boeblingen | "twenty to seven on a Saturday evening" |
+| Claims after the cell | 10,400 | "ten thousand four hundred" |
+| Run time, event to decision | measured 2026-09-16: 00002 26.8 s, 00001 27.7 s, 08103 30.6 s (later 31.1 s and 32.6 s), 08891 32.7 s, preflight dry fire 27 s | "about half a minute"; exact only as printed on the card |
+| Node budget, typical run | policy 13 s, intake 19 s (outside agent 5 s), rules 9 s, decision 12 s; critical path intake plus decision | "the outside agent is about five seconds" |
+| Claim 1, CLM-0913-00001 | Lena Hartmann, VW Golf, app, 16 dents roof and bonnet, no glass damage, drivable, EUR 640, POL-104211 ACTIVE, HC-7, deductible EUR 300, RN-3, Sindelfingen, photos 7 min after the cell start | APPROVE / FAST_LANE, drive-in slot at P-BRAENDLE |
+| Claim 2, CLM-0913-08103 | Ben Meier, Skoda Octavia, drive-in scanner, 60 dents claimed, EUR 6,800, reserve EUR 7,800, MOTOR_PARTIAL, deductible EUR 150, no RN-3; photos 7.3 days before the cell; scanner 14 vs 60 (76.7 percent) | HOLD / SPECIAL_INVESTIGATIONS, specialist within ten working days |
+| Contracts | policy 22 fields, intake 12, rules 5, decision 14 | "every step has a schema" |
+| Postgres acme_insurance | 68,700 policies, 51,525 customers, 10,400 claims, 1,600 workshop estimates, 3,900 payment items, 9 repair partners | system of record, native SQL connector |
+| Qdrant acme_knowledge | 52 passages, 384 dimensions, cosine; 16 claims guidelines, 14 partner contracts, 12 policy wordings, 10 storm playbooks | the rulebook, behind an MCP server |
+| MongoDB acme_claims | fnol_intake 10,463 (app 4,160, voice agent 2,663, workshop portal 1,560, drive-in scanner 1,040, agency email 1,040), scanner_results 1,040, weather_cells 3 | raw intake, only the outside agent reaches it |
+| Clauses that appear | CG-FL-1, PW-HC-7, PW-RN-3, PW-DED-1, PW-EXCL-1, CG-SC-1, CG-FR-5, CG-BAFIN-30, CG-HOLD-1, PW-TL-1, CG-TL-2 | read them from the card |
+| Models | four platform agents on `fast` (Claude Haiku 4.5), Orchestrator on `general`, outside agent on its own Haiku 4.5 | "a tier, not an endpoint" |
+| Evaluations | ins-claims-rules 10/10 (5 questions, Factuality + Closed QA), ins-guardrails 6/6 (3 attacks, Security + LLM Judge), ins-triage-decision 6/6 (3 decisions, LLM Judge + Closed QA); watchlist of 3 agents | "ten of ten, six of six, six of six" |
+| Dashboard | sam-claims-governance, folder SAM, 34 panels | "I showed you four" |
+| Lab retention | Tempo 48 h, Loki 7 days, Prometheus 7 days | "traces two days, logs seven" |
+
+Never say: a single run's seconds as a promise, the cost value, the number of
+model aliases, the Registered agents value.
+
+## Appendix E -- Known limits (moderate honestly)
+
+### Visible on stage
+
+- **One card at a time.** The cockpit has a single decision area; firing claim 2
+  replaces claim 1's card. The event stream keeps both, which is why the close
+  points at the stream and then at slide 2.
+- **The stepper is decoration.** Its steps pulse on fixed CSS delays. The card
+  and the clock come from the payloads and the click.
+- **Platform hops in Tempo are runtime ids.** Spans read `.../request/agent_<id>
+  receive`; only the outside agent's hop reads by name (`ClaimsIntakeAnalyst`),
+  because its card name is its address.
+- **The outside agent is not counted.** It is not in the Registered agents stat,
+  the token and cost panels, or the platform database. The platform sees its
+  card, every A2A hop with user identity and latency (Activities, Tempo, Loki),
+  and the pod's plain-text log (row 3). Do not promise more.
+- **Leftover MongoDB connectors.** An extended install creates fnol-intake,
+  scanner-results and weather-cells. `install.sh` removes them for this profile
+  -- the claim that only the outside agent reads the intake store has to survive
+  a click on the Connectors page -- but `preflight.sh` does not flag them if
+  something puts them back (A6).
+- **Evaluations list more than three experiments.** ins-ops-quality and
+  ins-ops-model-benchmark belong to the extended profile, and an early
+  ins-triage-decision run scored with Response Match (1 of 3, average 0.515) can
+  sit in Reports. The experiment now uses LLM Judge plus Closed QA: Response
+  Match punished correct JSON decisions for their wording.
+- **The Models page lists more aliases** than the demo uses. Point at `fast`;
+  never count them.
+- **Other discovered agents** of the shared lab mesh can appear in Agent
+  Management (A7).
+- **The approver is a fixed name** in the cockpit
+  (`claims.lead@acme-insurance`), not a login.
+- **The SQL connector uses the database's administrative account** in this lab
+  and the MCP server has no authentication. Read-only behaviour is instructed
+  and tested (ins-guardrails), not enforced by a database role.
+- **The entrypoint's target reads as a runtime id** (see the event-to-workflow
+  bugs below).
+- **CLM-0913-08891 is not a stage claim.** Its system-of-record data (Ford
+  Focus, Herrenberg, app) and its intake record (a different vehicle, channel
+  and town) were not seeded as a matching pair, so the card can show a vehicle
+  mismatch and a lower confidence. Its measured 32.7 s run stands; keep it off
+  stage until the intake seed is pinned.
+- **Junk characters in a reason.** The live contract note of partner P-DELLENDOC
+  still contains an em dash (the seed file is corrected; the database keeps it
+  until Postgres is re-seeded), and non-ASCII characters can arrive mangled in
+  the cockpit. If a line on the card shows three junk characters, read around
+  them.
+- **Hidden-window throttling.** The T+ clock runs on browser timers; keep the
+  cockpit in its own visible window.
+
+### Platform and build (2.225.14)
+
+- **Two platform bugs on the event-to-workflow path** (verified 2026-09-10): an
+  entrypoint `promptTemplate` renders only for agent targets, so a workflow
+  target gets an empty message; and the gateway publishes to
+  `.../request/<workflow name>` while the runtime listens on
+  `.../request/workflow_<id>`. Workaround in `install.sh`: the entrypoint is
+  rendered from `triage/entrypoints/claims-triage.yaml.template` after the
+  workflow exists, targeting the runtime name, with `inputExpression:
+  "input.payload"`. Consequences: the runtime name changes per install (re-run
+  `install.sh`, never hand-edit `.rendered/`), and receivers come up 20 to 40 s
+  after a deploy -- events published before that are lost.
+- **Node input templates render only whole-string expressions.** First-level
+  nodes carry only an `instruction:` and receive the raw event; the decision
+  node needs an explicit `input:` map. Do not "improve" the YAML.
+- **External v1 agents cannot be workflow nodes.** The CLI rejects the
+  reference, and via the REST API the v1 handler never answers the v2 engine. A
+  platform agent has to carry the hop -- hence the liaison.
+- **Peer delegation comes from one key**, `interAgentCommunication.allowList` in
+  `additionalConfigurations`. Without it an agent has no delegation tool at all;
+  the Orchestrator carries `["*"]`. Routing the hop through the Orchestrator
+  also works but adds Opus-tier overhead to the critical path.
+- **Never tell a schema-bound node agent how to format its answer.** The
+  platform injects its own structured-output instruction; a "JSON only"
+  instruction makes the node output null. Node instructions describe content
+  only.
+- **The liaison must call no tool except its peer tool.** Given the chance, a
+  fast-tier agent patches its answer with artifact tools and corrupts it into
+  "intake unavailable". The ban sits in the prompt and in the node instruction;
+  do not soften either.
+- **The decision is an LLM output validated against a schema.** A node that
+  violates its schema ends with a null output (no retry; the workflow still
+  reports completed), and the decision agent turns a missing section into REFER
+  / HANDLER with the reason. `fail_fast` is off on purpose so this stays visible
+  instead of fatal.
+- **No RBAC "denied" log lines.** Grants and denials log at DEBUG only; the
+  dashboard shows auth failures and capability-widening blocks instead.
+- **Evaluations target agents, not workflows.** ins-triage-decision feeds the
+  decision agent the workflow's exact fan-in; the orchestration itself is proven
+  by Activities and Tempo. One LLM-judge call takes around 40 s; two measured
+  ins-triage-decision runs took 102 s and 117 s.
+- **A bare `sam eval run` answers 401** even with a valid CLI login: the token
+  has to be exported first.
+
+```
+bash                              # from the demo directory
+./demo-links.sh >/dev/null        # refreshes the CLI token
+. ../agent-mesh-deployment/scripts/lib/common.sh
+load_env ../agent-mesh-deployment && resolve_sam_cli && sam_auth_token
+"$SAM_CLI" eval run ins-triage-decision \
+  --url https://sam.solace.lab --threshold 0.8
+```
+
+- **`install.sh` redeploys the two experts on every run.** Their skill binding
+  never converges in 2.225.14, so `sam config plan` in `core/` always reports
+  both as an update. `preflight.sh` reinstalls only when a resource is missing.
+  Never re-install close to the show; never show `sam config plan` on stage.
+- **Profiles are mutually exclusive.** Both entrypoints subscribe to
+  `acmeins/claims/fnol/received/...`. Switch with `./uninstall.sh --keep-core`,
+  then `./install.sh --extended`; never on show day. The other profile's script
+  is `talk-track-extended.md`.
+- **The outside agent's cluster prerequisites.** Its Deployment needs the
+  namespace `sam-solace-lab-agents` and the Secret `sam-shared-secret` (broker,
+  model endpoint and key), both from the companion solace-sam-artifacts
+  repository. `install.sh` stops with a message when either is missing; if they
+  disappear later, the pod stops working and every card lands as REFER / intake
+  unavailable.
+- **Stale agent card after delete and rebuild.** The mesh can keep a dead
+  instance's card after a re-install; fix in Appendix B.
+- **Retention.** Tempo 48 h, Loki 7 days, Prometheus 7 days.
+- **Demo clock.** The data is a frozen Monday 2026-07-20 10:00 UTC; node
+  instructions pin that instant. "Days before the cell" is computed against the
+  cell start in the event, never against the wall clock; only `published_at` and
+  `approved_at` carry real time.
+- **Regulatory colour is colour, not data.** CG-FR-5 and CG-BAFIN-30 live inside
+  Acme's fictional rulebook; answer compliance questions with Appendix C, never
+  with a claim of compliance.
+
+## Appendix F -- Why the script runs in this order
+
+For whoever edits this next. The script follows the narrative review's spine:
+the first claim fires before minute two, every explanation covers a running
+clock, the roster becomes wait-window material, and the live evaluation run is
+gone. Deliberate deviations:
+
+- **Slides.** The frame opens on slide 3 instead of the cockpit alone: it
+  asserts "one agent is outside" before the roster shows it. Slide 2 closes
+  because the cockpit keeps one card, and the close needs both outcomes side by
+  side. Slide 1 (the generic lifecycle vision) is not shown: it invites "so you
+  want us to build here".
+- **Window B stays a separate browser profile.** Activities is per user; tabs of
+  one profile share one login, so power_user cannot be a tab of the sam_admin
+  window.
+- **"Its own namespace", not "its own cluster".** The outside agent runs in the
+  same Kubernetes cluster, in `sam-solace-lab-agents`.
+- **No "read-only service accounts" line.** The lab's SQL connector does not use
+  one (Appendix E).
+- **CLM-0913-08891 left the optional depth.** Its intake record does not match
+  its system-of-record data.
+- **The run time is read off the card**, never recited: it moves by a few
+  seconds between runs.

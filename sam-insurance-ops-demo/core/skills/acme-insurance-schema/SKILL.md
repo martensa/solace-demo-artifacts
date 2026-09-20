@@ -127,8 +127,9 @@ Boeblingen). The data snapshot is Mon 2026-07-20 10:00 -- that is
    the partner's contracted rates.
 8. Cross-store: intake documents (narratives, photos with EXIF
    timestamps, damage signals, repeat contacts, voice transcripts),
-   drive-in scanner results and weather cells live in MongoDB
-   (Storm Intake Analyst). Policy wordings (HC-7, RN-3, TL-1),
+   drive-in scanner results and weather cells live in MongoDB,
+   read only by the claims intake agent (the external Claims Intake
+   Analyst in the governance demo). Policy wordings (HC-7, RN-3, TL-1),
    claims guidelines, partner contracts and storm playbooks live in
    the knowledge base (Acme Claims Knowledge Expert). No cross-store
    JOINs; correlate via claim_id, partner_id and document ids at

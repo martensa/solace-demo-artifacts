@@ -1,0 +1,33 @@
+# THE LIVE STAGE RUN (talk-track beat 5, started at ~4:30, ~75 s):
+# 3 rows x 2 evaluators on the fast-tier merge agent. Each row is
+# the exact fan-in the workflow's decision node sends (claim_event,
+# policy, intake, rules, with the current 22 / 12 / 5-field section
+# contracts); the agent takes about as long as the decision node
+# does in the workflow (12 s measured 2026-09-16), the LLM Judge
+# call takes ~40 s, Response Match is instant -> one wave of 3
+# workers finishes in roughly 75 s. Workflows cannot be experiment
+# targets in 2.225.14, so the decision node is exercised through
+# its agent. Apply AFTER the triage overlay: the target agent must
+# exist on the platform before this experiment can be created.
+kind: experiment
+name: ins-triage-decision
+description: >-
+  Decision quality of the Claims Triage Decision agent on the three
+  reference fan-ins of the claim-triage workflow: the clean claim
+  (APPROVE / FAST_LANE), the claim with pre-dated photos and a
+  scanner mismatch (HOLD / SPECIAL_INVESTIGATIONS) and a total-loss
+  signature (APPROVE / TOTAL_LOSS_FASTLANE). LLM Judge is primary;
+  Closed QA is the second opinion. NOT Response Match: the answer is
+  a JSON decision, and a heuristic word-overlap score punishes the
+  agent for phrasing a correct verdict differently (measured: LLM
+  Judge 3/3 Excellent, Response Match 1/3, so the report read 67 per
+  cent on three correct decisions).
+spec:
+  datasetId: ins-triage-decisions
+  targetAgent: Claims Triage Decision
+  evaluatorIds:
+    - LLM Judge
+    - Closed QA
+  primaryEvaluatorId: LLM Judge
+  runsPerExample: 1
+  maxWorkers: 3

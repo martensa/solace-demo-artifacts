@@ -1,0 +1,25 @@
+# TEMPLATE -- rendered by install.sh into ../.rendered/manifest.yaml
+# next to ../.rendered/entrypoints/claims-triage.yaml (the CLI
+# resolves resources.entrypoints[] as entrypoints/<name>.yaml
+# relative to the manifest, so install.sh must create that
+# subdirectory). Kept apart from ../manifest.yaml because the
+# entrypoint can only be rendered once the claim-triage workflow
+# exists (its rule needs the workflow's runtime name -- see
+# claims-triage.yaml.template). Applied with
+# `sam config apply -m .rendered/manifest.yaml` from ../ (or plain
+# `sam config apply` inside .rendered/).
+# NEVER pass --prune.
+kind: manifest
+name: ins-triage-entrypoint
+description: >-
+  Rendered companion of the ins-triage-demo manifest: the
+  claims-triage event-mesh entrypoint bound to the runtime name of
+  the claim-triage workflow.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  entrypoints:
+    - claims-triage

@@ -1,0 +1,25 @@
+# Knowledge regression for the rules node of the claim-triage
+# workflow. Workflows cannot be experiment targets in 2.225.14, so
+# the node agents are tested one by one; this one covers the Acme
+# Claims Knowledge Expert (Qdrant via MCP). Factuality checks doc
+# ids, thresholds and decisive sentences against the expected
+# answers; Closed QA checks the answer stays inside the question.
+# Timing: 5 rows x 2 judge calls at ~40 s each, judged in waves of
+# ~4 -> about 2-3 minutes. Pre-run in preflight, shown as a report.
+kind: experiment
+name: ins-claims-rules
+description: >-
+  Rules regression for the claim-triage workflow: does the Acme
+  Claims Knowledge Expert quote the right clause, doc id and
+  threshold (Fast Lane, HC-7, RN-3, TL-1, CG-FR-5, BaFin 30 days,
+  P-DELLENDOC) from the knowledge base? Judged by Factuality plus
+  Closed QA against verified expected answers.
+spec:
+  datasetId: ins-claims-rules
+  targetAgent: Acme Claims Knowledge Expert
+  evaluatorIds:
+    - Factuality
+    - Closed QA
+  primaryEvaluatorId: Factuality
+  runsPerExample: 1
+  maxWorkers: 2

@@ -18,3 +18,6 @@ terraform.tfvars
 
 # Python
 __pycache__/
+
+# Demo overlays: manifests rendered by install.sh
+sam-insurance-ops-demo/triage/.rendered/

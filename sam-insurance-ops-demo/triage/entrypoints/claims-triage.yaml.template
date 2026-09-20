@@ -1,0 +1,90 @@
+# TEMPLATE -- not applied as is. install.sh renders it into
+# ../.rendered/entrypoints/claims-triage.yaml (git-ignored) AFTER
+# the claim-triage workflow exists and applies ../.rendered/ as a
+# one-resource manifest (see manifest.yaml.template next to it).
+#
+# Why a template: two platform bugs of SAM 2.225.14 on the
+# event-mesh entrypoint -> WORKFLOW target (verified 2026-09-10,
+# build spec section 0 / 0.1):
+#   (a) promptTemplate renders only for AGENT targets; a workflow
+#       target receives an EMPTY message (DATAGO-148462).
+#       Workaround: inputExpression "input.payload" passes the JSON
+#       payload through -- the workflow input becomes
+#       {"text": "<payload JSON, keys sorted>"}. promptTemplate
+#       stays because the schema requires it; it is ignored for
+#       workflow targets.
+#   (b) the gateway publishes the request to
+#       .../a2a/v1/agent/request/<workflow NAME>, but the workflow
+#       runtime listens on .../request/workflow_<id, '-' as '_'>
+#       -> the task is never picked up (deferred-ACK timeout,
+#       redelivery). Workaround: targetWorkflowName carries the
+#       RUNTIME name; the CLI plan and the API accept it. That name
+#       is only known after the workflow has been created, hence
+#       the placeholder __WORKFLOW_RUNTIME__ (install.sh: GET
+#       /api/v1/platform/workflows, name claim-triage, id with '-'
+#       replaced by '_', prefixed with 'workflow_').
+# Fallback if the direct path ever breaks: targetAgent Orchestrator
+# with a promptTemplate that delegates to the claim-triage workflow.
+#
+# Receivers come up ~20-40 s after the deploy (gwe log "persistent
+# receiver started"); events published before that are LOST (no
+# queue yet) -- install.sh waits for the log line.
+#
+# Mutually exclusive with ../../mesh/entrypoints/claims-events.yaml
+# (the extended profile): both subscribe to acmeins/claims/fnol/
+# received and one FNOL must trigger exactly one flow; install.sh
+# removes the other entrypoint when switching profiles.
+#
+# The broker connection mirrors the SAM deployment values
+# (external broker solace-1, VPN sam). qos 1 + on_completion: the
+# event is acknowledged only after the workflow finished
+# (redelivery on crash); timeoutSeconds = workflow_timeout.
+kind: entrypoint
+name: claims-triage
+description: >-
+  Event-mesh entrypoint of the claim triage demo: every FNOL event
+  on acmeins/claims/fnol/received/> starts the claim-triage
+  workflow and publishes its decision back onto the mesh, where
+  the cockpit and tools/fire-claim.js pick it up.
+spec:
+  type: event_mesh
+  deploy: true
+  values:
+    broker_url: "ws://host.docker.internal:8008"
+    broker_vpn: sam
+    broker_username: default
+    broker_password: default
+    tls_skip_verify: "false"
+    event_rules:
+      - name: fnol_received
+        subscriptions:
+          - topic: "acmeins/claims/fnol/received/>"
+            qos: 1
+        messageFormat: json
+        # RUNTIME name of the claim-triage workflow (bug b above);
+        # rendered by install.sh, e.g.
+        # workflow_01a08a04_b3cc_7bd6_b516_b2a9766eaff8
+        targetWorkflowName: __WORKFLOW_RUNTIME__
+        # Pass the JSON payload through as the workflow input
+        # (bug a above): the workflow sees {"text": "<payload>"}.
+        inputExpression: "input.payload"
+        # Required by the schema; ignored for workflow targets.
+        promptTemplate: "{payload}"
+        # Attribute event-triggered runs to the power_user persona:
+        # without an identity the task runs under the bare gateway
+        # identity and is INVISIBLE in Activities.
+        defaultUserIdentity: power_user@solace.lab
+        acknowledgmentPolicy:
+          mode: on_completion
+          timeoutSeconds: 180
+        successOutput:
+          enabled: true
+          topic: "acmeins/claims/result/triage"
+          topicType: static
+          # full = the A2A task JSON: status.state, a data part with
+          # the workflow output object, metadata.duration_seconds.
+          responseType: full
+        errorOutput:
+          enabled: true
+          topic: "acmeins/claims/result/error"
+          topicType: static

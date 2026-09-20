@@ -31,6 +31,13 @@ variables:
   # apply time, e.g. INS_DB_PASSWORD=secret ./install.sh
   INS_DB_USERNAME: "postgres"
   INS_DB_PASSWORD: "postgres"
+  # Model tier of the two experts. `fast` (Haiku 4.5) for the
+  # default triage profile: the claim-triage workflow needs its
+  # policy and rules nodes back within ~12 s, and the benchmark
+  # experiment shows fast matching the general tier on the demo
+  # questions. install.sh --extended exports INS_EXPERT_TIER=general
+  # (Opus 4.8) for the long-form analyses of the extended profile.
+  INS_EXPERT_TIER: "fast"
 resources:
   connectors:
     - Acme Insurance DB

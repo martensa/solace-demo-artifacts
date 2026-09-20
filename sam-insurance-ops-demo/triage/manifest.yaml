@@ -1,0 +1,41 @@
+# Triage overlay of the Acme Insurance demo (the DEFAULT profile
+# of ../install.sh; the old event-driven acts live in ../mesh as
+# the --extended profile). Two platform agents and the claim-triage
+# workflow of the "Claim Triage in 30 Seconds" story. Applied with
+# `sam config apply` from this directory AFTER ../core: the
+# workflow nodes reference the two core experts and the CLI
+# xref-validates every node agent against the platform.
+#
+# The claims-triage ENTRYPOINT is deliberately NOT listed here. Its
+# rule must carry the workflow's RUNTIME name
+# (workflow_<id with - replaced by _>) instead of "claim-triage" --
+# a 2.225.14 platform bug, see entrypoints/claims-triage.yaml.
+# template -- and that id only exists once this manifest has
+# created the workflow. install.sh therefore applies this manifest
+# first, reads the workflow id, renders entrypoints/*.template into
+# .rendered/ (git-ignored) and applies .rendered/ as a second,
+# one-resource manifest.
+#
+# NEVER pass --prune: the platform hosts resources this manifest
+# does not manage (Orchestrator, developer-mcp, the core package,
+# the extended profile's mesh/ overlay, other demos ...).
+kind: manifest
+name: ins-triage-demo
+description: >-
+  Claim triage overlay: the Claims Intake Liaison (the one agent
+  allowed to reach the external Claims Intake Analyst), the Claims
+  Triage Decision merge agent and the claim-triage workflow (policy,
+  intake and rules fan-out, schema-bound decision fan-in).
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  agents:
+    - Claims Intake Liaison
+    - Claims Triage Decision
+  workflows:
+    - claim-triage
+  # entrypoints: rendered from entrypoints/*.template by install.sh
+  # into .rendered/ (see header) -- never listed here.

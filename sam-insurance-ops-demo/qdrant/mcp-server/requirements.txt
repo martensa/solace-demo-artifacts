@@ -1,15 +1,21 @@
 # Acme Claims Knowledge MCP server + seed job (python 3.12).
-# mcp: official python SDK. >=1.10 resolves to 2.x on a fresh build;
-#      server.py supports both majors (2.x renamed FastMCP to
-#      MCPServer and moved host/port to run()).
-mcp[cli]>=1.10
+# Pinned EXACTLY to the versions verified end to end on 2026-09-16
+# (the running acme-knowledge-mcp container). install.sh BUILDS this
+# image on every fresh machine, so an unpinned dependency could break
+# the Acme Claims Knowledge connector on the morning of a customer
+# session. Bump deliberately, rebuild, re-run ./preflight.sh.
+#
+# mcp: official python SDK. server.py keeps a 1.x/2.x shim (2.x
+#      renamed FastMCP to MCPServer and moved host/port to run()) as a
+#      safety net, but the pin is what we rely on.
+mcp[cli]==2.2.0
 # qdrant-client: query_points / upsert / scroll (1.10+ API). Pinned
 # next to the server image (qdrant/qdrant:v1.15.4 in
 # ../docker-compose.yaml): the client warns "client version X is
 # incompatible with server version 1.15.4" when its minor version is
 # more than one ahead. server.py and seed.py additionally pass
 # check_compatibility=False, so the check never fires either way.
-qdrant-client>=1.15,<1.17
+qdrant-client==1.16.2
 # fastembed: TextEmbedding BAAI/bge-small-en-v1.5 (384 dims, ONNX)
-fastembed>=0.5
-pyyaml
+fastembed==0.8.0
+pyyaml==6.0.3

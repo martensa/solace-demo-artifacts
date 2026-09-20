@@ -1,0 +1,345 @@
+# Claims Intake Analyst -- the ONE agent of the demo that runs
+# OUTSIDE the SAM platform: a SAM v1 Python-SDK app (image
+# solace-agent-mesh-enterprise 1.97.2, plugin sam_mongodb 0.1.0)
+# that joins the mesh over the broker only. The platform discovers
+# its agent card (Agent Management shows it as type "discovered")
+# and reaches it through the platform agent Claims Intake Liaison,
+# the only agent whose interAgentCommunication.allowList names it
+# (peer delegation from the workflow's intake node); it is never a
+# workflow node itself.
+# v1 SDK caveats: it cannot parse v2 agent cards, hence
+# agent_discovery disabled and an empty allow_list (leaf agent).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: sam-solace-lab-agents
+  name: sam-claims-intake-agent-config
+  labels:
+    app: sam-claims-intake-agent
+    tier: external-agents
+    demo: sam-insurance-ops
+data:
+  claims_intake_agent.yaml: |
+    log:
+      stdout_log_level: INFO
+      log_file_level: DEBUG
+      log_file: claims_intake_agent.log
+
+    apps:
+      - name: claims_intake_agent_app
+        app_base_path: .
+        app_module: solace_agent_mesh.agent.sac.app
+        broker:
+          dev_mode: ${SOLACE_DEV_MODE, false}
+          broker_url: ${SOLACE_BROKER_URL, ws://localhost:8080}
+          broker_username: ${SOLACE_BROKER_USERNAME, default}
+          broker_password: ${SOLACE_BROKER_PASSWORD, default}
+          broker_vpn: ${SOLACE_BROKER_VPN, default}
+          temporary_queue: ${USE_TEMPORARY_QUEUES, true}
+        app_config:
+          namespace: ${NAMESPACE}
+          supports_streaming: true
+          agent_name: "ClaimsIntakeAnalyst"
+          display_name: "Claims Intake Analyst"
+
+          # ------------------------------------------------------
+          # LLM: its OWN model (LLM_SERVICE_GENERAL_MODEL_NAME from
+          # the agent secret, Haiku 4.5), endpoint and key from the
+          # shared secret. Low temperature: the pipelines are
+          # literal and the answer is a JSON contract.
+          # ------------------------------------------------------
+          model:
+            model: "${LLM_SERVICE_GENERAL_MODEL_NAME}"
+            api_base: "${LLM_SERVICE_ENDPOINT}"
+            api_key: "${LLM_SERVICE_API_KEY}"
+            timeout: 120
+            temperature: 0.1
+            num_retries: 3
+
+          # One lookup pipeline + final answer = 2 LLM round trips;
+          # 6 leaves room for a pipeline fix and a retry.
+          max_llm_calls_per_task: 6
+
+          # ------------------------------------------------------
+          # sam_mongodb plugin lifecycle: one connection to the
+          # acme_claims store (read-only user), schema summary
+          # auto-detected at start-up and injected into the system
+          # instruction; results up to 60 rows come back inline.
+          # ------------------------------------------------------
+          agent_init_function:
+            module: "sam_mongodb.lifecycle"
+            name: "initialize_mongo_agent"
+            config:
+              db_host: "${MONGO_HOST}"
+              db_port: ${MONGO_PORT}
+              db_user: "${MONGO_USER}"
+              db_password: "${MONGO_PASSWORD}"
+              db_name: "${MONGO_DB}"
+              query_timeout: 30
+              database_purpose: >-
+                Claims intake store of Acme Insurance for hail event
+                HZ-0913: the raw first-notice-of-loss reality behind
+                the claim rows of the acme_insurance database.
+              data_description: >-
+                fnol_intake: one document per intake message (claim_id,
+                event_id, line, channel, received_at, vehicle{vin, model,
+                garage_parking}, location, narrative, photos[{photo_id,
+                exif_taken_at, gps, dent_count_est, image_hash}],
+                damage_signals{glass_shattered, roof_deformed,
+                dent_count_est, drivable}, severity_est,
+                is_repeat_contact, complaint_flag, voice_transcript,
+                workshop_estimate_text). scanner_results: one document
+                per drive-in scan (claim_id, partner_id, scanned_at,
+                dent_count_claimed, dent_count_scanned, panels,
+                estimate_eur, scanner_estimate_eur, mismatch_flag,
+                mismatch_ratio, note). weather_cells: one document per
+                hail cell (cell_id, status, start, end, district,
+                hail_size_cm, warning_level, exposure figures). All
+                timestamps are BSON dates.
+              # The instruction below carries the field lists, so the
+              # start-up schema summary (fields plus 5 sample values per
+              # field, per collection) is pure prompt weight on every
+              # request -- it cost about 4 s per triage run.
+              auto_detect_schema: false
+              max_inline_results: 60
+          agent_cleanup_function:
+            module: "sam_mongodb.lifecycle"
+            name: "cleanup_mongo_agent_resources"
+
+          # ------------------------------------------------------
+          # Agent instruction -- compact per-claim version of the
+          # Storm Intake Analyst prompt (fallback/agents/). The
+          # plugin prepends its own MongoDB expert preamble plus the
+          # detected schema.
+          # ------------------------------------------------------
+          instruction: |
+            You are the Claims Intake Analyst of Acme Insurance. You
+            run OUTSIDE the Solace Agent Mesh platform (own runtime,
+            own model) and are reached over the event mesh by the
+            platform's Claims Intake Liaison, the one platform agent
+            allowed to call you. Your data source is the
+            MongoDB database acme_claims -- the raw intake reality
+            behind the claim rows of acme_insurance. Your job is
+            PER-CLAIM lookups: the intake facts of ONE claim (damage
+            signals, photo EXIF times against the hail cell start,
+            the drive-in scanner comparison, duplicate VINs across
+            channels, repeat contacts). Cohort statistics are not
+            your job; claim status and partner assignment are not in
+            your store (they live in acme_insurance).
+
+            Collections and tools (the field lists describe the
+            seeded data; when the schema reported at start-up
+            differs, the tool schema wins):
+            - fnol_intake (tool fnol_intake_query) -- one document
+              per intake message: claim_id, event_id (HZ-0913), line
+              (MOTOR|PROPERTY), channel (APP|VOICE_AGENT|
+              WORKSHOP_PORTAL|DRIVE_IN_SCANNER|AGENCY_EMAIL),
+              received_at, customer_ref, vehicle{vin, model,
+              garage_parking}, location{postal_code, city},
+              narrative, photos[{photo_id, exif_taken_at, gps,
+              dent_count_est, image_hash}], damage_signals{
+              glass_shattered, roof_deformed, dent_count_est,
+              drivable}, severity_est, is_repeat_contact,
+              complaint_flag, voice_transcript (VOICE_AGENT only),
+              workshop_estimate_text (when an estimate was attached).
+              A document with is_repeat_contact true is a SECOND
+              message for an existing claim_id ("called twice"),
+              never a new claim.
+            - scanner_results (tool scanner_results_query) -- one
+              document per drive-in scan: claim_id, partner_id,
+              scanned_at, dent_count_claimed, dent_count_scanned,
+              panels, estimate_eur, scanner_estimate_eur (only when a
+              workshop estimate is on file as well), mismatch_flag,
+              mismatch_ratio, note.
+            - weather_cells (tool weather_cells_query) -- one
+              document per hail cell: cell_id, status (OBSERVED|
+              FORECAST), start, end, district, hail_size_cm,
+              warning_level, exposure figures. Cell HZ-0913 started
+              2026-07-18T18:40:00Z.
+
+            Rules:
+            1. Query ONLY with aggregation pipelines through the
+               three tools (one collection each; pipeline_str is a
+               JSON array). Always $match on claim_id or vehicle.vin
+               first; never dump a collection, never fetch more than
+               50 documents, never count by fetching rows -- use
+               $count or $group. One tool call per pipeline, no
+               exploratory queries, no schema probing.
+            2. Timestamps are BSON dates: a plain string never
+               matches them. Compare dates with expressions and
+               $dateFromString, e.g. {"$lt": ["$photos.exif_taken_at",
+               {"$dateFromString": {"dateString":
+               "2026-07-18T18:40:00Z"}}]} inside $expr or $project.
+               The data is a frozen snapshot as of Monday 2026-07-20
+               10:00 UTC; never use the wall clock for ages.
+            3. Whenever a $match can return several claims (VIN
+               lookups, cohorts) add "is_repeat_contact": {"$ne":
+               true} so a repeat-contact document does not double
+               count a claim. When you look up ONE claim by claim_id,
+               match the claim_id only and treat the extra document
+               with is_repeat_contact true as its repeat contact.
+            4. Per-claim lookup -- ONE tool call on
+               claim_intake_facts_query, whose pipeline is exactly:
+               [{"$match": {"claim_id": "<claim_id>"}}]
+               That view joins the drive-in scan, the other claims on
+               the same VIN, the repeat contacts and the hail cell of
+               the claim, and it already computes photos_before_cell
+               and days_before_cell against that cell's start. Never
+               rebuild those joins by hand, never call a second tool
+               for a per-claim request, never add stages to that
+               pipeline. (The raw collections stay available through
+               fnol_intake_query, scanner_results_query and
+               weather_cells_query for anything the view does not
+               answer.)
+               Then answer with the INTAKE JSON CONTRACT -- exactly
+               these 12 fields and no other, taken from the returned
+               document (all "" / 0 / false / [] when the view
+               returned nothing, with intake_found false):
+               {"intake_found": bool, "dent_count_est": int,
+               "glass_shattered": bool, "roof_deformed": bool,
+               "drivable": bool, "photos_before_cell": bool,
+               "repeat_contact": bool, "complaint_flag": bool,
+               "scanner_mismatch": bool, "duplicate_vin_claims":
+               [str], "indicators": [str], "summary": str}.
+               The view's other fields (days_before_cell,
+               dent_count_scanned, dent_count_claimed,
+               earliest_photo_at, channel, model, narrative) do not
+               go in the contract -- they belong in
+               the indicator strings and the summary, where a human
+               reads them.
+               indicators = one human-readable string per finding that
+               is present -- photos before the cell ("3 photos taken
+               7.3 days before the hail cell"), scanner mismatch
+               ("scanner counted 14 dents against 60 claimed"),
+               duplicate VIN ("same VIN also reported as CLM-..."),
+               repeat contact with complaint -- and an EMPTY array
+               when the claim is clean. summary = 1-2 sentences with
+               the key intake facts (channel, model, dents,
+               glass/roof, photo timing, scan).
+            5. Indicators are INDICATORS, never conclusions: a photo
+               taken before the cell start (compare exif_taken_at
+               with the cell start), a scanner count that deviates
+               by more than 50 percent from the count claimed
+               (mismatch_flag), the same VIN under two claim_ids in
+               two channels, a repeat contact with a complaint. A
+               single indicator proves nothing, the overall picture
+               decides, a human specialist decides. Report the facts
+               (counts, dates, days before the cell, claim_ids) and
+               never call a claim fraud.
+            6. Answer format: for a per-claim request answer with ONLY
+               the intake JSON contract of rule 4: the first character
+               of the answer is "{" and the last is "}" -- no prose
+               before or after, no markdown fences, no artifact
+               references, no embed directives; use "" / 0 / false /
+               [] for unknown values, never null. For any other
+               question answer in short plain sentences with the
+               numbers, no tables, no artifacts. ASCII only: write
+               "EUR 1,190", never the euro sign.
+            7. If a tool returns an error, fix the pipeline once and
+               retry; if the store is unreachable, say so in one
+               sentence (under a JSON contract: intake_found false
+               and the reason in summary). Never invent documents.
+
+          # ------------------------------------------------------
+          # Tools: the plugin's mongo_query function bound three
+          # times, one collection each (distinct tool_name, own
+          # tool_config). mongo_query saves every result as an
+          # artifact -> the artifact_management group provides the
+          # service it needs.
+          # ------------------------------------------------------
+          tools:
+            - tool_type: python
+              component_module: "sam_mongodb.search_query"
+              function_name: "mongo_query"
+              tool_name: "claim_intake_facts_query"
+              tool_description: >-
+                Per-claim intake facts of ONE claim, joined in the
+                database: damage signals, photo EXIF timing against the
+                hail cell start, the drive-in scan, other claims on the
+                same VIN, repeat contacts. Pipeline is normally just
+                [{"$match": {"claim_id": "CLM-..."}}].
+              tool_config:
+                collection: "claim_intake_facts"
+            - tool_type: python
+              component_module: "sam_mongodb.search_query"
+              function_name: "mongo_query"
+              tool_name: "fnol_intake_query"
+              tool_description: >-
+                Run an aggregation pipeline (JSON array string) on
+                the fnol_intake collection: FNOL intake messages with
+                narrative, photos (EXIF), damage signals, vehicle VIN
+                and model, repeat-contact and complaint flags.
+              tool_config:
+                collection: "fnol_intake"
+            - tool_type: python
+              component_module: "sam_mongodb.search_query"
+              function_name: "mongo_query"
+              tool_name: "scanner_results_query"
+              tool_description: >-
+                Run an aggregation pipeline (JSON array string) on
+                the scanner_results collection: drive-in scans with
+                dents claimed vs scanned, estimate and mismatch flag.
+              tool_config:
+                collection: "scanner_results"
+            - tool_type: python
+              component_module: "sam_mongodb.search_query"
+              function_name: "mongo_query"
+              tool_name: "weather_cells_query"
+              tool_description: >-
+                Run an aggregation pipeline (JSON array string) on
+                the weather_cells collection: observed and forecast
+                hail cells with start, end, district and exposure.
+              tool_config:
+                collection: "weather_cells"
+            # NOTE: no artifact_management group on purpose. mongo_query
+            # writes its result artifact through the artifact_service
+            # configured below, not through LLM-visible tools, and the 12
+            # extra tool declarations only slowed the per-claim turn.
+
+          # Per-request sessions: every triage request is
+          # independent; nothing must leak between claims.
+          session_service:
+            type: "memory"
+            default_behavior: "RUN_BASED"
+          artifact_service:
+            type: ${ARTIFACT_SERVICE_TYPE, s3}
+            bucket_name: ${S3_BUCKET_NAME}
+            endpoint_url: ${S3_ENDPOINT_URL}
+            aws_region: ${AWS_REGION, us-east-1}
+            artifact_scope: namespace
+          artifact_handling_mode: reference
+          enable_embed_resolution: ${ENABLE_EMBED_RESOLUTION, true}
+
+          # ------------------------------------------------------
+          # Agent card (published to the mesh; the platform lists
+          # it as a discovered agent). Text only: a file output
+          # would be an artifact reference the caller cannot pass.
+          # ------------------------------------------------------
+          agent_card:
+            description: >-
+              Runs OUTSIDE the SAM platform (own runtime, own model)
+              and reads Acme's claims intake store (MongoDB
+              acme_claims: fnol_intake, scanner_results,
+              weather_cells). Per-claim intake facts: damage signals,
+              photo EXIF vs hail cell start, scanner comparison,
+              duplicate VIN, repeat contacts.
+            defaultInputModes: ["text"]
+            defaultOutputModes: ["text"]
+            skills:
+              - id: "analyze_claim_intake"
+                name: "Analyze claim intake"
+                description: >-
+                  Per-claim intake analysis with literal aggregation
+                  pipelines: damage signals and narrative, photo EXIF
+                  timestamps against the hail cell start, drive-in
+                  scanner result vs the dents claimed, other claims on
+                  the same VIN, repeat contacts and complaint flags --
+                  answered as the requested JSON contract.
+          agent_card_publishing:
+            interval_seconds: 10
+          # v1 SDK cannot parse v2 cards -> no discovery, no peers.
+          agent_discovery:
+            enabled: false
+          inter_agent_communication:
+            allow_list: []
+            request_timeout_seconds: 60

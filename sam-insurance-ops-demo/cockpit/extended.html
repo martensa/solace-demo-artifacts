@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Acme Insurance — Claims Cockpit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./solclient.js"></script>
+<style>
+  :root {
+    --bg: #0d1420; --panel: #16202f; --card: #1b2839;
+    --text: #e8eef5; --muted: #8aa0b5; --accent: #00c895;
+    --amber: #fca829; --red: #ff5d6c; --navy: #0a3b5e; --blue: #4fa3ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text);
+         font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 14px;
+           padding: 18px 28px; background: var(--panel);
+           border-bottom: 2px solid var(--accent); }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  #clock { margin-left: auto; font: 700 18px ui-monospace, monospace;
+           color: var(--muted); letter-spacing: .04em; }
+  #clock.run { color: var(--accent); }
+  #led { width: 12px; height: 12px; border-radius: 50%;
+         background: var(--red); margin-left: 18px;
+         box-shadow: 0 0 8px var(--red); transition: all .3s; }
+  #led.on { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  #ledlabel { font-size: 12px; color: var(--muted); }
+  main { max-width: 1180px; margin: 22px auto; padding: 0 20px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;
+         margin-bottom: 16px; }
+  .row.reports { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .card { background: var(--card); border-radius: 12px; padding: 16px 18px;
+          border: 1px solid #263a52; }
+  .card h3 { font-size: 14px; margin-bottom: 8px; }
+  .card .sub { color: var(--muted); font-size: 12px; }
+  .chip { font-size: 10.5px; padding: 2px 10px; border-radius: 10px;
+          background: #24405e; color: #bcd6ee; float: right; }
+  .chip.run  { background: #0e3b2c; color: var(--accent); }
+  .chip.warn { background: #4a3620; color: var(--amber); }
+  .chip.fail { background: #4a2028; color: var(--red); }
+  /* storm banner: the ONE on-stage click */
+  #storm { grid-column: 1 / -1; display: flex; align-items: center;
+           gap: 20px; border-color: #3a5a80;
+           background: linear-gradient(90deg, #1b2839 0%, #14314d 100%); }
+  #storm .info { flex: 1; }
+  #storm label { font-size: 12px; color: var(--muted); white-space: nowrap;
+                 display: flex; align-items: center; gap: 6px; }
+  button { padding: 12px 18px; border: 0; border-radius: 8px;
+           background: var(--accent); color: #06281e; font-weight: 700;
+           cursor: pointer; font-size: 14px; }
+  button:hover { filter: brightness(1.12); }
+  button:disabled { background: #33475d; color: #7b8ea1; cursor: default; }
+  /* FNOL volume counter + channel breakdown */
+  #volume { grid-column: 1 / 3; }
+  #fnolcount { font-size: 42px; font-weight: 700; line-height: 1.1;
+               font-variant-numeric: tabular-nums; }
+  #fnolcount small { font-size: 13px; color: var(--muted); font-weight: 400; }
+  .bars { margin-top: 10px; display: grid; grid-template-columns: 150px 1fr 64px;
+          gap: 4px 10px; align-items: center; font-size: 12px; }
+  .bars .l { color: var(--muted); }
+  .bars .n { text-align: right; font-variant-numeric: tabular-nums; }
+  .bars .b { height: 10px; border-radius: 5px; background: #101a28;
+             overflow: hidden; }
+  .bars .b i { display: block; height: 100%; width: 0; background: var(--blue);
+               border-radius: 5px; transition: width .25s linear; }
+  #sevline { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  #sevline b { color: var(--text); }
+  /* fast lane list + report panels */
+  .list { margin-top: 8px; max-height: 260px; overflow: auto; }
+  .fl { padding: 8px 10px; border-left: 3px solid var(--accent);
+        background: #101a28; border-radius: 6px; margin-bottom: 6px;
+        font-size: 12.5px; animation: pop .25s ease; }
+  .fl .when { color: var(--muted); font-size: 11px; font-family:
+              ui-monospace, monospace; }
+  .report { margin-top: 8px; max-height: 420px; overflow: auto;
+            background: #101a28; border-radius: 8px; padding: 10px 12px;
+            font-size: 12.5px; line-height: 1.45; color: #d8e4ee; }
+  .report .empty { color: #5c7288; font-style: italic; }
+  .report h1, .report h2, .report h3, .report h4 { margin: 8px 0 4px; }
+  .report h1 { font-size: 15px; } .report h2 { font-size: 14px; }
+  .report h3, .report h4 { font-size: 13px; }
+  .report p { margin: 4px 0; }
+  .report ul, .report ol { margin: 4px 0 4px 18px; }
+  .report table { border-collapse: collapse; margin: 6px 0; font-size: 12px; }
+  .report th, .report td { border: 1px solid #263a52; padding: 2px 8px;
+                           text-align: left; }
+  .report th { background: #16202f; }
+  .report code { background: #16202f; padding: 0 4px; border-radius: 3px; }
+  .report pre { white-space: pre-wrap; background: #16202f; padding: 6px;
+                border-radius: 6px; }
+  .report hr { border: 0; border-top: 1px solid #263a52; margin: 6px 0; }
+  .approve { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .approve button { font-size: 12px; padding: 8px 14px; }
+  .flash { font-size: 12px; color: var(--accent); opacity: 0;
+           transition: opacity .3s; }
+  .flash.on { opacity: 1; }
+  #log { margin-top: 20px; background: var(--panel); border-radius: 12px;
+         padding: 16px 18px; }
+  #log h2 { font-size: 13px; color: var(--muted); text-transform: uppercase;
+            letter-spacing: .08em; margin-bottom: 10px; }
+  .evt { padding: 10px 12px; border-left: 3px solid var(--accent);
+         background: #101a28; border-radius: 6px; margin-bottom: 8px;
+         font-size: 13px; animation: pop .25s ease; }
+  .evt.fail { border-color: var(--red); }
+  .evt.warn { border-color: var(--amber); }
+  .evt.result { border-color: var(--amber); }
+  .evt.decision { border-color: var(--blue); }
+  .evt .topic { color: var(--muted); font-size: 11px; word-break: break-all; }
+  .evt pre { white-space: pre-wrap; word-break: break-word; color: #cfe3d9;
+             font-size: 12px; margin-top: 4px; max-height: 220px; overflow: auto; }
+  #burstline { font-size: 11.5px; color: var(--muted); margin-top: 8px;
+               font-family: ui-monospace, monospace; }
+  footer { max-width: 1180px; margin: 10px auto 30px; padding: 0 20px;
+           display: flex; gap: 10px; align-items: center; }
+  footer button { background: #24405e; color: #bcd6ee; font-size: 11px;
+                  padding: 6px 10px; font-weight: 400; }
+  @keyframes pop { from { transform: translateY(-4px); opacity: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <div style="font-size:28px">⛈️</div>
+  <div>
+    <h1>Acme Insurance — Claims Cockpit</h1>
+    <div class="sub">Claims events publish directly onto the Solace Event Mesh
+      (VPN <b>sam</b>) &rarr; Event-Mesh-Entrypoint &rarr; SAM agents</div>
+  </div>
+  <div id="clock">T+00:00</div>
+  <div id="led"></div><div id="ledlabel">connecting…</div>
+</header>
+<main>
+  <div class="row">
+    <div class="card" id="storm">
+      <div style="font-size:34px">🌩️</div>
+      <div class="info">
+        <h3>Hail cell HZ-0913 — Landkreis Boeblingen</h3>
+        <div class="sub">Sat 2026-07-18 18:40 · 3.5 cm hail · warning level 3 ·
+          Boeblingen, Sindelfingen, Herrenberg, Leonberg, Weil der Stadt,
+          Schoenaich, Holzgerlingen, Gaertringen &nbsp;|&nbsp; 31,600 motor
+          policies in the track, 15,800 parked without garage</div>
+      </div>
+      <label><input type="checkbox" id="chk-fraud"> Include fraud act</label>
+      <button id="btn-storm">Hail cell HZ-0913 hits Landkreis Boeblingen (Sat 18:40)</button>
+    </div>
+
+    <div class="card" id="volume">
+      <span class="chip" id="vol-chip">IDLE</span>
+      <h3>📥 First notices of loss — HZ-0913</h3>
+      <div class="sub">FNOL intake Sat 18:40 &rarr; Mon 10:00 · all channels ·
+        motor + property</div>
+      <div id="fnolcount">0<small> claims</small></div>
+      <div class="bars" id="bars"></div>
+      <div id="sevline">MINOR <b id="sev-minor">0</b> · MODERATE
+        <b id="sev-moderate">0</b> · SEVERE <b id="sev-severe">0</b></div>
+    </div>
+
+    <div class="card" id="p-fastlane">
+      <span class="chip" id="fl-chip">IDLE</span>
+      <h3>⚡ Fast Lane — clerk confirmations</h3>
+      <div class="sub">MINOR claims (estimate &lt; EUR 1,000) auto-confirmed
+        by the Fast Lane Clerk (fast tier)</div>
+      <div class="list" id="fl-list"></div>
+      <div class="approve">
+        <button id="ap-fastlane" disabled>Approve</button>
+        <span class="flash" id="fx-fastlane">approval published</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row reports">
+    <div class="card" id="p-incident">
+      <span class="chip" id="inc-chip">IDLE</span>
+      <h3>🛠️ Stalled Cohort Report</h3>
+      <div class="sub">AWAITING_WORKSHOP_SLOT &gt; 4 h · P-BRAENDLE · React</div>
+      <div class="report" id="rep-incident"><span class="empty">waiting for
+        the triage-stalled event…</span></div>
+      <div class="approve">
+        <button id="ap-incident" disabled>Approve</button>
+        <span class="flash" id="fx-incident">approval published</span>
+      </div>
+    </div>
+
+    <div class="card" id="p-readiness">
+      <span class="chip" id="rdy-chip">IDLE</span>
+      <h3>🛰️ Storm Readiness Recommendation</h3>
+      <div class="sub">Forecast cell HZ-0914 · Landkreis Ludwigsburg · Prevent</div>
+      <div class="report" id="rep-readiness"><span class="empty">waiting for
+        the forecast threshold event…</span></div>
+      <div class="approve">
+        <button id="ap-readiness" disabled>Approve</button>
+        <span class="flash" id="fx-readiness">approval published</span>
+      </div>
+    </div>
+
+    <div class="card" id="p-fraud" hidden>
+      <span class="chip" id="frd-chip">IDLE</span>
+      <h3>🔍 Fraud &amp; Leakage Report</h3>
+      <div class="sub">Scanner mismatch CLM-0913-08103 · cross-channel patterns ·
+        Act 2</div>
+      <div class="report" id="rep-fraud"><span class="empty">waiting for the
+        scanner-mismatch event…</span></div>
+      <div class="approve">
+        <button id="ap-fraud" disabled>Approve</button>
+        <span class="flash" id="fx-fraud">approval published</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="log">
+    <h2>Event stream (published / received)</h2>
+    <div id="burstline">intake: waiting for the hail cell…</div>
+    <div id="events"></div>
+  </div>
+</main>
+<footer>
+  <span class="sub" style="font-size:11px;color:#5c7288">break-glass:</span>
+  <button id="bg-stalled">Fire stalled event now</button>
+  <button id="bg-forecast">Fire forecast now</button>
+  <button id="bg-scanner">Fire scanner mismatch now</button>
+  <button id="bg-reset">Reset</button>
+</footer>
+<script>
+"use strict";
+/* Scripted claims-operations timeline (see ../talk-track.md):
+   T+0        storm click -> ONE cell-observed event (PERSISTENT),
+              then a burst of 40 sample FNOL events over ~20 s:
+              8 MINOR on .../fnol/received/minor/... (PERSISTENT ->
+              Fast Lane Clerk, confirmations stream back), 32
+              MODERATE/SEVERE on their severity topics (DIRECT, no
+              consumer) while the counter climbs 0 -> 10,400 with
+              the channel breakdown
+   T+25s      ONE triage-stalled business event (PERSISTENT) ->
+              Stalled Cohort Report (React)
+   T+480s     ONE scanner-mismatch event (PERSISTENT) -> Fraud &
+              Leakage Report (Act 2, only with the checkbox; ticking
+              it after the click arms the event for the same instant,
+              or at once when T+480 s has passed; after the
+              readiness report so the one Storm Intake Analyst never
+              serves two heavy flows at once)
+   T+300s     ONE forecast threshold-crossed event (PERSISTENT) ->
+              Storm Readiness Recommendation (Prevent)
+   Determinism beats realism on stage: the timings are fixed.
+   DEMO CLOCK CONTRACT: every business timestamp in the payloads is
+   the FICTION clock, written as a UTC 'Z' instant exactly like the
+   seeds store it (Sat 18:40 = 2026-07-18T18:40:00Z) -- the data's
+   "now" is Mon 2026-07-20 10:00 (preflight.sh, the SQL seed) and the
+   agents compute ages and deadlines against THAT demo clock, never
+   NOW() and never detected_at. Every payload additionally carries
+   published_at = the real wall clock, for the broker trace only. */
+const CFG = {
+  burstEvents: 40,          // sample FNOLs published on stage
+  burstMinor: 8,            // of which MINOR -> Fast Lane Clerk
+  burstDurationS: 20,       // burst window (one event every 500 ms)
+  counterTarget: 10400,     // the Monday 10:00 FNOL count (LAW)
+  stalledAtS: 25,           // React
+  scannerAtS: 480,          // Act 2 (only with the fraud checkbox);
+                            // AFTER the readiness report: the one
+                            // Storm Intake Analyst must never serve
+                            // two heavy flows at once (rehearsed:
+                            // at T+150 it timed out for the fraud
+                            // path while still on the stalled cohort)
+  forecastAtS: 300,         // Prevent
+};
+const T = {
+  observed: "acmeins/weather/cell/observed/HZ-0913/BOEBLINGEN",
+  fnol: (sev, ch, id) => `acmeins/claims/fnol/received/${sev}/${ch}/${id}`,
+  stalled: "acmeins/claims/triage/stalled/HZ-0913/BOEBLINGEN/P-BRAENDLE",
+  forecast: "acmeins/weather/cell/forecast/threshold-crossed/HZ-0914/LUDWIGSBURG",
+  scanner: "acmeins/claims/scanner/mismatch/P-BRAENDLE/CLM-0913-08103",
+  decision: (kind, id) => `acmeins/claims/decision/${kind}/${id}`,
+  results: "acmeins/claims/result/>",
+  resultPrefix: "acmeins/claims/result/",
+};
+/* Story numbers (section 1 of the build spec) -- the counter lands
+   EXACTLY on these. */
+const CHANNELS = [
+  ["APP", 4160], ["VOICE_AGENT", 2600], ["WORKSHOP_PORTAL", 1560],
+  ["DRIVE_IN_SCANNER", 1040], ["AGENCY_EMAIL", 1040],
+];
+const SEVERITY = { minor: 6200, moderate: 3600, severe: 600 };
+/* The 8 MINOR sample claims = the MINOR SAMPLE ANCHOR, a cross-
+   component contract shared by postgres/sql/01-acme_insurance.sql,
+   mongodb/seed/02-anchors.js and this file: CLM-0913-00001..00008,
+   all MINOR, status RECEIVED, line MOTOR, event HZ-0913, district
+   BOEBLINGEN, hail cover HC-7 = true, no garage, MOTOR_COMPREHENSIVE,
+   status_since = reported_at. The clerk's lookup must agree with the
+   event it received, so policy_id / channel / estimate / postal code
+   / city / reported_at below are the anchor values VERBATIM (the
+   reported_at instants are UTC 'Z', exactly as the seeds store them).
+   For the operator, the rest of the anchor (not in the payload):
+     00001 Lena Hartmann    VW Golf        deductible 300  RN-3 yes
+     00002 Jonas Keller     Skoda Octavia  deductible 150  RN-3 no
+     00003 Miriam Schaefer  BMW 3 Series   deductible 500  RN-3 yes
+     00004 Tobias Wagner    Opel Corsa     deductible 150  RN-3 yes
+     00005 Selin Aydin      Audi A4        deductible 300  RN-3 no
+     00006 Markus Brandt    Ford Focus     deductible 300  RN-3 yes
+     00007 Anna Fischer     Toyota Yaris   deductible 150  RN-3 yes
+     00008 Daniel Roth      Fiat 500       deductible 500  RN-3 no */
+const MINOR = [
+  { id: "CLM-0913-00001", pol: "POL-104211", ch: "APP", est: 640,
+    plz: "71063", city: "Sindelfingen", at: "2026-07-18T19:12:00Z" },
+  { id: "CLM-0913-00002", pol: "POL-118902", ch: "VOICE_AGENT", est: 420,
+    plz: "71032", city: "Boeblingen", at: "2026-07-18T19:40:00Z" },
+  { id: "CLM-0913-00003", pol: "POL-121377", ch: "APP", est: 890,
+    plz: "71083", city: "Herrenberg", at: "2026-07-18T20:05:00Z" },
+  { id: "CLM-0913-00004", pol: "POL-109654", ch: "AGENCY_EMAIL", est: 310,
+    plz: "71229", city: "Leonberg", at: "2026-07-19T08:15:00Z" },
+  { id: "CLM-0913-00005", pol: "POL-133018", ch: "APP", est: 760,
+    plz: "71065", city: "Sindelfingen", at: "2026-07-19T09:02:00Z" },
+  { id: "CLM-0913-00006", pol: "POL-115486", ch: "AGENCY_EMAIL", est: 540,
+    plz: "71034", city: "Boeblingen", at: "2026-07-19T10:48:00Z" },
+  { id: "CLM-0913-00007", pol: "POL-127730", ch: "APP", est: 950,
+    plz: "71093", city: "Weil der Stadt", at: "2026-07-19T15:30:00Z" },
+  { id: "CLM-0913-00008", pol: "POL-112245", ch: "VOICE_AGENT", est: 180,
+    plz: "71032", city: "Boeblingen", at: "2026-07-20T07:55:00Z" },
+];
+/* The other 32 sample FNOLs are deterministic (no consumer, DIRECT):
+   24 MODERATE motor (CLM-0913-08891..), 6 SEVERE motor (09581..) and
+   2 MODERATE property (10341..) -- all from the RECEIVED ranges of
+   the SQL claim-id layout, with the SQL's policy / channel / address
+   rules (CHANNEL RULE + POLICY LAYOUT in the seed header) so the
+   event stream agrees with ins_claims.fnol_channel and the policy
+   address in Postgres. The estimates are illustrative (NULL in
+   Postgres for non-MINOR RECEIVED claims). */
+/* Postal code -> city as in the seeds (mongodb/seed/01-init.js
+   BB_PLACES and the SQL geo rows; 71093 = Weil der Stadt is pinned
+   by the MINOR SAMPLE ANCHOR). */
+const GEO_BB = [["71032", "Boeblingen"], ["71034", "Boeblingen"],
+  ["71063", "Sindelfingen"], ["71065", "Sindelfingen"],
+  ["71067", "Sindelfingen"], ["71069", "Sindelfingen"],
+  ["71083", "Herrenberg"], ["71093", "Weil der Stadt"],
+  ["71101", "Schoenaich"], ["71229", "Leonberg"],
+  ["71263", "Weil der Stadt"], ["71272", "Leonberg"],
+  ["71277", "Leonberg"], ["71287", "Weil der Stadt"],
+  ["71296", "Holzgerlingen"], ["71297", "Gaertringen"]];
+/* SQL CHANNEL RULE for the "other motor" claims with c >= 8418:
+   m = ((c - 510) * 2731) mod 9140, then these upper bounds. */
+const CH_BY_SCATTER = [[3631, "APP"], [5810, "VOICE_AGENT"],
+  [7353, "WORKSHOP_PORTAL"], [8392, "DRIVE_IN_SCANNER"], [9140, "AGENCY_EMAIL"]];
+/* Fiction timestamps for the bulk samples: a fixed instant per sample,
+   minutes after the FNOL window opened (Sat 2026-07-18 18:50), as a
+   UTC 'Z' instant like the seeds. Sample i gets 18:50 + i * 73 min,
+   so the 32 bulk samples span Sat 18:50 .. Mon 08:33 -- inside the
+   contract window 2026-07-18T18:50:00Z .. 2026-07-20T09:55:00Z. */
+function fictionAt(minutes) {
+  const t = 18 * 60 + 50 + minutes, day = Math.floor(t / 1440), m = t % 1440;
+  return `2026-07-${18 + day}T${String(Math.floor(m / 60)).padStart(2, "0")}:` +
+    `${String(m % 60).padStart(2, "0")}:00Z`;
+}
+function bulkSample(i) {
+  const severe = i % 5 === 4, property = i % 14 === 13;
+  const nSevere = Math.floor(i / 5), nProperty = Math.floor(i / 14);
+  const c = property ? 10341 + nProperty : severe ? 9581 + nSevere
+    : 8891 + i - nSevere - nProperty;
+  // policy, channel and address exactly as the SQL seed derives them
+  // (every bulk motor id is >= 8418, so the scatter offset is 510)
+  const p = property ? 31600 + ((c - 9651) * 7919) % 1900 + 1
+    : (c * 7919) % 15800 + 1;
+  const scatter = ((c - 510) * 2731) % 9140, pm = ((c - 9650) * 7) % 750;
+  const ch = property
+    ? (pm < 300 ? "APP" : pm < 550 ? "VOICE_AGENT" : "AGENCY_EMAIL")
+    : CH_BY_SCATTER.find(([lim]) => scatter < lim)[1];
+  const [plz, city] = GEO_BB[(p - (p % 4 === 0 ? 1 : 0)) % 16];
+  return {
+    id: "CLM-0913-" + String(c).padStart(5, "0"),
+    pol: "POL-" + String(p).padStart(6, "0"),
+    ch, sev: severe ? "SEVERE" : "MODERATE",
+    line: property ? "PROPERTY" : "MOTOR",
+    est: severe ? 6500 + (i * 971) % 7500 : 1200 + (i * 613) % 3600,
+    plz, city, at: fictionAt(i * 73),
+  };
+}
+/* Approve buttons: decision events for the audience / broker trace
+   (nobody in SAM consumes them). */
+const DECISIONS = {
+  fastlane: { id: "HZ-0913", action: "Release the MINOR auto-confirmations " +
+    "of the Fast Lane (policy + HC-7 + deductible checked by the clerk)" },
+  incident: { id: "HZ-0913", action: "Move the 158 total-loss claims to the " +
+    "Fastlane (P-ROADASSIST pick-up + remote valuation), reactivate " +
+    "P-DELLENDOC under interim contract IC-2, extend P-BRAENDLE to two " +
+    "shifts -- cohort clears in 4 days instead of 11" },
+  readiness: { id: "HZ-0914", action: "Dispatch 3 mobile scanner units from " +
+    "the Stuttgart hub and release the warning SMS to the 8,900 no-garage " +
+    "customers now; rental pre-booking (P-RENTAFLEET) and Total Loss " +
+    "Fastlane pre-stage (P-ROADASSIST) armed" },
+  fraud: { id: "HZ-0913", action: "Hold the 58 flagged claims (47 cases) " +
+    "for a fraud specialist and their PR-2026-30 payment items before " +
+    "Friday 16:00; release the other 9,592" },
+};
+const RESULT_PANEL = { incident: "incident", readiness: "readiness", fraud: "fraud" };
+
+let session = null, connected = false;
+let running = false, t0 = 0, timers = [], scannerTimer = null;
+let stalledFired = false, forecastFired = false, scannerFired = false;
+let burstIdx = 0, minorIdx = 0, bulkIdx = 0, minorPublished = 0;
+let confirmations = 0, approved = {};
+let landed = {};   // panel -> true once its report arrived
+
+const $ = (s) => document.querySelector(s);
+const elapsedS = () => (Date.now() - t0) / 1000;
+const fmt = (n) => Math.round(n).toLocaleString("en-US");
+const clock = (s) => "T+" + String(Math.floor(s / 60)).padStart(2, "0") +
+  ":" + String(Math.floor(s % 60)).padStart(2, "0");
+/* Real wall clock: published_at on every event (broker trace) and
+   decided_at on the decision events -- never a business timestamp. */
+const now = () => new Date().toISOString();
+/* The demo clock: the data's "now" (Mon 2026-07-20 10:00, the same
+   instant preflight.sh spot-checks the 412 cohort against), stored as
+   a UTC 'Z' instant like the seeds. Goes out as detected_at; the
+   agents age the cohort against the demo clock pinned in their
+   prompts, never NOW() and never detected_at. */
+const DEMO_NOW = "2026-07-20T10:00:00Z";
+
+function logEvent(cls, topic, body) {
+  const div = document.createElement("div");
+  div.className = "evt " + cls;
+  div.innerHTML = `<div class="topic">${topic}</div><pre></pre>`;
+  div.querySelector("pre").textContent =
+    typeof body === "string" ? body : JSON.stringify(body, null, 1);
+  $("#events").prepend(div);
+  while ($("#events").children.length > 40) $("#events").lastChild.remove();
+}
+
+function publish(topic, payload, persistent) {
+  if (!connected) { logEvent("fail", "—", "Broker not connected"); return false; }
+  const msg = solace.SolclientFactory.createMessage();
+  msg.setDestination(solace.SolclientFactory.createTopicDestination(topic));
+  msg.setBinaryAttachment(JSON.stringify(payload));
+  msg.setDeliveryMode(persistent
+    ? solace.MessageDeliveryModeType.PERSISTENT
+    : solace.MessageDeliveryModeType.DIRECT);
+  try { session.send(msg); return true; }
+  catch (e) { logEvent("fail", topic, "Publish error: " + e.message); return false; }
+}
+
+function setChip(id, text, cls) {
+  $("#" + id).textContent = text; $("#" + id).className = "chip " + (cls || "");
+}
+
+/* ---------- business events (the three movements + act 2) ---------- */
+function fireStalled(force) {
+  if (stalledFired && !force) return; stalledFired = true;
+  setChip("inc-chip", "ANALYSING", "warn");
+  // never overwrite a report that already landed (re-fires, ordering)
+  if (!landed.incident) $("#rep-incident").innerHTML = '<span class="empty">stalled event published ' +
+    '&mdash; Insurance DB, Knowledge and Intake specialists are working, ' +
+    'the Orchestrator merges their findings&hellip; (report lands here)</span>';
+  const payload = {
+    event_type: "triage_stalled", event_id: "HZ-0913", district: "BOEBLINGEN",
+    status: "AWAITING_WORKSHOP_SLOT", threshold_hours: 4, cohort_size: 412,
+    partner_id: "P-BRAENDLE", detected_at: DEMO_NOW, published_at: now(),
+  };
+  if (publish(T.stalled, payload, true)) logEvent("warn", "➡ " + T.stalled, payload);
+}
+
+function fireForecast(force) {
+  if (forecastFired && !force) return; forecastFired = true;
+  setChip("rdy-chip", "PLANNING", "warn");
+  if (!landed.readiness) $("#rep-readiness").innerHTML = '<span class="empty">forecast event published ' +
+    '&mdash; observed conversion, exposure, capacity and the NatCat playbook ' +
+    'are being gathered, the Orchestrator merges them&hellip;</span>';
+  const payload = {
+    event_type: "forecast_threshold_crossed", cell_id: "HZ-0914",
+    district: "LUDWIGSBURG",
+    // = the HZ-0914 forecast document in mongodb/seed/02-anchors.js
+    window_start: "2026-07-21T16:00:00Z",
+    window_end: "2026-07-21T19:00:00Z",
+    hail_size_cm_forecast: 3.0, warning_level: 3,
+    exposure_vehicles_no_garage: 8900, exposure_property: 2300,
+    published_at: now(),
+  };
+  if (publish(T.forecast, payload, true)) logEvent("warn", "➡ " + T.forecast, payload);
+}
+
+function fireScanner(force) {
+  if (scannerFired && !force) return; scannerFired = true;
+  disarmScanner();                       // a pending T+480 s timer is moot now
+  $("#p-fraud").hidden = false;
+  setChip("frd-chip", "INVESTIGATING", "fail");
+  if (!landed.fraud) $("#rep-fraud").innerHTML = '<span class="empty">scanner mismatch published ' +
+    '&mdash; cross-channel signals, rates and payment items are being ' +
+    'checked, the Orchestrator merges them&hellip;</span>';
+  const payload = {
+    event_type: "scanner_mismatch", claim_id: "CLM-0913-08103",
+    event_id: "HZ-0913", partner_id: "P-BRAENDLE",
+    dents_claimed: 60, dents_scanned: 14, estimate_eur: 6800,
+    // = the scanner_results anchor in mongodb/seed/02-anchors.js
+    scanned_at: "2026-07-20T09:35:00Z",
+    published_at: now(),
+  };
+  if (publish(T.scanner, payload, true)) logEvent("fail", "➡ " + T.scanner, payload);
+}
+
+/* Act 2 arming: the checkbox schedules the scanner event for T+480 s
+   from the storm click -- also when it is ticked AFTER the click (at
+   once if T+480 s has passed); unticking before it fires disarms. */
+function armScanner() {
+  if (scannerFired || scannerTimer !== null) return;
+  const delayMs = Math.max(0, CFG.scannerAtS - elapsedS()) * 1000;
+  scannerTimer = setTimeout(() => { scannerTimer = null; fireScanner(false); },
+    delayMs);
+}
+function disarmScanner() {
+  if (scannerTimer !== null) { clearTimeout(scannerTimer); scannerTimer = null; }
+}
+
+/* ---------- the FNOL burst + counter animation ---------- */
+/* Spec 4.3 fnol payload: event_type, claim_id, event_id, policy_id,
+   channel, severity, line, postal_code, city, estimate_eur,
+   reported_at (fiction, per sample) + published_at (real wall clock). */
+function fnolPayload(s, sev, line) {
+  return {
+    event_type: "fnol_received", claim_id: s.id, event_id: "HZ-0913",
+    policy_id: s.pol, channel: s.ch, severity: sev, line: line,
+    postal_code: s.plz, city: s.city, estimate_eur: s.est, reported_at: s.at,
+    published_at: now(),
+  };
+}
+
+function burstTick() {
+  if (burstIdx >= CFG.burstEvents) return;
+  // every 5th event is one of the 8 MINOR claims -> Fast Lane Clerk
+  const minor = burstIdx % 5 === 0 && minorIdx < CFG.burstMinor;
+  let s, sev, line, topic;
+  if (minor) {
+    s = MINOR[minorIdx++]; sev = "MINOR"; line = "MOTOR";
+    topic = T.fnol("minor", s.ch, s.id);
+    const payload = fnolPayload(s, sev, line);
+    if (publish(topic, payload, true)) {
+      minorPublished++; logEvent("", "➡ " + topic, payload);
+    }
+  } else {
+    s = bulkSample(bulkIdx++); sev = s.sev; line = s.line;
+    topic = T.fnol(sev.toLowerCase(), s.ch, s.id);
+    publish(topic, fnolPayload(s, sev, line), false);
+  }
+  burstIdx++;
+  $("#burstline").textContent =
+    `intake: ${burstIdx} / ${CFG.burstEvents} sample FNOLs published ` +
+    `(${minorPublished} MINOR -> Fast Lane Clerk) · last: ${s.id} ${sev} ` +
+    `via ${s.ch} · est. EUR ${fmt(s.est)}`;
+  if (burstIdx >= CFG.burstEvents) setChip("vol-chip", "10,400 FNOLs", "warn");
+}
+
+function renderCounter(total) {
+  $("#fnolcount").innerHTML = fmt(total) + "<small> claims</small>";
+  const share = total / CFG.counterTarget;
+  for (const [ch, n] of CHANNELS) {
+    const v = total >= CFG.counterTarget ? n : Math.round(n * share);
+    $("#bar-" + ch + " i").style.width = (n / CHANNELS[0][1] * 100 * share) + "%";
+    $("#num-" + ch).textContent = fmt(v);
+  }
+  for (const k of Object.keys(SEVERITY)) {
+    $("#sev-" + k).textContent =
+      fmt(total >= CFG.counterTarget ? SEVERITY[k] : SEVERITY[k] * share);
+  }
+}
+
+function counterTick() {
+  const p = Math.min(1, elapsedS() / CFG.burstDurationS);
+  const eased = 1 - Math.pow(1 - p, 3);          // fast start, soft landing
+  renderCounter(p >= 1 ? CFG.counterTarget : CFG.counterTarget * eased);
+}
+
+function clockTick() {
+  $("#clock").textContent = clock(elapsedS());
+}
+
+/* ---------- inbound results (the loop closes in the browser) ---------- */
+/* responseType: full -> the A2A result JSON. Its exact top-level
+   shape is undocumented, so this walks the known A2A containers:
+   Task {status:{message}, artifacts[], history[]}, Message {parts[]},
+   Part {kind, text}. Key order: the final answer sits under
+   "result"/"status" (status.message = the agent's last message),
+   then "artifacts", both ahead of "message" (a request echo); in a
+   parts or artifacts array the LAST text part is the answer, in a
+   history the LAST agent entry; file parts carry no text; a bare
+   status string ("completed") is a state, not text. */
+function findText(body) {
+  if (body == null || typeof body !== "object") {
+    return typeof body === "string" ? body : "";
+  }
+  if (Array.isArray(body)) {
+    if (body.length && body.every((e) => e && typeof e === "object" && "role" in e)) {
+      const agent = body.filter((e) => e.role !== "user");
+      const seq = agent.length ? agent : body;
+      return findText(seq[seq.length - 1]);
+    }
+    for (let i = body.length - 1; i >= 0; i--) {   // prefer the LAST text part
+      const t = findText(body[i]); if (t) return t;
+    }
+    return "";
+  }
+  if (body.kind === "file") return "";
+  for (const k of ["text", "content", "response", "answer", "result",
+                   "status", "artifacts", "output", "message", "parts",
+                   "data", "history"]) {
+    const v = body[k];
+    if (v === undefined) continue;
+    if (k === "status" && typeof v !== "object") continue;
+    const t = findText(v); if (t) return t;
+  }
+  return "";
+}
+function extractText(body) {
+  if (typeof body === "string") return body;
+  return findText(body) || JSON.stringify(body, null, 1);
+}
+
+const esc = (s) => s.replace(/[&<>"]/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, "$1<i>$2</i>");
+}
+/* Tiny markdown renderer: headings, lists, tables, code, bold/italic
+   -- enough for the agents' reports, no external library. */
+function renderMd(src) {
+  const out = [], lines = String(src).replace(/\r/g, "").split("\n");
+  let list = null, para = [], table = false, code = null;
+  const flushPara = () => { if (para.length) { out.push("<p>" + inline(para.join(" ")) + "</p>"); para = []; } };
+  const flushList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  const flushTable = () => { if (table) { out.push("</table>"); table = false; } };
+  const flushAll = () => { flushPara(); flushList(); flushTable(); };
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (code !== null) {
+      if (/^\s*```/.test(line)) { out.push("<pre>" + esc(code.join("\n")) + "</pre>"); code = null; }
+      else code.push(line);
+      continue;
+    }
+    if (/^\s*```/.test(line)) { flushAll(); code = []; continue; }
+    let m;
+    if ((m = /^(#{1,6})\s+(.*)$/.exec(line))) {
+      flushAll(); const l = Math.min(m[1].length, 4);
+      out.push(`<h${l}>${inline(m[2])}</h${l}>`); continue;
+    }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { flushAll(); out.push("<hr>"); continue; }
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      if (/^\s*\|\s*:?-+/.test(line)) continue;          // header separator
+      flushPara(); flushList();
+      const tag = table ? "td" : "th";
+      if (!table) { out.push("<table>"); table = true; }
+      const cells = line.trim().slice(1, -1).split("|").map((c) => inline(c.trim()));
+      out.push("<tr>" + cells.map((c) => `<${tag}>${c}</${tag}>`).join("") + "</tr>");
+      continue;
+    }
+    if ((m = /^\s*([-*+]|\d+[.)])\s+(.*)$/.exec(line))) {
+      flushPara(); flushTable();
+      const kind = /^\d/.test(m[1]) ? "ol" : "ul";
+      if (list !== kind) { flushList(); out.push(`<${kind}>`); list = kind; }
+      out.push("<li>" + inline(m[2]) + "</li>"); continue;
+    }
+    if (!line.trim()) { flushAll(); continue; }
+    flushList(); flushTable(); para.push(line.trim());
+  }
+  flushAll();
+  if (code) out.push("<pre>" + esc(code.join("\n")) + "</pre>");
+  return out.join("\n");
+}
+
+/* When an agent slips a platform math embed («math:expr|fmt») into
+   its answer and the platform fails to evaluate it, the mesh result
+   carries "[Error: Math evaluation error: ... | expr|fmt | ...^]".
+   The expression is still in there -- evaluate it ourselves
+   (plain arithmetic only) instead of showing the error string. */
+function repairMathEmbeds(s) {
+  const fmtNum = (v, fmt) => {
+    const f = (fmt || "").toLowerCase();
+    if (/^\.(\d)f$/.test(f)) return v.toFixed(+f[1]);
+    if (f === "round" || f === ".0f" || f === "d" || f === "int") return String(Math.round(v));
+    if (f === ",d" || f === ",") return Math.round(v).toLocaleString("en-US");
+    return Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100);
+  };
+  const out = s.replace(
+    /\[Error: Math evaluation error:[\s\S]*?\|\s*([0-9.+\-*/() ]+?)\s*\|\s*([A-Za-z0-9.,]*)\s*\|[\s\S]*?\]/g,
+    (m, expr, fmt) => {
+      if (!/^[0-9.+\-*/() ]+$/.test(expr)) return m;
+      try { const v = Function('"use strict"; return (' + expr + ")")(); return Number.isFinite(v) ? fmtNum(v, fmt) : m; }
+      catch (_) { return m; }
+    });
+  // "= 5436 = 5436" when the model appended its own result after the embed
+  return out.replace(/(\b\d[\d,.]*)\s*=\s*\1\b/g, "$1");
+}
+
+function onResult(topic, body) {
+  const kind = topic.startsWith(T.resultPrefix)
+    ? topic.slice(T.resultPrefix.length).split("/")[0] : "";
+  const text = extractText(body);
+  if (kind === "confirmation") {
+    confirmations++;
+    const div = document.createElement("div");
+    div.className = "fl";
+    const m = /CLM-0913-\d{5}/.exec(text);
+    div.innerHTML = `<div class="when"></div><div></div>`;
+    div.firstChild.textContent = `${running ? clock(elapsedS()) : "—"} · ` +
+      `${new Date().toLocaleTimeString()}${m ? " · " + m[0] : ""}`;
+    div.lastChild.textContent = text;
+    $("#fl-list").prepend(div);
+    setChip("fl-chip", `${confirmations} / ${CFG.burstMinor} confirmed`, "run");
+    $("#ap-fastlane").disabled = !!approved.fastlane;
+    return;
+  }
+  const panel = RESULT_PANEL[kind];
+  if (panel) {
+    landed[panel] = true;
+    // LLMs occasionally narrate their arithmetic before the report:
+    // render from the first markdown H1 onward (keep all if none).
+    let body = repairMathEmbeds(String(text));
+    const h1 = body.search(/^# /m);
+    $("#rep-" + panel).innerHTML = renderMd(h1 > 0 ? body.slice(h1) : body);
+    setChip({ incident: "inc-chip", readiness: "rdy-chip", fraud: "frd-chip" }[panel],
+      "LANDED " + (running ? clock(elapsedS()) : "—"), "run");
+    $("#ap-" + panel).disabled = !!approved[panel];
+    if (panel === "fraud") $("#p-fraud").hidden = false;
+  }
+}
+
+/* ---------- approvals (human in the loop, EU AI Act Art. 50) ---------- */
+function approve(kind) {
+  const d = DECISIONS[kind];
+  const payload = {
+    decided_by: "claims.lead@acme-insurance", decision: "APPROVED",
+    kind: kind, ref_id: d.id, action: d.action, decided_at: now(),
+  };
+  const topic = T.decision(kind, d.id);
+  if (!publish(topic, payload, true)) return;
+  approved[kind] = true;
+  logEvent("decision", "➡ " + topic, payload);
+  $("#ap-" + kind).disabled = true;
+  $("#ap-" + kind).textContent = "Approved ✔";
+  $("#fx-" + kind).classList.add("on");
+  setTimeout(() => $("#fx-" + kind).classList.remove("on"), 2500);
+}
+
+/* ---------- the storm (the ONE on-stage click) ---------- */
+function storm() {
+  if (!connected || running) return;
+  running = true; t0 = Date.now();
+  $("#btn-storm").disabled = true;
+  $("#btn-storm").textContent = "HZ-0913 observed — FNOLs arriving";
+  $("#clock").classList.add("run");
+  setChip("vol-chip", "INTAKE", "run");
+  setChip("fl-chip", "WAITING", "run");
+  $("#p-fraud").hidden = !$("#chk-fraud").checked;
+  const payload = {
+    event_type: "cell_observed", cell_id: "HZ-0913", district: "BOEBLINGEN",
+    observed_at: "2026-07-18T18:40:00Z", hail_size_cm: 3.5,
+    warning_level: 3,
+    postal_codes: ["71032", "71034", "71063", "71065", "71067", "71069",
+      "71083", "71093", "71101", "71229", "71263", "71272", "71277", "71287",
+      "71296", "71297"],
+    exposure_vehicles_no_garage: 15800, published_at: now(),
+  };
+  if (publish(T.observed, payload, true)) logEvent("", "➡ " + T.observed, payload);
+  burstTick();
+  timers.push(setInterval(burstTick, CFG.burstDurationS * 1000 / CFG.burstEvents));
+  timers.push(setInterval(counterTick, 100));
+  timers.push(setInterval(clockTick, 1000));
+  timers.push(setTimeout(() => fireStalled(false), CFG.stalledAtS * 1000));
+  timers.push(setTimeout(() => fireForecast(false), CFG.forecastAtS * 1000));
+  if ($("#chk-fraud").checked) armScanner();
+}
+
+function reset() {
+  for (const t of timers) clearTimeout(t);
+  disarmScanner();
+  timers = []; running = false;
+  stalledFired = false; forecastFired = false; scannerFired = false;
+  burstIdx = 0; minorIdx = 0; bulkIdx = 0; minorPublished = 0;
+  confirmations = 0; approved = {}; landed = {};
+  $("#btn-storm").disabled = false;
+  $("#btn-storm").textContent =
+    "Hail cell HZ-0913 hits Landkreis Boeblingen (Sat 18:40)";
+  $("#clock").textContent = "T+00:00"; $("#clock").classList.remove("run");
+  setChip("vol-chip", "IDLE"); renderCounter(0);
+  setChip("fl-chip", "IDLE"); $("#fl-list").innerHTML = "";
+  setChip("inc-chip", "IDLE"); setChip("rdy-chip", "IDLE"); setChip("frd-chip", "IDLE");
+  $("#rep-incident").innerHTML =
+    '<span class="empty">waiting for the triage-stalled event…</span>';
+  $("#rep-readiness").innerHTML =
+    '<span class="empty">waiting for the forecast threshold event…</span>';
+  $("#rep-fraud").innerHTML =
+    '<span class="empty">waiting for the scanner-mismatch event…</span>';
+  for (const k of Object.keys(DECISIONS)) {
+    $("#ap-" + k).disabled = true; $("#ap-" + k).textContent = "Approve";
+    $("#fx-" + k).classList.remove("on");
+  }
+  $("#p-fraud").hidden = !$("#chk-fraud").checked;
+  $("#burstline").textContent = "intake: waiting for the hail cell…";
+  $("#events").innerHTML = "";
+}
+
+/* ---------- broker session ---------- */
+function connect() {
+  const factoryProps = new solace.SolclientFactoryProperties();
+  factoryProps.profile = solace.SolclientFactoryProfiles.version10;
+  solace.SolclientFactory.init(factoryProps);
+  session = solace.SolclientFactory.createSession({
+    url: "ws://localhost:8008",
+    vpnName: "sam",
+    userName: "default",
+    password: "default",
+    publisherProperties: { enabled: true, acknowledgeMode:
+      solace.MessagePublisherAcknowledgeMode.PER_MESSAGE },
+  });
+  session.on(solace.SessionEventCode.UP_NOTICE, () => {
+    connected = true;
+    $("#led").classList.add("on");
+    $("#ledlabel").textContent = "sam VPN · ws://localhost:8008";
+    session.subscribe(
+      solace.SolclientFactory.createTopicDestination(T.results),
+      true, "result-sub", 10000);
+    logEvent("", "✔ connected", "Session up, subscribed to " + T.results);
+  });
+  session.on(solace.SessionEventCode.CONNECT_FAILED_ERROR, (e) => {
+    $("#ledlabel").textContent = "connection failed";
+    logEvent("fail", "—", "Connect failed: " + e.infoStr);
+  });
+  session.on(solace.SessionEventCode.MESSAGE, (msg) => {
+    // solclientjs hands the attachment over as a byte string; the
+    // agents publish UTF-8 (EUR signs, dashes) -> decode explicitly.
+    const raw = msg.getBinaryAttachment() || "";
+    let body = raw;
+    try {
+      body = new TextDecoder("utf-8").decode(
+        Uint8Array.from(raw, (c) => c.charCodeAt(0) & 0xff));
+    } catch (_) { /* keep the byte string */ }
+    try { body = JSON.parse(body); } catch (_) { /* keep text */ }
+    const topic = msg.getDestination().getName();
+    logEvent(topic.endsWith("/error") ? "fail" : "result", "⬅ " + topic, body);
+    onResult(topic, body);
+  });
+  session.connect();
+}
+
+// channel breakdown rows (built once, animated by renderCounter)
+$("#bars").innerHTML = CHANNELS.map(([ch]) =>
+  `<div class="l">${ch}</div><div class="b" id="bar-${ch}"><i></i></div>` +
+  `<div class="n" id="num-${ch}">0</div>`).join("");
+$("#btn-storm").onclick = storm;
+$("#chk-fraud").onchange = () => {
+  if (scannerFired) return;
+  const on = $("#chk-fraud").checked;
+  $("#p-fraud").hidden = !on;
+  if (running) { if (on) armScanner(); else disarmScanner(); }
+};
+for (const k of Object.keys(DECISIONS)) $("#ap-" + k).onclick = () => approve(k);
+$("#bg-stalled").onclick = () => fireStalled(true);
+$("#bg-forecast").onclick = () => fireForecast(true);
+$("#bg-scanner").onclick = () => fireScanner(true);
+$("#bg-reset").onclick = reset;
+renderCounter(0);
+connect();
+</script>
+</body>
+</html>

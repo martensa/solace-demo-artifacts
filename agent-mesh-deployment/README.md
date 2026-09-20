@@ -366,6 +366,17 @@ Token und Cost, Governance und Security):
   `SAM Platform DB` (read-only role `grafana_ro`) queries the
   `tasks` table (`user_id`, `total_input/output_tokens`,
   `token_usage_details` with per-model breakdown).
+- **Platform DB for governance dashboards**: a second datasource
+  `SAM Platform Config DB` (uid `sam-platform-config-db`,
+  `manifests/observability/grafana-datasource-sam-platform-config.yaml`,
+  a ConfigMap in ns `monitoring` where the datasource sidecar
+  watches) reads `sam-solace-lab_platform` (agents, RBAC roles and
+  claim mappings, model aliases, eval runs). `grafana_ro` has no
+  SELECT there by default: `scripts/observability/`
+  `grant-grafana-platform-db.sh` grants it idempotently (incl.
+  default privileges for future tables), applies the ConfigMap and
+  verifies via `has_table_privilege`. The demo install scripts
+  call it; stop.sh drops the DB and with it the grant.
 
 Operational notes (learned the hard way):
 

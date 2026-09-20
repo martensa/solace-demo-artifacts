@@ -1,0 +1,12 @@
+# Answers are verified against qdrant/seed/documents.yaml (doc ids,
+# thresholds, decisive sentences) -- change the corpus, change this.
+kind: dataset
+name: ins-claims-rules
+description: >-
+  Five clause questions whose answers are literally in the claims
+  knowledge base: Fast Lane criteria (CG-FL-1), hail cover HC-7,
+  repair network clause RN-3, total loss TL-1 and the Total Loss
+  Fastlane (CG-TL-2), fraud indicators (CG-FR-5) and scanner mismatch
+  (CG-SC-1), the BaFin 30-day rule and the P-DELLENDOC contract.
+spec:
+  examples_file: ins-claims-rules.csv

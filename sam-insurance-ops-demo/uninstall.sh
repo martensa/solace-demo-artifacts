@@ -2,20 +2,26 @@
 set -euo pipefail
 
 # =============================================================
-# uninstall.sh -- remove the Event-Driven Claims Operations demo
-# (Acme Insurance) from the platform, leaving the SAM
-# infrastructure in agent-mesh-deployment (models, RBAC,
-# developer-mcp, observability) untouched (idempotent; absent
-# resources are skipped silently).
+# uninstall.sh -- remove the Acme Insurance demo (BOTH profiles)
+# from the platform, leaving the SAM infrastructure in
+# agent-mesh-deployment (models, RBAC, developer-mcp,
+# observability) untouched (idempotent; absent resources are
+# skipped silently).
 # =============================================================
-# Removes the demo OVERLAY (claims-events entrypoint,
-# stalled-cohort-report + storm-readiness +
-# cross-channel-fraud-report workflows, Claims Incident Reporter,
-# Storm Readiness Planner, Fraud Case Reporter, Fast Lane Clerk,
-# Storm Intake Analyst + fnol-intake/weather-cells/scanner-results
-# connectors), the insurance CORE (the two Acme experts, their
-# connectors and skills), eval experiments + dataset (INCLUDING
-# their run history!) and the demo dashboard.
+# Removes the TRIAGE overlay (claims-triage entrypoint,
+# claim-triage workflow, the Claims Intake Liaison and the Claims
+# Triage Decision agent, the external Claims Intake Analyst in ns
+# sam-solace-lab-agents via `kubectl delete -f external-agent/`,
+# the rendered entrypoint dir triage/.rendered), the EXTENDED
+# overlay (claims-events entrypoint, stalled-cohort-report +
+# storm-readiness + cross-channel-fraud-report workflows, Claims
+# Incident Reporter, Storm Readiness Planner, Fraud Case
+# Reporter, Fast Lane Clerk, Storm Intake Analyst +
+# fnol-intake/weather-cells/scanner-results connectors), the
+# insurance CORE (the two Acme experts, their connectors and
+# skills), eval experiments + datasets of both profiles
+# (INCLUDING their run history!), the sam_admin evaluation
+# watchlist install.sh set, and both demo dashboards.
 # The demo mongo container is removed INCLUDING its volume: the
 # data volume is anonymous and re-seeded from mongodb/seed on
 # every fresh `install.sh` anyway, so keeping it would only leave
@@ -24,11 +30,13 @@ set -euo pipefail
 # (acme-knowledge-data AND the acme-knowledge-models embedding
 # cache -- the next install.sh downloads the model again).
 # Keeps: the 5 model aliases, RBAC, the developer-mcp entrypoint,
-# the shared host containers postgres/pgadmin (acme_insurance
-# stays seeded unless --purge-data; install.sh re-seeds it).
+# the grafana_ro grant + platform-DB datasource (infrastructure,
+# agent-mesh-deployment), the shared host containers
+# postgres/pgadmin (acme_insurance stays seeded unless
+# --purge-data; install.sh re-seeds it).
 #
-#   ./uninstall.sh               # remove overlay + insurance core
-#   ./uninstall.sh --keep-core   # overlay only (fast demo switch)
+#   ./uninstall.sh               # remove both overlays + insurance core
+#   ./uninstall.sh --keep-core   # overlays only (fast demo switch)
 #   ./uninstall.sh --dry-run     # show what would be removed
 #   ./uninstall.sh --purge-data  # also DROP the acme_insurance DB
 # =============================================================
@@ -37,6 +45,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 AMD="$REPO_DIR/agent-mesh-deployment"
 SAM_URL="https://sam.solace.lab"
+EXT_DIR="$SCRIPT_DIR/external-agent"
+RENDERED="$SCRIPT_DIR/triage/.rendered"
+DASHBOARD_CMS="dashboard-sam-claims-governance dashboard-sam-insurance-ops"
 
 DRY=0; KEEP_CORE=0; PURGE=0
 for arg in "$@"; do
@@ -66,12 +77,20 @@ api() {
     -o /tmp/uninstall-api-body.json -w "%{http_code}")
   cat /tmp/uninstall-api-body.json 2>/dev/null || true
 }
+api_json() {  # api_json METHOD PATH JSON -> body on stdout, code in API_CODE
+  local method="$1" path="$2" body="$3"
+  API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
+    -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
+    -H "Content-Type: application/json" -d "$body" \
+    -o /tmp/uninstall-api-body.json -w "%{http_code}")
+  cat /tmp/uninstall-api-body.json 2>/dev/null || true
+}
 
 find_id() {  # find_id PATH NAME
   api GET "$1" | python3 -c "
 import json,sys
 for x in json.load(sys.stdin).get('data',[]):
-    if x.get('name')=='$2': print(x['id'])" 2>/dev/null
+    if x.get('name')==sys.argv[1]: print(x['id'])" "$2" 2>/dev/null
 }
 
 remove() {  # remove LABEL PATH NAME
@@ -94,10 +113,35 @@ if [ "${API_CODE:-}" != "200" ]; then
   exit 1
 fi
 
-echo "== Demo overlay"
-# Order: entrypoint first (stops event intake), then workflows,
-# then agents, then connectors.
+# Order: entrypoints first (stops event intake), then workflows,
+# then agents, then connectors -- for both profiles.
+echo "== Entrypoints (stop event intake first)"
+remove "entrypoint" /api/v1/platform/gateways      "claims-triage"
 remove "entrypoint" /api/v1/platform/gateways      "claims-events"
+
+echo "== Triage overlay (triage/ + external agent)"
+remove "workflow"   /api/v1/platform/workflows     "claim-triage"
+# Both triage agents are platform records (triage/manifest.yaml):
+# the liaison is the only agent allowed to delegate to the external
+# Claims Intake Analyst (its interAgentCommunication.allowList), the
+# decision agent writes the schema-bound triage verdict.
+remove "agent"      /api/v1/platform/agents        "Claims Intake Liaison"
+remove "agent"      /api/v1/platform/agents        "Claims Triage Decision"
+if [ ! -d "$EXT_DIR" ]; then
+  echo "   external agent: external-agent/ not in the checkout, skipped"
+elif [ "$DRY" -eq 1 ]; then
+  echo "   external agent: WOULD run: kubectl delete -f external-agent/ --ignore-not-found"
+else
+  kubectl delete -f "$EXT_DIR/" --ignore-not-found 2>&1 | sed 's/^/   /' || true
+fi
+if [ -d "$RENDERED" ]; then
+  if [ "$DRY" -eq 1 ]; then echo "   WOULD remove triage/.rendered/"
+  else rm -rf "$RENDERED" && echo "   triage/.rendered/ removed"; fi
+else
+  echo "   triage/.rendered/: not present"
+fi
+
+echo "== Extended overlay (mesh/ + fallback/)"
 remove "workflow"   /api/v1/platform/workflows     "stalled-cohort-report"
 remove "workflow"   /api/v1/platform/workflows     "storm-readiness"
 remove "workflow"   /api/v1/platform/workflows     "cross-channel-fraud-report"
@@ -125,32 +169,61 @@ fi
 echo "== Evaluation (deletes run history too!)"
 remove "experiment" /api/v1/platform/evaluations/experiments "ins-ops-quality"
 remove "experiment" /api/v1/platform/evaluations/experiments "ins-ops-model-benchmark"
+remove "experiment" /api/v1/platform/evaluations/experiments "ins-claims-rules"
+remove "experiment" /api/v1/platform/evaluations/experiments "ins-triage-decision"
+remove "experiment" /api/v1/platform/evaluations/experiments "ins-guardrails"
 remove "dataset"    /api/v1/platform/evaluations/datasets    "ins-ops-questions"
-
-echo "== Demo dashboard"
+remove "dataset"    /api/v1/platform/evaluations/datasets    "ins-claims-rules"
+remove "dataset"    /api/v1/platform/evaluations/datasets    "ins-triage-decisions"
+remove "dataset"    /api/v1/platform/evaluations/datasets    "ins-guardrails"
+# install.sh (step 7) puts the three reasoning agents of this demo on
+# the evaluation watchlist of the CLI token user (sam_admin). It is a
+# per-user setting, not a resource, so nothing above touches it --
+# clear it here, or the Evaluations page keeps watching agents that
+# no longer exist.
 if [ "$DRY" -eq 1 ]; then
-  kubectl get cm -n sam-solace-lab dashboard-sam-insurance-ops >/dev/null 2>&1 \
-    && echo "   WOULD delete ConfigMap dashboard-sam-insurance-ops" \
-    || echo "   dashboard: not present"
+  echo "   watchlist (sam_admin): WOULD clear"
 else
-  kubectl delete cm -n sam-solace-lab dashboard-sam-insurance-ops \
-    --ignore-not-found | sed 's/^/   /'
+  api_json PUT /api/v1/platform/evaluations/watchlist \
+    '{"agentNames":[]}' >/dev/null
+  echo "   watchlist (sam_admin): cleared (HTTP $API_CODE)"
 fi
 
-echo "== MongoDB (container + anonymous volume)"
-if [ "$DRY" -eq 1 ]; then
-  echo "   WOULD run: docker compose -f mongodb/docker-compose.yaml down -v"
-else
-  docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" down -v 2>&1 \
-    | sed 's/^/   /' || true
-fi
+echo "== Demo dashboards"
+for cm in $DASHBOARD_CMS; do
+  if [ "$DRY" -eq 1 ]; then
+    kubectl get cm -n sam-solace-lab "$cm" >/dev/null 2>&1 \
+      && echo "   WOULD delete ConfigMap $cm" \
+      || echo "   dashboard $cm: not present"
+  else
+    kubectl delete cm -n sam-solace-lab "$cm" \
+      --ignore-not-found | sed 's/^/   /'
+  fi
+done
 
-echo "== Knowledge base (Qdrant + MCP server + data/model volumes)"
-if [ "$DRY" -eq 1 ]; then
-  echo "   WOULD run: docker compose -f qdrant/docker-compose.yaml down -v"
+# The data stacks belong to the CORE: --keep-core is the fast switch
+# between the two profiles, and both profiles read the same Mongo store
+# and the same knowledge base. Tearing them down there would leave the
+# kept core connectors pointing at an empty Qdrant, and make the next
+# install re-download the embedding model (up to 6 minutes).
+if [ "$KEEP_CORE" -eq 1 ]; then
+  echo "== MongoDB + knowledge base: kept (--keep-core; the core reads them)"
 else
-  docker compose -f "$SCRIPT_DIR/qdrant/docker-compose.yaml" down -v 2>&1 \
-    | sed 's/^/   /' || true
+  echo "== MongoDB (container + anonymous volume)"
+  if [ "$DRY" -eq 1 ]; then
+    echo "   WOULD run: docker compose -f mongodb/docker-compose.yaml down -v"
+  else
+    docker compose -f "$SCRIPT_DIR/mongodb/docker-compose.yaml" down -v 2>&1 \
+      | sed 's/^/   /' || true
+  fi
+
+  echo "== Knowledge base (Qdrant + MCP server + data/model volumes)"
+  if [ "$DRY" -eq 1 ]; then
+    echo "   WOULD run: docker compose -f qdrant/docker-compose.yaml down -v"
+  else
+    docker compose -f "$SCRIPT_DIR/qdrant/docker-compose.yaml" down -v 2>&1 \
+      | sed 's/^/   /' || true
+  fi
 fi
 
 if [ "$PURGE" -eq 1 ]; then
@@ -170,9 +243,9 @@ echo ""
 if [ "$DRY" -eq 1 ]; then
   echo "Dry run - nothing was changed."
 elif [ "$KEEP_CORE" -eq 1 ]; then
-  echo "Demo overlay removed. Insurance core, models, RBAC and"
-  echo "the platform infrastructure stay."
+  echo "Demo overlays removed (triage + extended). Insurance core, models,"
+  echo "RBAC and the platform infrastructure stay."
 else
-  echo "Demo removed (overlay + insurance core). Models, RBAC,"
+  echo "Demo removed (both overlays + insurance core). Models, RBAC,"
   echo "developer-mcp and the platform infrastructure stay."
 fi

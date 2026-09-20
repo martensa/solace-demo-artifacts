@@ -1,0 +1,63 @@
+# Claims Intake Analyst -- the external agent's pod. No
+# imagePullSecrets entry: the Kyverno policies of the lab inject
+# the registry pull secret and the lab CA bundle into every pod of
+# this namespace (the `localhost-registry` entry of the Web
+# Research precedent is a no-op and is omitted here).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sam-claims-intake-agent
+  namespace: sam-solace-lab-agents
+  labels:
+    app: sam-claims-intake-agent
+    tier: external-agents
+    demo: sam-insurance-ops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sam-claims-intake-agent
+  template:
+    metadata:
+      labels:
+        app: sam-claims-intake-agent
+        tier: external-agents
+        demo: sam-insurance-ops
+        component: claims-intake
+    spec:
+      containers:
+      - name: sam-claims-intake-agent
+        # Contains the v1 SDK, sam_mongodb 0.1.0 and pymongo.
+        image: registry.solace.lab/solace-agent-mesh-enterprise:1.97.2
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        workingDir: /app
+        command: ["solace-agent-mesh", "run"]
+        args:
+        - "configs/agents/claims_intake_agent.yaml"
+        envFrom:
+        # Shared values (broker, LLM endpoint + key, S3, NAMESPACE)
+        # first; the agent-specific secret overrides (own model,
+        # MONGO_*).
+        - secretRef:
+            name: sam-shared-secret
+        - secretRef:
+            name: sam-claims-intake-agent-secret
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/configs
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+      volumes:
+      - name: config-volume
+        configMap:
+          name: sam-claims-intake-agent-config
+          items:
+          - key: claims_intake_agent.yaml
+            path: agents/claims_intake_agent.yaml

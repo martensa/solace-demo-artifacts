@@ -378,6 +378,80 @@ S.replaceOne({ _id: 'SCAN-0913-08103' }, {
 }, { upsert: true });
 // no other scan may carry the mismatch flag
 S.updateMany({ _id: { $ne: 'SCAN-0913-08103' } }, { $set: { mismatch_flag: false } });
+// The intake document of the scanner anchor must agree with the
+// Postgres policy row (POL-003858: Skoda Octavia, Sindelfingen 71063,
+// customer Ben Meier) -- the triage demo shows the policy facts and
+// the intake facts side by side, so the bulk generator's random
+// vehicle/location is pinned here (VIN = ins_policies.vehicle_vin).
+F.updateOne({ _id: 'FNOL-0913-08103' }, { $set: {
+  'vehicle.vin': 'WACAF158267BEBB51', 'vehicle.model': 'Skoda Octavia',
+  'vehicle.garage_parking': false,
+  location: { postal_code: '71063', city: 'Sindelfingen',
+              district: 'BOEBLINGEN', lat: 48.7134, lon: 9.0030 },
+  narrative: 'Drive-in intake at Braendle Drive-In Hail Center: ' +
+    'customer Ben Meier states about 60 dents on roof and bonnet of ' +
+    'a Skoda Octavia parked in the street in Sindelfingen (71063), ' +
+    'photos uploaded via the app beforehand; scanner run booked.',
+} });
+
+// ---- 7b. per-claim intake view (claim_intake_facts) --------------
+// The triage demo asks ONE question of this store: "give me every
+// intake fact of claim X". Expressed as an aggregation it is a
+// 900-token pipeline, and the external analyst agent pays for every
+// one of those tokens on the critical path of the workflow (it cost
+// about 6 s per run). As a view, the joins live in the database and
+// the agent's query collapses to {"$match": {"claim_id": "..."}}.
+// The cell start comes from weather_cells via event_id, so the photo
+// timing is computed against the real cell, not a constant.
+db.claim_intake_facts.drop();
+db.createView('claim_intake_facts', 'fnol_intake', [
+  { $match: { is_repeat_contact: { $ne: true } } },
+  { $lookup: { from: 'weather_cells', localField: 'event_id',
+      foreignField: '_id', as: 'cell' } },
+  { $lookup: { from: 'scanner_results', localField: 'claim_id',
+      foreignField: 'claim_id', as: 'scans' } },
+  { $lookup: { from: 'fnol_intake', let: { vin: '$vehicle.vin', cid: '$claim_id' },
+      pipeline: [ { $match: { $expr: { $and: [
+          { $eq: ['$vehicle.vin', '$$vin'] },
+          { $ne: ['$claim_id', '$$cid'] },
+          { $ne: ['$is_repeat_contact', true] } ] } } },
+        { $project: { _id: 0, claim_id: 1 } } ], as: 'same_vin' } },
+  { $lookup: { from: 'fnol_intake', let: { cid: '$claim_id' },
+      pipeline: [ { $match: { $expr: { $and: [
+          { $eq: ['$claim_id', '$$cid'] },
+          { $eq: ['$is_repeat_contact', true] } ] } } },
+        { $project: { _id: 0, complaint_flag: 1 } } ], as: 'repeats' } },
+  { $project: {
+      _id: 0, claim_id: 1,
+      intake_found: { $literal: true },
+      channel: 1, severity_est: 1, narrative: 1,
+      model: { $ifNull: ['$vehicle.model', ''] },
+      dent_count_est: { $ifNull: ['$damage_signals.dent_count_est', 0] },
+      glass_shattered: { $ifNull: ['$damage_signals.glass_shattered', false] },
+      roof_deformed: { $ifNull: ['$damage_signals.roof_deformed', false] },
+      drivable: { $ifNull: ['$damage_signals.drivable', false] },
+      photo_count: { $size: { $ifNull: ['$photos', []] } },
+      earliest_photo_at: { $min: '$photos.exif_taken_at' },
+      cell_start: { $first: '$cell.start' },
+      photos_before_cell: { $cond: [
+        { $eq: [{ $size: { $ifNull: ['$photos', []] } }, 0] }, false,
+        { $lt: [{ $min: '$photos.exif_taken_at' }, { $first: '$cell.start' }] } ] },
+      days_before_cell: { $cond: [
+        { $eq: [{ $size: { $ifNull: ['$photos', []] } }, 0] }, 0,
+        { $max: [0, { $round: [{ $divide: [
+          { $subtract: [{ $first: '$cell.start' }, { $min: '$photos.exif_taken_at' }] },
+          86400000] }, 1] }] } ] },
+      scanner_found: { $gt: [{ $size: '$scans' }, 0] },
+      dent_count_scanned: { $ifNull: [{ $first: '$scans.dent_count_scanned' }, 0] },
+      dent_count_claimed: { $ifNull: [{ $first: '$scans.dent_count_claimed' }, 0] },
+      scanner_estimate_eur: { $ifNull: [{ $first: '$scans.scanner_estimate_eur' }, 0] },
+      scanner_mismatch: { $ifNull: [{ $first: '$scans.mismatch_flag' }, false] },
+      duplicate_vin_claims: '$same_vin.claim_id',
+      repeat_contact: { $gt: [{ $size: '$repeats' }, 0] },
+      complaint_flag: { $or: ['$complaint_flag',
+        { $in: [true, '$repeats.complaint_flag'] }] } } },
+]);
+print('claim_intake_facts: view created');
 
 // ---- 8. weather cells: the exposure and conversion numbers -------
 W.updateOne({ _id: 'HZ-0913' }, { $set: {

@@ -1,0 +1,37 @@
+# Second Grafana datasource: the SAM PLATFORM DB (agents, RBAC roles
+# and claim mappings, workflows, gateways, model aliases, eval runs).
+# The existing datasource `sam-platform-db` (infra repo, Helm values)
+# points at the WebUI DB `sam-solace-lab_webui` (tasks, chargeback).
+#
+# The Grafana datasource sidecar watches ConfigMaps with label
+# grafana_datasource=1 in namespace `monitoring` ONLY (no NAMESPACE
+# env on the sidecar), hence the namespace below.
+#
+# grafana_ro has NO SELECT on the platform DB by default. Apply this
+# through scripts/observability/grant-grafana-platform-db.sh, which
+# grants idempotently, applies this ConfigMap and verifies.
+# Demo credentials (grafana_ro / grafana_ro) are intentional, lab only.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-sam-platform-config
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  sam-platform-config-db.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: SAM Platform Config DB
+        type: postgres
+        uid: sam-platform-config-db
+        url: agent-mesh-postgresql.sam-solace-lab:5432
+        access: proxy
+        user: grafana_ro
+        editable: true
+        jsonData:
+          database: sam-solace-lab_platform
+          sslmode: disable
+          postgresVersion: 1800
+        secureJsonData:
+          password: grafana_ro

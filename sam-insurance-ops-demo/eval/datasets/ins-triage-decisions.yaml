@@ -1,0 +1,28 @@
+# Each prompt is the fan-in JSON of the claim-triage decision node
+# (keys claim_event, policy, intake, rules; section shapes = the
+# node output schemas of the workflow -- policy 22 fields, intake
+# 12, rules 5; regenerate the rows whenever one of those contracts
+# changes). Live, claim_event arrives as the FNOL payload string
+# with sorted keys; here it is embedded as an object with the same
+# keys. Rows 1-2 are the real anchors (Postgres acme_insurance +
+# the Mongo view claim_intake_facts, both re-verified read-only on
+# 2026-09-16). Row 3 keeps the real POL-008411 policy row of
+# CLM-0913-09590 and carries a SYNTHETIC intake (glass shattered,
+# roof deformed, 210 dents) to hit the TL-1 signature -- the seeded
+# Mongo intake for that claim shows 47 dents and no glass damage.
+# Every expected_response carries all 14 fields of the decision
+# contract, because the agent must never omit one. The target agent
+# has no tools, so it decides on this JSON alone. Each CSV cell is
+# one-line JSON; regenerate it programmatically rather than editing
+# it by hand.
+kind: dataset
+name: ins-triage-decisions
+description: >-
+  Three decision-node fan-ins of the claim-triage workflow with the
+  expected decision JSON: CLM-0913-00001 clean (APPROVE / FAST_LANE,
+  network route to P-BRAENDLE under RN-3), CLM-0913-08103 pre-dated
+  photos plus scanner mismatch (HOLD / SPECIAL_INVESTIGATIONS) and
+  CLM-0913-09590 total-loss signature (APPROVE / TOTAL_LOSS_FASTLANE,
+  P-ROADASSIST pick-up).
+spec:
+  examples_file: ins-triage-decisions.csv

@@ -64,13 +64,16 @@ spec:
     Numbers about the live claims (counts, waiting times,
     capacities in use) are NOT in the knowledge base: they come
     from the acme_insurance database (Acme Insurance Query Expert)
-    and the intake store (Storm Intake Analyst) -- name them when
-    a question needs them.
+    and the MongoDB intake store, which only the claims intake agent
+    can read (the external Claims Intake Analyst in the governance
+    demo) -- name them when a question needs them.
 
     Maintain a professional and clear communication style, focusing
     on precision and traceability of every cited clause.
+  # Tier from the manifest variable INS_EXPERT_TIER (fast for the
+  # triage profile, general for --extended); see core/manifest.yaml.
   modelProvider:
-    - general
+    - "${INS_EXPERT_TIER}"
   toolsets:
     - builtin_artifact_tools
   connectors:
@@ -81,6 +84,16 @@ spec:
       description: >-
         Semantic search over policy wordings, claims guidelines,
         partner contracts and storm playbooks with cited answers.
+  # NOTE: `sam config plan` reports these experts as "update" on every
+  # run (skillRefs "" -> [<skill>]). The CLI resolves the skill NAME to
+  # a platform id at apply time and the platform stores only the id,
+  # but plan compares the declared name against the cleared name
+  # field. There is no portable way around it in 2.225.14 (the id
+  # differs per install), and the skill must stay bound: the extended
+  # profile's expert writes its own SQL from it. Consequence: every
+  # ./install.sh redeploys the two experts (a few seconds, harmless);
+  # preflight.sh only reinstalls when a resource is MISSING, so it
+  # never bounces them on this diff.
   skillRefs:
     - acme-knowledge-guide
   skillIds: []
