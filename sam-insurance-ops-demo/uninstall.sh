@@ -230,10 +230,29 @@ elif [ "$DRY" -eq 1 ]; then
 elif ! kubectl get pod -n sam-solace-lab agent-mesh-seaweedfs-0 >/dev/null 2>&1; then
   echo "   eval run artifacts: SKIPPED (seaweedfs pod not reachable)"
 else
+  # One `weed shell` per path on purpose: piping several fs.rm commands
+  # into one shell session silently drops all but the first (verified
+  # 2026-09-20 -- 8 paths in, 1 removed, no error for the other 7).
+  SW_BASE=/buckets/sam-solace-lab/sam-solace-lab
+  SW_RUNNER=$(kubectl exec -n sam-solace-lab agent-mesh-seaweedfs-0 -- sh -c \
+    "echo 'fs.ls $SW_BASE/eval-runner' | weed shell" 2>/dev/null \
+    | awk '{print $NF}' || true)
   for rid in $EVAL_RUN_IDS; do
-    echo "fs.rm -rf /buckets/sam-solace-lab/sam-solace-lab/eval/runs/$rid"
-  done | kubectl exec -i -n sam-solace-lab agent-mesh-seaweedfs-0 -- \
-    weed shell >/dev/null 2>&1 || true
+    kubectl exec -n sam-solace-lab agent-mesh-seaweedfs-0 -- sh -c \
+      "echo 'fs.rm -rf $SW_BASE/eval/runs/$rid' | weed shell" >/dev/null 2>&1 || true
+    # The per-example tool outputs of the same run live next door under
+    # eval-runner/eval-<run id>-<example id>-0. Those are exactly
+    # attributable; their sibling task dirs (a bare task uuid) are not,
+    # and are deliberately left rather than matched on a timestamp
+    # prefix that another demo's run could share.
+    for d in $SW_RUNNER; do
+      case "$d" in
+        eval-"$rid"-*)
+          kubectl exec -n sam-solace-lab agent-mesh-seaweedfs-0 -- sh -c \
+            "echo 'fs.rm -rf $SW_BASE/eval-runner/$d' | weed shell" >/dev/null 2>&1 || true ;;
+      esac
+    done
+  done
   echo "   eval run artifacts: removed $(echo "$EVAL_RUN_IDS" | wc -l | tr -d ' ') run dir(s) from SeaweedFS"
 fi
 
