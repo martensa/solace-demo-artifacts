@@ -35,6 +35,17 @@ set -euo pipefail
 # postgres/pgadmin (acme_insurance stays seeded unless
 # --purge-data; install.sh re-seeds it).
 #
+# Also SURVIVES, by design, and nowhere else documented: the demo's
+# HISTORY. Chat sessions and tasks stay in the webui and orchestrator
+# databases (they outlive the agents they name), and the artifacts of
+# every agent run stay in the SeaweedFS bucket sam-solace-lab under
+# <user>/<session>/. That is deliberate -- it is what makes a
+# post-mortem possible after a demo is gone -- but it means an
+# uninstall does NOT reclaim that space. The one exception is the
+# evaluation RUN artifacts below, which this script does delete,
+# because the header above promises to remove the run history and
+# leaving the objects behind would make that promise half true.
+#
 #   ./uninstall.sh               # remove both overlays + insurance core
 #   ./uninstall.sh --keep-core   # overlays only (fast demo switch)
 #   ./uninstall.sh --dry-run     # show what would be removed
@@ -167,6 +178,20 @@ else
 fi
 
 echo "== Evaluation (deletes run history too!)"
+# Collect the run ids BEFORE the experiments go: deleting an experiment
+# cascades its eval_runs rows away, and without the ids the artifacts
+# those runs wrote in the object store can no longer be attributed.
+EVAL_RUN_IDS=""
+for exp in ins-ops-quality ins-ops-model-benchmark ins-claims-rules \
+           ins-triage-decision ins-guardrails; do
+  eid=$(find_id /api/v1/platform/evaluations/experiments "$exp")
+  [ -z "$eid" ] && continue
+  EVAL_RUN_IDS="$EVAL_RUN_IDS $(api GET \
+    "/api/v1/platform/evaluations/experiments/$eid/runs" | python3 -c "
+import json,sys
+try: print(' '.join(r['id'] for r in json.load(sys.stdin).get('data',[])))
+except Exception: pass" 2>/dev/null)"
+done
 remove "experiment" /api/v1/platform/evaluations/experiments "ins-ops-quality"
 remove "experiment" /api/v1/platform/evaluations/experiments "ins-ops-model-benchmark"
 remove "experiment" /api/v1/platform/evaluations/experiments "ins-claims-rules"
@@ -187,6 +212,29 @@ else
   api_json PUT /api/v1/platform/evaluations/watchlist \
     '{"agentNames":[]}' >/dev/null
   echo "   watchlist (sam_admin): cleared (HTTP $API_CODE)"
+fi
+
+# The run rows are gone; their artifacts are not. SeaweedFS keeps
+# /buckets/sam-solace-lab/sam-solace-lab/eval/runs/<run id>/ per run
+# (about 1 MB each), and nothing on the platform references them any
+# more. Remove exactly the ids collected above -- never the whole
+# eval/runs prefix, which other demos share.
+# `grep` exits 1 when there is nothing to match, and under `set -e` a
+# bare assignment would take the script down with it.
+EVAL_RUN_IDS=$(echo "$EVAL_RUN_IDS" | tr ' ' '\n' \
+  | grep -E '^[0-9a-f-]{36}$' | sort -u || true)
+if [ -z "$EVAL_RUN_IDS" ]; then
+  echo "   eval run artifacts: none to remove"
+elif [ "$DRY" -eq 1 ]; then
+  echo "   eval run artifacts: WOULD remove $(echo "$EVAL_RUN_IDS" | wc -l | tr -d ' ') run dir(s) from SeaweedFS"
+elif ! kubectl get pod -n sam-solace-lab agent-mesh-seaweedfs-0 >/dev/null 2>&1; then
+  echo "   eval run artifacts: SKIPPED (seaweedfs pod not reachable)"
+else
+  for rid in $EVAL_RUN_IDS; do
+    echo "fs.rm -rf /buckets/sam-solace-lab/sam-solace-lab/eval/runs/$rid"
+  done | kubectl exec -i -n sam-solace-lab agent-mesh-seaweedfs-0 -- \
+    weed shell >/dev/null 2>&1 || true
+  echo "   eval run artifacts: removed $(echo "$EVAL_RUN_IDS" | wc -l | tr -d ' ') run dir(s) from SeaweedFS"
 fi
 
 echo "== Demo dashboards"
@@ -238,6 +286,8 @@ if [ "$PURGE" -eq 1 ]; then
     fi
   done
 fi
+
+rm -f /tmp/uninstall-api-body.json
 
 echo ""
 if [ "$DRY" -eq 1 ]; then
