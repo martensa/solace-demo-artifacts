@@ -134,6 +134,113 @@ unpack_chart() { # <lowercase-label> <archive> -> chart directory
   dirname "$chart_yaml"
 }
 
+# A path that does not exist is almost always a copy/paste artifact
+# rather than a quoting problem: the shell hands us one intact
+# argument (a broken quote would have made the option parser reject
+# the extra words), but the name carries an invisible character -- a
+# non-breaking space pasted instead of a space is the classic one --
+# or a stray trailing blank. Say which, and point at the sibling
+# whose name matches once whitespace and punctuation are ignored.
+#
+# Glob loops rather than `ls`: these names contain spaces.
+fuzzy_key() { # <string> -> letters, digits and dots, lowercased
+  printf '%s' "$1" | tr -cd '[:alnum:].' | tr '[:upper:]' '[:lower:]'
+}
+
+diagnose_missing_path() { # <lowercase-label> <path>
+  local label="$1" path="$2"
+  local parent base norm entry name hits shown prefix
+
+  parent=$(dirname "$path")
+  base=$(basename "$path")
+
+  echo "ERROR: --$label path does not exist:" >&2
+  echo "  $path" >&2
+  echo "  The argument arrived as ONE path, so the quoting is fine;" >&2
+  echo "  the name itself does not match anything on disk." >&2
+
+  if printf '%s' "$path" | LC_ALL=C grep -q '[^ -~]'; then
+    echo "  It contains a non-ASCII byte -- very likely a" >&2
+    echo "  non-breaking space where a plain space is expected." >&2
+  fi
+  case "$path" in
+    *' ') echo "  It ends with a space." >&2 ;;
+    ' '*) echo "  It starts with a space." >&2 ;;
+  esac
+
+  if [ ! -d "$parent" ]; then
+    echo "  The parent directory does not exist either:" >&2
+    echo "    $parent" >&2
+    return 1
+  fi
+
+  norm=$(fuzzy_key "$base")
+  hits=0
+  for entry in "$parent"/*; do
+    [ -e "$entry" ] || continue
+    name=$(basename "$entry")
+    if [ "$(fuzzy_key "$name")" = "$norm" ]; then
+      if [ "$hits" -eq 0 ]; then
+        echo "  A directory here matches once whitespace and" >&2
+        echo "  punctuation are ignored:" >&2
+      fi
+      hits=$((hits + 1))
+      echo "    $name" >&2
+      if printf '%s' "$name" | LC_ALL=C grep -q '[^ -~]'; then
+        echo "    ^ this name contains a non-ASCII byte (almost" >&2
+        echo "      certainly a non-breaking space), so on screen it" >&2
+        echo "      looks exactly like what you passed." >&2
+      fi
+      # A glob avoids reproducing the odd character altogether. The
+      # parent stays quoted (it may contain spaces); the basename is
+      # left unquoted so the shell expands it -- a glob match is one
+      # word even when it contains spaces.
+      echo "    Re-run with a glob instead of the literal name:" >&2
+      printf '      --%s "%s"/%s\n' "$label" "$parent" \
+        "$(printf '%s' "$name" \
+           | LC_ALL=C sed 's/[^[:alnum:].]\{1,\}/*/g')" >&2
+    fi
+  done
+
+  if [ "$hits" -gt 0 ]; then
+    return 1
+  fi
+
+  prefix=$(printf '%s' "$norm" | cut -c1-3)
+  echo "  No similar entry in:" >&2
+  echo "    $parent" >&2
+  if [ -n "$prefix" ]; then
+    shown=0
+    echo "  Entries there that start with '$prefix':" >&2
+    for entry in "$parent"/*; do
+      [ -e "$entry" ] || continue
+      if [ "$shown" -ge 10 ]; then
+        echo "    ..." >&2
+        break
+      fi
+      name=$(basename "$entry")
+      case "$(fuzzy_key "$name")" in
+        "$prefix"*)
+          echo "    $name" >&2
+          shown=$((shown + 1)) ;;
+      esac
+    done
+    if [ "$shown" -eq 0 ]; then
+      echo "    (none) -- what is actually there:" >&2
+      for entry in "$parent"/*; do
+        [ -e "$entry" ] || continue
+        if [ "$shown" -ge 10 ]; then
+          echo "    ..." >&2
+          break
+        fi
+        echo "    $(basename "$entry")" >&2
+        shown=$((shown + 1))
+      done
+    fi
+  fi
+  return 1
+}
+
 resolve_chart() { # <lowercase-label> <path> -> chart directory
   # tr rather than ${label^^}: /bin/bash on macOS is 3.2
   local label="$1" path="$2" upper cands count first
@@ -155,8 +262,14 @@ resolve_chart() { # <lowercase-label> <path> -> chart directory
     return 1
   fi
 
+  if [ ! -e "$path" ] && [ ! -L "$path" ]; then
+    diagnose_missing_path "$label" "$path"
+    return 1
+  fi
+
   if [ ! -d "$path" ]; then
-    echo "ERROR: $upper path '$path' does not exist." >&2
+    echo "ERROR: $upper path '$path' exists but is neither a" >&2
+    echo "directory nor a readable regular file (broken symlink?)." >&2
     return 1
   fi
 
