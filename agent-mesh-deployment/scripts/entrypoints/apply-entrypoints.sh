@@ -6,8 +6,8 @@ set -euo pipefail
 # entrypoints (developer-mcp) declaratively.
 # =============================================================
 # Idempotent: `sam config apply` creates or updates; re-running
-# is safe. Called by start.sh after the models (one-click
-# deployment) and usable standalone.
+# is safe. Run by ../provision.sh after the models (start.sh
+# calls provision.sh in a terminal); usable standalone.
 #
 # NOTE: a config CHANGE redeploys the entrypoint, which
 # invalidates its in-memory minted MCP tokens -- connected

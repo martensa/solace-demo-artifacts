@@ -8,7 +8,8 @@ regardless of which demo overlay is installed. Demo event-mesh
 entrypoints (shop-events, plant-events) live in their demo
 directories instead.
 
-Applied automatically by `start.sh` after the model aliases;
+Applied by `../provision.sh` after the model aliases (`start.sh`
+runs it after the browser login when started in a terminal);
 standalone:
 
 ```bash
@@ -27,8 +28,9 @@ on the same host as the WebUI. One MCP tool per agent-card skill,
 named `<card>_<skill name>` (both sanitized: lowercase,
 non-alphanumerics to `_`; the suffix comes from the skill NAME,
 not the skill id). DB-managed agents and workflows carry their
-UUID instance name as card name -- for example
-`agent_<uuid>_query_retail_crm` -- so tool names change with
+UUID instance name as card name, which 2.348.22 shortens to the
+last 8 hex digits in the tool name -- for example
+`agent_<8 hex>_query_retail_crm` -- so tool names change with
 every platform rebuild.
 
 ALL mesh agents are exposed (`includeTools` is empty): the
@@ -73,8 +75,12 @@ scopes.
 Notes: entrypoint tokens are minted in-memory per entrypoint --
 a restart invalidates them (clients re-auth silently via refresh
 token). Deployed workflows ARE exposed as MCP tools (named
-`workflow_<uuid>_<skill name>`, verified end-to-end); the tool's
-`message` argument lands in `{{workflow.input.text}}`.
+`workflow_<8 hex>_<skill name>`, verified end-to-end); the tool's
+`message` argument lands in `{{workflow.input.text}}`. The tool
+RESULT is only a completion status (`Workflow "<name>" completed
+successfully.`, re-verified on 2.348.22) -- `output_mapping`
+fields do not cross MCP; ask the Orchestrator tool to delegate to
+the workflow when the output itself is needed.
 
 The loopback redirect paths for Claude Code
 (`/callback`), MCP Inspector (`/oauth/callback`) and the SAM

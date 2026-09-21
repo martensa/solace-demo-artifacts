@@ -9,9 +9,14 @@ set -euo pipefail
 # tools/list until the user completes OAuth, so the desktop
 # runtime needs the tool schemas pre-declared at agent startup.
 #
-# Naming (verified live against 2.225.14):
-#   tool = sanitize(card name) + "_" + sanitize(skill NAME)
-# where sanitize = lowercase + every [^a-z0-9_] char becomes "_".
+# Naming (verified live against 2.348.22, 2026-09-21):
+#   tool = prefix(card name) + "_" + sanitize(skill NAME)
+# where sanitize = lowercase + every [^a-z0-9_] char becomes "_",
+# and prefix = sanitize(card name) -- EXCEPT for UUID cards
+# (agent_<uuid>, workflow_<uuid>), which 2.348.22 shortens to
+# <kind>_<last 8 hex digits of the uuid>, e.g. card
+# agent_01a0c38c_7b0a_7e4a_a405_8846c985d10e -> tool
+# agent_c985d10e_general. (2.225.14 used the full card name.)
 # The suffix comes from the skill NAME, not the skill id
 # (Builder skill id "automate-task", name "Automate a Task"
 # -> builder_automate_a_task). The card name of a DB-managed
@@ -73,6 +78,14 @@ def rows(payload):
 def sanitize(s):
     return re.sub(r"[^a-z0-9_]", "_", s.lower())
 
+UUID_CARD = re.compile(r"(agent|workflow)_([0-9a-f]{8}(?:_[0-9a-f]{4}){3}_[0-9a-f]{12})")
+
+def prefix(card_name):
+    m = UUID_CARD.fullmatch(card_name)
+    if m:
+        return f"{m.group(1)}_{m.group(2).replace('_', '')[-8:]}"
+    return sanitize(card_name)
+
 # card name -> human-readable display name
 display = {}
 orch_card = None
@@ -86,8 +99,9 @@ for w in rows("WORKFLOWS_JSON"):
 
 # Orchestrator tool name (the one-call path to workflow RESULTS:
 # the MCP result of a workflow tool carries only a completion
-# status in 2.225.14 -- output and artifacts stay on the mesh).
-orch_tool = f"{sanitize(orch_card)}_general" if orch_card else None
+# status -- output_mapping and artifacts stay on the mesh;
+# verified again on 2.348.22).
+orch_tool = f"{prefix(orch_card)}_general" if orch_card else None
 wf_names = [w["name"] for w in rows("WORKFLOWS_JSON")]
 
 lines, count = [], 0
@@ -100,7 +114,7 @@ for card in rows("CARDS_JSON"):
             continue
     kind = "workflow" if is_workflow else "agent"
     for s in card.get("skills") or []:
-        tool = f"{sanitize(cname)}_{sanitize(s.get('name') or s['id'])}"
+        tool = f"{prefix(cname)}_{sanitize(s.get('name') or s['id'])}"
         desc = (f"{s.get('description') or s.get('name') or s['id']} "
                 f"(K8s mesh {kind}: {disp})")
         if is_workflow:

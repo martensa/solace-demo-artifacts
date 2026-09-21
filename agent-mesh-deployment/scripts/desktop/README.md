@@ -52,7 +52,10 @@ no auth), via `sam config plan/apply`:
   (both sanitized: lowercase, non-alphanumerics to `_`): the
   suffix comes from the skill NAME, not the skill id, and the
   card name of a DB-managed agent is its instanceName
-  (`agent_<uuid>`) -- NOT the display name. The UUIDs change
+  (`agent_<uuid>`) -- NOT the display name. Since 2.348.22 such a
+  UUID card is shortened to `<kind>_<last 8 hex of the uuid>` in
+  the tool name (`agent_01a0c38c_..._8846c985d10e` ->
+  `agent_c985d10e_general`). The UUIDs change
   whenever the platform DB is rebuilt (stop.sh), so run it
   (then `connect.sh`) after every K8s teardown/rebuild; needs a
   valid `sam auth login` against `https://sam.solace.lab`.
@@ -62,13 +65,15 @@ no auth), via `sam config plan/apply`:
   -- 26 tools as of now. Deployed workflows ARE callable MCP
   tools (verified end-to-end); the `message` argument lands in
   `{{workflow.input.text}}`.
-  Workflow result gap (2.225.14, verified twice): the MCP tool
-  result of a workflow call is ONLY a completion status --
-  output and artifacts stay on the mesh, and re-fetching from an
+  Workflow result gap (verified on 2.225.14 and again on
+  2.348.22): the MCP tool result of a workflow call is ONLY a
+  completion status (`Workflow "<name>" completed
+  successfully.`) -- `output_mapping` and artifacts stay on the
+  mesh, and re-fetching from an
   agent afterwards REGENERATES the report (no shared session).
   The generated tool descriptions therefore steer the desktop
   Orchestrator to the one-call path for report requests: call
-  the K8s Orchestrator tool (`agent_<uuid>_general`) and let it
+  the K8s Orchestrator tool (`agent_<8 hex>_general`) and let it
   delegate to the workflow -- it collects the artifacts in the
   same mesh session and returns the full report text as the
   tool result.
@@ -88,8 +93,9 @@ Then chat with the Orchestrator in the app: on the first K8s tool
 call the app runs the Keycloak OAuth login (use a demo user with
 agent invoke scopes, e.g. `sam_admin` or `power_user`). The K8s
 agents appear as tools named `<card>_<skill name>` -- for example
-`agent_<uuid>_query_retail_crm` (DB-managed agents carry their
-UUID instance name as card name).
+`agent_<8 hex>_query_retail_crm` (DB-managed agents carry their
+UUID instance name as card name, shortened to its last 8 hex
+digits in the tool name since 2.348.22).
 
 ## Manual setup (app UI, without connect.sh)
 
