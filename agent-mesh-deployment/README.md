@@ -425,6 +425,13 @@ are classified by content, so the image tarballs in `Images/` are
 not mistaken for charts. `--old` defaults to `SAM_CHART_PATH` from
 `.env`, i.e. the chart currently deployed.
 
+Delivery package directories are routinely named with spaces, and
+sometimes with a trailing one or a non-breaking space that no
+terminal shows. When the given path does not exist but exactly one
+entry beside it matches once whitespace and punctuation are
+ignored, that entry is used and the substitution is reported; with
+two candidates it refuses and lists them.
+
 The report answers the questions an upgrade raises:
 
 - Does `local-k8s-values.yaml` still fit? The values schema is
@@ -463,10 +470,13 @@ Nothing of the old version is left in the cluster.
 
 - `.env`: `SAM_CHART_PATH`, `SAM_APP_IMAGE_TAR`,
   `SAM_STR_IMAGE_TAR`, `SAM_CLI_TAR` to the new package --
-  preflight section 6 prints the three tarball paths verbatim.
-  `SAM_CHART_PATH` must be an UNPACKED chart directory
-  (`start.sh` checks for `Chart.yaml` in it), so unpack the
-  packaged chart once and point it there.
+  preflight section 6 prints the three tarball paths as
+  ready-to-paste, already quoted assignments. `.env` is sourced,
+  so a path containing a space MUST stay quoted or the variable
+  ends up empty. `SAM_CHART_PATH` must be an UNPACKED chart
+  directory (`start.sh` checks for `Chart.yaml` in it), so unpack
+  the packaged chart once and point it there -- ideally somewhere
+  without spaces in the path.
 - `local-k8s-values.yaml`: `samDeployment.gwe.image.tag` and
   `samDeployment.str.image.tag` to the versions from preflight
   section 2, plus any values change preflight asked for.

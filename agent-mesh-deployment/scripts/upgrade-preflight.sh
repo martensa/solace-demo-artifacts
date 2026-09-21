@@ -147,6 +147,48 @@ fuzzy_key() { # <string> -> letters, digits and dots, lowercased
   printf '%s' "$1" | tr -cd '[:alnum:].' | tr '[:upper:]' '[:lower:]'
 }
 
+# Name the invisible difference, so a suggestion that looks identical
+# to the input still makes sense.
+describe_odd_name() { # <name> -- writes to stderr
+  case "$1" in
+    *[[:space:]]) echo "    ^ that name ENDS WITH A SPACE, which is why" >&2
+                  echo "      it looks identical to what you passed." >&2 ;;
+  esac
+  case "$1" in
+    [[:space:]]*) echo "    ^ that name STARTS WITH A SPACE." >&2 ;;
+  esac
+  if printf '%s' "$1" | LC_ALL=C grep -q '[^ -~]'; then
+    echo "    ^ that name contains a non-ASCII byte (almost" >&2
+    echo "      certainly a non-breaking space), so on screen it" >&2
+    echo "      looks like a normal space." >&2
+  fi
+}
+
+# The single entry in the parent directory whose name matches once
+# whitespace and punctuation are ignored -- nothing if there is no
+# such entry or more than one (never guess between two packages).
+find_fuzzy_sibling() { # <path> -> path, or nothing
+  local path="$1" parent base norm entry found count
+  parent=$(dirname "$path")
+  base=$(basename "$path")
+  [ -d "$parent" ] || return 0
+  norm=$(fuzzy_key "$base")
+  [ -n "$norm" ] || return 0
+  found=""
+  count=0
+  for entry in "$parent"/*; do
+    [ -e "$entry" ] || continue
+    if [ "$(fuzzy_key "$(basename "$entry")")" = "$norm" ]; then
+      found="$entry"
+      count=$((count + 1))
+    fi
+  done
+  if [ "$count" -eq 1 ]; then
+    printf '%s\n' "$found"
+  fi
+  return 0
+}
+
 diagnose_missing_path() { # <lowercase-label> <path>
   local label="$1" path="$2"
   local parent base norm entry name hits shown prefix
@@ -186,11 +228,7 @@ diagnose_missing_path() { # <lowercase-label> <path>
       fi
       hits=$((hits + 1))
       echo "    $name" >&2
-      if printf '%s' "$name" | LC_ALL=C grep -q '[^ -~]'; then
-        echo "    ^ this name contains a non-ASCII byte (almost" >&2
-        echo "      certainly a non-breaking space), so on screen it" >&2
-        echo "      looks exactly like what you passed." >&2
-      fi
+      describe_odd_name "$name"
       # A glob avoids reproducing the odd character altogether. The
       # parent stays quoted (it may contain spaces); the basename is
       # left unquoted so the shell expands it -- a glob match is one
@@ -300,8 +338,38 @@ resolve_chart() { # <lowercase-label> <path> -> chart directory
   unpack_chart "$label" "$first"
 }
 
-# Keep the raw argument: if it was the package directory, section 7
-# reports the image and CLI tarballs sitting next to the chart.
+# A path that does not exist, but has exactly one near miss in the
+# same directory, is corrected here -- before anything else reads the
+# argument. Loud, because it is not the path that was asked for, and
+# safe, because this script only reads. Correcting it up front keeps
+# the package scan (section 6) pointed at the real directory too.
+normalize_path() { # <lowercase-label> <path> -> an existing path
+  local label="$1" path="$2" corrected
+  if [ -e "$path" ] || [ -L "$path" ]; then
+    printf '%s\n' "$path"; return 0
+  fi
+  corrected=$(find_fuzzy_sibling "$path")
+  if [ -z "$corrected" ]; then
+    # Leave it be; resolve_chart diagnoses it properly.
+    printf '%s\n' "$path"; return 0
+  fi
+  echo "NOTE: --$label does not exist as given:" >&2
+  echo "    $path" >&2
+  echo "  but exactly one entry in $(dirname "$path") matches it" >&2
+  echo "  once whitespace and punctuation are ignored:" >&2
+  echo "    $corrected" >&2
+  describe_odd_name "$(basename "$corrected")"
+  echo "  Continuing with that path." >&2
+  printf '%s\n' "$corrected"
+}
+
+NEW_CHART=$(normalize_path new "$NEW_CHART")
+if [ -n "$OLD_CHART" ]; then
+  OLD_CHART=$(normalize_path old "$OLD_CHART")
+fi
+
+# Keep the (normalized) argument: if it was the package directory,
+# section 6 reports the image and CLI tarballs next to the chart.
 NEW_INPUT="$NEW_CHART"
 
 NEW_CHART=$(resolve_chart new "$NEW_CHART") || exit 1
@@ -581,10 +649,12 @@ if [ -d "$NEW_INPUT" ]; then
     \( -name '*.tgz' -o -name '*.tar.gz' \) 2>/dev/null | sort \
     | while IFS= read -r f; do
         if is_chart_archive "$f"; then continue; fi
+        # Quoted: .env is SOURCED by start.sh, and these paths
+        # routinely contain spaces (the package directory name).
         case "$(basename "$f")" in
-          *-app-*) printf 'SAM_APP_IMAGE_TAR=%s\n' "$f" >> "$PKG_LIST" ;;
-          *-str-*) printf 'SAM_STR_IMAGE_TAR=%s\n' "$f" >> "$PKG_LIST" ;;
-          *-cli-*) printf 'SAM_CLI_TAR=%s\n' "$f" >> "$PKG_LIST" ;;
+          *-app-*) printf 'SAM_APP_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
+          *-str-*) printf 'SAM_STR_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
+          *-cli-*) printf 'SAM_CLI_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
           *)       printf '# unclassified: %s\n' "$f" >> "$PKG_LIST" ;;
         esac
       done
