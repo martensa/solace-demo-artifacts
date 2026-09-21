@@ -446,7 +446,10 @@ cost**. Do not read the cost value.
 
 **DO**: the latest ins-guardrails report: three attacks, two evaluators
 (Security and LLM Judge), 6 of 6 passed. Do not open the Lab, do not open other
-reports, do not start a run.
+reports, do not start a run. Before the talk, read the latest ins-claims-rules
+score (A9): both pre-runs on 2.348.22 read 9 of 10. If it still does, replace
+"ten out of ten" below with: "nine out of ten -- and the one miss is exactly
+what this test is for: it caught it before a customer did".
 
 **SAY**:
 
@@ -671,11 +674,13 @@ CLM-0913-00002. The manual checks after it cover what it does not.
   entry `ClaimsIntakeAnalyst`, scrolled into view.
 - **A9** Tab 6: the latest **ins-guardrails** report (6 of 6) open. The scores
   in beat 11 and Appendix D were measured on SAM 2.225.14: check that the
-  pre-runs on 2.348.22 read the same, and say what the reports say (2026-09-21:
-  one ins-claims-rules pre-run read 9 of 10 because the Factuality judge
-  returned broken JSON on one row -- re-run the experiment if the latest report
-  is not 10 of 10). The Reports list also shows two experiments of the
-  extended profile and the platform's seeded "Sample Experiment" (target
+  pre-runs on 2.348.22 read the same, and say what the reports say. On
+  2026-09-21 both ins-claims-rules pre-runs read 9 of 10 (Closed QA 5 of 5,
+  Factuality 4 of 5): once the judge returned broken JSON on the BaFin row, once
+  the expert on `fast` wrongly tied a waived deductible to the Fast Lane
+  confirmation. A re-run can read 10 of 10 or 9 of 10 -- use the beat 11
+  fallback line if it stays at 9. The Reports list also shows two experiments of
+  the extended profile and the platform's seeded "Sample Experiment" (target
   Orchestrator); have the answer in Appendix C ready.
 - **A10** Tab 5: the governance dashboard loads; the Tempo panel shows the dry
   fire's trace; the platform-DB tables (roster, RBAC incl. **IdP group ->
@@ -941,7 +946,7 @@ Every figure below is measured or seeded. Anything not on this list, do not say.
 | MongoDB acme_claims | fnol_intake 10,463 (app 4,160, voice agent 2,663, workshop portal 1,560, drive-in scanner 1,040, agency email 1,040), scanner_results 1,040, weather_cells 3 | raw intake, only the outside agent reaches it |
 | Clauses that appear | CG-FL-1, PW-HC-7, PW-RN-3, PW-DED-1, PW-EXCL-1, CG-SC-1, CG-FR-5, CG-BAFIN-30, CG-HOLD-1, PW-TL-1, CG-TL-2 | read them from the card |
 | Models | four platform agents on `fast` (Claude Haiku 4.5), Orchestrator on `general`, outside agent on its own Haiku 4.5 | "a tier, not an endpoint" |
-| Evaluations | measured on SAM 2.225.14 (confirm against the 2.348.22 pre-runs, A9): ins-claims-rules 10/10 (5 questions, Factuality + Closed QA), ins-guardrails 6/6 (3 attacks, Security + LLM Judge), ins-triage-decision 6/6 (3 decisions, LLM Judge + Closed QA); watchlist of 3 agents | "ten of ten, six of six, six of six" |
+| Evaluations | ins-claims-rules (5 questions, Factuality + Closed QA) 10/10 on 2.225.14, 9/10 in both 2.348.22 pre-runs (2026-09-21, A9); ins-guardrails 6/6 (3 attacks, Security + LLM Judge) and ins-triage-decision 6/6 (3 decisions, LLM Judge + Closed QA) on both versions; watchlist of 3 agents | "ten of ten (or nine of ten, beat 11), six of six, six of six" |
 | Dashboard | sam-claims-governance, folder SAM, 34 panels | "I showed you four" |
 | Lab retention | Tempo 48 h, Loki 7 days, Prometheus 7 days | "traces two days, logs seven" |
 
