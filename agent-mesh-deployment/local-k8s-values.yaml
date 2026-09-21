@@ -1,5 +1,6 @@
-# Helm values for Solace Agent Mesh v2 (chart solace-agent-mesh 2.0.x)
-# on the local solace-lab cluster (Rancher Desktop / k3s).
+# Helm values for Solace Agent Mesh v2 (chart solace-agent-mesh
+# 2.1.164, appVersion 2.348.22) on the local solace-lab cluster
+# (Rancher Desktop / k3s).
 #
 # v2 architecture: three Go components replace the v1 core pod --
 #   gwe (Entrypoint Executor: WebUI + platform API, ingress backend),
@@ -30,6 +31,10 @@ sam:
   # works for Keycloak. The redirect URI is computed by the chart as
   # https://<dnsName>/api/v1/auth/callback; Keycloak accepts
   # https://sam.solace.lab/* (setup-keycloak-client.sh).
+  # Chart 2.1.164 adds sam.oauthProvider.claimKey (which OIDC claim
+  # identifies the user). Left unset: the default matches what the
+  # Keycloak claim mappings in scripts/rbac/ already rely on. Revisit
+  # only if identities stop resolving after the upgrade.
   oauthProvider:
     oidc:
       issuer: ""
@@ -78,8 +83,9 @@ llmService:
   # str/awe/gwe, the DB planning alias, the ephemeral test agent's
   # model binding) and kept calling the general/report tier
   # (Opus 4.8), which needs ~106 s while the caller kills at a
-  # hard 30 s. Vendor bug in 2.225.14; see sam-retail-ops-demo/
-  # demo-script.md "Bekannte Grenzen".
+  # hard 30 s. Vendor bug OBSERVED IN 2.225.14 and not re-tested on
+  # 2.348.22; see sam-retail-ops-demo/demo-script.md
+  # "Bekannte Grenzen".
   planningModel: "openai/claude-haiku-4-5-20251001"
   generalModel: "openai/claude-opus-4-8"
   reportModel: "openai/claude-opus-4-8"
@@ -158,7 +164,7 @@ samDeployment:
     image:
       registry: "registry.solace.lab"
       repository: "solace-agent-mesh"
-      tag: "2.225.14"
+      tag: "2.348.22"
       pullPolicy: IfNotPresent
   # str has its own image (Go+Python tool venvs). Never blank its
   # repository -- it would silently inherit the gwe image and break
@@ -167,11 +173,14 @@ samDeployment:
     image:
       registry: "registry.solace.lab"
       repository: "solace-agent-mesh-str"
-      tag: "1.50.3"
+      tag: "1.64.0"
       pullPolicy: IfNotPresent
   # S3 (SeaweedFS) init container used with bundled persistence.
   # The chart default tag "3.97-compliant" is a Solace-private
   # rebuild absent from Docker Hub; pin the valid upstream tag.
+  # The 2.348.22 package ships that build as an image tarball, so an
+  # air-gapped install could load it and drop this override -- here
+  # Docker Hub is reachable, so the upstream tag stays simpler.
   s3Init:
     image:
       tag: "3.97"

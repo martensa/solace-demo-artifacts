@@ -11,6 +11,9 @@ broker connectivity (sam VPN on solace-1,
 `global.broker.embedded: false`) and on solace-lab-infrastructure
 for the surrounding cluster services.
 
+Deployed version: chart `solace-agent-mesh` 2.1.164, appVersion
+2.348.22, str 1.64.0 (app and str are versioned independently).
+
 The chart and images come from the offline SAM delivery package
 and are NOT checked in. `.env` carries the local paths:
 `SAM_CHART_PATH` (unpacked chart), `SAM_APP_IMAGE_TAR` /
@@ -119,6 +122,17 @@ re-provisioning order.
   `3.97-compliant` exists only in Solace's private registry.
 - `global.persistence.namespaceId` also namespaces the broker
   topics -- kept at `sam-solace-lab` for continuity with v1.
+- Chart 2.1.164 adds `sam.oauthProvider.claimKey` (which OIDC
+  claim identifies the user). Deliberately left unset -- the
+  default is what the Keycloak claim mappings in `scripts/rbac/`
+  already rely on. Nothing else changed in the values schema
+  between 2.0.23 and 2.1.164, and the subcharts
+  (persistence-layer 1.10.0, sam-common 1.1.1) are unchanged.
+- `ingress.annotations` is a FREE-FORM map in the schema. A
+  values-schema checker that assumes a missing
+  `additionalProperties` means "forbidden" will report every
+  annotation as an unknown key -- the JSON Schema default is
+  permissive.
 - The `sam-doctor` pre-install hook tests broker/LLM/OIDC
   reachability; it runs warn-only via
   `samDoctor.failOnError: false`.
@@ -137,7 +151,9 @@ re-provisioning order.
   one-word description tweak) and `sam config apply` -- the
   update re-pushes the package, UUIDs stay stable. Check every
   connector-backed agent after any STR restart.
-- The Builder Test engine is broken in 2.225.14: its
+- NOT RE-VERIFIED ON 2.348.22 (observed on 2.225.14, kept
+  because nothing says it was fixed): the Builder Test engine is
+  broken. Its
   `generate_test_plan` str tool is killed at a hard 30 s
   (caller-side `timeout_seconds` default; the skill manifest's
   90 s is ignored) while its LLM call needs ~106 s on Opus -- and
@@ -275,7 +291,8 @@ reference DB-managed roles, never the YAML `sam_admin`.
   (`general` + `planning`) and the `mcp/remote` connector (gw/dev,
   OAuth discovery) to the desktop Orchestrator via
   `sam config apply`. Workflow MCP results carry only a
-  completion status in 2.225.14 -- the tool descriptions steer
+  completion status (observed on 2.225.14, not re-verified on
+  2.348.22) -- the tool descriptions steer
   report requests through the K8s Orchestrator tool instead.
 
 ## References

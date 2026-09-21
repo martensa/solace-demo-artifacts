@@ -357,7 +357,8 @@ Token und Cost, Governance und Security):
   duration_ms and RBAC denies -- the "who uses what" view. RBAC
   GRANTS log at DEBUG and are invisible at the default INFO
   level.
-- **Traces**: SAM emits no OTel spans in 2.225.14. A2A traffic
+- **Traces**: SAM emitted no OTel spans on 2.225.14 (not
+  re-verified on 2.348.22). A2A traffic
   (gwe/awe/str, guaranteed messaging on the `sam` VPN) is traced
   by the BROKER via a telemetry profile and lands in Tempo
   through the event-mesh OTel Collector
@@ -505,7 +506,7 @@ and re-base up front, now that the new images are local:
 
 ```bash
 ./scripts/observability/check-config-drift.sh \
-  solace-agent-mesh:<app-ver> solace-agent-mesh-str:<str-ver>
+  solace-agent-mesh:2.348.22 solace-agent-mesh-str:1.64.0
 ```
 
 On drift, refresh each reported base from the new image, review
@@ -513,7 +514,7 @@ the vendor diff, and keep the `management_server` block out of it
 (it is re-appended from `kustomize/configs/management_server.yaml`):
 
 ```bash
-docker run --rm --entrypoint cat solace-agent-mesh:<app-ver> \
+docker run --rm --entrypoint cat solace-agent-mesh:2.348.22 \
   /etc/sam/configs/gwe/gwe.yaml \
   > scripts/observability/kustomize/configs/gwe.yaml.base
 ```

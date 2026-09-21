@@ -430,7 +430,7 @@ def show(label, chart):
         return
     print(f"  {label:5} name={chart.get('name')} "
           f"version={chart.get('version')} "
-          f"appVersion={chart.get('appVersion')}")
+          f"appVersion={chart.get('appVersion') or '-'}")
     for name, ver in sorted(deps(chart).items()):
         print(f"        dependency {name} = {ver}")
 
@@ -547,49 +547,104 @@ our_values = load_yaml(values_path) or {}
 
 subchart_roots = set(deps(new_chart)) | set(deps(old_chart or {}))
 
+def resolve_schema(schema, root, seen=None):
+    """Follow $ref and fold allOf into one concrete schema."""
+    if not isinstance(schema, dict):
+        return {"properties": {}, "additionalProperties": None, "required": []}
+    if seen is None:
+        seen = frozenset()
+    if "$ref" in schema:
+        ref = schema["$ref"]
+        if ref.startswith("#/") and ref not in seen:
+            target = root
+            for part in ref[2:].split("/"):
+                if not isinstance(target, dict) or part not in target:
+                    break
+                target = target[part]
+            else:
+                return resolve_schema(target, root, seen | {ref})
+        return {"properties": {}, "additionalProperties": None, "required": []}
+
+    props, addl, req = {}, None, list(schema.get("required") or [])
+    for sub in schema.get("allOf") or []:
+        r = resolve_schema(sub, root, seen)
+        props.update(r["properties"])
+        req.extend(r["required"])
+        if r["additionalProperties"] is not None:
+            addl = r["additionalProperties"]
+    props.update(schema.get("properties") or {})
+    if schema.get("additionalProperties") is not None:
+        addl = schema["additionalProperties"]
+    return {"properties": props, "additionalProperties": addl, "required": req}
+
+
+def validate_values(value, schema, root, prefix, unknown, missing,
+                    subchart_roots, chart_defaults, depth=0):
+    """Walk OUR values against the schema.
+
+    Only a node that explicitly says additionalProperties:false can
+    make a key unknown -- an absent additionalProperties means the
+    JSON Schema default, which is PERMISSIVE. Free-form maps such as
+    ingress.annotations live there, and their keys contain dots of
+    their own, so they must never be split into paths.
+
+    anyOf/oneOf nodes are left alone: validating a choice properly is
+    the installer's job, and a false alarm here is worse than a miss
+    (section 7 renders the chart for real).
+    """
+    if not isinstance(schema, dict):
+        return
+    if schema.get("anyOf") or schema.get("oneOf"):
+        return
+
+    r = resolve_schema(schema, root)
+    props, addl = r["properties"], r["additionalProperties"]
+
+    for name in r["required"]:
+        path = f"{prefix}{name}" if prefix else name
+        if isinstance(value, dict) and name in value:
+            continue
+        if dig(chart_defaults, path) is None:
+            missing.append(path)
+
+    if not isinstance(value, dict):
+        return
+
+    for name, sub_value in value.items():
+        path = f"{prefix}{name}" if prefix else name
+        if depth == 0 and name in subchart_roots:
+            # Validated by the subchart's own schema, not this one.
+            continue
+        if name in props:
+            validate_values(sub_value, props[name], root, path + ".",
+                            unknown, missing, subchart_roots,
+                            chart_defaults, depth + 1)
+        elif addl is False:
+            unknown.append(path)
+
+
 rule("3. local-k8s-values.yaml against the NEW values.schema.json")
 if new_schema is None:
     print("  NOTE: the new chart has no values.schema.json -- unknown keys")
-    print("  will not be rejected, but section 6 (helm template) still")
+    print("  will not be rejected, but section 7 (helm template) still")
     print("  catches template-level breakage.")
     new_paths = None
 else:
     new_paths = schema_paths(new_schema)
-    problems = 0
-    for path in value_paths(our_values):
-        top = path.split(".")[0]
-        if path in new_paths:
-            continue
-        if top in subchart_roots:
-            # Subchart values are validated by the subchart's own
-            # schema, not by the parent's.
-            continue
-        # A key under a free-form object (additionalProperties) is fine.
-        parent = path.rsplit(".", 1)[0] if "." in path else None
-        parent_schema = new_paths.get(parent) if parent else None
-        if isinstance(parent_schema, dict) and parent_schema.get(
-                "additionalProperties") not in (False, None):
-            continue
-        print(f"  UNKNOWN KEY: {path}")
-        problems += 1
-    if problems == 0:
-        print("  OK: every key we set exists in the new schema.")
+    unknown, missing = [], []
+    validate_values(our_values, new_schema, new_schema, "",
+                    unknown, missing, subchart_roots, new_values)
+    if unknown:
+        for path in unknown:
+            print(f"  UNKNOWN KEY: {path}")
+        print(f"  {len(unknown)} key(s) sit under a node that forbids")
+        print("  additional properties -- these fail the install.")
     else:
-        print(f"  {problems} key(s) are not in the new schema -- with")
-        print("  additionalProperties:false these fail the install.")
+        print("  OK: every key we set is accepted by the new schema.")
 
-    required_missing = []
-    for path, sub in sorted(new_paths.items()):
-        for req in (sub.get("required") or []) if isinstance(sub, dict) else []:
-            child = f"{path}.{req}"
-            if dig(our_values, child) is None and dig(new_values, child) is None:
-                required_missing.append(child)
-    for req in (new_schema.get("required") or []):
-        if dig(our_values, req) is None and dig(new_values, req) is None:
-            required_missing.append(req)
-    if required_missing:
+    if missing:
         print("  REQUIRED but unset here and undefaulted by the chart:")
-        for path in sorted(set(required_missing)):
+        for path in sorted(set(missing)):
             print(f"    {path}")
 
 rule("4. Schema diff old -> new")
@@ -655,6 +710,9 @@ if [ -d "$NEW_INPUT" ]; then
           *-app-*) printf 'SAM_APP_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
           *-str-*) printf 'SAM_STR_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
           *-cli-*) printf 'SAM_CLI_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
+          postgres-*|seaweedfs-*)
+                   printf '# bundled persistence image: %s\n' "$f" \
+                     >> "$PKG_LIST" ;;
           *)       printf '# unclassified: %s\n' "$f" >> "$PKG_LIST" ;;
         esac
       done
@@ -674,6 +732,26 @@ if [ -d "$NEW_INPUT" ]; then
     echo "  Cross-check the versions in these filenames against the"
     echo "  image defaults in section 2 before pinning them in"
     echo "  local-k8s-values.yaml."
+
+    if grep -q '^# bundled persistence image' "$PKG_LIST"; then
+      echo ""
+      echo "  The bundled persistence images (postgres, seaweedfs) are"
+      echo "  NOT loaded here: global.imageRegistry is \"\" and those"
+      echo "  images are pulled from Docker Hub. They matter only for"
+      echo "  an air-gapped install -- which would also let the chart"
+      echo "  default tag seaweedfs:3.97-compliant be used instead of"
+      echo "  the 3.97 override, since that build ships in the package."
+    fi
+
+    if ! grep -q '^SAM_CLI_TAR=' "$PKG_LIST"; then
+      echo ""
+      echo "  No sam CLI tarball in this package -- install the CLI"
+      echo "  separately and make sure .env does not still point"
+      echo "  SAM_CLI_PATH at the previous version: it takes"
+      echo "  precedence over the sam on your PATH (see"
+      echo "  scripts/lib/common.sh), so a stale entry silently keeps"
+      echo "  using the old CLI."
+    fi
   fi
 fi
 
