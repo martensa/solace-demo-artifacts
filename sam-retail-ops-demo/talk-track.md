@@ -973,11 +973,14 @@ receipts plus the demo stories in the same document schema.
   agent-mesh-solace-agent-mesh-awe -n sam-solace-lab` -- all
   live agents re-register, stale cards vanish. Worth a
   pre-flight glance after any rebuild rehearsal.
-- **Never open the Builder's Test tab on stage**: its plan
-  generator is killed at a hard 30 s while its LLM call needs
-  ~106 s on the Opus tier it insists on using — no configurable
-  surface changes that model (vendor ticket filed). If asked:
-  "known issue in this build; filed upstream."
+- **Warm up the Builder's Test tab before going on stage**
+  (2.348.22): the 30 s kill of 2.225.14 is fixed, and "Create a
+  test for me" works. But the FIRST test plan after every str
+  start takes ~90 s: the plan tool sends `temperature`, the
+  LiteLLM proxy needs ~84 s to return Opus 4.8's rejection, and
+  only then does the str retry without it. It remembers that, so
+  every later plan comes back in ~4 s. Run one throwaway test in
+  the pre-flight after any rebuild or str restart.
 - **Event-trigger → workflow is defective in 2.225.14**: with
   `targetWorkflowName` the entrypoint delivers an EMPTY A2A
   message (sniff-verified). That is WHY the incident path runs

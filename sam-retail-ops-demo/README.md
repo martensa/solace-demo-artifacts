@@ -18,7 +18,7 @@ With the base platform running (one-click deployment plus
 Idempotent: starts the host data stores (postgres/pgadmin with
 the `retail_*` databases seeded from `postgres/`, MongoDB incl.
 first-run seed), applies the retail core package (`core/`), the
-five model aliases, the demo mesh overlay, the eval package and
+additional model aliases, the demo mesh overlay, the eval package and
 the demo dashboard. By default it leaves the
 Retail POS Analyst REMOVED while the `retail-poslog` connector
 stays pre-provisioned: the live Builder beat creates only the

@@ -35,7 +35,7 @@ With the base platform running (one-click deployment plus
 Idempotent: starts the host data stores (postgres/pgadmin with
 the four seeded `mfg_*` databases, MongoDB `mfg-plant-mongo` on
 port 27017 incl. first-run seed), applies the manufacturing core
-package (`core/`), the five model aliases, the demo mesh
+package (`core/`), the additional model aliases, the demo mesh
 overlay, the eval package and the demo dashboard. By default it
 leaves the Shop Floor Analyst REMOVED while the two MongoDB
 connectors stay pre-provisioned: the live Builder beat creates
