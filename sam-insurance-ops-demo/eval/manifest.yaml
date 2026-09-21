@@ -1,5 +1,8 @@
 # Offline evaluation for the insurance ops demo. install.sh applies
-# this manifest (step 7); preflight pre-runs all five experiments:
+# this manifest (step 7); preflight pre-runs all five experiments.
+# By hand: a bare `sam eval run` answers 401 "Missing authorization
+# header" even with a valid CLI login (still so on CLI 2.348.22) --
+# export SAM_AUTH_TOKEN first (talk-track.md Appendix E), then:
 #   sam config apply -m manifest.yaml
 #   sam eval run ins-ops-quality --url https://sam.solace.lab --threshold 0.8
 #   sam eval run ins-ops-model-benchmark --url https://sam.solace.lab
@@ -13,8 +16,9 @@
 # pre-runs all five, and talk-track beat 11 shows one finished
 # report (ins-guardrails). ins-triage-decision is the one worth
 # running live in a longer technical session (measured 102 s and
-# 117 s wall time on 2026-09-16, 6/6 on LLM Judge + Closed QA).
-# Workflows cannot be experiment targets in 2.225.14: the claim-
+# 117 s wall time on 2026-09-16 on SAM 2.225.14, 6/6 on LLM Judge +
+# Closed QA). Workflows cannot be experiment targets (2.225.14,
+# still in 2.348.22): the claim-
 # triage workflow is covered through its node agents (rules ->
 # Knowledge Expert, decision -> Claims Triage Decision) plus the
 # guardrail set on the Query Expert. Apply order matters: the

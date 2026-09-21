@@ -6,8 +6,12 @@ set -euo pipefail
 # (talk-track click paths, window setup, rehearsal).
 #
 # The UI is hash-routed. Link patterns (verified against the app
-# bundle and the live deployment, 2026-08-10):
-#   workflow    #/agents/workflows/workflow_<platform-id, - -> _>
+# bundle and the live deployment, 2026-08-10; the workflow route
+# re-checked on 2.348.22, 2026-09-21):
+#   workflow    #/agents/workflows/<display name, URL-encoded>
+#               or #/agents/workflows/workflow_<platform-id, - -> _>
+#               (the route resolves the card name or display name;
+#               a config-name link shows "Workflow not found")
 #   agent       #/agent-management?id=<platform-id>
 #   connector   #/connectors/<platform-id>
 #   entrypoint  #/entrypoints/<platform-id>
@@ -39,8 +43,11 @@ resolve_sam_cli
 sam_auth_token
 
 fetch() {  # fetch PATH -> body (exits with hint on auth failure)
-  local code
-  code=$(curl -sk -m 20 "$SAM_URL$1" \
+  local code p="$1"
+  # 2.348.22 pages every list endpoint (default 20 per page, newest
+  # first): read the maximum page of 100 (the demos stay far below).
+  case "$p" in *\?*) ;; *) p="$p?pageSize=100" ;; esac
+  code=$(curl -sk -m 20 "$SAM_URL$p" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
     -o /tmp/demo-links-body.json -w "%{http_code}")
   if [ "$code" != "200" ]; then

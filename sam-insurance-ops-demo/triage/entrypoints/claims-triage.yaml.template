@@ -5,12 +5,15 @@
 #
 # Why a template: two platform bugs of SAM 2.225.14 on the
 # event-mesh entrypoint -> WORKFLOW target (verified 2026-09-10,
-# build spec section 0 / 0.1):
+# build spec section 0 / 0.1), still present in 2.348.22
+# (re-verified 2026-09-21, workaround included):
 #   (a) promptTemplate renders only for AGENT targets; a workflow
 #       target receives an EMPTY message (DATAGO-148462).
 #       Workaround: inputExpression "input.payload" passes the JSON
 #       payload through -- the workflow input becomes
-#       {"text": "<payload JSON, keys sorted>"}. promptTemplate
+#       {"text": "<payload JSON, keys sorted>"} (shape observed on
+#       2.225.14; on 2.348.22 the workflow gets the event JSON and
+#       decides, the exact wrapping was not re-checked). promptTemplate
 #       stays because the schema requires it; it is ignored for
 #       workflow targets.
 #   (b) the gateway publishes the request to
@@ -26,9 +29,10 @@
 # Fallback if the direct path ever breaks: targetAgent Orchestrator
 # with a promptTemplate that delegates to the claim-triage workflow.
 #
-# Receivers come up ~20-40 s after the deploy (gwe log "persistent
-# receiver started"); events published before that are LOST (no
-# queue yet) -- install.sh waits for the log line.
+# Receivers come up about a second after the deploy on 2.348.22
+# (2.225.14: 20-40 s; gwe log "persistent receiver started");
+# events published before that are LOST (no queue yet) --
+# install.sh still waits for the log line as a guard.
 #
 # Mutually exclusive with ../../mesh/entrypoints/claims-events.yaml
 # (the extended profile): both subscribe to acmeins/claims/fnol/

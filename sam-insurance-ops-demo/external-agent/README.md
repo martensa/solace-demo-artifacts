@@ -2,8 +2,10 @@
 
 The one agent of the triage demo that runs OUTSIDE the SAM
 platform. It is a SAM v1 Python-SDK app (image
-`solace-agent-mesh-enterprise:1.97.2` with the `sam_mongodb` 0.1.0
-plugin) deployed as a plain Kubernetes workload in the namespace
+`solace-agent-mesh-enterprise:latest` from `registry.solace.lab`,
+pulled with `imagePullPolicy: Always`; on 2026-09-21 `latest` was
+the 1.97.2 build) with the `sam_mongodb` 0.1.0 plugin, deployed
+as a plain Kubernetes workload in the namespace
 `sam-solace-lab-agents`, next to the Web Research and Web Scraper
 agents. It joins the mesh over the broker only: the platform holds
 no deployment and no database row for it, just the one allow-list
@@ -45,9 +47,10 @@ as plain text. The `sam_*` Prometheus metrics do not count it
 ## How it is reached
 
 A workflow node cannot target a broker-discovered v1 agent: the CLI
-rejects the cross-reference, and forced in through the REST API the
-v1 structured-invocation handler never answers the v2 workflow
-engine (the node times out after 90 s). The `intake` node of the
+rejects the cross-reference (re-checked on 2.348.22), and forced in
+through the REST API the v1 structured-invocation handler never
+answered the v2 workflow engine (the node timed out after 90 s;
+observed on 2.225.14, not re-verified on 2.348.22). The `intake` node of the
 `claim-triage` workflow therefore targets a platform agent, the
 `Claims Intake Liaison`, which has no toolsets of its own and
 carries one key in its `additionalConfigurations`:
@@ -59,8 +62,10 @@ interAgentCommunication:
 ```
 
 That key is the whole mechanism. An agent without it has no
-delegation tool at all, only its own `sub_task`; the built-in
-Orchestrator carries the same key set to `["*"]`. So the liaison
+delegation tool at all, only its own `sub_task` (observed on SAM
+2.225.14, not re-verified on 2.348.22); the built-in Orchestrator
+carries the same key set to `["*"]` (unchanged in 2.348.22). So
+the liaison
 may call exactly one agent in the world, by name, declared in its
 config and reviewable in the UI -- reach across the platform
 boundary is declared and enforced, not implicit. It delegates ONE
@@ -76,8 +81,9 @@ node. That works, but it costs about 13 s of Opus-tier overhead on
 the critical path; the liaison does the hop on the `fast` tier.
 
 The agent itself has `agent_discovery` disabled and an empty
-`allow_list`: a v1 SDK agent cannot parse v2 agent cards, so it is
-a leaf that never calls anyone.
+`allow_list`: a v1 SDK agent cannot parse v2 agent cards (observed
+on SAM 2.225.14, not re-verified against the 2.348.22 cards), so it
+is a leaf that never calls anyone.
 
 ## Files
 
@@ -119,7 +125,7 @@ LLM-visible tools, so the twelve extra tool declarations only slowed
 the per-claim turn. With the view, the single call and those two
 cuts, the analyst answers a per-claim request in about 5 s -- its
 share of an `intake` node of about 19 s, measured on the live
-platform on 2026-09-16.
+platform on 2026-09-16 (SAM 2.225.14).
 
 ## Install, verify, remove
 
@@ -138,7 +144,19 @@ The card is discovered when the gateway log shows
 `"discovered agent" agentName=ClaimsIntakeAnalyst` or when
 `GET /api/v1/agentCards` (bearer token) lists the name; the pod log
 line `MongoDB Agent initialization completed successfully` proves
-the store connection. Remove with
+the store connection.
+
+The image tag `latest` moves, and `imagePullPolicy: Always` makes
+every pod start resolve it against `registry.solace.lab`, so the
+registry must be reachable whenever the pod (re)starts. Which build
+a running pod actually uses:
+
+```bash
+kubectl get pods -n sam-solace-lab-agents -l app=sam-claims-intake-agent \
+  -o jsonpath='{.items[*].status.containerStatuses[*].imageID}'
+```
+
+Remove with
 `kubectl delete -f external-agent/ --ignore-not-found`
 (`../uninstall.sh` does this).
 

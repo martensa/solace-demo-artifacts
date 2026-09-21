@@ -26,18 +26,19 @@ target:
   url: https://sam.solace.lab
   auth:
     type: oauth
-variables:
-  # Demo defaults (repo convention); override via environment at
-  # apply time, e.g. INS_DB_PASSWORD=secret ./install.sh
-  INS_DB_USERNAME: "postgres"
-  INS_DB_PASSWORD: "postgres"
-  # Model tier of the two experts. `fast` (Haiku 4.5) for the
-  # default triage profile: the claim-triage workflow needs its
-  # policy and rules nodes back within ~12 s, and the benchmark
-  # experiment shows fast matching the general tier on the demo
-  # questions. install.sh --extended exports INS_EXPERT_TIER=general
-  # (Opus 4.8) for the long-form analyses of the extended profile.
-  INS_EXPERT_TIER: "fast"
+# Environment variables of this package (no `variables:` block on
+# purpose): INS_DB_USERNAME / INS_DB_PASSWORD (default postgres) and
+# INS_EXPERT_TIER (default fast), each defaulted INLINE where it is
+# used -- `${VAR, default}` -- so an exported value wins. A default
+# under `variables:` beats the environment on CLI 2.348.22 (verified
+# 2026-09-21: install.sh --extended exported INS_EXPERT_TIER=general
+# and the experts still landed on fast). INS_EXPERT_TIER: `fast`
+# (Haiku 4.5) for the default triage profile -- the claim-triage
+# workflow needs its policy and rules nodes back within ~12 s, and the
+# benchmark shows fast matching general on the demo questions;
+# install.sh --extended exports general (Opus 4.8) for the long-form
+# analyses of the extended profile. Override e.g.
+#   INS_DB_PASSWORD=secret ./install.sh
 resources:
   connectors:
     - Acme Insurance DB

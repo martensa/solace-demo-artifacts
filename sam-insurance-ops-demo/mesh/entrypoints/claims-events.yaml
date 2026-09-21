@@ -13,7 +13,8 @@
 # the event is only acknowledged after the workflow/agent
 # finishes (redelivery on crash).
 #
-# Rehearsal-hardened 2026-09-10 (five live runs): the three
+# Rehearsal-hardened 2026-09-10 (five live runs on SAM 2.225.14;
+# not re-rehearsed on 2.348.22): the three
 # analysis rules make the ORCHESTRATOR gather the specialists'
 # findings AND write the report itself, with the report skeleton
 # inline. Delegating the merge to the reporter agents was the one
@@ -82,7 +83,8 @@ spec:
           - topic: "acmeins/claims/triage/stalled/>"
             qos: 1
         messageFormat: json
-        # NOTE (verified 2026-07-31, retail): with
+        # NOTE (verified 2026-07-31, retail; still the case on
+        # 2.348.22 -- re-verified 2026-09-21): with
         # targetWorkflowName the entrypoint delivers an EMPTY A2A
         # message -- promptTemplate is only rendered for AGENT
         # targets. Therefore the analysis paths run through the

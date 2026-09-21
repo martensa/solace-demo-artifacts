@@ -22,7 +22,8 @@ spec:
     # NOTE: event-triggered runs deliver NO structured input keys
     # (awe logs inputKeys: []), so nodes must reference the raw
     # task text as {{workflow.input}} -- {{workflow.input.text}}
-    # stays an unresolved literal (verified 2026-07-31, retail).
+    # stays an unresolved literal (verified 2026-07-31, retail; not
+    # re-verified on 2.348.22).
     version: "1.0.0"
     display_name: Stalled Cohort Report
     description: >-
@@ -41,7 +42,7 @@ spec:
           cohort report.
     # Workflow-level INPUT contract: describes the realtime
     # claims event that (conceptually) triggers this SOP -- the
-    # exact payload shape cockpit/index.html publishes on
+    # exact payload shape cockpit/extended.html publishes on
     # acmeins/claims/triage/stalled/>. Today the event PATH runs
     # via the Orchestrator (promptTemplate quirk), so this
     # schema is the published contract + the typed Run form in
@@ -99,7 +100,10 @@ spec:
       # Output contracts (JSON Schema) on the three specialist
       # nodes: the platform validates the agent's answer against
       # the schema and auto-retries on violation -- deterministic
-      # hand-offs mid-workflow. The final report node stays
+      # hand-offs mid-workflow. (Not re-verified on 2.348.22; the
+      # triage run on 2.225.14 saw a violating node end with a null
+      # output and no retry, see talk-track.md Appendix E.) The
+      # final report node stays
       # free-form markdown on purpose (it is read aloud).
       - id: insurance
         type: agent

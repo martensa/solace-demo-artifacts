@@ -9,8 +9,9 @@
 # The claims-triage ENTRYPOINT is deliberately NOT listed here. Its
 # rule must carry the workflow's RUNTIME name
 # (workflow_<id with - replaced by _>) instead of "claim-triage" --
-# a 2.225.14 platform bug, see entrypoints/claims-triage.yaml.
-# template -- and that id only exists once this manifest has
+# a platform bug (2.225.14, still in 2.348.22), see
+# entrypoints/claims-triage.yaml.template -- and that id only
+# exists once this manifest has
 # created the workflow. install.sh therefore applies this manifest
 # first, reads the workflow id, renders entrypoints/*.template into
 # .rendered/ (git-ignored) and applies .rendered/ as a second,

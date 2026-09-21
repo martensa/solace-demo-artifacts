@@ -7,14 +7,18 @@
 # agent Claims Intake Liaison) and the governing rules (knowledge
 # base) -- and a fast merge agent turns the three JSON sections
 # into one schema-bound decision. Measured end to end on the live
-# platform (2026-09-16, four anchor claims): 26.8 s, 27.7 s, 30.6 s
-# and 32.7 s from the FNOL event to the decision on the result
-# topic. Typical node breakdown: policy 13 s, intake 19 s (of which
-# the external analyst itself is 5 s), rules 9 s, decision 12 s.
+# platform (2026-09-16, SAM 2.225.14, four anchor claims): 26.8 s,
+# 27.7 s, 30.6 s and 32.7 s from the FNOL event to the decision on
+# the result topic. Typical node breakdown: policy 13 s, intake 19 s
+# (of which the external analyst itself is 5 s), rules 9 s,
+# decision 12 s. On SAM 2.348.22 the preflight dry fire decided in
+# 28 s (2026-09-21); the node times were not re-measured there.
 # The three fan-out nodes run in parallel, so the critical path is
 # intake plus decision -- tune those two, not the others.
 #
-# Design decisions (verified 2026-09-10 on 2.225.14, spec 0.1):
+# Design decisions (verified 2026-09-10 on 2.225.14, spec 0.1; on
+# 2.348.22 the CLI's rejection of a v1-agent node was re-checked,
+# the other observations below were not re-verified):
 # - The three first-level nodes carry ONLY `instruction:` and NO
 #   `input:`. A node without `input:` receives the raw workflow
 #   input {"text": "<FNOL event JSON>"} as its input FILE plus the
@@ -268,7 +272,8 @@ spec:
       # instruction only, NO input: the raw event is the input file.
       # The reference SQL is given verbatim (verified 2026-09-10:
       # 1-6 ms and 8-32 ms on the seeded acme_insurance) so the
-      # general-tier expert does not explore the schema first.
+      # expert (fast tier in this profile) does not explore the
+      # schema first.
       - id: policy
         type: agent
         agent_name: Acme Insurance Query Expert
@@ -486,8 +491,9 @@ spec:
               description: 1-2 sentences with the key intake facts.
       # ---- fan-out 3/3: the governing rules (knowledge base) ------
       # instruction only, NO input. At most three searches with
-      # top_k 3 and no get_knowledge_document: the general-tier
-      # expert otherwise reads six documents in full (~40 s).
+      # top_k 3 and no get_knowledge_document: the expert otherwise
+      # reads six documents in full (~40 s, seen on the general
+      # tier; this profile runs it on fast).
       - id: rules
         type: agent
         agent_name: Acme Claims Knowledge Expert

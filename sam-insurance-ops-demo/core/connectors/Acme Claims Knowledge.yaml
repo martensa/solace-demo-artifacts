@@ -1,5 +1,6 @@
-# MCP connector to the Acme claims knowledge base. SAM 2.225.14
-# has NO native Qdrant (vector store) connector, so the demo runs
+# MCP connector to the Acme claims knowledge base. SAM has NO
+# native Qdrant (vector store) connector (2.225.14, still in
+# 2.348.22), so the demo runs
 # a small MCP server (../../qdrant/mcp-server/server.py, FastMCP,
 # Streamable HTTP on host port 8765, endpoint path /mcp) that
 # fronts the Qdrant collection acme_knowledge and exposes five
@@ -9,7 +10,10 @@
 # section, score, text) and get_knowledge_document (full text by
 # doc_id). The server is unauthenticated (auth_type none), so no
 # static tool manifest is needed: the platform lists the tools
-# directly at connector create/update. SAM pods reach the host
+# directly at connector create/update. After an str restart the
+# first tool call gets "tool not in manifest"; on 2.348.22 the
+# agent runtime re-registers and retries, so it succeeds about a
+# second later (no connector touch needed). SAM pods reach the host
 # container via host.docker.internal (same as postgres/mongo).
 kind: connector
 name: Acme Claims Knowledge

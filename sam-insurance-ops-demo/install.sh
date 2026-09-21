@@ -5,11 +5,13 @@ set -euo pipefail
 # install.sh -- layer the Acme Insurance demo onto a running
 # agent-mesh-deployment (idempotent; safe to re-run).
 # =============================================================
-# Prerequisites (from agent-mesh-deployment):
+# Prerequisites (from agent-mesh-deployment, SAM 2.348.22):
 #   ./scripts/setup-keycloak-client.sh + setup-keycloak-users.sh
 #   ./scripts/load-images.sh && ./scripts/start.sh
+#     start.sh runs ./scripts/provision.sh (RBAC, models,
+#     max_tokens, developer-mcp); headless, run it afterwards:
+#     ./scripts/provision.sh --login
 #   sam auth login solace-lab --url https://sam.solace.lab
-#   ./scripts/rbac/apply-rbac.sh
 #
 # Two PROFILES share the same core (steps 1-4) and differ in the
 # overlay. Only one of them is on the platform at a time: both
@@ -25,8 +27,9 @@ set -euo pipefail
 #      server (qdrant/, built locally, port 8765) incl. the
 #      one-shot corpus seed (first run downloads the embedding
 #      model -- allow up to 6 minutes)
-#   3. The 5 additional model aliases (idempotent re-apply; on a
-#      fresh install start.sh skipped them for lack of a login).
+#   3. The additional model aliases (idempotent re-apply of the
+#      model step of provision.sh: the LiteLLM aliases plus
+#      `google gemini`, skipped with a warning without its key).
 #      They come before step 4 because the agents bind to them.
 #   4. Insurance core package (core/: Insurance DB + Claims
 #      Knowledge connectors, schema/guide skills, query experts;
@@ -105,6 +108,9 @@ sam_auth_token
 
 api() {  # api METHOD PATH -> body on stdout, code in API_CODE
   local method="$1" path="$2"
+  # 2.348.22 pages every list endpoint (default 20 per page, newest
+  # first): read the maximum page of 100 (the demos stay far below).
+  [ "$method" = GET ] && case "$path" in *\?*) ;; *) path="$path?pageSize=100" ;; esac
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
     -o /tmp/install-api-body.json -w "%{http_code}")
@@ -247,8 +253,9 @@ else
   exit 1
 fi
 
-# Model tier of the two core experts, passed into the core manifest
-# variable INS_EXPERT_TIER (default "fast"). The triage profile needs
+# Model tier of the two core experts, exported as INS_EXPERT_TIER
+# (the core agents default it inline to "fast"; see core/manifest.yaml
+# for why it is no manifest variable). The triage profile needs
 # the policy and rules nodes back within seconds -> fast (Haiku 4.5;
 # the model benchmark shows it matching general on the demo
 # questions); the extended profile's long-form cohort analyses stay
@@ -371,8 +378,9 @@ apply_pkg "$SCRIPT_DIR/triage"
 # (c) The event-mesh entrypoint must target the workflow's RUNTIME
 #     name (workflow_<id with - replaced by _>): with the plain
 #     workflow name the gateway publishes to a topic nobody listens
-#     on (2.225.14, see the spec/README). The id exists only after
-#     (b), so the entrypoint is rendered from a template now.
+#     on (2.225.14, still in 2.348.22 -- re-verified 2026-09-21; see
+#     the README). The id exists only after (b), so the entrypoint
+#     is rendered from a template now.
 WF_ID=$(id_of /api/v1/platform/workflows claim-triage)
 if [ -z "$WF_ID" ]; then
   echo "ERROR: workflow 'claim-triage' not on the platform after the" >&2
@@ -396,8 +404,9 @@ sed "s/__WORKFLOW_RUNTIME__/$WF_RUNTIME/g" "$TPL_DIR/claims-triage.yaml.template
 echo "   rendered claims-triage entrypoint -> targetWorkflowName $WF_RUNTIME"
 echo "   (triage/.rendered/, git-ignored)"
 apply_pkg "$RENDERED"
-# (d) Receivers come up ~20-40 s after the deploy; events published
-#     before that are LOST (no queue yet).
+# (d) Receivers come up about a second after the deploy on 2.348.22
+#     (2.225.14: 20-40 s); events published before that are LOST
+#     (no queue yet). The wait stays as a guard.
 echo "   waiting up to 60 s for the gwe receiver of rule fnol_received ..."
 RCV=0; END=$(( $(date +%s) + 60 ))
 until [ "$(date +%s)" -ge "$END" ]; do
@@ -488,7 +497,10 @@ if [ "$WITH_ANALYST" -eq 0 ]; then
   # infrastructure, like the postgres/MCP connectors): the live
   # Builder beat only creates the AGENT binding them -- one
   # config, no connector sub-tasks, no cross-component
-  # validation (optimization inherited from the mfg demo).
+  # validation (optimization inherited from the mfg demo; the
+  # Builder's connector-validation deadlock behind it is
+  # 2.225.14, still the case on 2.348.22 -- re-verified
+  # 2026-09-21).
   echo "   removing Storm Intake Analyst (live Builder demo; connectors stay)"
   SIA_ID=$(api GET /api/v1/platform/agents | python3 -c "
 import json,sys

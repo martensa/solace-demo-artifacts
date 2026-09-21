@@ -13,15 +13,19 @@ spec:
   type: standard
   # Multi-model demo beat: the report merge runs on the workflow
   # model (Claude Sonnet 5) while the Insurance DB / Knowledge
-  # specialists stay on general (Claude Opus 4.8) and the intake
-  # analyst on reasoning (DeepSeek V3.2) -- visibly different
-  # models in Activities and the token dashboard.
+  # specialists (general, Claude Opus 4.8, in the extended profile)
+  # and the intake analyst (general since the rehearsals; reasoning
+  # / DeepSeek V3.2 drifted, see fallback/agents) think -- visibly
+  # different models in Activities and the token dashboard.
   # NOTE: model aliases are platform-normalized to lowercase.
   modelProvider:
     - workflow
   # Pure analysis/merge agent: NO toolsets. With artifact tools
   # the LLM tries to call _notify_artifact_save (not a real tool)
-  # and the run fails -- verified 2026-07-31 in the retail demo.
+  # and the run fails -- verified 2026-07-31 in the retail demo
+  # (not re-verified on 2.348.22, where an empty list still leaves
+  # the card's built-in artifact/data tools: no connector, no
+  # toolset, no database access -- not zero tools).
   toolsets: []
   skills:
     - id: stalled_cohort_synthesis

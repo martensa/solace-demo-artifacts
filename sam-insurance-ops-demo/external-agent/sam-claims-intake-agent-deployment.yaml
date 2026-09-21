@@ -27,9 +27,14 @@ spec:
     spec:
       containers:
       - name: sam-claims-intake-agent
-        # Contains the v1 SDK, sam_mongodb 0.1.0 and pymongo.
-        image: registry.solace.lab/solace-agent-mesh-enterprise:1.97.2
-        imagePullPolicy: IfNotPresent
+        # Contains the v1 SDK, sam_mongodb 0.1.0 and pymongo. Tracks
+        # the newest v1 enterprise build in the lab registry (on
+        # 2026-09-21 `latest` == 1.97.2, same digest). Always: with a
+        # moving tag, IfNotPresent would keep a node on a stale
+        # `latest`; against registry.solace.lab it only costs a
+        # manifest check, the layers stay cached.
+        image: registry.solace.lab/solace-agent-mesh-enterprise:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
         workingDir: /app

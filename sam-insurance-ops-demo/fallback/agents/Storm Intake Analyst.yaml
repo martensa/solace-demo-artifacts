@@ -1,5 +1,5 @@
 # The MongoDB intake agent -- normally created LIVE in the demo
-# via the AI Builder (prompt in ../talk-track.md). This file is
+# via the AI Builder (prompt in ../talk-track-extended.md). This file is
 # the break-glass fallback and the reference for what the Builder
 # should produce.
 kind: agent

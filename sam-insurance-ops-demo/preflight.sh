@@ -14,7 +14,7 @@ set -uo pipefail
 #
 # Every check that fails triggers its fix and re-checks:
 #   platform resources missing   -> ./install.sh [--extended]
-#   entrypoint not deployed      -> gatewayDeployments deploy (triage)
+#   entrypoint not deployed      -> entrypointDeployments deploy (triage)
 #   external agent not ready     -> kubectl apply external-agent/ (triage)
 #   Storm Intake Analyst present -> deleted (extended, live Builder beat)
 #   postgres data                -> postgres/seed.sh + spot-check
@@ -197,6 +197,9 @@ resolve_sam_cli >/dev/null 2>&1 || resolve_sam_cli
 
 api() {  # api METHOD PATH -> body on stdout, code in API_CODE
   local method="$1" path="$2"
+  # 2.348.22 pages every list endpoint (default 20 per page, newest
+  # first): read the maximum page of 100 (the demos stay far below).
+  [ "$method" = GET ] && case "$path" in *\?*) ;; *) path="$path?pageSize=100" ;; esac
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
     -o /tmp/preflight-body.json -w "%{http_code}")
@@ -222,11 +225,16 @@ try:
         if x.get('name')=='$1': print(x['id'])
 except Exception: pass"; }
 field_of() {  # field_of NAME FIELD -> the field of the named list item
+  # A status field may be a plain string (2.225.14) or an object
+  # {"status": "running"} (runtimeStatus since 2.348.22) -- print the
+  # status string in both cases.
   python3 -c "
 import json,sys
 try:
     for x in json.load(sys.stdin).get('data',[]):
-        if x.get('name')==sys.argv[1]: print(x.get(sys.argv[2],''))
+        if x.get('name')==sys.argv[1]:
+            v=x.get(sys.argv[2],'')
+            print(v.get('status','') if isinstance(v,dict) else (v or ''))
 except Exception: pass" "$1" "$2"; }
 
 # ---- profile detection (before the first numbered step: the step
@@ -363,7 +371,7 @@ if [ "$PROFILE" = "triage" ]; then
       EP_DEP=$(api GET /api/v1/platform/entrypoints | field_of claims-triage deploymentStatus)
       [ "$EP_DEP" = "deployed" ] && break
     done
-    if [ "$EP_DEP" = "deployed" ]; then fixd "entrypoint claims-triage deployed (receivers follow in ~30 s)"
+    if [ "$EP_DEP" = "deployed" ]; then fixd "entrypoint claims-triage deployed (receivers follow within about a second)"
     else bad "entrypoint claims-triage still '$EP_DEP' (deploy POST -> HTTP $API_CODE)"; fi
   fi
 else
@@ -523,7 +531,7 @@ eval_preruns() {  # every experiment in $EVAL_EXPERIMENTS has a completed run
     EID=$(api GET /api/v1/platform/evaluations/experiments | id_of "$exp")
     if [ -z "$EID" ]; then bad "experiment '$exp' not on platform"; continue; fi
     if api GET "/api/v1/platform/evaluations/experiments/$EID/runs" \
-        | grep -q '"completed"'; then
+        | grep -qE '"(completed|completed_with_warnings)"'; then
       ok "experiment '$exp' has a completed run"
     else
       echo "          fix: running '$exp' (this is the ~15-min part) ..."
@@ -543,7 +551,7 @@ eval_preruns() {  # every experiment in $EVAL_EXPERIMENTS has a completed run
         (cd "$SCRIPT_DIR/eval" && "$SAM_CLI" config plan >/dev/null 2>&1) || true
         sam_auth_token >/dev/null 2>&1
         if api GET "/api/v1/platform/evaluations/experiments/$EID/runs" \
-            | grep -q '"completed"'; then DONE=1; break; fi
+            | grep -qE '"(completed|completed_with_warnings)"'; then DONE=1; break; fi
         sleep 30
       done
       if [ "$DONE" -eq 1 ]; then
@@ -631,7 +639,8 @@ else
   echo "     (Activities), C cockpit/extended.html (LED green), D Grafana."
   echo "   - Links: ./demo-links.sh"
   echo "   - Rehearsed break-glass buttons? RESET the cockpit after."
-  echo "   - Never open the Builder's Test tab on stage."
+  echo "   - Builder Test tab works since 2.348.22 -- warm it up once after"
+  echo "     any str restart (first test plan ~90 s, then ~4 s)."
 fi
 echo ""
 echo "== Result: $PASS ok, $FIXED fixed, $WARNED warned, $FAILED failed"

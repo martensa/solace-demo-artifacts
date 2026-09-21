@@ -7,10 +7,13 @@
 > directory is now the 10-minute governance profile in
 > `talk-track.md` ("Claim Triage in 30 Seconds"); the two
 > profiles are mutually exclusive on the platform (one entrypoint
-> at a time). Nothing else in this file changed.
+> at a time). Nothing else in this file changed, apart from the
+> SAM 2.348.22 version notes (2026-09-21).
 >
 > **Status: v0.2 — rehearsal-verified (2026-09-10, eight live
-> runs on the platform).** Structure, click paths and the Builder
+> runs on SAM 2.225.14; not yet re-rehearsed on SAM 2.348.22 --
+> the landing times and the verbatim report quotes below are
+> 2.225.14 values).** Structure, click paths and the Builder
 > green-path prompt mirror the rehearsal-hardened manufacturing
 > script (`sam-manufacturing-ops-demo/talk-track.md`). Every
 > READ-ALOUD quote below is VERBATIM report wording from the
@@ -80,7 +83,7 @@ named human (`claims.lead@acme-insurance`) on the broker.
 
 Show time on the left; the demo clock (T+) starts with the
 click at 4:00. Landing times are the measured values of
-rehearsal run 3 (2026-09-10).
+rehearsal run 3 (2026-09-10, SAM 2.225.14).
 
 | # | Beat | Show time | Demo clock |
 | --- | --- | --- | --- |
@@ -95,7 +98,7 @@ rehearsal run 3 (2026-09-10).
 | A2 | ACT 2 — fraud and leakage (optional) | 15:00–20:00 | report landed ~T+10 (14:00) — read it, no wait |
 
 Measured on the Orchestrator path, all agents on their tiers
-(rehearsal runs of 2026-09-10):
+(rehearsal runs of 2026-09-10, SAM 2.225.14):
 
 - Fast Lane Clerk (fast tier): first confirmation T+0:15 after
   the click, all 8 by T+0:38 (run 3; run 1: 8/8 by T+0:50).
@@ -152,8 +155,9 @@ slide 2 (the use case) at "Saturday evening".
 
 ## 2. HIRE — the empty seat (1:00–4:00)
 
-Measured: the live build takes 2–3 minutes including the
-deploy, the test question about 20 s. The beat ends when the
+Measured (SAM 2.225.14): the live build takes 2–3 minutes
+including the deploy, the test question about 20 s. The beat
+ends when the
 analyst shows **Deployed** and has answered once — only then
 the click (section 3).
 
@@ -162,7 +166,10 @@ the click (section 3).
 **DO**: window A -> Agent Management. Verified during pre-flight:
 the Storm Intake Analyst is ABSENT while the `fnol-intake`,
 `weather-cells` and `scanner-results` connectors are PRESENT
-(pre-provisioned workplace infrastructure).
+(pre-provisioned workplace infrastructure). The roster also
+shows the built-in Activity Monitor (new in 2.348.22) next to
+the Orchestrator and the Builder -- platform tooling, not part
+of the team; do not name it.
 
 **SAY**:
 
@@ -194,7 +201,10 @@ the Storm Intake Analyst is ABSENT while the `fnol-intake`,
 (Quick Build). Paste the prompt below and send it. Watch for
 ~10 s that it actually starts building (if it asks a clarifying
 question instead, answer in one line — it is
-non-deterministic). Then leave it running and move on to 2.3.
+non-deterministic; if it stops at "Here's the build plan for
+your review", reply "Approved - build it now exactly as
+specified, no further questions." -- seen on 2.348.22).
+Then leave it running and move on to 2.3.
 Reference result = `fallback/agents/Storm Intake Analyst.yaml`
 — the source of truth for what the live-built analyst must
 contain (three data shapes, rules 1–13 including the SPEED
@@ -206,11 +216,21 @@ The three MongoDB connectors (`fnol-intake`, `weather-cells`,
 Builder only creates the AGENT that binds them. One config, no
 connector sub-tasks, no cross-component validation: the
 optimization inherited from the manufacturing demo (see
-Appendix C).
+Appendix C). The Builder's connector-validation deadlock behind
+it (2.225.14, still the case on 2.348.22 -- re-verified
+2026-09-21) is why the prompt spells out the connector wiring;
+on 2.348.22 (2026-09-21) this prompt reached full validation
+true and "Build is ready for Build & Activate" after one
+self-corrected manifest-first round (see Appendix C).
 
-Click rule: as soon as the agent config has validated and the
-plan card is up, click **Build & Activate** yourself — do not
-wait for the Builder to keep validating. In the Review step,
+Click rule: once the Builder reports the build ready (full
+validation green -- "Build is ready for Build & Activate" on 2.348.22; the
+earlier "Here's the build plan for your review" is NOT that
+point), click **Build & Activate** yourself — do not wait for
+more validation rounds. Only the run up to the green full validation
+was re-verified on 2.348.22; Build & Activate and the Review
+step were last exercised on 2.225.14 -- rehearse one full
+build + activate. In the Review step,
 check TWO fields before deploying:
 
 1. NAME must read exactly "Storm Intake Analyst" (the Builder
@@ -223,7 +243,8 @@ check TWO fields before deploying:
    tools are fine — that field only mirrors UI-assigned
    toolsets; the truth is the runtime (awe logs: chart +
    artifact tools registered). Do not "fix" an empty Toolsets
-   field on stage.
+   field on stage. (Observed on 2.225.14; not re-verified for
+   Builder-built agents on 2.348.22.)
 
 Name fixes stay in the UI (Review card, or Agent Management ->
 edit -> save & redeploy, ~15 s) — no fallback needed.
@@ -568,7 +589,10 @@ to the TEAMWORK tour in section 4 — do not spend them here.
    for the experts, the analyst and the Orchestrator, `workflow`
    for the merges — three tiers live, four model families in
    the benchmark (`reasoning` is the fourth); multi-model by
-   task, no API key ever visible.
+   task, no API key ever visible. The page lists ten aliases on
+   2.348.22; `google gemini` calls the Gemini API directly, not
+   through the LiteLLM proxy. Point at the three tiers, do not
+   tour the rest.
 
 ### 2.4 Review, deploy, first task (3:15–4:00)
 
@@ -623,7 +647,7 @@ click: **Hail cell HZ-0913 hits Landkreis Boeblingen (Sat
 
 Timeline after the click (scripted in the cockpit CFG,
 deterministic; landing times measured in rehearsal run 3,
-2026-09-10):
+2026-09-10, SAM 2.225.14):
 
 - **T+0** — the cell observation is published, then a burst of
   40 sample FNOL events over ~20 s. Eight of them are MINOR on
@@ -928,15 +952,20 @@ run the audience just watched:
    visibly answers in seconds (first confirmation 15 s after
    the click) while the experts think (the incident report took
    the team 3 min 11 s from the event, the readiness
-   recommendation 1 min 50 s).
+   recommendation 1 min 50 s; rehearsal run 3, SAM 2.225.14).
 3. **Cost + chargeback** — **tokens per claim = cost per
    claim**, the **model mix**, and the platform-DB table BY
    USER (**runs by user**): the event-driven runs all landed
    on `power_user` — chargeback works for AI workers.
 4. **Governance** — the audit stream from Loki: every tool
-   execution with its user; RBAC denies included.
+   execution with its user (still so on 2.348.22); RBAC denies
+   included (not observed on 2.348.22 -- `talk-track.md`
+   Appendix E says denials log at DEBUG only; do not promise
+   them).
 5. **The proof** — one Tempo trace of the incident run (every
-   A2A hop is a broker span), and the offline evals in the
+   A2A hop is a broker span; SAM emits no spans of its own, and
+   Tempo only receives the broker's while the event-mesh
+   `otel-collector` container runs), and the offline evals in the
    Evaluations lab: the `ins-ops-quality` gate plus the
    three-model `ins-ops-model-benchmark` on the Insurance Query
    Expert — pre-run before the event.
@@ -1138,7 +1167,10 @@ break-glass rehearsal remain human steps.
    behind the SAM UI — hidden tabs throttle the timers);
    break-glass buttons tested in rehearsal; then RESET.
 7. Evals pre-run (~15 min): `sam eval run ins-ops-quality`,
-   `sam eval run ins-ops-model-benchmark`.
+   `sam eval run ins-ops-model-benchmark` (`./preflight.sh`
+   does it; by hand, the bare `sam eval run` answers 401 until
+   the token is exported -- still so on CLI 2.348.22, snippet in
+   `talk-track.md` Appendix E).
 8. Windows: A = sam_admin (Agent Management), B = power_user
    (Activities), C = cockpit, D = Grafana dashboard.
 
@@ -1174,8 +1206,8 @@ break-glass rehearsal remain human steps.
 - Product story, Fast Lane: 6,200 minor claims on the fast tier
   — the same platform that runs the incident analysis on the
   premium tier; multi-model by task.
-- Product story, Knowledge: there is no native vector-store
-  connector — the knowledge base sits behind a small MCP server,
+- Product story, Knowledge: there is no native Qdrant connector
+  — the knowledge base sits behind a small MCP server,
   bound through the same `mcp/remote` connector governance as
   any external tool (allow lists, optional per-tool human
   approval).
@@ -1183,14 +1215,16 @@ break-glass rehearsal remain human steps.
 ## Appendix C — Known limits (moderate honestly)
 
 Platform-level limitations (verified on the manufacturing
-build, same platform version): entrypoint promptTemplate renders
-only for AGENT targets, hence the Orchestrator route for the
-three incident paths while the workflows carry the UI story —
-and since runs 4–5 the Orchestrator also MERGES on that route
+build, SAM 2.225.14): entrypoint promptTemplate renders only for
+AGENT targets (still the case on 2.348.22 -- re-verified
+2026-09-21), hence the Orchestrator route for the three
+incident paths while the workflows carry the UI story — and
+since runs 4–5 the Orchestrator also MERGES on that route
 (report skeleton inline in the rule; the three reporters merge
 in the workflow variant only, see "Peer wait" below);
 event-triggered runs deliver no structured input keys
-(`{{workflow.input}}` raw); merge agents must have no toolsets.
+(`{{workflow.input}}` raw); merge agents must have no toolsets
+(these two observed on 2.225.14; not re-verified on 2.348.22).
 
 Insurance-specific: the cockpit timeline is scripted —
 deterministic on purpose; say so if asked ("the data stores are
@@ -1238,8 +1272,9 @@ Activities tree means the deployed entrypoint is stale —
 re-apply the overlay (`./install.sh`, idempotent) before the
 next run; on stage, let it finish and budget the minute.
 
-**Peer wait ~30 s of silence** (runs 4–5, the reason the
-Orchestrator merges on the event path): the Orchestrator's peer
+**Peer wait ~30 s of silence** (runs 4–5 on SAM 2.225.14; not
+re-verified on 2.348.22 — the reason the Orchestrator merges on
+the event path): the Orchestrator's peer
 wait times out after roughly 30 s of silence from a peer — tool
 progress counts as activity, pure thinking does not. The
 reporters (a pure LLM merge, no tool progress) sometimes
@@ -1275,8 +1310,9 @@ literal aggregation pipelines — counted repeat contacts,
 skipped the MOTOR filter, missed the cohort range — and went
 silent while thinking, which trips the peer wait above. The
 live Builder config has no model field, so the agent lands on
-the platform default `general` (Opus 4.8) — the tier the
-fallback YAML pins as well. The multi-model story stays: clerk
+the platform default `general` (Opus 4.8; observed on 2.225.14,
+not re-verified on 2.348.22) — the tier the fallback YAML pins
+as well. The multi-model story stays: clerk
 on `fast`, merge agents on `workflow`, `reasoning` in the model
 benchmark — three tiers live, four model families once the
 benchmark is counted.
@@ -1290,7 +1326,8 @@ it are correct, read them.
 
 **Failing data tools**: `create_sqlite_db`,
 `query_data_with_sql`, `jmespath` and `append_to_artifact`
-fail on this platform (`tool_error` in Activities). Signature:
+fail on this platform (`tool_error` in Activities; observed on
+2.225.14, not re-verified on 2.348.22). Signature:
 an analyst that converts a result into SQLite or JMESPath and
 stalls or loops. The prompts steer away from them — the
 analyst's rule 13 (SPEED RECIPES: one small aggregation per
@@ -1315,8 +1352,8 @@ cockpit in its own window, visible on stage (pre-flight item 6);
 never run it as a background tab of the SAM UI window.
 
 Builder failure signatures (all observed on the manufacturing
-demo 2026-08-11, and the reason the connectors are
-pre-provisioned so the live build creates ONLY the agent):
+demo 2026-08-11 on SAM 2.225.14, and the reason the connectors
+are pre-provisioned so the live build creates ONLY the agent):
 
 - Name normalization: "StormIntakeAnalyst" without spaces,
   connector "acme-claims-mongodb". The workflows and the
@@ -1327,13 +1364,16 @@ pre-provisioned so the live build creates ONLY the agent):
 - Connector sub-task hallucination: when the Builder fans
   connector creation out to parallel sub-tasks, one can claim
   "MongoDB is not supported (only DynamoDB, Neo4j, Neptune)".
-  It IS supported (`document_db`/`mongodb`, experimental in
-  this build) — the fallback configs prove it. With the
-  agent-only build this path no longer exists.
+  It IS supported (`document_db`/`mongodb`, flagged
+  experimental on 2.225.14 and still on 2.348.22) — the
+  fallback configs prove it. With the agent-only build this
+  path no longer exists.
 - "Couldn't confirm full validation — deploy stays disabled
-  until it succeeds": the deploy gate reflects the LAST
-  validation result. The full validation passes when (a) the
-  three connectors are manifest components with origin:
+  until it succeeds" (2.225.14; the validation loop behind it
+  re-verified on 2.348.22 on 2026-09-21, the deploy gate itself
+  not -- Build & Activate was not clicked on 2.348.22): the
+  deploy gate reflects the LAST validation result. The full
+  validation passes when (a) the three connectors are manifest components with origin:
   platform / status: deployed AND (b) the agent config declares
   `connectors` at the APP level, as a sibling of app_config.
   Inside app_config the schema rejects the field — that
@@ -1345,22 +1385,39 @@ pre-provisioned so the live build creates ONLY the agent):
   and continue at 2.4.
 - A long pasted prompt may be attached as a `snippet.txt` file
   instead of inline text — harmless, the Builder loads it.
-- Connectors-field flip-flop: the cross-component validator
-  demands a connectors declaration, the app_config schema
-  rejects the field INSIDE app_config, and the Builder
-  oscillates between adding and removing it. Root cause
-  resolved: the field belongs at the APP level — the prompt
-  states the exact placement.
+- Connectors-field flip-flop (2.225.14, still the case on
+  2.348.22 -- re-verified 2026-09-21): the cross-component
+  validator demands a connectors declaration, the app_config
+  schema rejects the field INSIDE app_config, and the Builder
+  oscillates between adding and removing it. The way out: the
+  field belongs at the APP level — the prompt states the exact
+  placement.
+- **Builder pauses after the plan / writes the manifest first**
+  (2.348.22, verified 2026-09-21): the Builder may stop at
+  "Here's the build plan for your review" instead of building
+  -- reply in ONE line "Approved - build it now exactly as
+  specified, no further questions." and it builds without
+  asking again (manufacturing prompt). A component config now
+  only validates once `build_manifest.yaml` exists in the
+  session; if the Builder validates the agent config first it
+  gets "No build_manifest.yaml exists in this session", writes
+  the manifest and continues on its own (insurance prompt) --
+  no action needed, it costs one extra round.
 - Toolset loss: one manufacturing run deployed with no runtime
   tools beyond the connector queries (no artifacts, no charts).
   Root cause: the tool groups never made it into the agent
   config. With the prompt's TOOLSETS block (builtin-group
   entries via `tool_name`, not `group_name`) the tools reach
-  the runtime. CAVEAT: the platform's Toolsets field in Agent
-  Management shows EMPTY either way — judge by the plan card /
-  awe logs, never by that field.
+  the runtime (on 2.348.22 both `tool_name` and `group_name`
+  validate; the prompt keeps `tool_name`). CAVEAT: the
+  platform's Toolsets field in Agent Management shows EMPTY
+  either way — judge by the plan card / awe logs, never by
+  that field (observed on 2.225.14; not re-verified for
+  Builder-built agents on 2.348.22).
 - **Stale agent card after delete + rebuild** (observed
-  2026-08-12): after the analyst is deleted and rebuilt (exactly
+  2026-08-12 on SAM 2.225.14; not re-verified on 2.348.22,
+  where an agent DELETE also removes the agent's broker
+  queue): after the analyst is deleted and rebuilt (exactly
   the live Builder sequence), the mesh can keep the DELETED
   instance's agent card; name-based resolution then hits the
   dead instance — symptom: WARN "multiple agent cards advertise
@@ -1371,6 +1428,12 @@ pre-provisioned so the live build creates ONLY the agent):
   agent-mesh-solace-agent-mesh-awe -n sam-solace-lab` — all
   live agents re-register, stale cards vanish. Worth a
   pre-flight glance after any rebuild rehearsal.
+
+Builder Test tab: works since 2.348.22 (on 2.225.14 its test
+plan was killed after 30 s). The first test plan after every
+`str` start takes about 90 s, later ones about 4 s -- warm it up
+once in the pre-flight before it goes anywhere near the stage;
+this script does not need it.
 
 Knowledge base specifics: the `Acme Claims Knowledge` connector
 is an `mcp/remote` connector pointing at

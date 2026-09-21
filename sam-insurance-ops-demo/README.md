@@ -2,7 +2,8 @@
 
 Two live demos on one data set, layered as removable overlays on
 top of the base platform in `agent-mesh-deployment/` (SAM v2
-2.225.14, namespace `sam-solace-lab`). The stage is Acme
+2.348.22 -- str 1.64.0, chart 2.1.164 -- namespace
+`sam-solace-lab`). The stage is Acme
 Insurance (motor and property, Germany-shaped geography), hail
 cell HZ-0913 over Landkreis Boeblingen on Saturday 2026-07-18 at
 18:40, and a frozen Monday morning (2026-07-20 10:00 UTC) with
@@ -46,7 +47,8 @@ MongoDB and hands its values back unchanged, 12-field contract)
 and `rules` (Acme Claims Knowledge Expert, three focused searches
 with top_k 3 against Qdrant behind an MCP server, 5-field
 contract). The `decision` node (Claims Triage Decision, fast tier,
-no tools) `depends_on` all three and merges them against the
+no connector, no toolset, no database access) `depends_on` all
+three and merges them against the
 decision matrix into the 14-field decision contract: APPROVE /
 HOLD / REFER plus a lane. In the workflow's `output_mapping` every
 optional field goes through `coalesce` with a fallback, so one
@@ -58,18 +60,23 @@ n s", and the Approve button publishes
 `acmeins/claims/decision/<claim_id>` with `approved_by:
 claims.lead@acme-insurance`.
 
-Measured on the live platform (2026-09-16), from publishing the
-FNOL event to the decision on the result topic: CLM-0913-00001
-APPROVE / FAST_LANE 27.7 s, CLM-0913-00002 APPROVE / FAST_LANE
-26.8 s, CLM-0913-08103 HOLD / SPECIAL_INVESTIGATIONS 30.6 s,
-CLM-0913-08891 APPROVE / STANDARD 32.7 s -- about 27 to 33 s.
-Typical nodes in one run: policy 13 s, intake 19 s (of which the
-external analyst itself is 5 s), rules 9 s, decision 12 s. The
+Measured on the live platform (2026-09-16, SAM 2.225.14), from
+publishing the FNOL event to the decision on the result topic:
+CLM-0913-00001 APPROVE / FAST_LANE 27.7 s, CLM-0913-00002 APPROVE
+/ FAST_LANE 26.8 s, CLM-0913-08103 HOLD / SPECIAL_INVESTIGATIONS
+30.6 s, CLM-0913-08891 APPROVE / STANDARD 32.7 s -- about 27 to
+33 s. Typical nodes in one run: policy 13 s, intake 19 s (of which
+the external analyst itself is 5 s), rules 9 s, decision 12 s. The
 fan-out is parallel, so the critical path is intake plus decision.
+On SAM 2.348.22 the preflight dry fire (CLM-0913-00002) decided
+APPROVE in 28 s (2026-09-21); the per-claim and per-node times
+above were not re-measured there.
 
 ## Install / remove / preflight
 
-With the base platform running (one-click deployment plus
+With the base platform running (`scripts/start.sh`, which runs
+`scripts/provision.sh` for RBAC, models, max_tokens and
+developer-mcp -- headless: `./scripts/provision.sh --login` -- plus
 `sam auth login solace-lab --url https://sam.solace.lab`, see
 `agent-mesh-deployment/README.md`):
 
@@ -86,8 +93,11 @@ With the base platform running (one-click deployment plus
 (postgres/pgadmin with the seeded `acme_insurance` database,
 MongoDB `acme-claims-mongo` on port 27017, Qdrant plus the
 `acme-knowledge-mcp` server on port 8765 with their first-run
-seeds), the insurance core package (`core/`) and the five model
-aliases. Triage steps: the external agent (`kubectl apply -f
+seeds), the additional model aliases (an idempotent re-apply of
+the model step of `provision.sh`: the LiteLLM aliases plus `google
+gemini`, which is skipped with a warning without its API key) and
+the insurance core package (`core/`). Triage steps: the external
+agent (`kubectl apply -f
 external-agent/`, rollout wait, poll for the discovered card
 "ClaimsIntakeAnalyst"); the triage overlay (`sam config apply`
 in `triage/`: the liaison and decision agents and the workflow);
@@ -101,7 +111,7 @@ dashboard ConfigMaps. It prints which cockpit page to open.
 
 `preflight.sh` detects the profile from the entrypoint on the
 platform. Triage checks: external agent pod Running and card
-discovered, workflow deployed and running, entrypoint receivers,
+discovered, workflow deployed and running, entrypoint deployed,
 decision agent present, dashboards and datasource, `grafana_ro`
 SELECT on the platform DB, Tempo traces in the last 24 h (warn
 only), completed pre-runs for the five experiments, and a DRY
@@ -160,17 +170,22 @@ observability) and the shared postgres/pgadmin containers. NEVER
   the `Acme Insurance DB` postgres and `Acme Claims Knowledge`
   MCP connectors, the `acme-insurance-schema` and
   `acme-knowledge-guide` skills, the two experts (both carry
-  `modelProvider: ["${INS_EXPERT_TIER}"]`, the manifest variable
-  that `install.sh` sets per profile: default `fast` (Haiku 4.5)
-  for triage, `general` for `--extended`; every agent of the
-  triage profile runs on `fast`); kept by `--keep-core`
+  `modelProvider: ["${INS_EXPERT_TIER, fast}"]`, an environment
+  variable with an inline default that `install.sh` exports per
+  profile: `fast` (Haiku 4.5) for triage, `general` (Opus 4.8) for
+  `--extended`; every agent of the triage profile runs on `fast`);
+  kept by `--keep-core`. An exported value wins
+  (`INS_EXPERT_TIER=... ./install.sh`, likewise `INS_DB_USERNAME` /
+  `INS_DB_PASSWORD`): the package has no `variables:` block,
+  because on CLI 2.348.22 a default there beats the environment.
 - `triage/` -- the default overlay (all CLI-applied):
   `manifest.yaml`, `agents/Claims Intake Liaison.yaml` (fast tier,
   `toolsets: []`, and an `interAgentCommunication` allow list with
   exactly one entry, `ClaimsIntakeAnalyst` -- its whole reach into
   the estate outside the platform, declared),
-  `agents/Claims Triage Decision.yaml` (fast tier, no tools, the
-  decision matrix), `workflows/claim-triage.yaml` (four nodes with
+  `agents/Claims Triage Decision.yaml` (fast tier, no connector,
+  no toolset, no database access; the decision matrix),
+  `workflows/claim-triage.yaml` (four nodes with
   22/12/5/14-field contracts, schema-bound, `fail_fast: false`,
   `output_mapping` with `coalesce` fallbacks; the `intake` node
   targets the liaison, which makes the one hop to the external
@@ -291,8 +306,10 @@ Liaison**, a platform agent with `toolsets: []` whose
 `additionalConfigurations` carry
 `interAgentCommunication.allowList: [ClaimsIntakeAnalyst]`. That
 key IS the mechanism: an agent without it has no delegation tool
-at all (it only reaches its own `sub_task`), and the built-in
-Orchestrator carries the same key set to `["*"]`. So the liaison
+at all (it only reaches its own `sub_task`; observed on 2.225.14,
+not re-verified on 2.348.22), and the built-in Orchestrator
+carries the same key set to `["*"]` (unchanged in 2.348.22). So
+the liaison
 may call exactly one agent in the world, by name, declared in its
 config and reviewable in the UI -- reach across the platform
 boundary is declared and enforced, not implicit. It delegates one
@@ -318,12 +335,16 @@ datasources prometheus / loki / tempo / `sam-platform-db` /
    in flight, the agent roster and workflows/entrypoints tables.
 2. **The claim -- from event to decision** -- claims events per
    minute, decision latency p50/p95, agent step duration p95 per
-   agent, the Tempo panel "Every hop of a claim is a span".
+   agent, the Tempo panel "Every hop of a claim is a span" (broker
+   spans only -- SAM emits no OTel spans of its own -- and only
+   while the event-mesh `otel-collector` container runs).
 3. **Who did what -- audit and security** -- tool executions by
    user and tool, agent calls per agent, external agent traffic
    (the analyst's pod logs), auth failures plus
    capability-widening blocks, RBAC roles -> scopes and IdP group
-   -> role tables.
+   -> role tables (the latter reads `rbac_idp_claim_mapping_roles`
+   since 2.348.22, where one claim mapping can carry several
+   roles).
 4. **Model management -- which model works for whom, at what
    cost** -- tokens per agent and model, LLM latency p95 per
    model, the alias table, an ILLUSTRATIVE cost stat, tokens per
@@ -336,22 +357,33 @@ datasources prometheus / loki / tempo / `sam-platform-db` /
 
 ## Evaluation experiments
 
-All experiments target AGENTS (workflows cannot be targets);
-evaluators are platform-seeded (LLM Judge, Factuality, Closed QA,
-Security, Response Match); pass = score >= 0.5; one LLM-judge
-call ~40 s. The watchlist holds Acme Insurance Query Expert, Acme
-Claims Knowledge Expert and Claims Triage Decision.
+All experiments target AGENTS (workflows cannot be targets, still
+the case in 2.348.22); evaluators are platform-seeded (LLM Judge,
+Factuality, Closed QA, Security, Response Match); pass = score >=
+0.5; one LLM-judge call ~40 s (measured on SAM 2.225.14). The
+watchlist holds Acme Insurance Query Expert, Acme Claims Knowledge
+Expert and Claims Triage Decision.
 
 | Experiment | Dataset | Target agent | Evaluators (primary first) | Stage use |
 | --- | --- | --- | --- | --- |
-| `ins-triage-decision` | `ins-triage-decisions` (3 rows: clean, suspicious, synthetic total loss -- the exact fan-in text of the decision node) | Claims Triage Decision | LLM Judge, Response Match | LIVE run started at 4:30, ~75 s, read in beat 5 |
+| `ins-triage-decision` | `ins-triage-decisions` (3 rows: clean, suspicious, synthetic total loss -- the exact fan-in text of the decision node) | Claims Triage Decision | LLM Judge, Closed QA | pre-run; nothing runs live on stage (a live run in a technical session takes about 2 min: 102 s and 117 s measured on SAM 2.225.14) |
 | `ins-claims-rules` | `ins-claims-rules` (5 rulebook questions verified against `qdrant/seed/documents.yaml`) | Acme Claims Knowledge Expert | Factuality, Closed QA | pre-run |
 | `ins-guardrails` | `ins-guardrails` (prompt injection, destructive SQL, role escalation) | Acme Insurance Query Expert | Security, LLM Judge | pre-run |
 | `ins-ops-quality` | `ins-ops-questions` | Acme Insurance Query Expert | LLM Judge, Factuality | pre-run (production gate) |
 | `ins-ops-model-benchmark` | `ins-ops-questions` | Acme Insurance Query Expert pinned to `workflow`, `reasoning`, `fast` | LLM Judge, Factuality | pre-run (three models, one dataset) |
 
-Run by hand:
-`sam eval run ins-triage-decision --url https://sam.solace.lab --threshold 0.8`
+Run by hand from this directory. A bare `sam eval run` answers
+401 "Missing authorization header" even with a valid CLI login
+(still the case on CLI 2.348.22): export the token first.
+
+```bash
+bash                              # the helpers are bash functions
+./demo-links.sh >/dev/null        # refreshes the CLI token
+. ../agent-mesh-deployment/scripts/lib/common.sh
+load_env ../agent-mesh-deployment && resolve_sam_cli && sam_auth_token
+"$SAM_CLI" eval run ins-triage-decision \
+  --url https://sam.solace.lab --threshold 0.8
+```
 
 ## The extended profile
 
@@ -365,21 +397,27 @@ limits and the storyline of the full 10,400-claim set live in
 
 ## Known limits (short)
 
-Full list with stage responses: `talk-track.md`, Appendix C.
+Full list: `talk-track.md`, Appendix E (stage answers in Appendix
+C).
 
 - Two platform bugs on the event -> workflow path (empty
   `promptTemplate` for workflow targets, DATAGO-148462; the
   request topic uses the workflow NAME while the runtime listens
-  on `workflow_<id>`) -- worked around by rendering the entrypoint
-  with the runtime name after the workflow exists. The name
-  changes per install: re-run `install.sh`, never edit
-  `triage/.rendered/`.
-- Node input templates render only whole-string `{{...}}`
-  values; external v1 agents cannot be workflow nodes, and a
-  platform agent has no peer-delegation tool in 2.225.14 unless
-  its config declares one (otherwise it only reaches its own
-  `sub_task`) -- the Claims Intake Liaison declares exactly one
-  peer and makes the hop on the fast tier.
+  on `workflow_<id>`; 2.225.14, still present in 2.348.22 --
+  re-verified 2026-09-21) -- worked around by rendering the
+  entrypoint with the runtime name after the workflow exists. The
+  name changes per install: re-run `install.sh`, never edit
+  `triage/.rendered/`. The receivers now come up about a second
+  after the deploy (2.225.14: 20 to 40 s); events published
+  before the deploy are still lost.
+- Node input templates render only whole-string `{{...}}` values
+  (observed on 2.225.14; not re-verified on 2.348.22); external
+  v1 agents cannot be workflow nodes (the CLI still rejects the
+  reference on 2.348.22), and a platform agent has no
+  peer-delegation tool unless its config declares one (otherwise
+  it only reaches its own `sub_task`; observed on 2.225.14, not
+  re-verified on 2.348.22) -- the Claims Intake Liaison declares
+  exactly one peer and makes the hop on the fast tier.
 - Never tell a schema-bound node agent HOW to format its answer:
   the platform injects its own structured-invocation instruction
   and the agent fulfils it through a save_artifact block. Asking
@@ -387,14 +425,29 @@ Full list with stage responses: `talk-track.md`, Appendix C.
   node output null. For the same reason the liaison is told to
   call NO tool but its peer tool, and all agents write ASCII
   ("EUR 300", plain hyphens): non-ASCII arrives mangled at the
-  cockpit.
+  cockpit. (Observed on 2.225.14; not re-verified on 2.348.22.)
 - The platform does not see the external agent's tokens or tool
-  calls; it is not in `sam_component_count`.
-- No RBAC "denied" log lines (grants log at DEBUG); retention
-  Tempo 48 h, Loki 7 d, Prometheus 7 d.
+  calls; it is not in `sam_component_count` (still so in
+  2.348.22).
+- No RBAC "denied" log lines (grants log at DEBUG; observed on
+  2.225.14, not re-verified on 2.348.22); retention Tempo 48 h,
+  Loki 7 d, Prometheus 7 d.
+- Tempo holds broker spans only: SAM emits no OTel spans of its
+  own, and the traces need the event-mesh `otel-collector`
+  container running.
+- After an `str` restart the first call of a connector tool gets
+  "tool not in manifest"; on 2.348.22 the agent runtime
+  re-registers and retries on its own, so the call succeeds about
+  a second later (no action needed; on 2.225.14 it needed a
+  connector touch plus `sam config apply`).
 - Evaluations target agents, not workflows; the decision is an
   LLM output validated against a schema -- a `null` section
   degrades to REFER.
+- The external agent tracks
+  `registry.solace.lab/solace-agent-mesh-enterprise:latest` with
+  `imagePullPolicy: Always` (on 2026-09-21 the 1.97.2 build):
+  every pod start resolves the tag against the lab registry, so
+  the registry must be reachable when the pod (re)starts.
 
 ## Slides
 

@@ -1,5 +1,6 @@
 # Knowledge regression for the rules node of the claim-triage
-# workflow. Workflows cannot be experiment targets in 2.225.14, so
+# workflow. Workflows cannot be experiment targets (2.225.14, still
+# in 2.348.22), so
 # the node agents are tested one by one; this one covers the Acme
 # Claims Knowledge Expert (Qdrant via MCP). Factuality checks doc
 # ids, thresholds and decisive sentences against the expected

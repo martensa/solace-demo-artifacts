@@ -1,14 +1,17 @@
-# THE LIVE STAGE RUN (talk-track beat 5, started at ~4:30, ~75 s):
-# 3 rows x 2 evaluators on the fast-tier merge agent. Each row is
-# the exact fan-in the workflow's decision node sends (claim_event,
-# policy, intake, rules, with the current 22 / 12 / 5-field section
-# contracts); the agent takes about as long as the decision node
-# does in the workflow (12 s measured 2026-09-16), the LLM Judge
-# call takes ~40 s, Response Match is instant -> one wave of 3
-# workers finishes in roughly 75 s. Workflows cannot be experiment
-# targets in 2.225.14, so the decision node is exercised through
-# its agent. Apply AFTER the triage overlay: the target agent must
-# exist on the platform before this experiment can be created.
+# Pre-run by preflight; the current talk-track runs NOTHING live
+# (beat 11 shows the finished ins-guardrails report). Worth a live
+# run in a longer technical session: 3 rows x 2 evaluators (LLM
+# Judge + Closed QA) on the fast-tier merge agent, about 2 minutes
+# wall time (102 s and 117 s measured 2026-09-16 on SAM 2.225.14).
+# Each row is the exact fan-in the workflow's decision node sends
+# (claim_event, policy, intake, rules, with the current 22 / 12 /
+# 5-field section contracts); the agent takes about as long as the
+# decision node does in the workflow (12 s measured 2026-09-16), an
+# LLM-judge call takes ~40 s. Workflows cannot be experiment
+# targets (2.225.14, still in 2.348.22), so the decision node is
+# exercised through its agent. Apply AFTER the triage overlay: the
+# target agent must exist on the platform before this experiment
+# can be created.
 kind: experiment
 name: ins-triage-decision
 description: >-

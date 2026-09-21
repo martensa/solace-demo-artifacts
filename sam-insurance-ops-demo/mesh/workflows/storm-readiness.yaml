@@ -34,7 +34,7 @@ spec:
           exposure and partner capacity and the NatCat playbook
           and produce a readiness recommendation.
     # Workflow-level INPUT contract: the realtime forecast event
-    # cockpit/index.html publishes on
+    # cockpit/extended.html publishes on
     # acmeins/weather/cell/forecast/threshold-crossed/>. The
     # event PATH runs via the Orchestrator (promptTemplate
     # quirk), so this schema is the published contract + the

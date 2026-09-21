@@ -2,7 +2,9 @@
 # agent that reaches OUT of the platform: it may talk to exactly ONE
 # peer, the external Claims Intake Analyst, and to nobody else.
 #
-# How an agent gets a peer at all (verified 2026-09-16 on 2.225.14):
+# How an agent gets a peer at all (verified 2026-09-16 on 2.225.14;
+# the key and the Orchestrator's ["*"] are unchanged in 2.348.22,
+# the no-key behaviour below was not re-verified there):
 # peer delegation comes from `interAgentCommunication.allowList` in
 # additionalConfigurations -- the same key the built-in Orchestrator
 # carries, where it is set to ["*"]. An agent WITHOUT that key gets no

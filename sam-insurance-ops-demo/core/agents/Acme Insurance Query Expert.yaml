@@ -82,10 +82,11 @@ spec:
 
     Maintain a professional and clear communication style, focusing
     on accuracy and clarity in your explanations.
-  # Tier from the manifest variable INS_EXPERT_TIER (fast for the
-  # triage profile, general for --extended); see core/manifest.yaml.
+  # Tier from the environment variable INS_EXPERT_TIER (fast for the
+  # triage profile, general for --extended; inline default fast -- see
+  # core/manifest.yaml for why it is not a manifest variable).
   modelProvider:
-    - "${INS_EXPERT_TIER}"
+    - "${INS_EXPERT_TIER, fast}"
   toolsets:
     - data_analysis
     - builtin_artifact_tools
@@ -99,7 +100,8 @@ spec:
   # run (skillRefs "" -> [<skill>]). The CLI resolves the skill NAME to
   # a platform id at apply time and the platform stores only the id,
   # but plan compares the declared name against the cleared name
-  # field. There is no portable way around it in 2.225.14 (the id
+  # field. There is no portable way around it (2.225.14, still in
+  # 2.348.22, whose plan also diffs the outputModes; the id
   # differs per install), and the skill must stay bound: the extended
   # profile's expert writes its own SQL from it. Consequence: every
   # ./install.sh redeploys the two experts (a few seconds, harmless);

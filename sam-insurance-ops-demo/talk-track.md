@@ -4,7 +4,9 @@
 > storm, one workflow decides, a human signs. Shown twice, with the same agents
 > and opposite outcomes. 16 minutes with questions, optional depth to 20. Click
 > paths, names and expected cards follow the platform as built and measured on
-> 2026-09-16.
+> 2026-09-16 (SAM 2.225.14). Re-checked on SAM 2.348.22 (str 1.64.0) on
+> 2026-09-21: install and uninstall, the dry fire (APPROVE in 28 s) and the
+> evaluation runs; the full script was not re-rehearsed there.
 
 **The line you say verbatim three times** (frame, after the HOLD, close): *"Keep
 your agents where they are; govern them from here."*
@@ -180,9 +182,10 @@ Point at it last and keep the pointer there.
 
 > "Here is who is working on it right now. An expert on the system of record --
 > policies, claims, partners, in Postgres. An expert on the rulebook -- policy
-> wordings, claims guidelines, partner contracts. A decision agent with no tools
-> at all; it only merges and decides. And a liaison, also with no tools, whose
-> only job is to carry one request across the edge of this platform.
+> wordings, claims guidelines, partner contracts. A decision agent with no
+> connector, no toolset and no database access; it only merges and decides. And
+> a liaison, just as bare, whose only job is to carry one request across the
+> edge of this platform.
 >
 > And this row: Claims Intake Analyst. No Undeploy button, no creator. It runs
 > outside the platform, in its own namespace, on its own model, with its own
@@ -365,7 +368,9 @@ decision, not a prompt edit."
 **Screen**: A, tab 4, Models. **Talk**: 0:45.
 
 **DO**: point at the `fast` alias only. The page lists more aliases than this
-demo uses; do not count them and do not tour them.
+demo uses (ten on 2.348.22, among them `google gemini`, which calls the Gemini
+API directly instead of going through the LiteLLM proxy); do not count them and
+do not tour them.
 
 **SAY**:
 
@@ -399,7 +404,10 @@ paragraph.
 **DO** (2): row 2, **Every hop of a claim is a span (Tempo)**; open the newest
 trace. The platform's own hops show up under runtime ids (`agent_...`); the hop
 to the outside agent reads `.../request/ClaimsIntakeAnalyst receive`, typically
-about 5 s. Point at the user id tag.
+about 5 s. Point at the user id tag. These are broker spans -- SAM emits no
+spans of its own -- and the panel stays empty unless the event-mesh
+`otel-collector` container runs (A10). The user id tag on the span was observed
+on 2.225.14 and not re-verified on 2.348.22: check it in rehearsal.
 
 **SAY**:
 
@@ -542,13 +550,15 @@ Knowledge** (MCP).
 **SAY**:
 
 > "Two connections. The database, through the platform's own SQL connector. And
-> the rulebook, which is a vector store. The platform has no native connector
-> for that, so it sits behind a small MCP server -- and it gets the same
-> treatment. Bring your own tool. The intake store is not on this page."
+> the rulebook, which lives in a Qdrant vector store. The platform has no native
+> connector for Qdrant, so it sits behind a small MCP server -- and it gets the
+> same treatment. Bring your own tool. The intake store is not on this page."
 
 ### D4. The RBAC tables (inside beat 10, +0:30)
 
-**DO**: Grafana row 3: **RBAC roles -> scopes** and **IdP group -> role**.
+**DO**: Grafana row 3: **RBAC roles -> scopes** and **IdP group -> role**. On
+2.348.22 the group table also lists `sam_manager` (a built-in role: all SAM
+administration except RBAC).
 
 **SAY**:
 
@@ -577,8 +587,9 @@ Only if slide 4 is adapted (Appendix A, A2).
 Keep these for a technical follow-up session.
 
 - **The live evaluation run** of ins-triage-decision. Wall time about two
-  minutes (measured 102 s and 117 s on 2026-09-16); the run with the current
-  evaluators scored 6 of 6, average 1.00 on both LLM Judge and Closed QA. Start
+  minutes (measured 102 s and 117 s on 2026-09-16, SAM 2.225.14); the run with
+  the current evaluators scored 6 of 6, average 1.00 on both LLM Judge and
+  Closed QA. Start
   it from Evaluations -> Lab -> experiments -> ins-triage-decision -> Run. From
   a terminal, the bare `sam eval run` answers 401 until the token is exported
   (Appendix E).
@@ -635,9 +646,9 @@ CLM-0913-00002. The manual checks after it cover what it does not.
     reported as FAIL after 90 s may be a cold first run that is still
     completing. Look for CLM-0913-00002 in Activities (power_user) first, then
     run `./preflight.sh --skip-evals` again.
-  - If its closing reminders tell you to start the ins-triage-decision run at
-    the proof beat, ignore that line: it belongs to the old script, and this
-    script runs no evaluation live.
+  - Its closing reminders say that nothing runs live in Evaluations: this
+    script starts no evaluation run on stage (beat 11 shows a finished
+    report).
 
 ### 30 minutes before -- what preflight does not check
 
@@ -647,25 +658,33 @@ CLM-0913-00002. The manual checks after it cover what it does not.
   before the show. If you cannot, skip D3 and drop the last paragraph of beat
   9 -- otherwise the pitch "only the outside agent reaches the intake store" is
   false on screen.
-- **A7** Agent Management: the four claims agents and the Orchestrator, plus
-  **Claims Intake Analyst** as discovered. No Fast Lane Clerk, no reporters, no
-  Storm Intake Analyst. Other discovered agents of the shared lab mesh may be
-  listed too
-  (Web Research Agent, Web Scraper Agent, Markdown Creator, Mermaid Diagram
-  Generator, Solace Agent Mesh Builder). Scroll or filter so the Claims Intake
-  Analyst row is on screen together with the four claims agents, and know the
-  answer in Appendix C. That row is also your ten-second health tell on stage:
-  no row, no outside agent (R4).
+- **A7** Agent Management: the four claims agents, the built-in Orchestrator,
+  Builder and Activity Monitor (the monitor is new in 2.348.22; not part of the
+  story, do not point at it), plus **Claims Intake Analyst** as discovered. No
+  Fast Lane Clerk, no reporters, no Storm Intake Analyst. Other discovered
+  agents of the shared lab mesh may be listed too (Web Research Agent, Web
+  Scraper Agent, Markdown Creator, Mermaid Diagram Generator). Scroll or filter
+  so the Claims Intake Analyst row is on screen together with the four claims
+  agents, and know the answer in Appendix C. That row is also your ten-second
+  health tell on stage: no row, no outside agent (R4).
 - **A8** Tab 3: the liaison's configuration shows `allowList` with the single
   entry `ClaimsIntakeAnalyst`, scrolled into view.
-- **A9** Tab 6: the latest **ins-guardrails** report (6 of 6) open. The Reports
-  list may also show an earlier ins-triage-decision run scored with Response
-  Match (1 of 3 passed, average 0.515) and two experiments of the extended
-  profile. Remove that earlier run if the platform lets you; otherwise have the
-  answer in Appendix C ready.
+- **A9** Tab 6: the latest **ins-guardrails** report (6 of 6) open. The scores
+  in beat 11 and Appendix D were measured on SAM 2.225.14: check that the
+  pre-runs on 2.348.22 read the same, and say what the reports say (2026-09-21:
+  one ins-claims-rules pre-run read 9 of 10 because the Factuality judge
+  returned broken JSON on one row -- re-run the experiment if the latest report
+  is not 10 of 10). The Reports list also shows two experiments of the
+  extended profile and the platform's seeded "Sample Experiment" (target
+  Orchestrator); have the answer in Appendix C ready.
 - **A10** Tab 5: the governance dashboard loads; the Tempo panel shows the dry
-  fire's trace; the platform-DB tables (roster, RBAC, latest runs) are filled.
-  Widen the time range if the dry fire is older than the default hour.
+  fire's trace; the platform-DB tables (roster, RBAC incl. **IdP group ->
+  role**, latest runs) are filled. Widen the time range if the dry fire is
+  older than the default hour. The Tempo panel needs the event-mesh
+  `otel-collector` container Up (`docker ps --filter name=otel-collector`; if
+  it is not, `(cd ../event-mesh-deployment && docker compose up -d
+  otel-collector)` and fire the dry run again) -- SAM emits no spans of its
+  own, Tempo only holds the broker's.
 
 ### 10 minutes before -- the stage
 
@@ -743,7 +762,9 @@ land between 27 and 33 s.
   ```
 
 - **R9 Empty Grafana panels.** Widen the time range to include the live runs.
-  Tempo empty: skip panel 2 and say the honest-limit paragraph on panel 3.
+  Tempo empty: skip panel 2 and say the honest-limit paragraph on panel 3
+  (afterwards, off screen: is the event-mesh `otel-collector` container Up?
+  See A10).
   Platform-DB tables empty: the grafana_ro grant is missing (preflight
   re-applies it); skip to panel 4.
 - **R10 Approve does nothing.** The cockpit publishes one approval per decision,
@@ -761,9 +782,11 @@ kubectl rollout restart deployment sam-claims-intake-agent -n sam-solace-lab-age
 ```
 
 If the platform log still warns "multiple agent cards advertise the same display
-name" or "peer tool unavailable" (typical after a re-install), restart the
-platform's agent runtime too. That takes every platform agent down for a while:
-never during the demo, only in a break or afterwards.
+name" or "peer tool unavailable" (typical after a re-install; observed on
+2.225.14, not re-verified on 2.348.22, where deleting an agent also removes its
+broker queue), restart the platform's agent runtime too. That takes every
+platform agent down for a while: never during the demo, only in a break or
+afterwards.
 
 ```
 kubectl rollout restart deployment agent-mesh-solace-agent-mesh-awe -n sam-solace-lab
@@ -867,6 +890,10 @@ continuous.
 
 **Why does the evaluation list show a weaker run, and more experiments?**
 
+(The weaker run existed only on the 2.225.14 platform database; on 2.348.22
+the question is only about the extra experiments -- answer with the last
+sentence.)
+
 > "That run is from before we changed the scorer. A word-overlap score marked
 > correct decisions down for phrasing them differently; the judge scored the
 > same decisions as correct. We changed how we measure, not the agent. The other
@@ -904,8 +931,8 @@ Every figure below is measured or seeded. Anything not on this list, do not say.
 | --- | --- | --- |
 | The storm | Hail cell HZ-0913, Saturday 2026-07-18, 18:40, Landkreis Boeblingen | "twenty to seven on a Saturday evening" |
 | Claims after the cell | 10,400 | "ten thousand four hundred" |
-| Run time, event to decision | measured 2026-09-16: 00002 26.8 s, 00001 27.7 s, 08103 30.6 s (later 31.1 s and 32.6 s), 08891 32.7 s, preflight dry fire 27 s | "about half a minute"; exact only as printed on the card |
-| Node budget, typical run | policy 13 s, intake 19 s (outside agent 5 s), rules 9 s, decision 12 s; critical path intake plus decision | "the outside agent is about five seconds" |
+| Run time, event to decision | measured 2026-09-16 on SAM 2.225.14: 00002 26.8 s, 00001 27.7 s, 08103 30.6 s (later 31.1 s and 32.6 s), 08891 32.7 s, preflight dry fire 27 s; on SAM 2.348.22 (2026-09-21): preflight dry fire 28 s | "about half a minute"; exact only as printed on the card |
+| Node budget, typical run | measured on SAM 2.225.14: policy 13 s, intake 19 s (outside agent 5 s), rules 9 s, decision 12 s; critical path intake plus decision | "the outside agent is about five seconds" |
 | Claim 1, CLM-0913-00001 | Lena Hartmann, VW Golf, app, 16 dents roof and bonnet, no glass damage, drivable, EUR 640, POL-104211 ACTIVE, HC-7, deductible EUR 300, RN-3, Sindelfingen, photos 7 min after the cell start | APPROVE / FAST_LANE, drive-in slot at P-BRAENDLE |
 | Claim 2, CLM-0913-08103 | Ben Meier, Skoda Octavia, drive-in scanner, 60 dents claimed, EUR 6,800, reserve EUR 7,800, MOTOR_PARTIAL, deductible EUR 150, no RN-3; photos 7.3 days before the cell; scanner 14 vs 60 (76.7 percent) | HOLD / SPECIAL_INVESTIGATIONS, specialist within ten working days |
 | Contracts | policy 22 fields, intake 12, rules 5, decision 14 | "every step has a schema" |
@@ -914,7 +941,7 @@ Every figure below is measured or seeded. Anything not on this list, do not say.
 | MongoDB acme_claims | fnol_intake 10,463 (app 4,160, voice agent 2,663, workshop portal 1,560, drive-in scanner 1,040, agency email 1,040), scanner_results 1,040, weather_cells 3 | raw intake, only the outside agent reaches it |
 | Clauses that appear | CG-FL-1, PW-HC-7, PW-RN-3, PW-DED-1, PW-EXCL-1, CG-SC-1, CG-FR-5, CG-BAFIN-30, CG-HOLD-1, PW-TL-1, CG-TL-2 | read them from the card |
 | Models | four platform agents on `fast` (Claude Haiku 4.5), Orchestrator on `general`, outside agent on its own Haiku 4.5 | "a tier, not an endpoint" |
-| Evaluations | ins-claims-rules 10/10 (5 questions, Factuality + Closed QA), ins-guardrails 6/6 (3 attacks, Security + LLM Judge), ins-triage-decision 6/6 (3 decisions, LLM Judge + Closed QA); watchlist of 3 agents | "ten of ten, six of six, six of six" |
+| Evaluations | measured on SAM 2.225.14 (confirm against the 2.348.22 pre-runs, A9): ins-claims-rules 10/10 (5 questions, Factuality + Closed QA), ins-guardrails 6/6 (3 attacks, Security + LLM Judge), ins-triage-decision 6/6 (3 decisions, LLM Judge + Closed QA); watchlist of 3 agents | "ten of ten, six of six, six of six" |
 | Dashboard | sam-claims-governance, folder SAM, 34 panels | "I showed you four" |
 | Lab retention | Tempo 48 h, Loki 7 days, Prometheus 7 days | "traces two days, logs seven" |
 
@@ -932,7 +959,9 @@ model aliases, the Registered agents value.
   and the clock come from the payloads and the click.
 - **Platform hops in Tempo are runtime ids.** Spans read `.../request/agent_<id>
   receive`; only the outside agent's hop reads by name (`ClaimsIntakeAnalyst`),
-  because its card name is its address.
+  because its card name is its address (still so in 2.348.22). Tempo holds
+  broker spans only: SAM emits no OTel spans of its own, and the broker's reach
+  Tempo only while the event-mesh `otel-collector` container runs (A10).
 - **The outside agent is not counted.** It is not in the Registered agents stat,
   the token and cost panels, or the platform database. The platform sees its
   card, every A2A hop with user identity and latency (Activities, Tempo, Loki),
@@ -945,8 +974,9 @@ model aliases, the Registered agents value.
 - **Evaluations list more than three experiments.** ins-ops-quality and
   ins-ops-model-benchmark belong to the extended profile, and an early
   ins-triage-decision run scored with Response Match (1 of 3, average 0.515) can
-  sit in Reports. The experiment now uses LLM Judge plus Closed QA: Response
-  Match punished correct JSON decisions for their wording.
+  sit in Reports (on the 2.225.14 platform database; the one rebuilt for
+  2.348.22 starts without it). The experiment now uses LLM Judge plus Closed
+  QA: Response Match punished correct JSON decisions for their wording.
 - **The Models page lists more aliases** than the demo uses. Point at `fast`;
   never count them.
 - **Other discovered agents** of the shared lab mesh can appear in Agent
@@ -966,14 +996,19 @@ model aliases, the Registered agents value.
 - **Junk characters in a reason.** The live contract note of partner P-DELLENDOC
   still contains an em dash (the seed file is corrected; the database keeps it
   until Postgres is re-seeded), and non-ASCII characters can arrive mangled in
-  the cockpit. If a line on the card shows three junk characters, read around
-  them.
+  the cockpit (observed on 2.225.14; not re-verified on 2.348.22). If a line on
+  the card shows three junk characters, read around them.
 - **Hidden-window throttling.** The T+ clock runs on browser timers; keep the
   cockpit in its own visible window.
 
-### Platform and build (2.225.14)
+### Platform and build (2.348.22)
 
-- **Two platform bugs on the event-to-workflow path** (verified 2026-09-10): an
+The platform runs SAM 2.348.22 (str 1.64.0, chart 2.1.164). Most of this list
+was found on 2.225.14; every platform-behaviour item says whether it was
+re-verified on 2.348.22.
+
+- **Two platform bugs on the event-to-workflow path** (verified 2026-09-10 on
+  2.225.14, still present in 2.348.22 -- re-verified 2026-09-21): an
   entrypoint `promptTemplate` renders only for agent targets, so a workflow
   target gets an empty message; and the gateway publishes to
   `.../request/<workflow name>` while the runtime listens on
@@ -981,39 +1016,45 @@ model aliases, the Registered agents value.
   rendered from `triage/entrypoints/claims-triage.yaml.template` after the
   workflow exists, targeting the runtime name, with `inputExpression:
   "input.payload"`. Consequences: the runtime name changes per install (re-run
-  `install.sh`, never hand-edit `.rendered/`), and receivers come up 20 to 40 s
-  after a deploy -- events published before that are lost.
-- **Node input templates render only whole-string expressions.** First-level
-  nodes carry only an `instruction:` and receive the raw event; the decision
-  node needs an explicit `input:` map. Do not "improve" the YAML.
+  `install.sh`, never hand-edit `.rendered/`), and events published before the
+  deploy are lost. The receivers themselves now come up about a second after
+  the deploy (2.225.14: 20 to 40 s).
+- **Node input templates render only whole-string expressions** (observed on
+  2.225.14; not re-verified on 2.348.22). First-level nodes carry only an
+  `instruction:` and receive the raw event; the decision node needs an
+  explicit `input:` map. Do not "improve" the YAML.
 - **External v1 agents cannot be workflow nodes.** The CLI rejects the
-  reference, and via the REST API the v1 handler never answers the v2 engine. A
-  platform agent has to carry the hop -- hence the liaison.
+  reference (still so on 2.348.22), and via the REST API the v1 handler never
+  answers the v2 engine (observed on 2.225.14). A platform agent has to carry
+  the hop -- hence the liaison.
 - **Peer delegation comes from one key**, `interAgentCommunication.allowList` in
-  `additionalConfigurations`. Without it an agent has no delegation tool at all;
-  the Orchestrator carries `["*"]`. Routing the hop through the Orchestrator
-  also works but adds Opus-tier overhead to the critical path.
-- **Never tell a schema-bound node agent how to format its answer.** The
-  platform injects its own structured-output instruction; a "JSON only"
-  instruction makes the node output null. Node instructions describe content
-  only.
-- **The liaison must call no tool except its peer tool.** Given the chance, a
-  fast-tier agent patches its answer with artifact tools and corrupts it into
-  "intake unavailable". The ban sits in the prompt and in the node instruction;
-  do not soften either.
+  `additionalConfigurations`. Without it an agent has no delegation tool at all
+  (observed on 2.225.14; not re-verified on 2.348.22); the Orchestrator carries
+  `["*"]` (unchanged in 2.348.22). Routing the hop through the Orchestrator also
+  works but adds Opus-tier overhead to the critical path.
+- **Never tell a schema-bound node agent how to format its answer** (observed
+  on 2.225.14; not re-verified on 2.348.22). The platform injects its own
+  structured-output instruction; a "JSON only" instruction makes the node
+  output null. Node instructions describe content only.
+- **The liaison must call no tool except its peer tool** (observed on 2.225.14;
+  not re-verified on 2.348.22). Given the chance, a fast-tier agent patches its
+  answer with artifact tools and corrupts it into "intake unavailable". The ban
+  sits in the prompt and in the node instruction; do not soften either.
 - **The decision is an LLM output validated against a schema.** A node that
   violates its schema ends with a null output (no retry; the workflow still
-  reports completed), and the decision agent turns a missing section into REFER
-  / HANDLER with the reason. `fail_fast` is off on purpose so this stays visible
-  instead of fatal.
-- **No RBAC "denied" log lines.** Grants and denials log at DEBUG only; the
-  dashboard shows auth failures and capability-widening blocks instead.
-- **Evaluations target agents, not workflows.** ins-triage-decision feeds the
-  decision agent the workflow's exact fan-in; the orchestration itself is proven
-  by Activities and Tempo. One LLM-judge call takes around 40 s; two measured
-  ins-triage-decision runs took 102 s and 117 s.
-- **A bare `sam eval run` answers 401** even with a valid CLI login: the token
-  has to be exported first.
+  reports completed; observed on 2.225.14, not re-verified on 2.348.22), and
+  the decision agent turns a missing section into REFER / HANDLER with the
+  reason. `fail_fast` is off on purpose so this stays visible instead of fatal.
+- **No RBAC "denied" log lines.** Grants and denials log at DEBUG only (observed
+  on 2.225.14; not re-verified on 2.348.22); the dashboard shows auth failures
+  and capability-widening blocks instead.
+- **Evaluations target agents, not workflows** (still so in 2.348.22).
+  ins-triage-decision feeds the decision agent the workflow's exact fan-in; the
+  orchestration itself is proven by Activities and Tempo. One LLM-judge call
+  takes around 40 s; two measured ins-triage-decision runs took 102 s and 117 s
+  (measured on SAM 2.225.14).
+- **A bare `sam eval run` answers 401** even with a valid CLI login (still so on
+  CLI 2.348.22, re-verified 2026-09-21): the token has to be exported first.
 
 ```
 bash                              # from the demo directory
@@ -1025,9 +1066,20 @@ load_env ../agent-mesh-deployment && resolve_sam_cli && sam_auth_token
 ```
 
 - **`install.sh` redeploys the two experts on every run.** Their skill binding
-  never converges in 2.225.14, so `sam config plan` in `core/` always reports
-  both as an update. `preflight.sh` reinstalls only when a resource is missing.
-  Never re-install close to the show; never show `sam config plan` on stage.
+  never converges (2.225.14, still in 2.348.22, where the plan also flags the
+  output modes), so `sam config plan` in `core/` always reports both as an
+  update. `preflight.sh` reinstalls only when a resource is missing. Never
+  re-install close to the show; never show `sam config plan` on stage.
+- **Expert tier and database login come from the environment.** The two
+  experts bind `${INS_EXPERT_TIER, fast}`; `install.sh` exports `fast` for this
+  profile and `general` for `--extended`, and an exported value wins
+  (`INS_EXPERT_TIER=... ./install.sh`, likewise `INS_DB_USERNAME` /
+  `INS_DB_PASSWORD`). The defaults sit inline, not in a manifest `variables:`
+  block: on CLI 2.348.22 a default there beats the environment.
+- **Connector tools after an `str` restart.** The first call gets "tool not in
+  manifest"; on 2.348.22 the agent runtime re-registers and retries on its own,
+  so the call succeeds about a second later. No action needed, but the first
+  dry fire after a restart can be a little slower.
 - **Profiles are mutually exclusive.** Both entrypoints subscribe to
   `acmeins/claims/fnol/received/...`. Switch with `./uninstall.sh --keep-core`,
   then `./install.sh --extended`; never on show day. The other profile's script
@@ -1037,9 +1089,14 @@ load_env ../agent-mesh-deployment && resolve_sam_cli && sam_auth_token
   model endpoint and key), both from the companion solace-sam-artifacts
   repository. `install.sh` stops with a message when either is missing; if they
   disappear later, the pod stops working and every card lands as REFER / intake
-  unavailable.
+  unavailable. Its image is
+  `registry.solace.lab/solace-agent-mesh-enterprise:latest` with
+  `imagePullPolicy: Always` (on 2026-09-21 the 1.97.2 build): every pod start
+  resolves the tag against the lab registry, so the registry must be reachable
+  whenever the pod restarts.
 - **Stale agent card after delete and rebuild.** The mesh can keep a dead
-  instance's card after a re-install; fix in Appendix B.
+  instance's card after a re-install (observed on 2.225.14; not re-verified on
+  2.348.22); fix in Appendix B.
 - **Retention.** Tempo 48 h, Loki 7 days, Prometheus 7 days.
 - **Demo clock.** The data is a frozen Monday 2026-07-20 10:00 UTC; node
   instructions pin that instant. "Days before the cell" is computed against the

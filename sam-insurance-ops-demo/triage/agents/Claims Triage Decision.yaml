@@ -23,7 +23,11 @@ spec:
   modelProvider:
     - fast
   # NO toolsets: with artifact tools the fast model calls
-  # non-existent tools (_notify_artifact_save) and the run fails.
+  # non-existent tools (_notify_artifact_save) and the run fails
+  # (observed on 2.225.14; not re-verified on 2.348.22). On 2.348.22
+  # an empty list still leaves ~23 built-in artifact/data tools on
+  # the agent card: it means no connector, no toolset, no database
+  # access -- not zero tools.
   toolsets: []
   skills:
     - id: triage_decision

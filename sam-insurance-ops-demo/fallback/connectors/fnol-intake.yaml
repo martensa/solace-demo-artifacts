@@ -3,8 +3,9 @@
 # runs at a time; stop retail-pos-mongo and mfg-plant-mongo
 # first).
 # sam_ro/sam_ro is a demo-only read-only user (repo convention).
-# The connector is EXPERIMENTAL in 2.225.14 and generates ONE
-# tool per collection (<collection>_mongo_query_<suffix>); schema
+# The connector type is flagged EXPERIMENTAL (2.225.14, still in
+# 2.348.22) and generates ONE tool per collection
+# (<collection>_mongo_query_<8 hex digits of the connector id>); schema
 # introspection samples up to 100 documents at startup.
 kind: connector
 name: fnol-intake

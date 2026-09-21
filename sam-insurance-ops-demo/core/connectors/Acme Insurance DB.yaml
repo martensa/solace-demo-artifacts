@@ -22,5 +22,5 @@ spec:
     database: acme_insurance
     hostname: host.docker.internal
     port: 5432
-    username: ${INS_DB_USERNAME}
-    password: ${INS_DB_PASSWORD}
+    username: ${INS_DB_USERNAME, postgres}
+    password: ${INS_DB_PASSWORD, postgres}

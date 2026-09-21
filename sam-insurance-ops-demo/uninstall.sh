@@ -29,11 +29,16 @@ set -euo pipefail
 # MCP server) goes the same way INCLUDING its named volumes
 # (acme-knowledge-data AND the acme-knowledge-models embedding
 # cache -- the next install.sh downloads the model again).
-# Keeps: the 5 model aliases, RBAC, the developer-mcp entrypoint,
-# the grafana_ro grant + platform-DB datasource (infrastructure,
-# agent-mesh-deployment), the shared host containers
-# postgres/pgadmin (acme_insurance stays seeded unless
+# Keeps: the model aliases, RBAC and the developer-mcp entrypoint
+# (all re-created by agent-mesh-deployment's provision.sh, which
+# start.sh runs), the grafana_ro grant + platform-DB datasource
+# (infrastructure, agent-mesh-deployment), the shared host
+# containers postgres/pgadmin (acme_insurance stays seeded unless
 # --purge-data; install.sh re-seeds it).
+# Known leftover (SAM 2.348.22, harmless): a deleted connector
+# keeps its tool subscription on the broker queue
+# q/str/builtin-tools-worker; agent-mesh-deployment's stop.sh
+# drops the queue.
 #
 # Also SURVIVES, by design, and nowhere else documented: the demo's
 # HISTORY. Chat sessions and tasks stay in the webui and orchestrator
@@ -83,6 +88,9 @@ sam_auth_token
 
 api() {
   local method="$1" path="$2"
+  # 2.348.22 pages every list endpoint (default 20 per page, newest
+  # first): read the maximum page of 100 (the demos stay far below).
+  [ "$method" = GET ] && case "$path" in *\?*) ;; *) path="$path?pageSize=100" ;; esac
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
     -o /tmp/uninstall-api-body.json -w "%{http_code}")
@@ -216,7 +224,8 @@ fi
 
 # The run rows are gone; their artifacts are not. SeaweedFS keeps
 # /buckets/sam-solace-lab/sam-solace-lab/eval/runs/<run id>/ per run
-# (about 1 MB each), and nothing on the platform references them any
+# (about 1 MB each; layout seen on 2.225.14, not re-verified on
+# 2.348.22), and nothing on the platform references them any
 # more. Remove exactly the ids collected above -- never the whole
 # eval/runs prefix, which other demos share.
 # `grep` exits 1 when there is nothing to match, and under `set -e` a

@@ -1,6 +1,7 @@
 # Claims Intake Analyst -- the ONE agent of the demo that runs
 # OUTSIDE the SAM platform: a SAM v1 Python-SDK app (image
-# solace-agent-mesh-enterprise 1.97.2, plugin sam_mongodb 0.1.0)
+# solace-agent-mesh-enterprise:latest -- the 1.97.2 build on
+# 2026-09-21 -- plugin sam_mongodb 0.1.0)
 # that joins the mesh over the broker only. The platform discovers
 # its agent card (Agent Management shows it as type "discovered")
 # and reaches it through the platform agent Claims Intake Liaison,
@@ -62,9 +63,10 @@ data:
 
           # ------------------------------------------------------
           # sam_mongodb plugin lifecycle: one connection to the
-          # acme_claims store (read-only user), schema summary
-          # auto-detected at start-up and injected into the system
-          # instruction; results up to 60 rows come back inline.
+          # acme_claims store (read-only user), NO start-up schema
+          # detection (auto_detect_schema false, see below -- the
+          # instruction carries the field lists); results up to 60
+          # rows come back inline.
           # ------------------------------------------------------
           agent_init_function:
             module: "sam_mongodb.lifecycle"
@@ -241,11 +243,13 @@ data:
                and the reason in summary). Never invent documents.
 
           # ------------------------------------------------------
-          # Tools: the plugin's mongo_query function bound three
-          # times, one collection each (distinct tool_name, own
-          # tool_config). mongo_query saves every result as an
-          # artifact -> the artifact_management group provides the
-          # service it needs.
+          # Tools: the plugin's mongo_query function bound four
+          # times -- the claim_intake_facts view plus the three raw
+          # collections (distinct tool_name, own tool_config).
+          # mongo_query saves every result as an artifact through
+          # the artifact_service configured below; no
+          # artifact_management tool group (see the NOTE after the
+          # tools).
           # ------------------------------------------------------
           tools:
             - tool_type: python

@@ -36,7 +36,7 @@ spec:
           workshop estimates, the payment run and the fraud
           guideline and produce a hold/release report.
     # Workflow-level INPUT contract: the realtime scanner event
-    # cockpit/index.html publishes on
+    # cockpit/extended.html publishes on
     # acmeins/claims/scanner/mismatch/>. The event PATH runs via
     # the Orchestrator (promptTemplate quirk), so this schema is
     # the published contract + the typed Run form in the UI, not
