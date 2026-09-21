@@ -111,7 +111,8 @@ host containers.
   ([solace-sam-demos/sam-retail][repo], 20 receipts) plus the
   demo story transactions in the same document shape
   (read-only user `sam_ro` for the SAM connector)
-- `slides/` -- the deck: lifecycle, platform architecture, the
-  high-level POS scenario and the lifecycle mapping
+- `slides/` -- the deck (3 slides): the AI worker lifecycle,
+  the high-level POS scenario on the platform architecture, and
+  the demo mapped onto the lifecycle (adapted to SAM 2.348.22)
 
 [repo]: https://github.com/martensa/solace-sam-demos/tree/master/sam-retail

@@ -7,7 +7,7 @@ limits live in the appendices at the end.
 
 Conventions: **DO** = click path, **SAY** = spoken line
 (shorten freely, keep the bold claims). Slide numbers refer to
-`slides/SAM v2 – AI Worker Lifecycle Meetup.pptx` (3 slides:
+`slides/SAM v2 - AI Worker Lifecycle Meetup.pptx` (3 slides:
 1 = lifecycle, 2 = demo scenario, 3 = the demo mapped onto the
 lifecycle).
 
@@ -157,8 +157,8 @@ that did."
 > on top of it. When I say 'the mesh', I mean the event mesh —
 > the wires.
 >
-> The interesting part is at the top: the online shop publishes
-> every order as an event onto the mesh. Most orders succeed.
+> The interesting part is the online shop in the store row: it
+> publishes every order as an event onto the mesh. Most orders succeed.
 > Some fail — out of stock, out of season, broken master data.
 > And nobody notices until a customer complains.
 >
@@ -439,7 +439,7 @@ workflow run before making that claim on stage.)
 **SAY** (Connectors — adapt to what the screen shows):
 
 > "Three Postgres connectors — CRM, OMS, PDM. And
-> **retail-poslog**: the plant-side data access IT provisioned
+> **retail-poslog**: the store-side data access IT provisioned
 > before the hire — read-only service account, one database,
 > one collection. That is the connection our new analyst is
 > being BOUND to right now; the agent never sees credentials."
@@ -845,14 +845,17 @@ marked "not shown today").
 > improvement stage. Let's step back and close the loop.
 >
 > **Hiring**: you saw the roster, and a job posting turned
-> into a worker. **Onboarding**: the Builder wired it to
-> MongoDB with scoped credentials, and it answered its first
-> question two minutes later. **Teamwork**: a customer order
-> failed, and a team of agents — including the one we hired
-> during this talk — investigated it end to end, triggered by
-> the event, and told the developers which line of code to
-> fix. **Improvement**: everything measured — health, speed,
-> cost per person, audit trail, and a quality gate in CI.
+> into a worker. **Onboarding**: the Builder bound it to the
+> MongoDB connector — read-only credentials it never sees —
+> and it answered its first question two minutes later.
+> **Coaching**: schema skills from Git taught every query
+> expert its database. **Teamwork**: a customer order failed, and a team of agents
+> — including the one we hired during this talk — investigated
+> it end to end, triggered by the event, and told the
+> developers which fields to look at for the fix.
+> **Improvement**: everything measured — health, speed, cost
+> per person, audit trail, and a quality gate ready to drop
+> into CI.
 >
 > The point is not that agents can answer questions. The point
 > is that you can run them like a **workforce**: hired,
