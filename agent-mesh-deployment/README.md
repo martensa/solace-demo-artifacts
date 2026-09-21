@@ -72,8 +72,10 @@ requires cluster-internal hostname resolution.
   demo's `install.sh` starts its own host data stores -- the
   standalone postgres container (`postgres` + `pgadmin`, managed
   outside this repo, reached via `host.docker.internal:5432`)
-  and a demo-specific MongoDB. See the demo directories
-  (`../sam-retail-ops-demo/`, `../sam-manufacturing-ops-demo/`).
+  and a demo-specific MongoDB (insurance adds Qdrant plus an MCP
+  server on port 8765). See the demo directories
+  (`../sam-retail-ops-demo/`, `../sam-manufacturing-ops-demo/`,
+  `../sam-insurance-ops-demo/`).
 
 ### Local CLI Tools
 
@@ -303,19 +305,45 @@ for the MCP tool naming and the Claude Code connection guide.
 The platform itself carries NO demo content. Demos are layered
 on top as self-contained packages with their own core (domain
 connectors, schema skills, query experts), overlay (event-driven
-workflows, entrypoints), eval package and dashboard:
+workflows, entrypoints), eval package and dashboard. Run the
+commands from this directory (`agent-mesh-deployment/`); the
+subshell keeps you here for the next command:
 
 ```bash
-cd ../sam-retail-ops-demo && ./install.sh
+(cd ../sam-retail-ops-demo && ./install.sh)
 ```
 
 ```bash
-cd ../sam-manufacturing-ops-demo && ./install.sh
+(cd ../sam-manufacturing-ops-demo && ./install.sh)
 ```
 
-Both are idempotent; the matching `uninstall.sh` removes the
-demo again (`--keep-core` keeps the demo's core agents for fast
-overlay switching). Requires the `sam auth login` from step 6.
+```bash
+(cd ../sam-insurance-ops-demo && ./install.sh)              # triage (default)
+(cd ../sam-insurance-ops-demo && ./install.sh --extended)   # 15-min original
+```
+
+- Retail -- "Acme Retail": order events, the incident workflow,
+  CRM/OMS/PDM query experts, the POSLOG connector (the POS
+  analyst agent is built live in the Builder; `--with-pos` keeps
+  a prebuilt one) ([README](../sam-retail-ops-demo/README.md)).
+- Manufacturing -- plant events, quality-incident and
+  replenishment workflows
+  ([README](../sam-manufacturing-ops-demo/README.md)).
+- Insurance -- "Acme Insurance": by default the claim triage
+  governance demo (one FNOL event -> one decision in ~30 s, with
+  an external v1 intake agent); `--extended` installs the 15-min
+  event-driven claims operations original instead. Both profiles
+  subscribe to overlapping FNOL topics, so switching removes the
+  other profile's entrypoint
+  ([README](../sam-insurance-ops-demo/README.md)).
+
+Only ONE demo runs at a time (shared host data stores, one MongoDB
+on port 27017): each `install.sh` refuses to install over another
+demo's overlay. All are idempotent; the matching `uninstall.sh`
+removes the demo again (`--keep-core` keeps the demo's core agents
+for fast overlay switching, `--dry-run` shows what it would
+remove). Each demo also has a `preflight.sh` for the day of the
+talk. Requires the `sam auth login` from step 6.
 
 ### 8. Teardown
 
@@ -323,10 +351,15 @@ overlay switching). Requires the `sam auth login` from step 6.
 ./scripts/stop.sh
 ```
 
-This uninstalls the Helm release, deletes PVCs, removes the
-namespace, removes `sam.solace.lab` from CoreDNS NodeHosts,
-removes the Keycloak users and groups, and deletes the Keycloak
-OIDC client.
+Run from `agent-mesh-deployment/`. Uninstall a demo first if one
+is installed: `uninstall.sh` needs the running platform, and
+`stop.sh` leaves the demo's host data stores and the insurance
+external agent (namespace `sam-solace-lab-agents`) in place. It
+uninstalls the Helm release, deletes
+the PVCs and the namespace, drops the SAM queues on the broker VPN,
+removes the observability objects in `monitoring`, removes
+`sam.solace.lab` from CoreDNS NodeHosts, the Keycloak users,
+groups and OIDC client, and the local `sam` CLI caches.
 
 ## Rebuilding after teardown
 
@@ -348,7 +381,7 @@ rebuild:
    `load-images.sh` are only needed if the private registry
    itself was rebuilt -- images persist outside the namespace.
 4. Reinstall the demo, e.g.
-   `cd ../sam-retail-ops-demo && ./install.sh` (starts the demo
+   `(cd ../sam-retail-ops-demo && ./install.sh)` (starts the demo
    data stores and re-creates core, overlay, eval package and
    dashboard, including the model bindings)
 5. If the desktop app is connected:
@@ -519,8 +552,10 @@ This removes the Helm release, the namespace with its PVCs and
 released PVs, the observability objects in the `monitoring`
 namespace, the CoreDNS NodeHosts entry, the cached and now
 version-mismatched `sam` CLI plus its login cache, and the
-Keycloak client, groups and users. Nothing of the old version is
-left in the cluster.
+Keycloak client, groups and users, and it drops the SAM queues
+on the broker VPN. Uninstall any demo first (see step 8 of the
+install walkthrough): nothing of the old version is left in the
+cluster then.
 
 ### 3. Repoint and re-pin
 

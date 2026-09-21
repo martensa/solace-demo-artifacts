@@ -100,12 +100,14 @@ into it), never type the name, and keep `.env` paths quoted.
 This deployment is pure SAM INFRASTRUCTURE (platform, RBAC,
 models, developer-mcp entrypoint, observability). It carries NO
 demo content: demos live in their own top-level directories
-(../sam-retail-ops-demo/, ../sam-manufacturing-ops-demo/), each
+(../sam-retail-ops-demo/, ../sam-manufacturing-ops-demo/,
+../sam-insurance-ops-demo/), each
 with its own core (domain connectors/skills/experts), overlay,
 eval package and dashboard, installed/removed via idempotent
 install.sh / uninstall.sh (--keep-core keeps a demo's core for
 fast overlay switching; the demo install scripts also start the
-host data stores postgres/pgadmin + demo mongo).
+host data stores postgres/pgadmin + demo mongo, insurance also
+Qdrant + its MCP server).
 
 stop.sh destroys the platform DB and with it all DB-managed
 content (RBAC, installed demos, developer-mcp, model tuning) --
@@ -201,18 +203,33 @@ re-provisioning order.
   event JSON, runs, and successOutput (responseType full) carries
   the output_mapping as a data part. promptTemplate stays ignored
   for workflow targets even then.
-- AI Builder with an EXISTING connector (2.225.14 "validation
-  deadlock": the manifest validator demanded `connectors`, the
-  config validator forbade it) -- resolved on 2.348.22 at the
-  validation level: the wiring lives in the build MANIFEST
-  (`connectors:`/`depends_on:` of the agent component), the agent
-  config carries none, and both `validate_component_config` and
-  `validate_build_manifest` pass. The Builder then stops at
-  `request_build_activate`: with the default feature flag
-  `builder_server_apply=false` the FRONTEND saves the components
-  on the "Build & Activate" click and adds the connector ids from
-  the manifest (`/api/v1/platform/builder/builds` is not even
-  routed). That last step was not exercised headlessly.
+- AI Builder with an EXISTING connector -- the 2.225.14
+  "validation deadlock" is NOT gone on 2.348.22 (re-verified
+  2026-09-21 with the retail talk-track prompt, headless via a
+  Builder session): the FULL build-manifest validation
+  (`validate_build_manifest`, `full_validation: true`) demands a
+  `connectors` entry at the APP level of the agent config ("add a
+  'connectors' entry at the app level so the platform can wire the
+  connector's tools"), `validate_component_config` rejects
+  `connectors` INSIDE `app_config`, and the Builder's own internal
+  instruction says the agent config should carry no connector at
+  all -- left to itself it loops (7+ rounds observed). The wiring
+  that passes both validators on the first try: the connector as a
+  manifest component (origin: platform, status: deployed) AND
+  `connectors:` at the app level of the agent config (sibling of
+  `app_config`); the Builder itself then lists the connector in
+  the agent component's `depends_on` and `connectors`. The demo
+  talk-track Builder prompts spell out exactly this -- keep them.
+  The Builder may also pause at "Here's the build plan for your
+  review" (reply "Approved - build it now exactly as specified")
+  and a component config only validates once
+  `build_manifest.yaml` exists (it self-corrects). Builtin-group
+  tools validate with
+  `tool_name:` and with `group_name:`. With the default feature
+  flag `builder_server_apply=false` the FRONTEND saves the
+  components on the "Build & Activate" click
+  (`/api/v1/platform/builder/builds` is not routed); that click
+  was not exercised headlessly.
 - Builder Test engine WORKS on 2.348.22 (verified 2026-09-21 via
   the WebUI's API path: POST /api/v1/sessions {id} -> POST
   /api/v1/platform/builder/sessions/{id}/test-agent
@@ -341,8 +358,8 @@ reference DB-managed roles, never the YAML `sam_admin`.
   (clients re-auth automatically).
   NOTE: demo content (cores with domain connectors/skills/
   experts, overlays, eval packages, dashboards) lives in
-  ../sam-retail-ops-demo/ and ../sam-manufacturing-ops-demo/,
-  managed by their idempotent install.sh / uninstall.sh
+  ../sam-retail-ops-demo/, ../sam-manufacturing-ops-demo/ and
+  ../sam-insurance-ops-demo/, managed by their idempotent install.sh / uninstall.sh
   (NEVER `--prune` there either).
 - `scripts/models/` -- `set-max-tokens.sh` patches
   `modelParams.max_tokens` via `sam api` (SAM_AUTH_TOKEN from the
