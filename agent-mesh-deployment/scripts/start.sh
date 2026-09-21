@@ -96,11 +96,11 @@ CHART_VERSION=$(awk '$1 == "version:" {print $2; exit}' \
   "$SAM_CHART_PATH/Chart.yaml")
 echo "Using local chart: $SAM_CHART_PATH (version ${CHART_VERSION:-unknown})"
 
-# --- Observability overlay (metrics) ------------------------------
-# scripts/observability/ overlays the image-baked component configs
-# with a management_server block (Prometheus /metrics on the health
-# ports) via a Helm post-renderer plugin. Guard against vendor
-# config drift first, then make sure the plugin is installed.
+# --- Metrics gate -------------------------------------------------
+# /metrics is switched on by environmentVariables.
+# SAM_OBSERVABILITY_ENABLED in local-k8s-values.yaml, which the
+# image-baked configs read. Warn (never fail) if a new delivery no
+# longer honours that switch.
 GWE_IMG=$(python3 -c "
 import yaml
 v = yaml.safe_load(open('$PROJECT_DIR/local-k8s-values.yaml'))
@@ -111,13 +111,8 @@ import yaml
 v = yaml.safe_load(open('$PROJECT_DIR/local-k8s-values.yaml'))
 i = v['samDeployment']['str']['image']
 print(f\"{i['repository']}:{i['tag']}\")")
-"$PROJECT_DIR/scripts/observability/check-config-drift.sh" \
+"$PROJECT_DIR/scripts/observability/check-metrics-gate.sh" \
   "$GWE_IMG" "$STR_IMG"
-
-if ! helm plugin list 2>/dev/null | grep -q "^sam-observability"; then
-  echo "Installing helm post-renderer plugin sam-observability ..."
-  helm plugin install "$PROJECT_DIR/scripts/observability/helm-plugin"
-fi
 
 # --- Namespace and pull secret ------------------------------------
 kubectl create namespace "$SAM_NAMESPACE" 2>/dev/null || true
@@ -156,8 +151,7 @@ helm upgrade --install "$SAM_RELEASE" \
   --set sam.oauthProvider.oidc.issuer="$KEYCLOAK_ISSUER" \
   --set sam.oauthProvider.oidc.clientId="$KEYCLOAK_CLIENT_ID" \
   --set sam.oauthProvider.oidc.clientSecret="$KEYCLOAK_CLIENT_SECRET" \
-  --set llmService.llmServiceApiKey="$LLM_SERVICE_API_KEY" \
-  --post-renderer sam-observability
+  --set llmService.llmServiceApiKey="$LLM_SERVICE_API_KEY"
 
 # --- Observability manifests (Services, ServiceMonitors,
 #     Dashboards, Alerts) ------------------------------------------
@@ -184,37 +178,28 @@ else
   echo "Helm install finished, but not all pods became ready within"
   echo "300s. Watch them with:"
   echo "  kubectl get pods -n $SAM_NAMESPACE -w"
+  echo "Once every pod is Running, provision the platform content"
+  echo "(RBAC, models, developer-mcp; browser login as sam_admin):"
+  echo "  ./scripts/provision.sh --login"
 fi
 
-# --- Additional LLM models (declarative, idempotent) ---------------
-# Creates/updates the workflow / reasoning / coding / expert / fast
-# model aliases on top of the chart-seeded ones and probes every
-# upstream. Needs a sam CLI login; a missing token must not fail
-# the deployment -- warn and point at the standalone re-run.
+# --- Platform content (RBAC, models, max_tokens, developer-mcp) ----
+# The platform DB starts empty after every fresh install. All of it
+# is re-created by scripts/provision.sh, which needs a sam CLI login
+# -- and that login can only happen now that the platform is up. In
+# a terminal, provision.sh --login opens the browser for it (log in
+# as sam_admin); without one, print the single follow-up command.
 if [ "$PODS_READY" -eq 1 ]; then
   echo ""
-  echo "Applying additional LLM models ..."
-  if ! "$PROJECT_DIR/scripts/models/apply-models.sh"; then
-    echo ""
-    echo "WARNING: additional models were not (fully) applied."
-    echo "If the sam CLI login is missing or expired, run:"
-    echo "  sam auth login solace-lab --url https://sam.solace.lab"
-    echo "  ./scripts/models/apply-models.sh"
-  fi
-fi
-
-# --- Platform entrypoints (declarative, idempotent) ----------------
-# Creates/updates the developer-mcp MCP endpoint (infrastructure,
-# used by the desktop wiring and Claude Code across all demos).
-# Same login caveat as the models above.
-if [ "$PODS_READY" -eq 1 ]; then
-  echo ""
-  echo "Applying platform entrypoints ..."
-  if ! "$PROJECT_DIR/scripts/entrypoints/apply-entrypoints.sh"; then
-    echo ""
-    echo "WARNING: platform entrypoints were not (fully) applied."
-    echo "If the sam CLI login is missing or expired, run:"
-    echo "  sam auth login solace-lab --url https://sam.solace.lab"
-    echo "  ./scripts/entrypoints/apply-entrypoints.sh"
+  if [ -t 0 ] && [ -t 1 ]; then
+    "$PROJECT_DIR/scripts/provision.sh" --login || {
+      echo ""
+      echo "WARNING: provisioning incomplete -- fix the step above and"
+      echo "re-run ./scripts/provision.sh (idempotent)."
+    }
+  else
+    echo "Next: provision RBAC, models and developer-mcp (needs a"
+    echo "browser login as sam_admin):"
+    echo "  ./scripts/provision.sh --login"
   fi
 fi

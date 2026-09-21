@@ -102,11 +102,12 @@ cd event-mesh-deployment
 
 # Agent Mesh (requires solace-lab-infrastructure deployed first)
 cd ../agent-mesh-deployment
-cp .env.example .env                 # edit LLM_SERVICE_API_KEY
-./scripts/setup-keycloak-client.sh   # creates OIDC client
-# paste the printed client secret into .env
+cp .env.example .env                 # LLM + Gemini keys, artifact paths
+./scripts/setup-keycloak-client.sh   # OIDC client, secret -> .env
 ./scripts/setup-keycloak-users.sh    # creates groups + demo users
-./scripts/start.sh                   # helm install
+./scripts/load-images.sh             # offline images -> registry
+./scripts/start.sh                   # helm install, then (in a
+                                     # terminal) sam login + provision
 ```
 
 See the component READMEs for full details.

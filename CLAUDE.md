@@ -50,19 +50,21 @@ cd event-mesh-deployment
 
 ```bash
 cd agent-mesh-deployment
-cp .env.example .env                 # edit LLM key + artifact paths
-./scripts/setup-keycloak-client.sh   # creates OIDC client
-# paste the printed client secret into .env
+cp .env.example .env                 # edit LLM keys + artifact paths
+./scripts/setup-keycloak-client.sh   # OIDC client, secret -> .env
 ./scripts/setup-keycloak-users.sh    # creates groups + demo users
 docker login registry.solace.lab     # once
 ./scripts/load-images.sh             # offline images -> registry
-./scripts/start.sh                   # helm install (local chart)
-./scripts/rbac/apply-rbac.sh         # roles + claim mappings
-(cd scripts/models && ./set-max-tokens.sh)   # max_tokens tuning
-# five model aliases + developer-mcp come from start.sh
+./scripts/start.sh                   # helm install + (in a terminal)
+                                     # browser login + provision.sh
+./scripts/provision.sh --login       # if start.sh ran without a TTY:
+                                     # RBAC, models, max_tokens, MCP
 (cd ../sam-retail-ops-demo && ./install.sh)  # demo (core+overlay)
 ./scripts/stop.sh                    # full teardown incl. Keycloak
 ```
+
+Version upgrades: `agent-mesh-deployment/README.md` "Upgrade"
+(preflight with the new CLI first).
 
 SAM v2 (Go stack): the chart and images come from the offline
 delivery package; `.env` points at the local copies

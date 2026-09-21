@@ -31,10 +31,12 @@ sam:
   # works for Keycloak. The redirect URI is computed by the chart as
   # https://<dnsName>/api/v1/auth/callback; Keycloak accepts
   # https://sam.solace.lab/* (setup-keycloak-client.sh).
-  # Chart 2.1.164 adds sam.oauthProvider.claimKey (which OIDC claim
-  # identifies the user). Left unset: the default matches what the
-  # Keycloak claim mappings in scripts/rbac/ already rely on. Revisit
-  # only if identities stop resolving after the upgrade.
+  # Chart 2.1.164 adds sam.oauthProvider.claimKey ->
+  # EXTERNAL_AUTH_CLAIM_KEY: the group/role claim that the
+  # DB-managed claim mappings (scripts/rbac/) match -- deployment-
+  # wide since 2.348.22, no longer per mapping. Left unset: the
+  # default "groups" is what the Keycloak group mapper emits. It is
+  # NOT the identity claim; never set it to email or sub.
   oauthProvider:
     oidc:
       issuer: ""
@@ -76,16 +78,11 @@ broker:
 # post-install tuning (scripts/models/set-max-tokens.sh) survives
 # restarts and upgrades.
 llmService:
-  # Haiku (harmless; kept in sync with the DB 'planning' alias,
-  # which nothing binds). NOTE (2026-08-03): this env does NOT
-  # govern the Builder test engine's plan generator -- that tool's
-  # LLM call ignored every configurable surface (this env in
-  # str/awe/gwe, the DB planning alias, the ephemeral test agent's
-  # model binding) and kept calling the general/report tier
-  # (Opus 4.8), which needs ~106 s while the caller kills at a
-  # hard 30 s. Vendor bug OBSERVED IN 2.225.14 and not re-tested on
-  # 2.348.22; see sam-retail-ops-demo/demo-script.md
-  # "Bekannte Grenzen".
+  # Haiku (seeds the DB 'planning' alias). This does NOT pick the
+  # model of the Builder test engine's tools: since str 1.64.0
+  # that is STR_TOOL_MODEL_ALIAS (default "general"), and the
+  # engine works on 2.348.22 (the 2.225.14 30 s kill is fixed; see
+  # CLAUDE.md "v2 Chart Gotchas").
   planningModel: "openai/claude-haiku-4-5-20251001"
   generalModel: "openai/claude-opus-4-8"
   reportModel: "openai/claude-opus-4-8"
@@ -186,6 +183,21 @@ samDeployment:
       tag: "3.97"
   # dbInit uses postgres:18.0-trixie (valid Docker Hub tag) -- chart
   # default is fine with imageRegistry "".
+
+# Extra env for ALL SAM containers (gwe/awe/str), rendered into the
+# chart's shared env ConfigMap. Helm merges this map with the chart
+# default, so its NO_PROXY entry is kept.
+environmentVariables:
+  # Prometheus /metrics on the management server, which rides the
+  # --health-addr port (gwe 9090, awe/str 8090) -- the port that
+  # manifests/observability/ scrapes. Since 2.348.22 every baked
+  # component config carries an env-gated management_server block
+  # (off by default); this flag is all it takes. It replaced the
+  # full-file config overlays + Helm post-renderer that 2.225.14
+  # needed. The same block has an OTLP push exporter
+  # (SAM_OTLP_METRICS / SAM_OTLP_ENDPOINT), left off: Prometheus
+  # scrapes, nothing is pushed.
+  SAM_OBSERVABILITY_ENABLED: "true"
 
 # sam-doctor pre-install/pre-upgrade hook: keep the checks (broker,
 # LLM, OIDC reachability) but warn-only, so start.sh stays push-button

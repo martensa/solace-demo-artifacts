@@ -121,18 +121,33 @@ if [ "$DO_LOCAL" -eq 1 ]; then
 fi
 
 # --- Collect the registry tags to purge ----------------------------
-# Credentials come from the existing `docker login` session.
+# Credentials come from the existing `docker login` session: either
+# inline in ~/.docker/config.json ("auth") or, as Rancher Desktop on
+# macOS sets it up, in a credential helper (credHelpers entry or the
+# global credsStore, e.g. osxkeychain) queried through its
+# docker-credential-<helper> binary.
 REG_AUTH=""
 registry_ready() {
   [ -f "$HOME/.docker/config.json" ] || return 1
   REG_AUTH=$(python3 -c "
-import base64, json, sys
+import base64, json, subprocess, sys
 cfg = json.load(open('$HOME/.docker/config.json'))
-for key in ('$REGISTRY', 'https://$REGISTRY', 'https://$REGISTRY/v2/'):
+keys = ('$REGISTRY', 'https://$REGISTRY', 'https://$REGISTRY/v2/')
+for key in keys:
     entry = cfg.get('auths', {}).get(key) or {}
     if entry.get('auth'):
         sys.stdout.write(base64.b64decode(entry['auth']).decode())
-        break
+        raise SystemExit
+helper = next((cfg.get('credHelpers', {}).get(k) for k in keys
+               if cfg.get('credHelpers', {}).get(k)), cfg.get('credsStore'))
+if helper:
+    for key in keys:
+        r = subprocess.run(['docker-credential-' + helper, 'get'],
+                           input=key, capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip():
+            c = json.loads(r.stdout)
+            sys.stdout.write(c['Username'] + ':' + c['Secret'])
+            break
 " 2>/dev/null) || return 1
   [ -n "$REG_AUTH" ] || return 1
 }

@@ -29,7 +29,9 @@ local copies:
 - `SAM_CHART_PATH` -- unpacked Helm chart directory
 - `SAM_APP_IMAGE_TAR` -- app image tarball (gwe/awe)
 - `SAM_STR_IMAGE_TAR` -- str image tarball
-- `SAM_CLI_TAR` -- sam CLI tarball (for the RBAC step)
+- `SAM_CLI_PATH` or `SAM_CLI_TAR` -- the sam CLI (an installed
+  binary, or the CLI tarball when the package ships one;
+  2.348.22 does not)
 
 ### Cluster Infrastructure (from `solace-lab-infrastructure`)
 
@@ -83,10 +85,11 @@ requires cluster-internal hostname resolution.
 
 ### Installing the sam CLI
 
-The CLI ships in the delivery package as
-`solace-agent-mesh-<version>-cli-<os>-<arch>.tar.gz` (a single
-static binary). Install it for interactive use (`sam auth login`,
-`sam config`, `sam api`):
+The CLI is a single static binary. Some delivery packages ship it
+as `solace-agent-mesh-<version>-cli-<os>-<arch>.tar.gz`; others do
+not (2.348.22 has only `Charts/` and `Images/`) -- then get the
+matching CLI separately. Install it for interactive use
+(`sam auth login`, `sam config`, `sam api`) and for the scripts:
 
 ```bash
 mkdir -p ~/.local/bin
@@ -101,10 +104,12 @@ Notes:
   BEFORE any Python framework bin directory if the old v1 Python
   CLI (`pip install solace-agent-mesh`, also named `sam`) is
   still installed; the v2 Go CLI must win the lookup.
-- The repo scripts do not require this install: they resolve the
-  CLI via `scripts/lib/common.sh` (`SAM_CLI_PATH` from `.env`,
-  then PATH, then auto-extract from `SAM_CLI_TAR`). The install
-  is for the interactive login and ad-hoc `sam` commands.
+- The repo scripts resolve the CLI via `scripts/lib/common.sh`:
+  `SAM_CLI_PATH` from `.env`, then PATH, then auto-extract from
+  `SAM_CLI_TAR`. Only a package that ships the CLI tarball can
+  rely on that last fallback; otherwise the install above (or
+  `SAM_CLI_PATH`) is required. Keep `SAM_CLI_PATH` on the current
+  version -- it wins over the PATH.
 
 ## Architecture Overview
 
@@ -147,10 +152,11 @@ registry.
 cp .env.example .env
 ```
 
-Edit `.env` and set `LLM_SERVICE_API_KEY` plus the four offline
-artifact paths (`SAM_CHART_PATH`, `SAM_APP_IMAGE_TAR`,
-`SAM_STR_IMAGE_TAR`, `SAM_CLI_TAR`). The Keycloak client secret is
-populated in the next step.
+Edit `.env` and set `LLM_SERVICE_API_KEY`,
+`GOOGLE_AI_STUDIO_API_KEY` (the `google gemini` model alias) and
+the offline artifact paths (`SAM_CHART_PATH`, `SAM_APP_IMAGE_TAR`,
+`SAM_STR_IMAGE_TAR`, plus `SAM_CLI_PATH` or `SAM_CLI_TAR`). The
+Keycloak client secret is filled in by the next step.
 
 ### 2. Create the Keycloak OIDC client
 
@@ -161,8 +167,9 @@ populated in the next step.
 This creates a confidential OIDC client `solace-agent-mesh`
 in the `solace-lab` realm and adds a group membership mapper so
 the `groups` claim is included in tokens (required for SAM RBAC).
-Copy the printed client secret into `.env` as
-`KEYCLOAK_CLIENT_SECRET`.
+The script writes the client secret into `.env`
+(`KEYCLOAK_CLIENT_SECRET`) itself; re-running it against an
+existing client re-syncs `.env` with the current secret.
 
 ### 3. Create Keycloak groups and demo users
 
@@ -195,55 +202,79 @@ The script performs the following steps:
 
 1. Checks that `kubectl`, `helm`, `jq` are available
 2. Validates `.env` (secrets plus `SAM_CHART_PATH`)
-3. Creates the Kubernetes namespace
-4. Provisions the `sam-tls` certificate via cert-manager and
+3. Checks that the pinned images still honour the metrics switch
+   (`scripts/observability/check-metrics-gate.sh`, warn-only)
+4. Creates the Kubernetes namespace
+5. Provisions the `sam-tls` certificate via cert-manager and
    waits for it (the chart validates its existence at install)
-5. Registers `sam.solace.lab` in CoreDNS NodeHosts
-6. Runs `helm upgrade --install` from the local chart directory
+6. Registers `sam.solace.lab` in CoreDNS NodeHosts
+7. Runs `helm upgrade --install` from the local chart directory
    with the values file, injecting secrets via `--set`
-7. Waits for pods and prints the release status
+8. Waits for pods and prints the release status
+9. Provisions the platform content (next step) -- in a terminal
+   it opens the browser for the `sam` CLI login first
 
 The chart's `sam-doctor` pre-install hook checks broker, LLM and
 OIDC reachability; it is configured warn-only
 (`samDoctor.failOnError: false`) so a briefly unavailable
 dependency does not block the push-button flow.
 
-### 6. Apply RBAC (roles + group mappings)
+### 6. Provision the platform content
+
+The platform database starts empty after every install. Everything
+this deployment owns there is re-created by one idempotent script:
 
 ```bash
-./scripts/rbac/apply-rbac.sh
+./scripts/provision.sh --login
 ```
 
-In v2, only bootstrap admins are seeded via Helm values; roles,
-Keycloak group claim mappings and default roles are DB-managed
-and applied post-install with `sam config apply`. See
-[`scripts/rbac/README.md`](scripts/rbac/README.md). The first run
-needs a browser login as `sam_admin`:
+`start.sh` runs it on its own when it runs in a terminal. All steps
+go through the `sam` CLI, which needs a browser login as the
+bootstrap admin `sam_admin` -- possible only once the platform is
+up, which is why this comes after the deploy. `--login` opens that
+login when no login cache exists; without it the script expects
+an existing login:
 
 ```bash
 sam auth login solace-lab --url https://sam.solace.lab
 ```
 
-### 7. Models: output limit and additional LLMs
+It runs, in this order (each script also works standalone):
 
-```bash
-cd scripts/models && ./set-max-tokens.sh
-```
+1. `scripts/rbac/apply-rbac.sh` -- roles, Keycloak claim mappings
+   and default roles
+2. `scripts/models/apply-models.sh` -- the extra model aliases,
+   plus a live probe of every upstream
+3. `scripts/models/set-max-tokens.sh` -- `max_tokens` on the
+   seeded aliases
+4. `scripts/entrypoints/apply-entrypoints.sh` -- the
+   `developer-mcp` MCP entrypoint
 
-Sets `modelParams.max_tokens` (default 16384) on the `general`
-model and restarts the agents. Without it the chart-seeded empty
+RBAC runs first because it doubles as the login smoke test: a bad
+login stops there instead of failing four times.
+
+#### RBAC (roles + group mappings)
+
+In v2, only bootstrap admins are seeded via Helm values; roles,
+Keycloak group claim mappings and default roles are DB-managed
+and applied post-install with `sam config apply`. See
+[`scripts/rbac/README.md`](scripts/rbac/README.md).
+
+#### Models: output limit and additional LLMs
+
+`set-max-tokens.sh` sets `modelParams.max_tokens` (default 16384)
+on the chart-seeded `general`, `planning` and `report_gen`
+aliases, skips an alias that is already there, and restarts the
+agents once if anything changed. Without it the chart-seeded empty
 `modelParams` reintroduce the tool-call truncation failure
 documented in [`scripts/models/README.md`](scripts/models/README.md).
-Repeat with `--model-alias planning` and `--model-alias report_gen`.
+`--model-alias <alias>` tunes a single alias.
 
-`start.sh` additionally applies five extra model aliases
-(`workflow`, `reasoning`, `coding`, `expert`, `fast`) from the
-declarative package in `scripts/models/` and probes every model
-upstream. Standalone runs:
-
-```bash
-cd scripts/models && ./apply-models.sh
-```
+`apply-models.sh` applies six extra aliases from the declarative
+package in `scripts/models/` -- `workflow`, `reasoning`, `coding`,
+`expert`, `fast` through the LiteLLM proxy, and `google gemini`
+directly on the Gemini API (own key, `GOOGLE_AI_STUDIO_API_KEY`) --
+and probes every model upstream. Probe only:
 
 ```bash
 cd scripts/models && ./apply-models.sh --probe-only
@@ -252,17 +283,12 @@ cd scripts/models && ./apply-models.sh --probe-only
 Note: the platform normalizes model aliases to lowercase on
 create, so all aliases are lowercase by design.
 
-### 8. Platform entrypoints (developer-mcp)
+#### Platform entrypoints (developer-mcp)
 
-`start.sh` also applies the `developer-mcp` MCP entrypoint from
-the declarative package in `scripts/entrypoints/` -- it exposes
-the mesh agents as MCP tools at `https://sam.solace.lab/gw/dev/`
-for developer clients (Claude Code, MCP Inspector, the SAM
-desktop app). Standalone runs:
-
-```bash
-cd scripts/entrypoints && ./apply-entrypoints.sh
-```
+The `developer-mcp` MCP entrypoint from the declarative package in
+`scripts/entrypoints/` exposes the mesh agents as MCP tools at
+`https://sam.solace.lab/gw/dev/` for developer clients (Claude
+Code, MCP Inspector, the SAM desktop app). Probe only:
 
 ```bash
 cd scripts/entrypoints && ./apply-entrypoints.sh --probe-only
@@ -271,7 +297,7 @@ cd scripts/entrypoints && ./apply-entrypoints.sh --probe-only
 See [`scripts/entrypoints/README.md`](scripts/entrypoints/README.md)
 for the MCP tool naming and the Claude Code connection guide.
 
-### 9. Install a demo
+### 7. Install a demo
 
 The platform itself carries NO demo content. Demos are layered
 on top as self-contained packages with their own core (domain
@@ -290,7 +316,7 @@ Both are idempotent; the matching `uninstall.sh` removes the
 demo again (`--keep-core` keeps the demo's core agents for fast
 overlay switching). Requires the `sam auth login` from step 6.
 
-### 10. Teardown
+### 8. Teardown
 
 ```bash
 ./scripts/stop.sh
@@ -305,30 +331,26 @@ OIDC client.
 
 `stop.sh` destroys the platform database, and with it ALL
 DB-managed content: RBAC roles, claim mappings and default roles,
-the developer-mcp entrypoint, any installed demo (core + overlay)
-and the model `max_tokens` tuning. The Keycloak client is deleted
-too, so the sam CLI login cache is invalid. To rebuild:
+the model aliases and `max_tokens` tuning, the developer-mcp
+entrypoint and any installed demo (core + overlay). The Keycloak
+client is deleted too, and with it the `sam` CLI login cache. To
+rebuild:
 
-1. `./scripts/setup-keycloak-client.sh` -- paste the NEW client
+1. `./scripts/setup-keycloak-client.sh` -- writes the NEW client
    secret into `.env`
 2. `./scripts/setup-keycloak-users.sh`
-3. `./scripts/start.sh` (`docker login` + `load-images.sh` are
-   only needed if the private registry itself was rebuilt --
-   images persist outside the namespace)
-4. `sam auth login solace-lab --url https://sam.solace.lab`
-   (as `sam_admin`)
-5. `./scripts/rbac/apply-rbac.sh`
-6. `cd scripts/models && ./set-max-tokens.sh` (plus
-   `--model-alias planning` and `--model-alias report_gen`),
-   then `./apply-models.sh` and
-   `cd ../entrypoints && ./apply-entrypoints.sh` -- during the
-   rebuild, `start.sh` ran before the `sam auth login` existed,
-   so both post-install hooks were skipped with a warning
-7. Reinstall the demo, e.g.
+3. `./scripts/start.sh` -- in a terminal it ends with the browser
+   login (as `sam_admin`) and `provision.sh`, which re-creates
+   RBAC, models, `max_tokens` and developer-mcp. Run without a
+   terminal (CI, an agent), it prints the one follow-up command:
+   `./scripts/provision.sh --login`. `docker login` +
+   `load-images.sh` are only needed if the private registry
+   itself was rebuilt -- images persist outside the namespace.
+4. Reinstall the demo, e.g.
    `cd ../sam-retail-ops-demo && ./install.sh` (starts the demo
    data stores and re-creates core, overlay, eval package and
    dashboard, including the model bindings)
-8. If the desktop app is connected:
+5. If the desktop app is connected:
    `cd scripts/desktop && ./generate-manifest.sh && ./connect.sh`
    (the MCP tool names embed platform-DB UUIDs, which the rebuild
    changed)
@@ -339,14 +361,19 @@ SAM is fully wired into the lab's Grafana stack
 (`https://monitoring.solace.lab`, folder "SAM": Operations,
 Token und Cost, Governance und Security):
 
-- **Metrics**: the SAM configs are baked into the images, so
-  `scripts/observability/` overlays them (full-file ConfigMap
-  overlays adding a `management_server` block) through a Helm 4
-  post-renderer plugin (`sam-observability`, installed by
-  start.sh). `/metrics` rides the existing health ports (gwe
+- **Metrics**: since 2.348.22 every image-baked component config
+  carries an env-gated `management_server` block (off by
+  default). `local-k8s-values.yaml` switches it on with one key,
+  `environmentVariables.SAM_OBSERVABILITY_ENABLED: "true"`, which
+  the chart renders into the env ConfigMap of all three
+  components. `/metrics` rides the existing health ports (gwe
   9090, awe/str 8090); `manifests/observability/` adds metrics
   Services + ServiceMonitors. Prometheus picks them up without
-  further wiring. Key metrics: `sam_entrypoint_*` (request rate
+  further wiring. The same block has an OTLP push exporter
+  (`SAM_OTLP_METRICS`, `SAM_OTLP_ENDPOINT`), left off -- Prometheus
+  scrapes. (2.225.14 had no such switch and needed full-file
+  config overlays through a Helm post-renderer plugin; both are
+  gone.) Key metrics: `sam_entrypoint_*` (request rate
   and latency), `sam_operation_duration_seconds` (agent/tool),
   `sam_gen_ai_tokens_used_total` and `sam_gen_ai_cost_total`
   (by model), plus `sam_instance_up` and
@@ -357,8 +384,11 @@ Token und Cost, Governance und Security):
   duration_ms and RBAC denies -- the "who uses what" view. RBAC
   GRANTS log at DEBUG and are invisible at the default INFO
   level.
-- **Traces**: SAM emitted no OTel spans on 2.225.14 (not
-  re-verified on 2.348.22). A2A traffic
+- **Traces**: SAM itself emits no OTel spans. Verified on
+  2.348.22: the gwe/awe/str binaries link the OTel metric and log
+  exporters (`otlpmetric*`, `otlplog*`, `prometheus`) but not the
+  trace SDK (`otel/sdk/trace`, `otlptrace*`), and Tempo lists no
+  SAM service -- only the broker. A2A traffic
   (gwe/awe/str, guaranteed messaging on the `sam` VPN) is traced
   by the BROKER via a telemetry profile and lands in Tempo
   through the event-mesh OTel Collector
@@ -381,15 +411,15 @@ Token und Cost, Governance und Security):
 
 Operational notes (learned the hard way):
 
-- **Config drift guard**: the overlays replace image-baked
-  configs in full. start.sh diffs them against the delivery
-  images (`scripts/observability/check-config-drift.sh`) and
-  aborts with re-basing instructions when a new SAM delivery
-  changes them.
-- The `management_server` block is only honored in the MAIN
-  component config; extra `--config` files are rejected
-  (`expected YAML list`). Its `port:` is overridden by
-  `--health-addr`.
+- **Metrics gate**: nothing is overlaid any more, so a new
+  delivery cannot be silently overridden -- but if it renamed or
+  dropped `SAM_OBSERVABILITY_ENABLED`, `/metrics` would just
+  vanish. start.sh greps the three baked configs of the pinned
+  images for the switch
+  (`scripts/observability/check-metrics-gate.sh`) and warns.
+- The `management_server` block only works in the MAIN component
+  config (extra `--config` files reject root keys: `expected YAML
+  list`), and its port is the `--health-addr` port.
 - After a simultaneous gwe+awe restart the DB-managed agents may
   not load (deploy handshake race): restart awe once more AFTER
   gwe is ready.
@@ -402,21 +432,23 @@ Operational notes (learned the hard way):
 
 ## Upgrade
 
-A new SAM delivery changes the Helm chart, the gwe/str images and
-the image-baked component configs at the same time, so an upgrade
-is a clean rebuild rather than a rolling `helm upgrade`. The
-platform database is dropped with the namespace, so every
-DB-managed object is re-provisioned afterwards -- the order is in
-"Rebuilding after teardown".
+A new SAM delivery changes the Helm chart, the gwe/str images, the
+image-baked component configs and the `sam` CLI's resource schema
+at the same time, so an upgrade is a clean rebuild rather than a
+rolling `helm upgrade`. The platform database is dropped with the
+namespace, so every DB-managed object is re-provisioned afterwards
+(`provision.sh`, see "Rebuilding after teardown").
 
-Have the new delivery package unpacked (or at least the chart
-tarball and the image tarballs to hand) and a `sam` CLI of the
-matching version on the PATH before starting.
+Before starting, have the new delivery package unpacked and the
+`sam` CLI of the NEW version installed (see "Installing the sam
+CLI"; `SAM_CLI_PATH` in `.env` wins over the PATH, so point it at
+the new binary or remove it). The CLI goes first because
+preflight section 8 validates the declarative packages with it.
 
-### 1. Review the new chart (no cluster changes)
+### 1. Review the new delivery (no cluster changes)
 
 ```bash
-./scripts/upgrade-preflight.sh --new "/path/to/SAM Enterprise Update <ver>"
+./scripts/upgrade-preflight.sh --new ~/Downloads/SAM*Enterprise*Update*2.348.22*
 ```
 
 `--new` takes the delivery package directory -- the chart is found
@@ -427,11 +459,17 @@ not mistaken for charts. `--old` defaults to `SAM_CHART_PATH` from
 `.env`, i.e. the chart currently deployed.
 
 Delivery package directories are routinely named with spaces, and
-sometimes with a trailing one or a non-breaking space that no
-terminal shows. When the given path does not exist but exactly one
-entry beside it matches once whitespace and punctuation are
-ignored, that entry is used and the substitution is reported; with
-two candidates it refuses and lists them.
+sometimes with a trailing one (the 2.348.22 package directory
+name ends in a space) or a non-breaking space that no terminal
+shows. Use a version-specific glob
+(`SAM*Enterprise*Update*<version>*`; a bare `SAM*Enterprise*Update*`
+matches every package still in `~/Downloads`, and the previous one
+stays there while `.env` points into it) or tab completion rather
+than typing the name. When the given
+path does not exist but exactly one entry beside it matches once
+whitespace and punctuation are ignored, that entry is used and the
+substitution is reported; with two candidates it refuses and lists
+them.
 
 The report answers the questions an upgrade raises:
 
@@ -451,8 +489,24 @@ The report answers the questions an upgrade raises:
   tarballs found in the package as ready-to-paste
   `SAM_APP_IMAGE_TAR` / `SAM_STR_IMAGE_TAR` / `SAM_CLI_TAR`
   assignments.
+- Do the declarative packages still parse? Section 8 runs
+  `sam config plan` (read-only) over every package -- `scripts/`
+  rbac, models, entrypoints, desktop, and the demo packages next
+  to this directory -- with the CLI `provision.sh` would use
+  (`SAM_CLI_PATH` from `.env`, else the PATH). The CLI schema
+  moves with the delivery (2.348.22 dropped `claimKey` from
+  `rbacClaimMapping` and turned `roleName` into `roleNames`), and
+  only a plan shows it. The CLI validates the files only AFTER it
+  has reached the platform with a login, so run the preflight
+  while the old platform is still up and after
+  `sam auth login solace-lab --url https://sam.solace.lab`;
+  `NOT VALIDATED` (unreachable, no login) is not a pass.
+  "references another package's resources" is fine: a demo's
+  `mesh/` needs its `core/` first. `scripts/desktop` targets the
+  SAM desktop app and is only validated while that app runs.
 
-Fix `local-k8s-values.yaml` until sections 3 and 7 are clean.
+Fix `local-k8s-values.yaml` until sections 3 and 7 are clean, and
+every section 8 `FAIL` before tearing anything down.
 
 ### 2. Tear the old deployment down
 
@@ -462,22 +516,23 @@ Fix `local-k8s-values.yaml` until sections 3 and 7 are clean.
 
 This removes the Helm release, the namespace with its PVCs and
 released PVs, the observability objects in the `monitoring`
-namespace, the `sam-observability` Helm plugin, the CoreDNS
-NodeHosts entry, the cached and now version-mismatched `sam` CLI
-plus its login cache, and the Keycloak client, groups and users.
-Nothing of the old version is left in the cluster.
+namespace, the CoreDNS NodeHosts entry, the cached and now
+version-mismatched `sam` CLI plus its login cache, and the
+Keycloak client, groups and users. Nothing of the old version is
+left in the cluster.
 
 ### 3. Repoint and re-pin
 
 - `.env`: `SAM_CHART_PATH`, `SAM_APP_IMAGE_TAR`,
-  `SAM_STR_IMAGE_TAR`, `SAM_CLI_TAR` to the new package --
-  preflight section 6 prints the three tarball paths as
-  ready-to-paste, already quoted assignments. `.env` is sourced,
-  so a path containing a space MUST stay quoted or the variable
-  ends up empty. `SAM_CHART_PATH` must be an UNPACKED chart
-  directory (`start.sh` checks for `Chart.yaml` in it), so unpack
-  the packaged chart once and point it there -- ideally somewhere
-  without spaces in the path.
+  `SAM_STR_IMAGE_TAR` (and `SAM_CLI_TAR` if the package ships a
+  CLI) to the new package -- preflight section 6 prints the
+  tarball paths as ready-to-paste, already quoted assignments.
+  `.env` is sourced, so a path containing a space MUST stay
+  quoted or the variable ends up empty. Remove a `SAM_CLI_TAR`
+  that still names the OLD tarball. `SAM_CHART_PATH` must be an
+  UNPACKED chart directory (`start.sh` checks for `Chart.yaml` in
+  it), so unpack the packaged chart once, ideally to a path
+  without spaces (command below).
 - `local-k8s-values.yaml`: `samDeployment.gwe.image.tag` and
   `samDeployment.str.image.tag` to the versions from preflight
   section 2, plus any values change preflight asked for.
@@ -485,67 +540,51 @@ Nothing of the old version is left in the cluster.
   their tags from this file, so there is nothing else to keep in
   sync.
 
-The Keycloak client secret changes with step 2, so re-create the
-client and paste the new secret into `.env`:
+```bash
+V=2.1.164   # chart version, preflight section 1
+mkdir -p ~/Downloads/solace-agent-mesh-$V
+tar -xzf ~/Downloads/SAM*Update*2.348.22*/Charts/solace-agent-mesh-$V.tar.gz \
+  -C ~/Downloads/solace-agent-mesh-$V --strip-components=1
+```
+
+The Keycloak client was deleted in step 2; re-create it (the
+script writes the new secret into `.env`) and the demo users:
 
 ```bash
 ./scripts/setup-keycloak-client.sh
 ./scripts/setup-keycloak-users.sh
 ```
 
-### 4. Load the new images and re-base the config overlays
+### 4. Load the new images
 
 ```bash
 ./scripts/load-images.sh
 ```
 
-`scripts/observability/` replaces three component configs in
-full, so a delivery that changed them would be silently overridden
-by the stale copies. `start.sh` refuses to deploy on drift; check
-and re-base up front, now that the new images are local:
-
-```bash
-./scripts/observability/check-config-drift.sh \
-  solace-agent-mesh:2.348.22 solace-agent-mesh-str:1.64.0
-```
-
-On drift, refresh each reported base from the new image, review
-the vendor diff, and keep the `management_server` block out of it
-(it is re-appended from `kustomize/configs/management_server.yaml`):
-
-```bash
-docker run --rm --entrypoint cat solace-agent-mesh:2.348.22 \
-  /etc/sam/configs/gwe/gwe.yaml \
-  > scripts/observability/kustomize/configs/gwe.yaml.base
-```
-
-The three bases are `gwe.yaml.base` (`/etc/sam/configs/gwe/gwe.yaml`
-in the app image), `awe-sam.yaml.base`
-(`/etc/sam/configs/awe/sam.yaml`, app image) and `str.yaml.base`
-(`/etc/sam/configs/str/str.yaml`, str image).
+No config re-basing is needed any more: metrics come from the
+env switch in `local-k8s-values.yaml`, not from overlaid config
+files. `start.sh` checks that the new images still honour that
+switch and warns otherwise.
 
 ### 5. Install and re-provision
 
 ```bash
 ./scripts/start.sh
-sam auth login solace-lab --url https://sam.solace.lab
-./scripts/rbac/apply-rbac.sh
-(cd scripts/models && ./set-max-tokens.sh)
-./scripts/models/apply-models.sh
-./scripts/entrypoints/apply-entrypoints.sh
 ```
 
-`start.sh` runs the models and entrypoints hooks itself, but at
-that point the `sam` login does not exist yet, so both warn and
-are re-run here. Steps 4 onwards of "Rebuilding after teardown"
-apply unchanged -- including the demo installs, which are yours to
-run afterwards.
+Run it in a terminal: after the pods are ready it opens the
+browser for the `sam` CLI login (log in as `sam_admin`) and runs
+`provision.sh` -- RBAC, models, `max_tokens`, developer-mcp. The
+demo installs are yours to run afterwards.
 
-### 6. Drop the old images
+### 6. Verify, then drop the old images
 
-The old gwe/str images stay in the local Docker daemon and in
-`registry.solace.lab` (several GB per version), both outside the
-deleted namespace. Once the new version is up and verified:
+Verify first: all pods `Running`, the WebUI on
+`https://sam.solace.lab`, `provision.sh` all `OK`, the three SAM
+targets `up` in Prometheus. The old gwe/str images stay in
+`registry.solace.lab` (and possibly the local Docker daemon),
+outside the deleted namespace -- they are the way back until the
+new version is proven. Then:
 
 ```bash
 ./scripts/purge-images.sh --dry-run   # review
@@ -554,12 +593,25 @@ deleted namespace. Once the new version is up and verified:
 
 It keeps exactly the tags `local-k8s-values.yaml` pins and drops
 every other tag of the SAM repositories, so it stays correct
-across upgrades. `./scripts/stop.sh --purge-images` does the same
-inline, which is right for abandoning a version but not for an
-upgrade: the old images are the fallback until the new ones are
-proven. Registry deletion needs the registry to run with
+across upgrades. Other repositories (the v1
+`solace-agent-mesh-enterprise` and `solace/solace-agent-mesh`
+images the lab agents in `sam-solace-lab-agents` run on) are never
+touched. `./scripts/stop.sh --purge-images` does the same inline,
+which is right for abandoning a version but not for an upgrade.
+Registry deletion needs the registry to run with
 `REGISTRY_STORAGE_DELETE_ENABLED=true`; the script reports it
-rather than failing when it does not.
+rather than failing when it does not. Registry credentials come
+from the `docker login` session, also when Docker keeps them in
+the macOS keychain (`credsStore: osxkeychain`).
+
+Only the REGISTRY copy is a dependable fallback: the local copy
+of an old image may already be gone. Rancher Desktop shares the
+Docker image store with k3s, and the kubelet's image garbage
+collection deletes unused images when the VM disk crosses its
+threshold (85 %). Loading a ~10 GB str image can tip it over; on
+the 2.348.22 upgrade the old str 1.50.3 vanished locally during
+`start.sh` (`image_gc_manager ... Removing image to free bytes`
+in `~/Library/Logs/rancher-desktop/k3s.log`).
 
 To inspect current values:
 
@@ -577,6 +629,7 @@ Passed to Helm via `--set` at deploy time:
 - `KEYCLOAK_CLIENT_ID` -> `sam.oauthProvider.oidc.clientId`
 - `KEYCLOAK_CLIENT_SECRET` -> `sam.oauthProvider.oidc.clientSecret`
 - `LLM_SERVICE_API_KEY` -> `llmService.llmServiceApiKey`
+  (also the key of the extra LiteLLM model aliases)
 
 Consumed by the scripts only (never passed to Helm):
 
@@ -585,9 +638,11 @@ Consumed by the scripts only (never passed to Helm):
 - `SAM_CHART_PATH` -- offline chart directory (start.sh)
 - `SAM_APP_IMAGE_TAR`, `SAM_STR_IMAGE_TAR` -- image tarballs
   (load-images.sh)
-- `SAM_CLI_TAR` / `SAM_CLI_PATH` -- sam CLI (rbac/apply-rbac.sh,
-  models/*, entrypoints/apply-entrypoints.sh and the demo
+- `SAM_CLI_TAR` / `SAM_CLI_PATH` -- sam CLI (provision.sh and
+  the scripts it runs, the preflight and the demo
   install/uninstall scripts, via scripts/lib/)
+- `GOOGLE_AI_STUDIO_API_KEY` -- Gemini API key of the
+  `google gemini` model alias (scripts/models)
 - `RETAIL_DB_USERNAME` / `RETAIL_DB_PASSWORD` (and the `MFG_DB_*`
   pair) -- demo connector credentials (optional; the demo core
   manifests default to postgres/postgres; the demo install
@@ -614,6 +669,9 @@ defined in `local-k8s-values.yaml`. Key sections:
 - **samDeployment** -- gwe and str images from
   `registry.solace.lab` (awe inherits the gwe image), seaweedfs
   init tag pin
+- **environmentVariables** -- extra env for all SAM containers:
+  `SAM_OBSERVABILITY_ENABLED` switches on `/metrics` (merged with
+  the chart's default `NO_PROXY`)
 - **persistence-layer** -- seaweedfs tag pin `3.97` (the chart
   default `3.97-compliant` is a Solace-private tag absent from
   Docker Hub)
@@ -648,7 +706,10 @@ Keycloak group mappings are DB-managed and live in
 - Roles `sam_user`, `viewer`, `data_engineer`, `power_user`
   (v2 scope grammar `<category>:<resource>:<verb>`)
 - Claim mappings for the Keycloak groups `user`, `viewer`,
-  `data_engineer`, `power_user` (claim key `groups`)
+  `data_engineer`, `power_user`. The claim they match is
+  deployment-wide since 2.348.22 (`sam.oauthProvider.claimKey`,
+  default `groups`, which the Keycloak group mapper emits), no
+  longer a field of each mapping
 - Default roles `[sam_user]` for authenticated users without a
   matching group
 
@@ -673,15 +734,19 @@ agent-mesh-deployment/
     load-images.sh                Load offline images -> registry
     purge-images.sh               Drop unpinned SAM images
                                   (local daemon + registry)
-    upgrade-preflight.sh          Compare a new delivery chart
-                                  with the deployed one
+    upgrade-preflight.sh          Compare a new delivery with
+                                  the deployed one
     start.sh                      Deploy SAM (local chart path)
+    provision.sh                  DB-managed content after an
+                                  install (RBAC, models, MCP)
     stop.sh                       Full teardown
     lib/                          Shared helpers (sam CLI, .env)
     rbac/                         Declarative RBAC (sam config)
     entrypoints/                  Platform developer-mcp MCP
                                   entrypoint (declarative, v2)
-    models/                       Model tuning via sam CLI (v2)
+    models/                       Model aliases + max_tokens
+    observability/                Metrics gate check, Grafana
+                                  platform-DB grant
     desktop/                      Connect the SAM desktop app to
                                   this deployment (MCP connector)
   CLAUDE.md                       Claude Code instructions

@@ -62,6 +62,34 @@ get_client_uuid() {
     | head -1
 }
 
+# --- Helper: write the client secret into .env ---------------------
+# The secret changes with every client re-creation (stop.sh deletes
+# the client), so it is written straight into .env instead of being
+# printed for a manual copy -- start.sh reads it from there.
+write_secret_to_env() {
+  local secret="$1"
+  if [ -z "$secret" ]; then
+    echo "ERROR: Keycloak returned no client secret." >&2
+    exit 1
+  fi
+  KC_SECRET="$secret" python3 - "$PROJECT_DIR/.env" <<'PY'
+import os, sys
+path, secret = sys.argv[1], os.environ["KC_SECRET"]
+lines = open(path).read().splitlines()
+line = "KEYCLOAK_CLIENT_SECRET=" + secret
+hits = [i for i, l in enumerate(lines) if l.startswith("KEYCLOAK_CLIENT_SECRET=")]
+if hits:
+    for i in hits:
+        lines[i] = line
+else:
+    lines.append(line)
+open(path, "w").write("\n".join(lines) + "\n")
+PY
+  echo ""
+  echo "Client ID:     ${SAM_CLIENT_ID}"
+  echo "Client Secret: ${secret:0:4}... (written to .env as KEYCLOAK_CLIENT_SECRET)"
+}
+
 # --- Check if client already exists -------------------------------
 CLIENT_UUID=$(get_client_uuid)
 
@@ -72,12 +100,7 @@ if [ -n "$CLIENT_UUID" ]; then
     "${BASE}/clients/${CLIENT_UUID}/client-secret" \
     -H "Authorization: Bearer ${TOKEN}" \
     | jq -r '.value // empty')
-  echo ""
-  echo "Client ID:     ${SAM_CLIENT_ID}"
-  echo "Client Secret: ${SECRET}"
-  echo ""
-  echo "Set this in your .env file:"
-  echo "  KEYCLOAK_CLIENT_SECRET=${SECRET}"
+  write_secret_to_env "$SECRET"
   exit 0
 fi
 
@@ -173,9 +196,4 @@ SECRET=$(curl -sk \
 
 echo ""
 echo "OIDC client created successfully."
-echo ""
-echo "Client ID:     ${SAM_CLIENT_ID}"
-echo "Client Secret: ${SECRET}"
-echo ""
-echo "Set this in your .env file:"
-echo "  KEYCLOAK_CLIENT_SECRET=${SECRET}"
+write_secret_to_env "$SECRET"

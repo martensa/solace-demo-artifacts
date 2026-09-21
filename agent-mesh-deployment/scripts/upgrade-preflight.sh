@@ -27,6 +27,19 @@ set -euo pipefail
 #                       the chart, as ready-to-paste .env lines
 #   7. helm lint + helm template with our values -- the
 #                       authoritative check
+#   8. Declarative      every `sam config` package (scripts/rbac,
+#      packages         models, entrypoints, desktop and the demo
+#                       packages next to this directory) planned
+#                       with the sam CLI provision.sh would use
+#                       (SAM_CLI_PATH, PATH, SAM_CLI_TAR), which
+#                       should already be the NEW version: the CLI
+#                       schema changes with the delivery too
+#                       (2.348.22 dropped rbacClaimMapping claimKey
+#                       and turned roleName into roleNames), and
+#                       only a plan shows it. Read-only, but it
+#                       needs the (old) platform up and a sam login:
+#                       the CLI validates the files only after it
+#                       has reached the platform.
 #
 # Usage:
 #   ./upgrade-preflight.sh --new <path> [--old <path>]
@@ -53,7 +66,19 @@ while [ $# -gt 0 ]; do
     -h|--help)
       awk '/^# Usage:/{f=1} f && /^# ==/{exit} f' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
-    *) echo "Unknown argument: $1" >&2; exit 1 ;;
+    *)
+      if [ -e "$1" ]; then
+        # An unquoted glob such as ~/Downloads/SAM*Enterprise*Update*
+        # expands to one word per match -- with two delivery packages
+        # side by side, the second one lands here.
+        echo "ERROR: more than one path given -- a glob matched several" >&2
+        echo "  delivery packages. Make it version-specific, e.g." >&2
+        echo "  --new ~/Downloads/SAM*Enterprise*Update*<version>*" >&2
+        echo "  (extra path: $1)" >&2
+      else
+        echo "Unknown argument: $1" >&2
+      fi
+      exit 1 ;;
   esac
   shift
 done
@@ -756,11 +781,12 @@ if [ -d "$NEW_INPUT" ]; then
 fi
 
 # --- Section 7: helm lint + template ------------------------------
+section7() {
 echo ""
 echo "== 7. helm lint + helm template with local-k8s-values.yaml"
 if ! command -v helm >/dev/null 2>&1; then
   echo "  SKIPPED: helm not found in PATH."
-  exit 0
+  return 0
 fi
 
 # Stubs for the secrets that start.sh injects via --set. Values are
@@ -807,3 +833,81 @@ namespace and the sam-tls certificate exist, the full check is:
   helm upgrade --install agent-mesh <new-chart> \
     -n sam-solace-lab --values local-k8s-values.yaml --dry-run
 EOF
+}
+section7
+
+# --- Section 8: declarative packages vs the sam CLI ----------------
+# The CLI's resource schema moves with the delivery, and `sam config
+# plan` is the only thing that checks a package against it. It does
+# so only AFTER reaching the platform (feature probes, model list)
+# and with a login -- so this runs before the teardown, against the
+# old platform, and anything that stops earlier is reported as NOT
+# VALIDATED, never as OK. --skip-version-check: at preflight time the
+# new CLI meets the OLD platform. --no-build: no toolset builds for a
+# read-only check. .env is loaded here in every mode, so the CLI is
+# resolved exactly as provision.sh does (SAM_CLI_PATH wins).
+echo ""
+echo "== 8. Declarative packages vs the sam CLI provision.sh uses"
+SAM_CLI=""
+# shellcheck source=lib/common.sh
+. "$PROJECT_DIR/scripts/lib/common.sh"
+load_env "$PROJECT_DIR"
+if resolve_sam_cli 2>/dev/null; then
+  CLI_VER=$("$SAM_CLI" --version 2>/dev/null | awk '{print $NF}')
+  NEW_APP=$(awk '$1 == "appVersion:" {gsub(/"/, "", $2); print $2}' \
+    "$NEW_CHART/Chart.yaml")
+  echo "  sam CLI: $SAM_CLI ($CLI_VER)"
+  if [ -n "$NEW_APP" ] && [ "$CLI_VER" != "$NEW_APP" ]; then
+    echo "  WARNING: the new delivery is $NEW_APP but this CLI is $CLI_VER --"
+    echo "  the packages are validated against the CLI's schema, so"
+    echo "  install the matching CLI first and point SAM_CLI_PATH in"
+    echo "  .env at it (it wins over the PATH)."
+  fi
+  PKG_FAIL=0
+  PKG_UNVALIDATED=0
+  REPO_ROOT="$(cd "$PROJECT_DIR/.." && pwd)"
+  while IFS= read -r manifest; do
+    dir="$(dirname "$manifest")"
+    rel="${dir#"$REPO_ROOT"/}"
+    # A failing plan is the expected case for some packages; under
+    # set -e/pipefail it must not end the script.
+    out=$(cd "$dir" && "$SAM_CLI" config plan --no-interactive \
+            --skip-version-check --no-build 2>&1 | grep -v 'level=') || true
+    err=$(printf '%s\n' "$out" | grep -m1 '^sam: ' | sed 's/^sam: //' || true)
+    if [ -z "$err" ]; then
+      verdict="OK"
+    else
+      case "$err" in
+        *"not found on platform"*)
+          # Files parsed; a referenced resource comes from another
+          # package (a demo's mesh/ needs its core/ first).
+          verdict="OK (references another package's resources)" ;;
+        *"connection refused"*|*"no such host"*|*"dial tcp"*|*"timeout"*|*"Timeout"*|*"auth login"*|*"OAuth"*|*"401"*|*"403"*)
+          verdict="NOT VALIDATED ($(printf '%s' "$err" | cut -c1-70))"
+          PKG_UNVALIDATED=1 ;;
+        *)
+          verdict="FAIL  $err"; PKG_FAIL=1 ;;
+      esac
+    fi
+    printf '  %-42s %s\n' "$rel" "$verdict"
+  done < <(find "$PROJECT_DIR/scripts" "$REPO_ROOT"/sam-*-demo -maxdepth 3 \
+             -name manifest.yaml -not -path '*/node_modules/*' 2>/dev/null | sort)
+  if [ "$PKG_FAIL" -eq 1 ]; then
+    echo ""
+    echo "  A FAIL is a file the new CLI rejects. Look up the current"
+    echo "  shape with: sam config schema show <kind>  and fix the file"
+    echo "  before the teardown -- provision.sh and the demo installs"
+    echo "  would stop there."
+  fi
+  if [ "$PKG_UNVALIDATED" -eq 1 ]; then
+    echo ""
+    echo "  NOT VALIDATED means the CLI stopped before reading the files"
+    echo "  (platform unreachable or no login) -- that is not a pass."
+    echo "  Run this section while the old platform is still up, after:"
+    echo "    $SAM_CLI auth login solace-lab --url https://sam.solace.lab"
+    echo "  (scripts/desktop targets the SAM desktop app on"
+    echo "  localhost:8800 and is only validated while that app runs.)"
+  fi
+else
+  echo "  SKIPPED: no sam CLI found (SAM_CLI_PATH / PATH / SAM_CLI_TAR)."
+fi

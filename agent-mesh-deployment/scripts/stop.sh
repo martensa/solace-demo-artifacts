@@ -10,7 +10,6 @@ SAM_DNS_NAME="sam.solace.lab"
 # Artifacts this deployment creates OUTSIDE $SAM_NAMESPACE. They
 # survive the namespace delete and must be removed by name.
 MONITORING_NAMESPACE="monitoring"
-HELM_PLUGIN="sam-observability"
 # sam CLI login cache (macOS path, see scripts/lib/common.sh). The
 # Keycloak client teardown below invalidates the cached token.
 SAM_AUTH_CACHE="$HOME/Library/Application Support/sam/auth/solace-lab.json"
@@ -25,9 +24,10 @@ while [ $# -gt 0 ]; do
 Usage: ./stop.sh [--purge-images]
 
 Full teardown of the Solace Agent Mesh deployment: Helm release,
-namespace, the observability artifacts in the monitoring namespace,
-the Helm post-renderer plugin, local caches, the CoreDNS NodeHosts
-entry and the Keycloak client/users.
+namespace, the SAM queues on the broker VPN (<namespaceId>/q/*,
+unless still consumed), the observability artifacts in the
+monitoring namespace, local caches, the CoreDNS NodeHosts entry
+and the Keycloak client/users.
 
   --purge-images   also remove SAM container images that
                    local-k8s-values.yaml does not pin, from the
@@ -133,6 +133,69 @@ if [ -n "${LEFTOVER_PVS// /}" ]; then
   kubectl delete pv $LEFTOVER_PVS --timeout=120s 2>/dev/null || true
 fi
 
+# --- Broker queues of this SAM namespace --------------------------
+# SAM provisions every durable queue it uses under
+# <namespaceId>/q/ on its VPN at startup (gwe: platform/gdk/eval/
+# schedule queues, awe: one q/a2a/<card> per agent and workflow,
+# str: q/str/builtin-tools-worker). With the platform DB gone,
+# nothing will ever consume the old per-agent queues again (their
+# cards are named after DB UUIDs), dead connector-tool
+# subscriptions stay on the str queue, and the task log keeps its
+# backlog -- so drop the lot and let the next install start clean.
+# The lab agents in sam-solace-lab-agents only use temporary
+# #P2P/QTMP queues and are not touched. A queue that still has a
+# consumer (a SAM instance still running somewhere) is kept and
+# reported. SEMP defaults are the event-mesh-deployment lab broker
+# (solace-1, admin/admin); override via SAM_SEMP_URL /
+# SAM_SEMP_USER / SAM_SEMP_PASSWORD.
+cleanup_broker_queues() {
+  local semp="${SAM_SEMP_URL:-http://127.0.0.1:8080}"
+  local auth="${SAM_SEMP_USER:-admin}:${SAM_SEMP_PASSWORD:-admin}"
+  local vpn ns
+  read -r vpn ns < <(python3 -c "
+import yaml
+v = yaml.safe_load(open('$SCRIPT_DIR/../local-k8s-values.yaml'))
+print(v['broker']['vpn'], v['global']['persistence']['namespaceId'])
+" 2>/dev/null) || true
+  if [ -z "${vpn:-}" ] || [ -z "${ns:-}" ]; then
+    echo "WARNING: could not read broker.vpn / namespaceId from the"
+    echo "  values file -- broker queues not cleaned up."
+    return 0
+  fi
+  local list
+  if ! list=$(curl -sf -m 10 -u "$auth" \
+      "$semp/SEMP/v2/monitor/msgVpns/$vpn/queues?count=1000&select=queueName" \
+      2>/dev/null); then
+    echo "WARNING: SEMP at $semp not reachable -- SAM queues on VPN"
+    echo "  '$vpn' not cleaned up (re-run stop.sh once the broker is up)."
+    return 0
+  fi
+  local q enc consumers removed=0 kept=0
+  while IFS= read -r q; do
+    [ -n "$q" ] || continue
+    enc=$(python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=''))" "$q")
+    consumers=$(curl -sf -m 10 -u "$auth" \
+      "$semp/SEMP/v2/monitor/msgVpns/$vpn/queues/$enc/txFlows?count=100" \
+      2>/dev/null | jq '.data | length' 2>/dev/null || echo "?")
+    if [ "$consumers" != "0" ]; then
+      echo "  kept $q (consumers: $consumers)"
+      kept=$((kept + 1))
+      continue
+    fi
+    if curl -sf -m 10 -u "$auth" -X DELETE \
+        "$semp/SEMP/v2/config/msgVpns/$vpn/queues/$enc" >/dev/null 2>&1; then
+      removed=$((removed + 1))
+    else
+      echo "  WARNING: could not delete $q"
+      kept=$((kept + 1))
+    fi
+  done < <(printf '%s' "$list" \
+             | jq -r --arg p "$ns/q/" '.data[].queueName | select(startswith($p))')
+  echo "Broker queues under $ns/q/ on VPN '$vpn': $removed removed, $kept kept."
+}
+echo "Removing the SAM queues from the broker ..."
+cleanup_broker_queues
+
 # --- Observability artifacts outside the namespace ----------------
 # start.sh applies manifests/observability/ recursively; two of those
 # objects live in the monitoring namespace (the Grafana datasource
@@ -144,15 +207,6 @@ kubectl delete prometheusrule sam-alerts \
   --namespace "$MONITORING_NAMESPACE" --ignore-not-found 2>/dev/null || true
 kubectl delete configmap grafana-datasource-sam-platform-config \
   --namespace "$MONITORING_NAMESPACE" --ignore-not-found 2>/dev/null || true
-
-# --- Helm post-renderer plugin ------------------------------------
-# start.sh installs it on demand; it is a host-side artifact and its
-# kustomize config bases are pinned to one SAM delivery, so a stale
-# copy must not survive into the next version.
-if helm plugin list 2>/dev/null | grep -q "^$HELM_PLUGIN"; then
-  echo "Uninstalling Helm plugin $HELM_PLUGIN ..."
-  helm plugin uninstall "$HELM_PLUGIN" >/dev/null 2>&1 || true
-fi
 
 # --- Remove CoreDNS NodeHosts entry -------------------------------
 echo "Removing ${SAM_DNS_NAME} from CoreDNS NodeHosts ..."

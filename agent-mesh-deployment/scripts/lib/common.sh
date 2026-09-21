@@ -45,8 +45,9 @@ resolve_sam_cli() {
   fi
   if [ -z "$SAM_CLI" ]; then
     echo "ERROR: sam CLI not found. Set SAM_CLI_PATH or SAM_CLI_TAR in" >&2
-    echo ".env, or put 'sam' on the PATH. The CLI ships in the SAM" >&2
-    echo "delivery package as solace-agent-mesh-<ver>-cli-<os>-<arch>.tar.gz" >&2
+    echo ".env, or put 'sam' on the PATH. Some SAM delivery packages" >&2
+    echo "ship it as solace-agent-mesh-<ver>-cli-<os>-<arch>.tar.gz;" >&2
+    echo "otherwise install the matching CLI separately." >&2
     return 1
   fi
   echo "Using sam CLI: $SAM_CLI" >&2

@@ -18,7 +18,8 @@ The chart and images come from the offline SAM delivery package
 and are NOT checked in. `.env` carries the local paths:
 `SAM_CHART_PATH` (unpacked chart), `SAM_APP_IMAGE_TAR` /
 `SAM_STR_IMAGE_TAR` (image tarballs for `load-images.sh`),
-`SAM_CLI_TAR` (sam CLI for the RBAC step).
+`SAM_CLI_PATH` / `SAM_CLI_TAR` (sam CLI; the 2.348.22 package
+ships no CLI tarball, the CLI lives in `~/.local/bin/sam`).
 
 ## Cluster Dependencies
 
@@ -58,28 +59,42 @@ All Keycloak-side configuration this repo owns is scoped to the
 ## Start and Stop
 
 ```bash
-./scripts/setup-keycloak-client.sh  # create OIDC client first
+./scripts/setup-keycloak-client.sh  # OIDC client; writes the secret to .env
 ./scripts/setup-keycloak-users.sh   # create groups and demo users
 docker login registry.solace.lab    # once
 ./scripts/load-images.sh            # offline tarballs -> registry
-./scripts/start.sh                  # helm install (local chart)
-./scripts/rbac/apply-rbac.sh        # roles + claim mappings
-(cd scripts/models && ./set-max-tokens.sh)   # max_tokens 16384
-# additional models (workflow/reasoning/coding/expert/fast) AND
-# the developer-mcp entrypoint are applied by start.sh;
-# standalone: scripts/models/apply-models.sh and
-# scripts/entrypoints/apply-entrypoints.sh
+./scripts/start.sh                  # helm install, then (in a
+                                    # terminal) browser login +
+                                    # provision.sh
+./scripts/provision.sh --login      # standalone / non-TTY: RBAC,
+                                    # models, max_tokens, developer-mcp
 ./scripts/stop.sh                   # full teardown
 ./scripts/stop.sh --purge-images    # ... plus the SAM images
 ```
 
-Version upgrade (new delivery package): run
-`./scripts/upgrade-preflight.sh --new <chart>` first -- it decides
-whether `local-k8s-values.yaml` needs changes before anything is
-torn down. The full ordered procedure (preflight, teardown,
-re-pin, re-base the observability config bases against the new
-images, install, re-provision, purge the old images) is the
-README's "Upgrade" section.
+`provision.sh` runs, in order: `rbac/apply-rbac.sh`,
+`models/apply-models.sh` (six extra aliases incl. `google gemini`),
+`models/set-max-tokens.sh` (general/planning/report_gen, one awe
+restart only if something changed) and
+`entrypoints/apply-entrypoints.sh`. All idempotent. It needs a
+`sam auth login` as `sam_admin`, which can only happen once the
+platform is up -- a Claude session cannot do that browser login
+(password entry), so ask the user to run
+`sam auth login solace-lab --url https://sam.solace.lab` and then
+run `./scripts/provision.sh` yourself.
+
+Version upgrade (new delivery package): install the NEW sam CLI,
+then run `./scripts/upgrade-preflight.sh --new <package-dir>`
+first -- it decides whether `local-k8s-values.yaml` (sections
+3/7) or any declarative package (section 8, `sam config plan`
+with the new CLI) needs changes before anything is torn down.
+The full ordered procedure (preflight, teardown, re-pin, load
+images, install + provision, verify, purge the old images) is
+the README's "Upgrade" section. Package directory names contain
+spaces (2.348.22: a TRAILING space) -- always glob, and
+version-specific (`~/Downloads/SAM*Enterprise*Update*2.348.22*`:
+the previous package stays in ~/Downloads while `.env` points
+into it), never type the name, and keep `.env` paths quoted.
 
 This deployment is pure SAM INFRASTRUCTURE (platform, RBAC,
 models, developer-mcp entrypoint, observability). It carries NO
@@ -122,12 +137,27 @@ re-provisioning order.
   `3.97-compliant` exists only in Solace's private registry.
 - `global.persistence.namespaceId` also namespaces the broker
   topics -- kept at `sam-solace-lab` for continuity with v1.
-- Chart 2.1.164 adds `sam.oauthProvider.claimKey` (which OIDC
-  claim identifies the user). Deliberately left unset -- the
-  default is what the Keycloak claim mappings in `scripts/rbac/`
-  already rely on. Nothing else changed in the values schema
-  between 2.0.23 and 2.1.164, and the subcharts
-  (persistence-layer 1.10.0, sam-common 1.1.1) are unchanged.
+- Chart 2.1.164 adds `sam.oauthProvider.claimKey` ->
+  env `EXTERNAL_AUTH_CLAIM_KEY` (default `groups`): the OIDC
+  claim the RBAC claim mappings match, now DEPLOYMENT-WIDE.
+  Deliberately left unset -- `groups` is what the Keycloak group
+  mapper emits. Nothing else changed in the values schema between
+  2.0.23 and 2.1.164, and the subcharts (persistence-layer 1.10.0,
+  sam-common 1.1.1) are unchanged. The CLI schema DID change with
+  2.348.22: `rbacClaimMapping` lost `spec.claimKey` and
+  `roleName` became `roleNames` (list) -- the helm-side preflight
+  could not see that; preflight section 8 now can.
+- Metrics: `environmentVariables.SAM_OBSERVABILITY_ENABLED: "true"`
+  in the values switches on the env-gated `management_server`
+  block that every baked config carries since 2.348.22. Do NOT
+  re-introduce full-file config overlays: a second
+  `management_server` key would break the config. The 2.225.14
+  Helm post-renderer plugin `sam-observability` is gone.
+- Rancher Desktop shares the Docker image store with k3s: the
+  kubelet image GC deletes UNUSED images when the VM disk crosses
+  85 % (seen on the 2.348.22 upgrade: str 1.50.3 vanished locally
+  during start.sh). The registry copy is the only dependable
+  fallback image.
 - `ingress.annotations` is a FREE-FORM map in the schema. A
   values-schema checker that assumes a missing
   `additionalProperties` means "forbidden" will report every
@@ -151,20 +181,27 @@ re-provisioning order.
   one-word description tweak) and `sam config apply` -- the
   update re-pushes the package, UUIDs stay stable. Check every
   connector-backed agent after any STR restart.
-- NOT RE-VERIFIED ON 2.348.22 (observed on 2.225.14, kept
-  because nothing says it was fixed): the Builder Test engine is
-  broken. Its
-  `generate_test_plan` str tool is killed at a hard 30 s
-  (caller-side `timeout_seconds` default; the skill manifest's
-  90 s is ignored) while its LLM call needs ~106 s on Opus -- and
-  the model it uses is NOT operator-controllable (env in
-  str/awe/gwe, DB `planning` alias and the ephemeral test
-  agent's binding were all switched to Haiku and verified
-  ineffective via bifrost debug logs). Vendor ticket material.
-  Harmless leftovers: DB alias `planning` = Haiku, and a
-  platform-DB trigger `ephemeral_agent_default_model` binding
-  ephemeral test agents to `fast` (their chat then runs Haiku).
-  Both vanish with stop.sh.
+- Builder Test engine WORKS on 2.348.22 (verified 2026-09-21 via
+  the WebUI's API path: POST /api/v1/sessions {id} -> POST
+  /api/v1/platform/builder/sessions/{id}/test-agent
+  {componentName, componentKind} -> test session
+  `{agentId: TEST_AGENT_INSTANCE_NAME, source: builder_test}` ->
+  message:send "Create a test for me"). The 2.225.14 defect (the
+  caller killed `generate_test_plan` after 30 s) is fixed:
+  str 1.64.0 gives both test-harness tools 300 s (DATAGO-147065),
+  and the new `tool_model_alias` (env `STR_TOOL_MODEL_ALIAS`,
+  default `general`) makes the in-tool model operator-
+  controllable. Quirk: the tool sends `temperature: 0.3`, Opus 4.8
+  (via the LiteLLM proxy -> Bedrock) rejects it, and the PROXY
+  takes ~84 s to return that 400. STR then drops the param and
+  remembers it per policy key, so the FIRST test plan after every
+  str start takes ~87 s, later ones ~4 s. If that first wait
+  matters, set `STR_TOOL_MODEL_ALIAS: planning` (Haiku, accepts
+  temperature) via `environmentVariables` -- not done, test plans
+  stay on the general tier. Ephemeral test agents
+  (`isEphemeral`, `expiresAt` +3 days, swept by gwe) delete
+  cleanly via DELETE /api/v1/platform/agents/{id}; since 2.348.22
+  an agent DELETE also removes its broker queue.
 - `sam config apply`'s deploy phase only fires for resources whose
   config CHANGED in that apply: re-running `--deploy` over an
   unchanged undeployed resource is a silent no-op (bump a config
@@ -204,9 +241,14 @@ reference DB-managed roles, never the YAML `sam_admin`.
   the local Docker daemon and from `registry.solace.lab`
   (`--dry-run` to review). Registry deletes need
   `REGISTRY_STORAGE_DELETE_ENABLED=true` on the registry; without
-  it the script reports HTTP 405 instead of failing.
-- `scripts/upgrade-preflight.sh` -- Compares a new delivery chart
-  with the deployed one. `--new` takes the delivery package
+  it the script reports HTTP 405 instead of failing. Registry
+  credentials: inline `auth` in `~/.docker/config.json` OR the
+  credential helper (`credsStore: osxkeychain` on this Mac).
+  Only the two pinned repositories are touched -- the v1
+  `solace-agent-mesh-enterprise` / `solace/solace-agent-mesh`
+  images the lab agents run on are never purged.
+- `scripts/upgrade-preflight.sh` -- Compares a new delivery with
+  the deployed one. `--new` takes the delivery package
   directory (the chart is found in a subfolder such as `Charts/`,
   max three levels deep), a `.tgz` or an unpacked dir; archives
   are classified by CONTENT, so the image tarballs in `Images/`
@@ -216,17 +258,31 @@ reference DB-managed roles, never the YAML `sam_admin`.
   every key of `local-k8s-values.yaml` against the new
   `values.schema.json` (strict schema: a renamed key fails the
   install), diffs the two schemas, flags chart defaults that
-  changed under an override, and runs `helm lint` + `helm
-  template` with the real values. Run it BEFORE the teardown.
-- `scripts/start.sh` -- Sources `.env`, installs from
-  `SAM_CHART_PATH`
+  changed under an override, runs `helm lint` + `helm
+  template` with the real values, and (section 8) plans every
+  declarative package (scripts/* and ../sam-*-demo/*) with the
+  CLI provision.sh uses (`--skip-version-check --no-build`,
+  read-only). The CLI validates the files only AFTER reaching the
+  platform with a login -- so run it BEFORE the teardown, logged
+  in, with the new CLI; "NOT VALIDATED" is not a pass.
+- `scripts/start.sh` -- Sources `.env`, warns if the pinned
+  images lost the metrics switch (`check-metrics-gate.sh`),
+  installs from `SAM_CHART_PATH`, then runs `provision.sh --login`
+  when stdin/stdout are a terminal (else prints that command)
+- `scripts/provision.sh` -- DB-managed content after an install:
+  RBAC -> models -> max_tokens -> developer-mcp (RBAC first as
+  the auth smoke test; stops there on failure, later steps
+  continue and report WARN/FAIL)
+- `scripts/setup-keycloak-client.sh` -- creates the OIDC client
+  and writes its secret into `.env` itself (re-run against an
+  existing client re-syncs `.env`)
 - `scripts/stop.sh` -- Full teardown. Beyond the release and the
   namespace it removes what lives OUTSIDE the namespace and would
   otherwise survive: the `sam-alerts` PrometheusRule and the
   `grafana-datasource-sam-platform-config` ConfigMap in
-  `monitoring`, released PVs, the `sam-observability` Helm
-  plugin, the cached `sam` CLI (`scripts/lib/.cache/`) and its
-  login cache, and the Keycloak client/groups/users.
+  `monitoring`, released PVs, the cached `sam` CLI
+  (`scripts/lib/.cache/`) and its login cache, and the Keycloak
+  client/groups/users.
   `--purge-images` also runs `purge-images.sh`.
 - `scripts/lib/common.sh` -- shared helpers (.env loading, sam
   CLI resolution, SAM_AUTH_TOKEN export) sourced by the rbac,
@@ -240,7 +296,7 @@ reference DB-managed roles, never the YAML `sam_admin`.
 - `scripts/entrypoints/` -- Declarative package for the
   platform-level `developer-mcp` MCP entrypoint (infrastructure,
   used by the desktop wiring and Claude Code across all demos),
-  applied by `apply-entrypoints.sh` (start.sh hook;
+  applied by `apply-entrypoints.sh` (provision.sh step;
   `--probe-only` checks /gw/dev). NEVER `--prune` (demo
   event_mesh entrypoints are not managed here). A config change
   redeploys the entrypoint and invalidates its minted MCP tokens
@@ -252,48 +308,62 @@ reference DB-managed roles, never the YAML `sam_admin`.
   (NEVER `--prune` there either).
 - `scripts/models/` -- `set-max-tokens.sh` patches
   `modelParams.max_tokens` via `sam api` (SAM_AUTH_TOKEN from the
-  CLI login cache) and restarts the awe deployment. Plus the
-  declarative package for five additional aliases (`workflow` =
+  CLI login cache) on general/planning/report_gen (or one
+  `--model-alias`), skips aliases already at the value, and
+  restarts awe once only if something changed. Plus the
+  declarative package for six additional aliases (`workflow` =
   Sonnet 5 for the incident merge, `reasoning` = DeepSeek V3.2,
-  `coding` = Qwen3 Coder, `expert` = Opus 5, `fast` = Haiku 4.5)
-  applied by `apply-models.sh` (start.sh hook; `--probe-only` =
-  upstream health check). Gotchas: the platform lowercases model
+  `coding` = Qwen3 Coder, `expert` = Opus 5, `fast` = Haiku 4.5,
+  all via the LiteLLM proxy; `google gemini` = Gemini 3.6 Flash,
+  provider `google_ai_studio`, DIRECT on the Gemini API with
+  `GOOGLE_AI_STUDIO_API_KEY` -- alias name with a space, file
+  `google-gemini.yaml`, the resolver matches by `name:`) applied
+  by `apply-models.sh` (provision.sh step; `--probe-only` =
+  upstream health check). The platform stores model API keys in
+  plain text in the platform DB. Gotchas: the platform lowercases model
   aliases on create (declarative names must be lowercase); the
   Claude 5 family rejects temperature/top_p/top_k (HTTP 400); the
   proxy's azure-*/gemini-* routes have permanently broken backend
   credentials. The models and entrypoints tooling are v2-native
   and verified live.
-- `scripts/observability/` -- overlays the image-baked component
-  configs with a `management_server` block (metrics) via a Helm 4
-  postrenderer/v1 plugin + kustomize (configMapGenerator hash =
-  auto-rollout). Gotchas: the block only works in the MAIN config
-  (extra `--config` files reject root keys: "expected YAML
-  list"); `/metrics` rides the `--health-addr` port (gwe 9090,
-  awe/str 8090); full-file overlays are drift-checked against the
-  delivery images by start.sh (`check-config-drift.sh`, re-base
-  on new delivery). After simultaneous gwe+awe restarts the
-  DB-managed agents may not load -- restart awe again AFTER gwe
-  is ready. `manifests/observability/` holds metrics Services,
+- `scripts/observability/` -- `check-metrics-gate.sh` (start.sh
+  guard: warns if a pinned image's baked configs no longer
+  reference `SAM_OBSERVABILITY_ENABLED`) and
+  `grant-grafana-platform-db.sh`. Metrics themselves come from
+  the values switch (see v2 Chart Gotchas); `/metrics` rides the
+  `--health-addr` port (gwe 9090, awe/str 8090). After
+  simultaneous gwe+awe restarts the DB-managed agents may not
+  load -- restart awe again AFTER gwe is ready.
+  `manifests/observability/` holds metrics Services,
   ServiceMonitors, PrometheusRule (sam-alerts, ns monitoring) and
   the Grafana dashboards (ConfigMaps, label grafana_dashboard=1,
   folder annotation SAM). Token chargeback per user comes from
   the platform DB (`tasks` table, Grafana role grafana_ro), NOT
-  from Prometheus (metrics carry no user identity). A2A traces
-  come from broker tracing on the sam VPN (event-mesh repo);
+  from Prometheus (metrics carry no user identity). SAM emits NO
+  OTel spans (verified 2.348.22: the gwe/awe/str binaries link
+  only the OTel metric/log exporters, no trace SDK; Tempo lists
+  only the broker). A2A traces come from broker tracing on the
+  sam VPN (event-mesh repo);
   enabling a telemetry profile on a running broker needs a
   broker restart.
 - `scripts/desktop/` -- wires the SAM desktop app (its platform
   runs unauthenticated on localhost:8800) to this deployment:
   `generate-manifest.sh` builds the connector's static tool
   manifest from the live mesh (`/api/v1/agentCards`; tool names
-  `<card>_<skill name>` embed platform-DB UUIDs -- regenerate
-  after every rebuild), `connect.sh` applies both default models
+  `<card>_<skill name>`, where 2.348.22 shortens a UUID card
+  `agent_<uuid>` / `workflow_<uuid>` to `<kind>_<last 8 hex>` --
+  e.g. `agent_c985d10e_general`; 2.225.14 used the full card name.
+  They embed platform-DB UUIDs -- regenerate after every rebuild),
+  `connect.sh` applies both default models
   (`general` + `planning`) and the `mcp/remote` connector (gw/dev,
   OAuth discovery) to the desktop Orchestrator via
   `sam config apply`. Workflow MCP results carry only a
-  completion status (observed on 2.225.14, not re-verified on
-  2.348.22) -- the tool descriptions steer
-  report requests through the K8s Orchestrator tool instead.
+  completion status -- re-verified on 2.348.22 (2026-09-21, OAuth
+  and tools/call against gw/dev): the result is exactly
+  `Workflow "<display name>" completed successfully.`, none of the
+  `output_mapping` fields cross MCP, while an agent tool returns
+  the agent's answer. The tool descriptions steer report requests
+  through the K8s Orchestrator tool instead.
 
 ## References
 
