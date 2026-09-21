@@ -6,8 +6,8 @@
 # sam-manufacturing-ops-demo/core -- every demo owns its core;
 # agent-mesh-deployment stays pure SAM infrastructure (models,
 # RBAC, observability, developer-mcp). uninstall.sh removes the
-# core together with the overlay; --keep-core keeps it for fast
-# switching between demo overlays.
+# core together with the overlay; --keep-core keeps it for a fast
+# re-install of the overlay.
 #
 # Applied with:  sam config plan/apply -m manifest.yaml
 # (install.sh does this; order is handled by the CLI, connectors
@@ -31,14 +31,15 @@ target:
 # INS_EXPERT_TIER (default fast), each defaulted INLINE where it is
 # used -- `${VAR, default}` -- so an exported value wins. A default
 # under `variables:` beats the environment on CLI 2.348.22 (verified
-# 2026-09-21: install.sh --extended exported INS_EXPERT_TIER=general
-# and the experts still landed on fast). INS_EXPERT_TIER: `fast`
-# (Haiku 4.5) for the default triage profile -- the claim-triage
-# workflow needs its policy and rules nodes back within ~12 s, and the
-# benchmark shows fast matching general on the demo questions;
-# install.sh --extended exports general (Opus 4.8) for the long-form
-# analyses of the extended profile. Override e.g.
+# 2026-09-21: an exported INS_EXPERT_TIER=general left the experts on
+# the fast default of a `variables:` block). INS_EXPERT_TIER: `fast`
+# (Haiku 4.5), the tier of every agent of the demo -- the
+# claim-triage workflow needs its policy and rules nodes back within
+# ~12 s, and a three-model benchmark on the demo questions (retired
+# with the extended profile on 2026-09-21) measured fast matching
+# general. Override e.g.
 #   INS_DB_PASSWORD=secret ./install.sh
+#   INS_EXPERT_TIER=general ./install.sh
 resources:
   connectors:
     - Acme Insurance DB
@@ -49,9 +50,8 @@ resources:
   agents:
     - Acme Insurance Query Expert
     - Acme Claims Knowledge Expert
-    # NOTE: demo-specific resources (Fast Lane Clerk, Claims
-    # Incident Reporter, Storm Readiness Planner, Fraud Case
-    # Reporter, the three workflows, claims-events entrypoint,
-    # Storm Intake Analyst) are NOT managed here -- they live in
-    # ../mesh and ../fallback and are installed/removed via
-    # install.sh / uninstall.sh.
+    # NOTE: the demo overlay (Claims Intake Liaison, Claims Triage
+    # Decision, the claim-triage workflow and the rendered
+    # claims-triage entrypoint) is NOT managed here -- it lives in
+    # ../triage, the external Claims Intake Analyst in
+    # ../external-agent; install.sh / uninstall.sh handle both.

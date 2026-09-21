@@ -6,29 +6,35 @@ set -uo pipefail
 # Appendix A) with AUTO-FIX. Run ~15 minutes before going live;
 # after a clean run the environment is validated and demo-ready.
 #
-# PROFILE-AWARE: the installed profile is detected from the
-# entrypoints on the platform (claims-triage => triage,
-# claims-events => extended; neither => FAIL with the install
-# hint). Shared checks (login, cluster, models, data stores,
-# broker WebSocket) run for both; each profile adds its own.
+# Needs the demo installed: the entrypoint claims-triage on the
+# platform, else FAIL with the install hint. The former "extended"
+# profile was removed on 2026-09-21: a platform that carries only
+# its entrypoint claims-events is a LEGACY install and aborts with
+# the hint `./uninstall.sh && ./install.sh` (never run from here --
+# install.sh redeploys the experts); leftovers of it next to a
+# triage install are deleted in step 4.
 #
 # Every check that fails triggers its fix and re-checks:
-#   platform resources missing   -> ./install.sh [--extended]
-#   entrypoint not deployed      -> entrypointDeployments deploy (triage)
-#   external agent not ready     -> kubectl apply external-agent/ (triage)
-#   Storm Intake Analyst present -> deleted (extended, live Builder beat)
+#   platform resources missing   -> ./install.sh
+#   extended-profile leftovers   -> deleted (claims-events entrypoint
+#                                   first, then workflows, agents,
+#                                   connectors)
+#   entrypoint not deployed      -> entrypointDeployments deploy
+#   external agent not ready     -> kubectl apply external-agent/
 #   postgres data                -> postgres/seed.sh + spot-check
 #   wrong/empty mongo            -> compose down -v && up (reseed)
 #   other demos' mongo running   -> stopped (port 27017 rule)
 #   qdrant empty / MCP down      -> compose up --build + reseed
 #   broker WS down               -> docker start solace-1/2, retry
 #   dashboard ConfigMap missing  -> kubectl apply
-#   datasource CM / grant missing-> grant-grafana-platform-db.sh (triage)
-#   evals without completed runs -> sam eval run (the 15-min part)
-# WARN only: no Tempo traces in the last 24 h (triage).
-# Triage ends with a DRY FIRE (tools/fire-claim.js) that must
-# print a decision -- it warms the agents; the cockpit stays
-# untouched.
+#   legacy dashboard ConfigMap   -> deleted (dashboard-sam-insurance-ops)
+#   datasource CM / grant missing-> grant-grafana-platform-db.sh
+#   evals without completed runs -> sam eval run (the slow part)
+# WARN only: no Tempo traces in the last 24 h; the legacy
+# experiments ins-ops-quality / ins-ops-model-benchmark still on
+# the platform (./uninstall.sh removes them with their runs).
+# Ends with a DRY FIRE (tools/fire-claim.js) that must print a
+# decision -- it warms the agents; the cockpit stays untouched.
 # Not auto-fixable (reported with instructions): sam login
 # (browser flow), unhealthy cluster pods, dead model upstreams,
 # a liaison whose DEPLOYED allow list does not name the external
@@ -54,7 +60,7 @@ SAM_NS="sam-solace-lab"
 MON_NS="monitoring"
 PG_POD="agent-mesh-postgresql-0"
 PLATFORM_DB="sam-solace-lab_platform"
-# ---- triage profile -------------------------------------------------
+# ---- triage demo (external agent, cockpit, Grafana, dry fire) ------
 EXT_NS="sam-solace-lab-agents"
 EXT_DEPLOY="sam-claims-intake-agent"
 EXT_CARD="ClaimsIntakeAnalyst"
@@ -65,6 +71,33 @@ GRANT_SCRIPT="$AMD/scripts/observability/grant-grafana-platform-db.sh"
 FIRE_JS="$SCRIPT_DIR/tools/fire-claim.js"
 FIRE_CLAIM="CLM-0913-00002"
 FIRE_WAIT=90
+# PLATFORM agents only -- the four the workflow's nodes bind to.
+# The intake node runs on the Claims Intake Liaison, whose single
+# declared peer is the EXTERNAL Claims Intake Analyst: that one is
+# not a platform record and is checked separately below (the
+# liaison's allow list, the deployment, the agent card).
+REQUIRED_AGENTS=("Acme Insurance Query Expert" \
+  "Acme Claims Knowledge Expert" "Claims Intake Liaison" \
+  "Claims Triage Decision")
+REQUIRED_CONNECTORS=("Acme Insurance DB" "Acme Claims Knowledge")
+REQUIRED_WORKFLOWS=("claim-triage")
+REQUIRED_ENTRYPOINT="claims-triage"
+EVAL_EXPERIMENTS=("ins-claims-rules" "ins-guardrails" "ins-triage-decision")
+DASHBOARD_CMS=("dashboard-sam-claims-governance")
+# ---- legacy: the removed extended profile (2026-09-21) ------------
+# What an install from an older checkout can leave on the platform.
+# Same names as install.sh step 6 and uninstall.sh. Never list the
+# Orchestrator, the two Acme experts or the two Acme connectors here:
+# they are built-in or core.
+LEGACY_ENTRYPOINT="claims-events"
+LEGACY_WORKFLOWS=("stalled-cohort-report" "storm-readiness" \
+  "cross-channel-fraud-report")
+LEGACY_AGENTS=("Fast Lane Clerk" "Claims Incident Reporter" \
+  "Storm Readiness Planner" "Fraud Case Reporter" \
+  "Storm Intake Analyst" "StormIntakeAnalyst")
+LEGACY_CONNECTORS=("fnol-intake" "weather-cells" "scanner-results")
+LEGACY_EXPERIMENTS=("ins-ops-quality" "ins-ops-model-benchmark")
+LEGACY_DASHBOARD_CM="dashboard-sam-insurance-ops"
 
 mongo_counts_ok() {
   docker exec "$MY_MONGO" mongosh -u sam_ro -p sam_ro \
@@ -82,8 +115,12 @@ mongo_counts_ok() {
 }
 
 sql_spot_ok() {
-  # The demo's "now" is Mon 2026-07-20 10:00 (fixed in the data),
-  # so the > 4 h stalled cohort is measured against that instant.
+  # Storyline anchors of the seed: the claim-triage policy node reads
+  # the P-BRAENDLE queue (640) and the P-DELLENDOC INACTIVE note; the
+  # other three prove the rest of the seed the experts answer ad-hoc
+  # questions from. The demo's "now" is Mon 2026-07-20 10:00 (fixed
+  # in the data), so the > 4 h stalled cohort is measured against
+  # that instant.
   local cohort braendle dellendoc nogarage payitems
   cohort=$(docker exec postgres psql -U postgres -d acme_insurance -tAc \
     "SELECT count(*) FROM ins_claims WHERE status='AWAITING_WORKSHOP_SLOT' AND assigned_partner_id='P-BRAENDLE' AND status_since < TIMESTAMP '2026-07-20 10:00:00' - INTERVAL '4 hours';" 2>/dev/null)
@@ -183,7 +220,7 @@ case "${1:-}" in
   *) echo "Unknown argument: $1" >&2; exit 1 ;;
 esac
 
-PASS=0; FIXED=0; WARNED=0; FAILED=0; STEP=0; TOTAL=0
+PASS=0; FIXED=0; WARNED=0; FAILED=0; STEP=0; TOTAL=13
 ok()   { echo "   [OK]    $1"; PASS=$((PASS+1)); }
 fixd() { echo "   [FIXED] $1"; FIXED=$((FIXED+1)); }
 warn() { echo "   [WARN]  $1"; WARNED=$((WARNED+1)); }
@@ -237,8 +274,7 @@ try:
             print(v.get('status','') if isinstance(v,dict) else (v or ''))
 except Exception: pass" "$1" "$2"; }
 
-# ---- profile detection (before the first numbered step: the step
-#      count depends on it) -----------------------------------------
+# ---- login + install check (before the first numbered step) -------
 (cd "$SCRIPT_DIR/eval" && "$SAM_CLI" config plan >/dev/null 2>&1)  # token refresh
 sam_auth_token >/dev/null 2>&1
 # Without a login cache sam_auth_token leaves SAM_AUTH_TOKEN unset and
@@ -248,59 +284,26 @@ sam_auth_token >/dev/null 2>&1
 SAM_AUTH_TOKEN="${SAM_AUTH_TOKEN:-}"
 api GET /api/v1/platform/agents >/dev/null
 API_OK="${API_CODE:-}"
-PROFILE=""
-if [ "$API_OK" = "200" ]; then
-  GW=$(api GET /api/v1/platform/entrypoints | names_of)
-  if grep -qxF claims-triage <<<"$GW"; then PROFILE=triage
-  elif grep -qxF claims-events <<<"$GW"; then PROFILE=extended
-  fi
-fi
-if [ "$PROFILE" = "triage" ]; then
-  TOTAL=13
-  # PLATFORM agents only -- the four the workflow's nodes bind to.
-  # The intake node runs on the Claims Intake Liaison, whose single
-  # declared peer is the EXTERNAL Claims Intake Analyst: that one is
-  # not a platform record and is checked separately below (the
-  # liaison's allow list, the deployment, the agent card).
-  REQUIRED_AGENTS=("Acme Insurance Query Expert" \
-    "Acme Claims Knowledge Expert" "Claims Intake Liaison" \
-    "Claims Triage Decision")
-  REQUIRED_CONNECTORS=("Acme Insurance DB" "Acme Claims Knowledge")
-  REQUIRED_WORKFLOWS=("claim-triage")
-  REQUIRED_ENTRYPOINT="claims-triage"
-  EVAL_EXPERIMENTS=("ins-ops-quality" "ins-ops-model-benchmark" \
-    "ins-claims-rules" "ins-guardrails" "ins-triage-decision")
-  DASHBOARD_CMS=("dashboard-sam-claims-governance" "dashboard-sam-insurance-ops")
-  INSTALL_ARGS=""
-else
-  TOTAL=9
-  REQUIRED_AGENTS=("Orchestrator" "Acme Insurance Query Expert" \
-    "Acme Claims Knowledge Expert" "Fast Lane Clerk" \
-    "Claims Incident Reporter" "Storm Readiness Planner" \
-    "Fraud Case Reporter")
-  FORBIDDEN_AGENT="Storm Intake Analyst"
-  REQUIRED_CONNECTORS=("Acme Insurance DB" "Acme Claims Knowledge" \
-    "fnol-intake" "weather-cells" "scanner-results")
-  REQUIRED_WORKFLOWS=("stalled-cohort-report" "storm-readiness" \
-    "cross-channel-fraud-report")
-  REQUIRED_ENTRYPOINT="claims-events"
-  EVAL_EXPERIMENTS=("ins-ops-quality" "ins-ops-model-benchmark")
-  DASHBOARD_CMS=("dashboard-sam-insurance-ops")
-  INSTALL_ARGS="--extended"
-fi
+GW=""
+[ "$API_OK" = "200" ] && GW=$(api GET /api/v1/platform/entrypoints | names_of)
 
-step "Platform login + API + profile"
+step "Platform login + API + demo installed"
 if [ "$API_OK" = "200" ]; then
   ok "platform API reachable, token fresh"
 else
   bad "platform API HTTP ${API_OK:-?} -- manual fix: sam auth login solace-lab --url $SAM_URL"
   echo ""; echo "ABORT: everything else needs the API."; exit 1
 fi
-if [ -n "$PROFILE" ]; then
-  ok "profile: $PROFILE (entrypoint '$REQUIRED_ENTRYPOINT' on the platform)"
+if grep -qxF "$REQUIRED_ENTRYPOINT" <<<"$GW"; then
+  ok "demo installed (entrypoint '$REQUIRED_ENTRYPOINT' on the platform)"
+elif grep -qxF "$LEGACY_ENTRYPOINT" <<<"$GW"; then
+  # Never healed from here: a re-install redeploys the experts
+  # (talk-track A3) and is nothing to start 15 minutes before a show.
+  bad "legacy install: only the entrypoint '$LEGACY_ENTRYPOINT' of the removed extended profile is on the platform -- re-install the claim triage demo: ./uninstall.sh && ./install.sh"
+  echo ""; echo "ABORT: legacy extended install, not the claim triage demo."; exit 1
 else
-  bad "no demo entrypoint on the platform (neither claims-triage nor claims-events) -- install first: ./install.sh (triage) or ./install.sh --extended"
-  echo ""; echo "ABORT: the profile decides which checks apply."; exit 1
+  bad "demo not installed (no entrypoint '$REQUIRED_ENTRYPOINT' on the platform) -- install first: ./install.sh"
+  echo ""; echo "ABORT: install the demo first."; exit 1
 fi
 
 step "Cluster health"
@@ -321,7 +324,46 @@ else
   bad "model probe failed (no auto-fix -- external gateway; retry or demo without that alias)"
 fi
 
-step "Platform resources (roster, connectors incl. MCP, workflows, entrypoint)"
+step "Platform resources (roster, connectors incl. MCP, workflow, entrypoint, no extended leftovers)"
+# Leftovers of the removed extended profile go FIRST. Not tidiness:
+# its claims-events entrypoint subscribes to
+# acmeins/claims/fnol/received/minor/> and would also answer the
+# MINOR dry-fire claim below (and the MINOR stage claim), and it
+# publishes its errors on acmeins/claims/result/error, which
+# tools/fire-claim.js reads as FAILED. Its MongoDB connectors would
+# contradict "only the outside agent reaches the intake store" on
+# the Connectors page (talk-track A6), its agents the roster (A7).
+# Delete order as in uninstall.sh: entrypoint, workflows, agents
+# (the Storm Intake Analyst before the connectors it binds),
+# connectors.
+legacy_present() {  # -> "<collection>|<name>" per leftover, in delete order
+  local EP WF AG CO x
+  EP=$(api GET /api/v1/platform/entrypoints | names_of)
+  WF=$(api GET /api/v1/platform/workflows | names_of)
+  AG=$(api GET /api/v1/platform/agents | names_of)
+  CO=$(api GET /api/v1/platform/connectors | names_of)
+  grep -qxF "$LEGACY_ENTRYPOINT" <<<"$EP" && echo "entrypoints|$LEGACY_ENTRYPOINT"
+  for x in "${LEGACY_WORKFLOWS[@]}";  do grep -qxF "$x" <<<"$WF" && echo "workflows|$x"; done
+  for x in "${LEGACY_AGENTS[@]}";     do grep -qxF "$x" <<<"$AG" && echo "agents|$x"; done
+  for x in "${LEGACY_CONNECTORS[@]}"; do grep -qxF "$x" <<<"$CO" && echo "connectors|$x"; done
+  return 0
+}
+LEGACY=$(legacy_present)
+if [ -z "$LEGACY" ]; then
+  ok "no leftovers of the removed extended profile"
+else
+  while IFS='|' read -r coll name; do
+    [ -n "$name" ] || continue
+    LID=$(api GET "/api/v1/platform/$coll" | id_of "$name")
+    [ -n "$LID" ] || continue
+    api DELETE "/api/v1/platform/$coll/$LID" >/dev/null
+    if [ "$API_CODE" = "204" ]; then
+      fixd "extended-profile leftover ${coll%s} '$name' deleted"
+    else
+      bad "extended-profile leftover ${coll%s} '$name': DELETE returned HTTP $API_CODE -- ./uninstall.sh && ./install.sh removes it"
+    fi
+  done <<<"$LEGACY"
+fi
 collect_missing() {  # -> sets MISSING from the live platform
   local AG CO WF GW a c w
   MISSING=""
@@ -337,55 +379,42 @@ collect_missing() {  # -> sets MISSING from the live platform
 collect_missing
 if [ -n "$MISSING" ]; then
   echo "          missing: $MISSING"
-  echo "          fix: running ./install.sh $INSTALL_ARGS (idempotent) ..."
-  # shellcheck disable=SC2086
-  (cd "$SCRIPT_DIR" && ./install.sh $INSTALL_ARGS >/tmp/preflight-install.log 2>&1)
+  echo "          fix: running ./install.sh (idempotent) ..."
+  (cd "$SCRIPT_DIR" && ./install.sh >/tmp/preflight-install.log 2>&1)
   collect_missing
   if [ -z "$MISSING" ]; then fixd "platform resources (via install.sh; log: /tmp/preflight-install.log)"
   else bad "still missing after install.sh: $MISSING"; fi
 else
   ok "all required resources present"
 fi
-if [ "$PROFILE" = "triage" ]; then
-  # Deployment state matters here: an undeployed workflow never
-  # answers and an undeployed entrypoint has no broker receiver.
-  WF_DEP=$(api GET /api/v1/platform/workflows | field_of claim-triage deploymentStatus)
-  WF_RUN=$(api GET /api/v1/platform/workflows | field_of claim-triage runtimeStatus)
-  if [ "$WF_DEP" = "deployed" ] && [ "$WF_RUN" = "running" ]; then
-    ok "workflow claim-triage deployed + running"
-  elif [ "$WF_DEP" = "deployed" ]; then
-    warn "workflow claim-triage deployed but runtimeStatus='$WF_RUN' (awe restart pending? check Workflows page)"
-  else
-    bad "workflow claim-triage deploymentStatus='$WF_DEP' -- fix: bump appConfig.version in triage/workflows/claim-triage.yaml, then ./install.sh (re-renders the entrypoint)"
-  fi
-  EP_DEP=$(api GET /api/v1/platform/entrypoints | field_of claims-triage deploymentStatus)
-  if [ "$EP_DEP" = "deployed" ]; then
-    ok "entrypoint claims-triage deployed"
-  else
-    EPID=$(api GET /api/v1/platform/entrypoints | id_of claims-triage)
-    echo "          fix: deploying entrypoint claims-triage ($EPID, status '$EP_DEP') ..."
-    api_json POST /api/v1/platform/entrypointDeployments \
-      "{\"gatewayId\":\"$EPID\",\"action\":\"deploy\"}" >/dev/null
-    for _ in $(seq 1 8); do
-      sleep 5
-      EP_DEP=$(api GET /api/v1/platform/entrypoints | field_of claims-triage deploymentStatus)
-      [ "$EP_DEP" = "deployed" ] && break
-    done
-    if [ "$EP_DEP" = "deployed" ]; then fixd "entrypoint claims-triage deployed (receivers follow within about a second)"
-    else bad "entrypoint claims-triage still '$EP_DEP' (deploy POST -> HTTP $API_CODE)"; fi
-  fi
+# Deployment state matters here: an undeployed workflow never
+# answers and an undeployed entrypoint has no broker receiver.
+WF_DEP=$(api GET /api/v1/platform/workflows | field_of claim-triage deploymentStatus)
+WF_RUN=$(api GET /api/v1/platform/workflows | field_of claim-triage runtimeStatus)
+if [ "$WF_DEP" = "deployed" ] && [ "$WF_RUN" = "running" ]; then
+  ok "workflow claim-triage deployed + running"
+elif [ "$WF_DEP" = "deployed" ]; then
+  warn "workflow claim-triage deployed but runtimeStatus='$WF_RUN' (awe restart pending? check Workflows page)"
 else
-  FID=$(api GET /api/v1/platform/agents | id_of "$FORBIDDEN_AGENT")
-  if [ -n "$FID" ]; then
-    api DELETE "/api/v1/platform/agents/$FID" >/dev/null
-    [ "$API_CODE" = "204" ] && fixd "'$FORBIDDEN_AGENT' removed (live Builder beat)" \
-      || bad "'$FORBIDDEN_AGENT' delete returned HTTP $API_CODE"
-  else
-    ok "'$FORBIDDEN_AGENT' absent (live Builder beat is free)"
-  fi
+  bad "workflow claim-triage deploymentStatus='$WF_DEP' -- fix: bump appConfig.version in triage/workflows/claim-triage.yaml, then ./install.sh (re-renders the entrypoint)"
+fi
+EP_DEP=$(api GET /api/v1/platform/entrypoints | field_of claims-triage deploymentStatus)
+if [ "$EP_DEP" = "deployed" ]; then
+  ok "entrypoint claims-triage deployed"
+else
+  EPID=$(api GET /api/v1/platform/entrypoints | id_of claims-triage)
+  echo "          fix: deploying entrypoint claims-triage ($EPID, status '$EP_DEP') ..."
+  api_json POST /api/v1/platform/entrypointDeployments \
+    "{\"gatewayId\":\"$EPID\",\"action\":\"deploy\"}" >/dev/null
+  for _ in $(seq 1 8); do
+    sleep 5
+    EP_DEP=$(api GET /api/v1/platform/entrypoints | field_of claims-triage deploymentStatus)
+    [ "$EP_DEP" = "deployed" ] && break
+  done
+  if [ "$EP_DEP" = "deployed" ]; then fixd "entrypoint claims-triage deployed (receivers follow within about a second)"
+  else bad "entrypoint claims-triage still '$EP_DEP' (deploy POST -> HTTP $API_CODE)"; fi
 fi
 
-if [ "$PROFILE" = "triage" ]; then
 step "Intake hop: liaison allow list + external agent (ns $EXT_NS)"
 # The platform half of the hop first. Without
 # interAgentCommunication.allowList naming $EXT_CARD the liaison has
@@ -424,7 +453,6 @@ else
   done
   if [ "$FOUND" -eq 1 ]; then fixd "card '$EXT_CARD' discovered after $(( $(date +%s) - T0 )) s"
   else bad "card '$EXT_CARD' not in the mesh -- kubectl -n $EXT_NS logs deploy/$EXT_DEPLOY (broker creds from sam-shared-secret? 'MongoDB Agent initialization completed successfully'?)"; fi
-fi
 fi
 
 step "Postgres storyline data"
@@ -534,7 +562,7 @@ eval_preruns() {  # every experiment in $EVAL_EXPERIMENTS has a completed run
         | grep -qE '"(completed|completed_with_warnings)"'; then
       ok "experiment '$exp' has a completed run"
     else
-      echo "          fix: running '$exp' (this is the ~15-min part) ..."
+      echo "          fix: running '$exp' (the slow part, a few minutes) ..."
       # Refresh the short-lived token right before the run; the
       # CLI does not refresh mid-run, so its polling can die with
       # a 401 while the run continues on the platform. The run is
@@ -544,8 +572,9 @@ eval_preruns() {  # every experiment in $EVAL_EXPERIMENTS has a completed run
       sam_auth_token >/dev/null 2>&1
       "$SAM_CLI" eval run "$exp" --url "$SAM_URL" 2>&1 \
         | tail -3 | sed 's/^/          /' || true
-      # 20 min: the three-model benchmark alone is 36 LLM-judge calls
-      # (measured 437 s on an idle platform, more on a busy one).
+      # 20 min, generous on purpose: one LLM-judge call takes ~40 s
+      # and the platform judges in waves of ~4 (a retired 36-call
+      # benchmark took 437 s on an idle platform, more on a busy one).
       DONE=0; END=$(( $(date +%s) + 1200 ))
       until [ "$(date +%s)" -ge "$END" ]; do
         (cd "$SCRIPT_DIR/eval" && "$SAM_CLI" config plan >/dev/null 2>&1) || true
@@ -563,10 +592,18 @@ eval_preruns() {  # every experiment in $EVAL_EXPERIMENTS has a completed run
   done
 }
 
-if [ "$PROFILE" = "triage" ]; then
-
 step "Grafana: dashboards, platform-DB datasource, grafana_ro grant"
 check_dashboards
+# Legacy: the retired "SAM Insurance Ops Demo" dashboard of the
+# removed extended profile (install.sh deletes it too). Silent when
+# absent.
+if kubectl get cm -n "$SAM_NS" "$LEGACY_DASHBOARD_CM" >/dev/null 2>&1; then
+  if kubectl delete cm -n "$SAM_NS" "$LEGACY_DASHBOARD_CM" >/dev/null 2>&1; then
+    fixd "legacy dashboard ConfigMap $LEGACY_DASHBOARD_CM deleted (removed extended profile)"
+  else
+    warn "legacy dashboard ConfigMap $LEGACY_DASHBOARD_CM present, delete failed (kubectl delete cm -n $SAM_NS $LEGACY_DASHBOARD_CM)"
+  fi
+fi
 if kubectl get cm -n "$MON_NS" "$DATASOURCE_CM" >/dev/null 2>&1; then
   ok "datasource ConfigMap $DATASOURCE_CM present (ns $MON_NS)"
 elif kubectl apply -f "$DATASOURCE_FILE" >/dev/null 2>&1; then
@@ -592,6 +629,18 @@ else
 fi
 
 step "Eval pre-runs"
+# Legacy experiments of the removed extended profile (`sam config
+# apply` never prunes). WARN only: they cost nothing, but the Reports
+# list shows them. Deleting them here would drop their run history
+# without the artifact cleanup -- that is uninstall.sh's job.
+LEGACY_EVAL=""
+EXP_NAMES=$(api GET /api/v1/platform/evaluations/experiments | names_of)
+for x in "${LEGACY_EXPERIMENTS[@]}"; do
+  grep -qxF "$x" <<<"$EXP_NAMES" && LEGACY_EVAL+="$x "
+done
+if [ -n "$LEGACY_EVAL" ]; then
+  warn "legacy experiments of the removed extended profile on the platform: ${LEGACY_EVAL% } -- not part of the story (Appendix C); after the show ./uninstall.sh removes them with their runs, then ./install.sh"
+fi
 eval_preruns
 
 step "Dry fire ($FIRE_CLAIM via tools/fire-claim.js, warms the agents)"
@@ -612,36 +661,19 @@ else
   fi
 fi
 
-else
-
-step "Dashboard + eval pre-runs"
-check_dashboards
-eval_preruns
-
-fi
-
 echo ""
 echo "== Manual reminders (not automatable)"
-if [ "$PROFILE" = "triage" ]; then
-  echo "   - Window A (sam_admin), tabs in order: Agent Management,"
-  echo "     Workflows > Claim Triage, Claims Intake Liaison scrolled to"
-  echo "     the allow list, Models, Grafana 'SAM Claims Governance',"
-  echo "     Evaluations > Reports > ins-guardrails."
-  echo "   - Window B (power_user, separate browser profile): Activities."
-  echo "   - Window C: cockpit/index.html, always visible, LED green."
-  echo "   - Links: ./demo-links.sh   Script: talk-track.md, Stage rules."
-  echo "   - The dry fire warmed the agents; RESET the cockpit before"
-  echo "     going live (the stage claim is CLM-0913-00001)."
-  echo "   - Nothing runs live in Evaluations: beat 11 shows the"
-  echo "     finished ins-guardrails report. Do not start a run on stage."
-else
-  echo "   - Windows: A sam_admin (Agent Management), B power_user"
-  echo "     (Activities), C cockpit/extended.html (LED green), D Grafana."
-  echo "   - Links: ./demo-links.sh"
-  echo "   - Rehearsed break-glass buttons? RESET the cockpit after."
-  echo "   - Builder Test tab works since 2.348.22 -- warm it up once after"
-  echo "     any str restart (first test plan ~90 s, then ~4 s)."
-fi
+echo "   - Window A (sam_admin), tabs in order: Agent Management,"
+echo "     Workflows > Claim Triage, Claims Intake Liaison scrolled to"
+echo "     the allow list, Models, Grafana 'SAM Claims Governance',"
+echo "     Evaluations > Reports > ins-guardrails."
+echo "   - Window B (power_user, separate browser profile): Activities."
+echo "   - Window C: cockpit/index.html, always visible, LED green."
+echo "   - Links: ./demo-links.sh   Script: talk-track.md, Stage rules."
+echo "   - The dry fire warmed the agents; RESET the cockpit before"
+echo "     going live (the stage claim is CLM-0913-00001)."
+echo "   - Nothing runs live in Evaluations: beat 11 shows the"
+echo "     finished ins-guardrails report. Do not start a run on stage."
 echo ""
 echo "== Result: $PASS ok, $FIXED fixed, $WARNED warned, $FAILED failed"
 if [ "$FAILED" -eq 0 ]; then

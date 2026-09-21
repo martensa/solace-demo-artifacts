@@ -34,8 +34,9 @@
 --
 --   c range        line      severity  status                  partner
 --   00001..00100   MOTOR     MINOR     RECEIVED                -
---                  (00001..00040 = Fast Lane clerk samples, est 180..950;
---                   00001..00008 = cockpit FNOL sample anchor: pinned
+--                  (00001..00040 = Fast Lane samples, est 180..950;
+--                   00001..00008 = FNOL sample anchors (cockpit 00001,
+--                   fire-claim.js 00002): pinned
 --                   policy, channel, estimate, reported_at -- section 6)
 --   00101..04500   MOTOR     MINOR     CONFIRMED               -
 --   04501..04727   MOTOR     MINOR     AWAITING_WORKSHOP_SLOT  P-BRAENDLE

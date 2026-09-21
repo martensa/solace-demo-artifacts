@@ -24,7 +24,7 @@
 //   AND roof deformed AND > 150 dents), 06001..06063 called a
 //   second time on Monday morning, 06001..06004 filed a formal
 //   complaint during that second call.
-// - Fraud patterns (act 2): 08101..08119 photos with EXIF 6-9 days
+// - Fraud anchors: 08101..08119 photos with EXIF 6-9 days
 //   BEFORE the cell (08103 = the scanner-mismatch claim, "about 60
 //   dents" claimed, 14 scanned); 08201..08211 (APP) and
 //   08301..08311 (VOICE_AGENT) share a VIN pairwise with dent
@@ -261,11 +261,13 @@ function customerRef(i) {
 }
 
 // ---- Fast Lane sample anchors CLM-0913-00001..00008 --------------
-// The cockpit publishes these eight MINOR claims as fnol events and
-// the Fast Lane Clerk confirms them from Postgres, so channel,
-// intake time (= reported_at), place, vehicle and customer are a
-// cross-store contract: identical values in acme_insurance
-// (ins_claims / ins_policies / ins_customers) and cockpit/index.html.
+// Pinned MINOR claims (the cockpit fires 00001, tools/fire-claim.js
+// the dry-fire claim 00002; all eight were published by the cockpit
+// of the former extended profile), so channel, intake time
+// (= reported_at), place, vehicle and customer are a cross-store
+// contract: identical values in acme_insurance (ins_claims /
+// ins_policies / ins_customers), cockpit/index.html and
+// tools/fire-claim.js.
 // Postgres estimates for the record: 640 / 420 / 890 / 310 / 760 /
 // 540 / 950 / 180 EUR (all < 1,000 -> MINOR, 5-25 dents, no glass,
 // drivable). 02-anchors.js re-asserts the same documents (same

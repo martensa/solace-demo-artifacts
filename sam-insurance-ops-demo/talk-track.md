@@ -1,12 +1,13 @@
-# Claim Triage -- Live Demo Script (default profile)
+# Claim Triage -- Live Demo Script
 
-> **Version 2.0, 2026-09-16.** One scenario: a claim comes in after a hail
+> **Version 2.1, 2026-09-21.** One scenario: a claim comes in after a hail
 > storm, one workflow decides, a human signs. Shown twice, with the same agents
 > and opposite outcomes. 16 minutes with questions, optional depth to 20. Click
 > paths, names and expected cards follow the platform as built and measured on
 > 2026-09-16 (SAM 2.225.14). Re-checked on SAM 2.348.22 (str 1.64.0) on
 > 2026-09-21: install and uninstall, the dry fire (APPROVE in 27-28 s) and the
-> evaluation runs; the full script was not re-rehearsed there.
+> evaluation runs; the full script was not re-rehearsed there. Since
+> 2026-09-21 this is the demo's only script: the extended profile was removed.
 
 **The line you say verbatim three times** (frame, after the HOLD, close): *"Keep
 your agents where they are; govern them from here."*
@@ -617,11 +618,12 @@ Keep these for a technical follow-up session.
 
 What `./preflight.sh` covers (and fixes where it can): login and API, cluster
 pods, a one-token probe of every model upstream, the four platform agents, both
-connectors, the workflow and the entrypoint, the liaison's deployed allow list,
-the external agent's pod and card, the Postgres, MongoDB and Qdrant data, the
-MCP server, the broker WebSocket the cockpit uses, the dashboards and their
-platform-DB grant, Tempo traces, the evaluation pre-runs, and a dry fire of
-CLM-0913-00002. The manual checks after it cover what it does not.
+connectors, the workflow and the entrypoint, leftovers of the former extended
+profile (deleted), the liaison's deployed allow list, the external agent's pod
+and card, the Postgres, MongoDB and Qdrant data, the MCP server, the broker
+WebSocket the cockpit uses, the dashboard and its platform-DB grant, Tempo
+traces, the evaluation pre-runs, and a dry fire of CLM-0913-00002. The manual
+checks after it cover what it does not.
 
 ### The day before
 
@@ -639,8 +641,8 @@ CLM-0913-00002. The manual checks after it cover what it does not.
   Builder beat, no "8 agents", no GDV, no "all passing". The speaker notes of
   slide 3 are rewritten (presenter view shows them) and label every run time
   and evaluation score with its SAM version. Any check fails: no deck (R11).
-- **A3** No profile switch and no re-install on show day: `./install.sh`
-  redeploys the two experts on every run (Appendix E).
+- **A3** No re-install on show day: `./install.sh` redeploys the two experts on
+  every run (Appendix E).
 
 ### 45 minutes before
 
@@ -667,20 +669,25 @@ CLM-0913-00002. The manual checks after it cover what it does not.
 ### 30 minutes before -- what preflight does not check
 
 - **A6** Connectors page: exactly **Acme Insurance DB** and **Acme Claims
-  Knowledge**. If fnol-intake, scanner-results or weather-cells are listed, they
-  are leftovers of the extended profile. Delete them on the Connectors page
-  before the show. If you cannot, skip D3 and drop the last paragraph of beat
-  9 -- otherwise the pitch "only the outside agent reaches the intake store" is
-  false on screen.
+  Knowledge**. fnol-intake, scanner-results and weather-cells are leftovers of
+  the former extended profile (removed 2026-09-21) on a lab installed from an
+  older checkout; `./preflight.sh` deletes them (step 4), `./uninstall.sh` too.
+  If one is still listed, delete it on the Connectors page before the show
+  (after the Storm Intake Analyst that binds it, A7). If you cannot, skip D3 and
+  drop the last paragraph of beat 9 -- otherwise the pitch "only the outside
+  agent reaches the intake store" is false on screen.
 - **A7** Agent Management: the four claims agents, the built-in Orchestrator,
   Builder and Activity Monitor (the monitor is new in 2.348.22; not part of the
   story, do not point at it), plus **Claims Intake Analyst** as discovered. No
-  Fast Lane Clerk, no reporters, no Storm Intake Analyst. Other discovered
-  agents of the shared lab mesh may be listed too (Web Research Agent, Web
-  Scraper Agent, Markdown Creator, Mermaid Diagram Generator). Scroll or filter
-  so the Claims Intake Analyst row is on screen together with the four claims
-  agents, and know the answer in Appendix C. That row is also your ten-second
-  health tell on stage: no row, no outside agent (R4).
+  Fast Lane Clerk, no reporters, no Storm Readiness Planner, no Storm Intake
+  Analyst: those are leftovers of the former extended profile, which
+  `./preflight.sh` deletes (step 4); if one is still listed, delete it in Agent
+  Management, before the A6 connectors it binds. Other discovered agents of the
+  shared lab mesh may be listed too (Web Research Agent, Web Scraper Agent,
+  Markdown Creator, Mermaid Diagram Generator). Scroll or filter so the Claims
+  Intake Analyst row is on screen together with the four claims agents, and know
+  the answer in Appendix C. That row is also your ten-second health tell on
+  stage: no row, no outside agent (R4).
 - **A8** Tab 3: the liaison's configuration shows `allowList` with the single
   entry `ClaimsIntakeAnalyst`, scrolled into view. The spoken line "an agent
   without this line has no way to call another agent at all" (beat 5, Appendix
@@ -694,9 +701,12 @@ CLM-0913-00002. The manual checks after it cover what it does not.
   Factuality 4 of 5): once the judge returned broken JSON on the BaFin row, once
   the expert on `fast` wrongly tied a waived deductible to the Fast Lane
   confirmation. A re-run can read 10 of 10 or 9 of 10 -- use the beat 11
-  fallback line if it stays at 9. The Reports list also shows two experiments of
-  the extended profile and the platform's seeded "Sample Experiment" (target
-  Orchestrator); have the answer in Appendix C ready.
+  fallback line if it stays at 9. The Reports list also shows the platform's
+  seeded "Sample Experiment" (target Orchestrator). On a lab installed from an
+  older checkout it still lists ins-ops-quality and ins-ops-model-benchmark,
+  retired with the former extended profile: `./preflight.sh` warns about them,
+  and `./uninstall.sh` removes them with their runs -- after the show, not on
+  show day (A3). Have the answer in Appendix C ready.
 - **A10** Tab 5: the governance dashboard loads; the Tempo panel shows the dry
   fire's trace; the platform-DB tables (roster, RBAC incl. **IdP group ->
   role**, latest runs) are filled. Widen the time range if the dry fire is
@@ -914,13 +924,14 @@ continuous.
 **Why does the evaluation list show a weaker run, and more experiments?**
 
 (The weaker run existed only on the 2.225.14 platform database; on 2.348.22
-the question is only about the extra experiments -- answer with the last
-sentence.)
+the question is only about the extra experiment -- answer with the last
+sentence. If ins-ops-quality and ins-ops-model-benchmark are still listed (A9),
+add: "-- and two tests from an earlier, broader version of this demo.")
 
 > "That run is from before we changed the scorer. A word-overlap score marked
 > correct decisions down for phrasing them differently; the judge scored the
 > same decisions as correct. We changed how we measure, not the agent. The other
-> experiments belong to a broader version of this demo."
+> one is the platform's own sample experiment."
 
 **How long do you keep the audit trail?**
 
@@ -989,17 +1000,22 @@ model aliases, the Registered agents value.
   the token and cost panels, or the platform database. The platform sees its
   card, every A2A hop with user identity and latency (Activities, Tempo, Loki),
   and the pod's plain-text log (row 3). Do not promise more.
-- **Leftover MongoDB connectors.** An extended install creates fnol-intake,
-  scanner-results and weather-cells. `install.sh` removes them for this profile
-  -- the claim that only the outside agent reads the intake store has to survive
-  a click on the Connectors page -- but `preflight.sh` does not flag them if
-  something puts them back (A6).
-- **Evaluations list more than three experiments.** ins-ops-quality and
-  ins-ops-model-benchmark belong to the extended profile, and an early
-  ins-triage-decision run scored with Response Match (1 of 3, average 0.515) can
-  sit in Reports (on the 2.225.14 platform database; the one rebuilt for
-  2.348.22 starts without it). The experiment now uses LLM Judge plus Closed
-  QA: Response Match punished correct JSON decisions for their wording.
+- **Leftovers of the former extended profile.** A lab that once ran it (removed
+  2026-09-21) can still carry the MongoDB connectors fnol-intake,
+  scanner-results and weather-cells, its agents, workflows and the
+  `claims-events` entrypoint, which would answer the same FNOL events.
+  `install.sh` and `preflight.sh` (step 4) delete them, `uninstall.sh` too --
+  the claim that only the outside agent reads the intake store has to survive a
+  click on the Connectors page (A6).
+- **Evaluations list more than three experiments.** The platform seeds a
+  "Sample Experiment" (target Orchestrator), and a lab installed from an older
+  checkout still lists ins-ops-quality and ins-ops-model-benchmark, retired with
+  the extended profile (`sam config apply` never prunes; `preflight.sh` warns,
+  `uninstall.sh` removes them with their runs). An early ins-triage-decision
+  run scored with Response Match (1 of 3, average 0.515) can sit in Reports (on
+  the 2.225.14 platform database; the one rebuilt for 2.348.22 starts without
+  it). The experiment now uses LLM Judge plus Closed QA: Response Match punished
+  correct JSON decisions for their wording.
 - **The Models page lists more aliases** than the demo uses. Point at `fast`;
   never count them.
 - **Other discovered agents** of the shared lab mesh can appear in Agent
@@ -1094,8 +1110,8 @@ load_env ../agent-mesh-deployment && resolve_sam_cli && sam_auth_token
   update. `preflight.sh` reinstalls only when a resource is missing. Never
   re-install close to the show; never show `sam config plan` on stage.
 - **Expert tier and database login come from the environment.** The two
-  experts bind `${INS_EXPERT_TIER, fast}`; `install.sh` exports `fast` for this
-  profile and `general` for `--extended`, and an exported value wins
+  experts bind `${INS_EXPERT_TIER, fast}`; `install.sh` exports `fast`, the
+  tier every agent of this demo runs on, and an exported value wins
   (`INS_EXPERT_TIER=... ./install.sh`, likewise `INS_DB_USERNAME` /
   `INS_DB_PASSWORD`). The defaults sit inline, not in a manifest `variables:`
   block: on CLI 2.348.22 a default there beats the environment.
@@ -1103,10 +1119,6 @@ load_env ../agent-mesh-deployment && resolve_sam_cli && sam_auth_token
   manifest"; on 2.348.22 the agent runtime re-registers and retries on its own,
   so the call succeeds about a second later. No action needed, but the first
   dry fire after a restart can be a little slower.
-- **Profiles are mutually exclusive.** Both entrypoints subscribe to
-  `acmeins/claims/fnol/received/...`. Switch with `./uninstall.sh --keep-core`,
-  then `./install.sh --extended`; never on show day. The other profile's script
-  is `talk-track-extended.md`.
 - **The outside agent's cluster prerequisites.** Its Deployment needs the
   namespace `sam-solace-lab-agents` and the Secret `sam-shared-secret` (broker,
   model endpoint and key), both from the companion solace-sam-artifacts

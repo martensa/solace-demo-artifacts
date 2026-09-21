@@ -2,26 +2,32 @@
 set -euo pipefail
 
 # =============================================================
-# uninstall.sh -- remove the Acme Insurance demo (BOTH profiles)
+# uninstall.sh -- remove the Acme Insurance claim triage demo
 # from the platform, leaving the SAM infrastructure in
 # agent-mesh-deployment (models, RBAC, developer-mcp,
 # observability) untouched (idempotent; absent resources are
 # skipped silently).
 # =============================================================
-# Removes the TRIAGE overlay (claims-triage entrypoint,
-# claim-triage workflow, the Claims Intake Liaison and the Claims
-# Triage Decision agent, the external Claims Intake Analyst in ns
+# Removes the demo overlay (claims-triage entrypoint, claim-triage
+# workflow, the Claims Intake Liaison and the Claims Triage
+# Decision agent, the external Claims Intake Analyst in ns
 # sam-solace-lab-agents via `kubectl delete -f external-agent/`,
-# the rendered entrypoint dir triage/.rendered), the EXTENDED
-# overlay (claims-events entrypoint, stalled-cohort-report +
-# storm-readiness + cross-channel-fraud-report workflows, Claims
+# the rendered entrypoint dir triage/.rendered), the insurance
+# CORE (the two Acme experts, their connectors and skills), the
+# eval experiments + datasets (INCLUDING their run history!), the
+# sam_admin evaluation watchlist install.sh set, and the
+# governance dashboard.
+# LEGACY (removed extended profile, 2026-09-21; left by installs
+# from older checkouts, no-op when absent): the claims-events
+# entrypoint, the stalled-cohort-report + storm-readiness +
+# cross-channel-fraud-report workflows, the agents Claims
 # Incident Reporter, Storm Readiness Planner, Fraud Case
-# Reporter, Fast Lane Clerk, Storm Intake Analyst +
-# fnol-intake/weather-cells/scanner-results connectors), the
-# insurance CORE (the two Acme experts, their connectors and
-# skills), eval experiments + datasets of both profiles
-# (INCLUDING their run history!), the sam_admin evaluation
-# watchlist install.sh set, and both demo dashboards.
+# Reporter, Fast Lane Clerk, Storm Intake Analyst (also under its
+# Builder name StormIntakeAnalyst), the fnol-intake/weather-cells/
+# scanner-results connectors, the experiments ins-ops-quality +
+# ins-ops-model-benchmark (with their runs) and the dataset
+# ins-ops-questions, and the dashboard-sam-insurance-ops
+# ConfigMap.
 # The demo mongo container is removed INCLUDING its volume: the
 # data volume is anonymous and re-seeded from mongodb/seed on
 # every fresh `install.sh` anyway, so keeping it would only leave
@@ -51,8 +57,8 @@ set -euo pipefail
 # because the header above promises to remove the run history and
 # leaving the objects behind would make that promise half true.
 #
-#   ./uninstall.sh               # remove both overlays + insurance core
-#   ./uninstall.sh --keep-core   # overlays only (fast demo switch)
+#   ./uninstall.sh               # remove the demo + insurance core
+#   ./uninstall.sh --keep-core   # keep core + data stores (evals go)
 #   ./uninstall.sh --dry-run     # show what would be removed
 #   ./uninstall.sh --purge-data  # also DROP the acme_insurance DB
 # =============================================================
@@ -63,6 +69,8 @@ AMD="$REPO_DIR/agent-mesh-deployment"
 SAM_URL="https://sam.solace.lab"
 EXT_DIR="$SCRIPT_DIR/external-agent"
 RENDERED="$SCRIPT_DIR/triage/.rendered"
+# dashboard-sam-insurance-ops: legacy, the dashboard of the removed
+# extended profile (older installs of either profile applied it).
 DASHBOARD_CMS="dashboard-sam-claims-governance dashboard-sam-insurance-ops"
 
 DRY=0; KEEP_CORE=0; PURGE=0
@@ -93,7 +101,7 @@ api() {
   [ "$method" = GET ] && case "$path" in *\?*) ;; *) path="$path?pageSize=100" ;; esac
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
-    -o /tmp/uninstall-api-body.json -w "%{http_code}")
+    -o /tmp/uninstall-api-body.json -w "%{http_code}") || API_CODE=000
   cat /tmp/uninstall-api-body.json 2>/dev/null || true
 }
 api_json() {  # api_json METHOD PATH JSON -> body on stdout, code in API_CODE
@@ -101,7 +109,7 @@ api_json() {  # api_json METHOD PATH JSON -> body on stdout, code in API_CODE
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
     -H "Content-Type: application/json" -d "$body" \
-    -o /tmp/uninstall-api-body.json -w "%{http_code}")
+    -o /tmp/uninstall-api-body.json -w "%{http_code}") || API_CODE=000
   cat /tmp/uninstall-api-body.json 2>/dev/null || true
 }
 
@@ -121,7 +129,10 @@ remove() {  # remove LABEL PATH NAME
     echo "   $label '$name': WOULD delete ($id)"
   else
     api DELETE "$path/$id" >/dev/null
-    echo "   $label '$name': deleted (HTTP $API_CODE)"
+    case "$API_CODE" in
+      2??) echo "   $label '$name': deleted (HTTP $API_CODE)" ;;
+      *)   echo "   WARNING: $label '$name': DELETE failed (HTTP $API_CODE)" ;;
+    esac
   fi
 }
 
@@ -133,12 +144,13 @@ if [ "${API_CODE:-}" != "200" ]; then
 fi
 
 # Order: entrypoints first (stops event intake), then workflows,
-# then agents, then connectors -- for both profiles.
+# then agents, then connectors. claims-events = the entrypoint of
+# the removed extended profile (legacy, older checkouts).
 echo "== Entrypoints (stop event intake first)"
 remove "entrypoint" /api/v1/platform/entrypoints      "claims-triage"
 remove "entrypoint" /api/v1/platform/entrypoints      "claims-events"
 
-echo "== Triage overlay (triage/ + external agent)"
+echo "== Demo overlay (triage/ + external agent)"
 remove "workflow"   /api/v1/platform/workflows     "claim-triage"
 # Both triage agents are platform records (triage/manifest.yaml):
 # the liaison is the only agent allowed to delegate to the external
@@ -160,7 +172,11 @@ else
   echo "   triage/.rendered/: not present"
 fi
 
-echo "== Extended overlay (mesh/ + fallback/)"
+# Legacy: what an install of the removed extended profile (older
+# checkouts) left behind. Same names as install.sh step 6 and
+# preflight.sh step 4; the Storm Intake Analyst goes before the
+# three connectors it binds.
+echo "== Legacy (removed extended profile; no-op when absent)"
 remove "workflow"   /api/v1/platform/workflows     "stalled-cohort-report"
 remove "workflow"   /api/v1/platform/workflows     "storm-readiness"
 remove "workflow"   /api/v1/platform/workflows     "cross-channel-fraud-report"
@@ -169,6 +185,7 @@ remove "agent"      /api/v1/platform/agents        "Storm Readiness Planner"
 remove "agent"      /api/v1/platform/agents        "Fraud Case Reporter"
 remove "agent"      /api/v1/platform/agents        "Fast Lane Clerk"
 remove "agent"      /api/v1/platform/agents        "Storm Intake Analyst"
+remove "agent"      /api/v1/platform/agents        "StormIntakeAnalyst"
 remove "connector"  /api/v1/platform/connectors    "fnol-intake"
 remove "connector"  /api/v1/platform/connectors    "weather-cells"
 remove "connector"  /api/v1/platform/connectors    "scanner-results"
@@ -189,6 +206,10 @@ echo "== Evaluation (deletes run history too!)"
 # Collect the run ids BEFORE the experiments go: deleting an experiment
 # cascades its eval_runs rows away, and without the ids the artifacts
 # those runs wrote in the object store can no longer be attributed.
+# ins-ops-quality, ins-ops-model-benchmark and the dataset
+# ins-ops-questions are LEGACY (retired with the extended profile;
+# `sam config apply` never prunes, so older installs still carry
+# them) -- install.sh leaves them to this script.
 EVAL_RUN_IDS=""
 for exp in ins-ops-quality ins-ops-model-benchmark ins-claims-rules \
            ins-triage-decision ins-guardrails; do
@@ -265,7 +286,7 @@ else
   echo "   eval run artifacts: removed $(echo "$EVAL_RUN_IDS" | wc -l | tr -d ' ') run dir(s) from SeaweedFS"
 fi
 
-echo "== Demo dashboards"
+echo "== Demo dashboards (incl. legacy)"
 for cm in $DASHBOARD_CMS; do
   if [ "$DRY" -eq 1 ]; then
     kubectl get cm -n sam-solace-lab "$cm" >/dev/null 2>&1 \
@@ -277,13 +298,14 @@ for cm in $DASHBOARD_CMS; do
   fi
 done
 
-# The data stacks belong to the CORE: --keep-core is the fast switch
-# between the two profiles, and both profiles read the same Mongo store
-# and the same knowledge base. Tearing them down there would leave the
-# kept core connectors pointing at an empty Qdrant, and make the next
-# install re-download the embedding model (up to 6 minutes).
+# The data stacks stay with the CORE under --keep-core (fast
+# re-install): the kept Acme Claims Knowledge connector reads the
+# knowledge base -- tearing it down would leave it on an empty Qdrant
+# and make the next install re-download the embedding model (up to 6
+# minutes) -- and the intake store (read only by the external
+# analyst) stays alongside so the next install.sh finds it seeded.
 if [ "$KEEP_CORE" -eq 1 ]; then
-  echo "== MongoDB + knowledge base: kept (--keep-core; the core reads them)"
+  echo "== MongoDB + knowledge base: kept (--keep-core; the next install.sh finds both seeded)"
 else
   echo "== MongoDB (container + anonymous volume)"
   if [ "$DRY" -eq 1 ]; then
@@ -321,9 +343,10 @@ echo ""
 if [ "$DRY" -eq 1 ]; then
   echo "Dry run - nothing was changed."
 elif [ "$KEEP_CORE" -eq 1 ]; then
-  echo "Demo overlays removed (triage + extended). Insurance core, models,"
-  echo "RBAC and the platform infrastructure stay."
+  echo "Demo overlay, evals (incl. run history) and dashboard removed."
+  echo "Insurance core, data stores, models, RBAC and the platform"
+  echo "infrastructure stay."
 else
-  echo "Demo removed (both overlays + insurance core). Models, RBAC,"
+  echo "Demo removed (overlay + insurance core). Models, RBAC,"
   echo "developer-mcp and the platform infrastructure stay."
 fi

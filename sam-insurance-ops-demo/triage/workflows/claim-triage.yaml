@@ -1,5 +1,5 @@
-# Claim triage workflow -- the ONE scenario of the default demo
-# profile. An FNOL event (published by the cockpit or by
+# Claim triage workflow -- the ONE scenario of the demo. An FNOL
+# event (published by the cockpit or by
 # tools/fire-claim.js, routed here by the claims-triage event-mesh
 # entrypoint) fans out to three specialists IN PARALLEL -- the
 # policy and claims side (Insurance DB), the intake side (the
@@ -272,7 +272,7 @@ spec:
       # instruction only, NO input: the raw event is the input file.
       # The reference SQL is given verbatim (verified 2026-09-10:
       # 1-6 ms and 8-32 ms on the seeded acme_insurance) so the
-      # expert (fast tier in this profile) does not explore the
+      # expert (fast tier in this demo) does not explore the
       # schema first.
       - id: policy
         type: agent
@@ -493,7 +493,7 @@ spec:
       # instruction only, NO input. At most three searches with
       # top_k 3 and no get_knowledge_document: the expert otherwise
       # reads six documents in full (~40 s, seen on the general
-      # tier; this profile runs it on fast).
+      # tier; this demo runs it on fast).
       - id: rules
         type: agent
         agent_name: Acme Claims Knowledge Expert

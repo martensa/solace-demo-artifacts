@@ -34,10 +34,11 @@
 # events published before that are LOST (no queue yet) --
 # install.sh still waits for the log line as a guard.
 #
-# Mutually exclusive with ../../mesh/entrypoints/claims-events.yaml
-# (the extended profile): both subscribe to acmeins/claims/fnol/
-# received and one FNOL must trigger exactly one flow; install.sh
-# removes the other entrypoint when switching profiles.
+# One FNOL must trigger exactly one flow: a leftover claims-events
+# entrypoint of the removed extended profile (installs from an
+# older checkout) subscribes to acmeins/claims/fnol/received/minor/>
+# as well -- install.sh deletes it before this one is applied, and
+# preflight.sh deletes it if it shows up again.
 #
 # The broker connection mirrors the SAM deployment values
 # (external broker solace-1, VPN sam). qos 1 + on_completion: the

@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # =============================================================
-# install.sh -- layer the Acme Insurance demo onto a running
+# install.sh -- layer the Acme Insurance claim triage demo
+# ("Claim Triage in 30 Seconds") onto a running
 # agent-mesh-deployment (idempotent; safe to re-run).
 # =============================================================
 # Prerequisites (from agent-mesh-deployment, SAM 2.348.22):
@@ -13,16 +14,16 @@ set -euo pipefail
 #     ./scripts/provision.sh --login
 #   sam auth login solace-lab --url https://sam.solace.lab
 #
-# Two PROFILES share the same core (steps 1-4) and differ in the
-# overlay. Only one of them is on the platform at a time: both
-# entrypoints subscribe to acmeins/claims/fnol/received/>, so the
-# other profile's entrypoint is removed on install (mutual
-# exclusion, both ways).
+# The former "extended" profile (the event-driven claims
+# operations demo, `--extended` / `--with-analyst`) was removed on
+# 2026-09-21. Step 6 still removes what an install from an older
+# checkout left on the platform, and step 8 its dashboard.
 #
-# Common steps (both profiles):
+# Steps:
 #   1. Host data stores: postgres+pgadmin (acme_insurance DB
 #      seeded from postgres/), MongoDB acme-claims-mongo (port
-#      27017) incl. first-run seed
+#      27017, the intake store the external analyst reads) incl.
+#      first-run seed
 #   2. Knowledge base: Qdrant + the Acme Claims Knowledge MCP
 #      server (qdrant/, built locally, port 8765) incl. the
 #      one-shot corpus seed (first run downloads the embedding
@@ -32,38 +33,32 @@ set -euo pipefail
 #      `google gemini`, skipped with a warning without its key).
 #      They come before step 4 because the agents bind to them.
 #   4. Insurance core package (core/: Insurance DB + Claims
-#      Knowledge connectors, schema/guide skills, query experts;
-#      expert model tier: fast for triage, general for --extended)
-#
-# TRIAGE profile (default, "Claim Triage in 30 Seconds"):
+#      Knowledge connectors, schema/guide skills, query experts on
+#      the fast tier; INS_EXPERT_TIER=<alias> ./install.sh
+#      overrides)
 #   5. External agent: external-agent/ (Claims Intake Analyst, a
 #      v1-SDK agent in ns sam-solace-lab-agents, discovered over
 #      the broker) + wait for its agent card
-#   6. Triage overlay (triage/): the Claims Intake Liaison and
-#      Claims Triage Decision agents plus the claim-triage workflow
-#      (its intake node targets the liaison, whose allow list names
-#      exactly one peer -- the external analyst) via
-#      `sam config apply`, then the claims-triage entrypoint
-#      rendered from a template (the workflow RUNTIME name is
-#      only known after the workflow exists) + receiver wait
-#   7. Eval package (eval/: all datasets + experiments) and the
-#      sam_admin evaluation watchlist
+#   6. Legacy cleanup of the removed extended profile (the
+#      claims-events entrypoint plus its agents, workflows and
+#      MongoDB connectors, left by an install from an older
+#      checkout; no-op otherwise), then the triage overlay
+#      (triage/): the Claims Intake Liaison and Claims Triage
+#      Decision agents plus the claim-triage workflow (its intake
+#      node targets the liaison, whose allow list names exactly one
+#      peer -- the external analyst) via `sam config apply`, then
+#      the claims-triage entrypoint rendered from a template (the
+#      workflow RUNTIME name is only known after the workflow
+#      exists) + receiver wait
+#   7. Eval package (eval/: the three test sets ins-claims-rules,
+#      ins-guardrails, ins-triage-decision + their datasets) and
+#      the sam_admin evaluation watchlist
 #   8. Dashboards: grafana_ro grant + platform-DB datasource
-#      (agent-mesh-deployment) and both Grafana ConfigMaps
+#      (agent-mesh-deployment) and the governance dashboard
+#      ConfigMap (the retired dashboard-sam-insurance-ops ConfigMap
+#      of the extended profile is deleted)
 #
-# EXTENDED profile (--extended, the event-driven acts):
-#   5. Demo overlay (mesh/): Fast Lane Clerk, the three reporter/
-#      planner agents, the three workflows and the claims-events
-#      entrypoint -- the Storm Intake Analyst is created first
-#      from fallback/ (workflow xref needs it), then removed
-#      again unless --with-analyst (live Builder demo!)
-#   6. Eval package (eval/, shared with the triage profile; its
-#      triage-only ins-triage-decision experiment warns here)
-#   7. Demo dashboard (Grafana ConfigMap)
-#
-#   ./install.sh                             # triage profile (default)
-#   ./install.sh --extended                  # extended profile (old flow)
-#   ./install.sh --extended --with-analyst   # + keep Storm Intake Analyst
+#   ./install.sh    # the claim triage demo (no flags)
 # =============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -79,21 +74,21 @@ EXT_CARD="ClaimsIntakeAnalyst"
 SAM_NS="sam-solace-lab"
 GWE_DEPLOY="agent-mesh-solace-agent-mesh-gwe"
 
-PROFILE=triage; WITH_ANALYST=0
+STEPS=8
 for arg in "$@"; do
   case "$arg" in
-    --extended)     PROFILE=extended ;;
-    --with-analyst) WITH_ANALYST=1 ;;
-    -h|--help)  grep '^#   \./' "$0" | sed 's/^#   //'; exit 0 ;;
-    *) echo "Unknown argument: $arg" >&2; exit 1 ;;
+    -h|--help)  grep '^#   \./install\.sh' "$0" | sed 's/^#   //'; exit 0 ;;
+    --extended|--with-analyst)
+      echo "ERROR: $arg: the extended profile was removed on 2026-09-21;" >&2
+      echo "  ./install.sh installs the claim triage demo." >&2
+      exit 1 ;;
+    *)
+      echo "ERROR: unknown argument: $arg (install.sh takes no flags)." >&2
+      echo "  The extended profile was removed on 2026-09-21;" >&2
+      echo "  ./install.sh installs the claim triage demo." >&2
+      exit 1 ;;
   esac
 done
-if [ "$WITH_ANALYST" -eq 1 ] && [ "$PROFILE" != "extended" ]; then
-  echo "ERROR: --with-analyst only applies to the extended profile:" >&2
-  echo "  ./install.sh --extended --with-analyst" >&2
-  exit 1
-fi
-if [ "$PROFILE" = "triage" ]; then STEPS=8; else STEPS=7; fi
 
 # --- Shared helpers (sam CLI + auth token) --------------------------
 # shellcheck source=../agent-mesh-deployment/scripts/lib/common.sh
@@ -113,7 +108,7 @@ api() {  # api METHOD PATH -> body on stdout, code in API_CODE
   [ "$method" = GET ] && case "$path" in *\?*) ;; *) path="$path?pageSize=100" ;; esac
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
-    -o /tmp/install-api-body.json -w "%{http_code}")
+    -o /tmp/install-api-body.json -w "%{http_code}") || API_CODE=000
   cat /tmp/install-api-body.json 2>/dev/null || true
 }
 api_json() {  # api_json METHOD PATH JSON -> body on stdout, code in API_CODE
@@ -121,7 +116,7 @@ api_json() {  # api_json METHOD PATH JSON -> body on stdout, code in API_CODE
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
     -H "Content-Type: application/json" -d "$body" \
-    -o /tmp/install-api-body.json -w "%{http_code}")
+    -o /tmp/install-api-body.json -w "%{http_code}") || API_CODE=000
   cat /tmp/install-api-body.json 2>/dev/null || true
 }
 id_of() {  # id_of PATH NAME -> platform id of the named resource ("" if absent)
@@ -146,7 +141,11 @@ remove_entrypoint() {  # remove_entrypoint NAME REASON... (no-op if absent)
   [ -z "$id" ] && return 0
   echo "   removing entrypoint '$name' -- $*"
   api DELETE "/api/v1/platform/entrypoints/$id" >/dev/null
-  echo "   '$name' deleted (HTTP $API_CODE)"
+  case "$API_CODE" in
+    2??) echo "   '$name' deleted (HTTP $API_CODE)" ;;
+    *)   echo "   WARNING: '$name': DELETE returned HTTP $API_CODE -- still on" \
+              "the platform (./preflight.sh step 4 retries it)" ;;
+  esac
 }
 
 remove_resource() {  # remove_resource LABEL PATH NAME (no-op if absent)
@@ -154,7 +153,11 @@ remove_resource() {  # remove_resource LABEL PATH NAME (no-op if absent)
   id=$(id_of "$path" "$name")
   [ -z "$id" ] && return 0
   api DELETE "$path/$id" >/dev/null
-  echo "   $label '$name' removed (HTTP $API_CODE)"
+  case "$API_CODE" in
+    2??) echo "   $label '$name' removed (HTTP $API_CODE)" ;;
+    *)   echo "   WARNING: $label '$name': DELETE returned HTTP $API_CODE --" \
+              "still on the platform (./preflight.sh step 4 retries it)" ;;
+  esac
 }
 
 api GET /api/v1/platform/agents >/dev/null
@@ -183,7 +186,6 @@ for pair in "shop-events:sam-retail-ops-demo" \
   fi
 done
 
-echo "Profile: $PROFILE"
 echo "== 1/$STEPS Host data stores"
 for c in postgres pgadmin; do
   if [ "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" = "true" ]; then
@@ -255,14 +257,14 @@ fi
 
 # Model tier of the two core experts, exported as INS_EXPERT_TIER
 # (the core agents default it inline to "fast"; see core/manifest.yaml
-# for why it is no manifest variable). The triage profile needs
-# the policy and rules nodes back within seconds -> fast (Haiku 4.5;
-# the model benchmark shows it matching general on the demo
-# questions); the extended profile's long-form cohort analyses stay
-# on general (Opus 4.8). An explicit INS_EXPERT_TIER=... ./install.sh
-# still wins in both profiles. Re-running re-applies the same value.
+# for why it is no manifest variable). The claim-triage workflow
+# needs the policy and rules nodes back within seconds -> fast
+# (Haiku 4.5; a three-model benchmark on the demo questions, retired
+# with the extended profile, measured it matching general). An
+# explicit INS_EXPERT_TIER=... ./install.sh wins. Re-running
+# re-applies the value (and moves experts that a legacy extended
+# install left on general back to fast).
 EXPERT_TIER="${INS_EXPERT_TIER:-fast}"
-[ "$PROFILE" = "extended" ] && EXPERT_TIER="${INS_EXPERT_TIER:-general}"
 # The model aliases come FIRST: the core experts and the triage agents
 # bind to an alias (fast / general) by name, and `sam config plan` does
 # not validate that the alias exists -- on a fresh platform the agents
@@ -277,11 +279,6 @@ echo "== 4/$STEPS Insurance core (core/, expert tier: $EXPERT_TIER)"
 # as "update" on every run (see the NOTE in core/agents/*.yaml).
 export INS_EXPERT_TIER="$EXPERT_TIER"
 apply_pkg "$SCRIPT_DIR/core"
-
-# =============================================================
-# TRIAGE profile
-# =============================================================
-if [ "$PROFILE" = "triage" ]; then
 
 echo "== 5/$STEPS External agent (external-agent/ -> ns $EXT_NS)"
 # The Claims Intake Analyst runs OUTSIDE the platform: a v1-SDK
@@ -345,28 +342,36 @@ else
 fi
 
 echo "== 6/$STEPS Triage overlay (triage/: agents + workflow, then the entrypoint)"
-# (a) Mutual exclusion: the extended profile's entrypoint listens on
-#     the same FNOL topics and would answer the same event.
+# (a) Legacy cleanup: the extended profile is gone from this repo
+#     (2026-09-21), but a lab installed from an older checkout still
+#     carries it. Its claims-events entrypoint subscribes to
+#     acmeins/claims/fnol/received/minor/> -- the topic of every MINOR
+#     triage fire, the dry fire included -- and would answer the same
+#     FNOL a second time. No-op on a clean lab. The same names are in
+#     uninstall.sh and in preflight.sh (step 4).
 remove_entrypoint claims-events \
-  "extended profile; it subscribes to the same acmeins/claims/fnol topics"
-#     The extended overlay's agents and workflows are removed too, so
-#     Agent Management shows the roster this demo talks about: four
-#     platform agents plus the one discovered external analyst. Nothing
-#     is lost -- './install.sh --extended' recreates them from mesh/.
+  "legacy extended profile; it subscribes to the triage FNOL topics"
+#     Its agents and workflows go too, so Agent Management shows the
+#     roster this demo talks about: four platform agents plus the one
+#     discovered external analyst. Workflows first, then the agents
+#     (the Storm Intake Analyst before the connectors it binds), then
+#     the connectors -- the order of uninstall.sh and preflight.sh.
+#     StormIntakeAnalyst is the name the live Builder beat of the
+#     extended profile could save the analyst under.
+for x in stalled-cohort-report storm-readiness cross-channel-fraud-report; do
+  remove_resource "legacy workflow" /api/v1/platform/workflows "$x"
+done
 for x in "Fast Lane Clerk" "Claims Incident Reporter" \
          "Storm Readiness Planner" "Fraud Case Reporter" \
-         "Storm Intake Analyst"; do
-  remove_resource "extended agent" /api/v1/platform/agents "$x"
+         "Storm Intake Analyst" "StormIntakeAnalyst"; do
+  remove_resource "legacy agent" /api/v1/platform/agents "$x"
 done
-for x in stalled-cohort-report storm-readiness cross-channel-fraud-report; do
-  remove_resource "extended workflow" /api/v1/platform/workflows "$x"
-done
-#     And the extended profile's three MongoDB connectors. The claim of
-#     this demo is that the PLATFORM never touches the intake store --
-#     only the external analyst does -- and one click on the Connectors
-#     page must not contradict it. ('--extended' recreates them.)
+#     And its three MongoDB connectors. The claim of this demo is that
+#     the PLATFORM never touches the intake store -- only the external
+#     analyst does -- and one click on the Connectors page must not
+#     contradict it.
 for x in fnol-intake scanner-results weather-cells; do
-  remove_resource "extended connector" /api/v1/platform/connectors "$x"
+  remove_resource "legacy connector" /api/v1/platform/connectors "$x"
 done
 # (b) Agents + workflow. Every workflow node targets a PLATFORM agent
 #     (Query Expert, Claims Intake Liaison, Knowledge Expert, Claims
@@ -429,6 +434,12 @@ else
 fi
 
 echo "== 7/$STEPS Eval package + watchlist"
+# The three test sets of the story. The legacy eval resources of the
+# removed extended profile (experiments ins-ops-quality and
+# ins-ops-model-benchmark, dataset ins-ops-questions) are NOT deleted
+# here: deleting an experiment cascades its runs away, and their
+# artifacts in SeaweedFS have to be collected first -- uninstall.sh
+# does both; preflight.sh warns while they are on the platform.
 apply_pkg "$SCRIPT_DIR/eval"
 # The watchlist is per user (the CLI token user = sam_admin) and
 # holds at most 5 agents: the three agents of this demo that
@@ -441,7 +452,7 @@ api_json PUT /api/v1/platform/evaluations/watchlist \
 echo "   watchlist PUT -> HTTP $API_CODE (sam_admin: Query Expert, Knowledge"
 echo "   Expert, Claims Triage Decision)"
 echo "   NOTE: experiments have no runs yet on a fresh platform --"
-echo "   pre-run before the demo (~15 min): ./preflight.sh does it"
+echo "   pre-run before the demo (a few minutes): ./preflight.sh does it"
 echo "   automatically (the bare 'sam eval run' needs the token"
 echo "   exported -- see scripts/lib/common.sh sam_auth_token)."
 
@@ -456,81 +467,14 @@ if ! "$AMD/scripts/observability/grant-grafana-platform-db.sh" 2>&1 | sed 's/^/ 
 fi
 kubectl apply -f "$SCRIPT_DIR/observability/dashboard-sam-claims-governance.yaml" \
   | sed 's/^/   /'
-kubectl apply -f "$SCRIPT_DIR/observability/dashboard-sam-insurance-ops.yaml" \
-  | sed 's/^/   /'
+# Legacy: the "SAM Insurance Ops Demo" dashboard of the removed
+# extended profile (older installs of either profile applied it).
+# No-op when absent; a failure here must not fail the install.
+kubectl delete cm -n "$SAM_NS" dashboard-sam-insurance-ops \
+  --ignore-not-found 2>&1 | sed 's/^/   /' \
+  || echo "   WARNING: could not delete the legacy ConfigMap dashboard-sam-insurance-ops"
 
 echo ""
-echo "Done (triage profile). Stage: cockpit/index.html -- run ./preflight.sh"
-echo "before going live (~15 min: eval pre-runs + one dry fire that warms"
+echo "Done. Stage: cockpit/index.html -- run ./preflight.sh"
+echo "before going live (~10 min: eval pre-runs + one dry fire that warms"
 echo "the agents)."
-
-# =============================================================
-# EXTENDED profile
-# =============================================================
-else
-
-echo "== 5/$STEPS Demo overlay (mesh/)"
-# Mutual exclusion: the triage profile's entrypoint listens on the
-# same FNOL topics. The external Claims Intake Analyst (ns
-# sam-solace-lab-agents) is NOT removed here: it is harmless on the
-# extended stage (a discovered agent nothing references) and
-# uninstall.sh takes it down.
-remove_entrypoint claims-triage \
-  "triage profile; it subscribes to the same acmeins/claims/fnol topics"
-# The workflows xref-validate against the Storm Intake Analyst ->
-# ensure it exists BEFORE the mesh apply (create from fallback if
-# missing).
-SIA_ID=$(api GET /api/v1/platform/agents | python3 -c "
-import json,sys
-for a in json.load(sys.stdin).get('data',[]):
-    if a['name']=='Storm Intake Analyst': print(a['id'])")
-if [ -z "$SIA_ID" ]; then
-  echo "   Storm Intake Analyst missing -> creating from fallback/"
-  (cd "$SCRIPT_DIR/fallback" && "$SAM_CLI" config apply 2>&1 \
-    | grep -viE "^time=" | grep -E "\+|~|\*|error" | head -8)
-fi
-(cd "$SCRIPT_DIR/mesh" && "$SAM_CLI" config apply 2>&1 \
-  | grep -viE "^time=" | grep -E "\+|~|\*|error|fail" | head -16)
-
-if [ "$WITH_ANALYST" -eq 0 ]; then
-  # The three MongoDB connectors STAY installed (workplace
-  # infrastructure, like the postgres/MCP connectors): the live
-  # Builder beat only creates the AGENT binding them -- one
-  # config, no connector sub-tasks, no cross-component
-  # validation (optimization inherited from the mfg demo; the
-  # Builder's connector-validation deadlock behind it is
-  # 2.225.14, still the case on 2.348.22 -- re-verified
-  # 2026-09-21).
-  echo "   removing Storm Intake Analyst (live Builder demo; connectors stay)"
-  SIA_ID=$(api GET /api/v1/platform/agents | python3 -c "
-import json,sys
-for a in json.load(sys.stdin).get('data',[]):
-    if a['name']=='Storm Intake Analyst': print(a['id'])")
-  [ -n "$SIA_ID" ] && api DELETE "/api/v1/platform/agents/$SIA_ID" >/dev/null \
-    && echo "   Storm Intake Analyst deleted (HTTP $API_CODE)"
-else
-  echo "   keeping Storm Intake Analyst (--with-analyst)"
-fi
-
-echo "== 6/$STEPS Eval package"
-# The package is shared with the triage profile. Its
-# ins-triage-decision experiment targets the Claims Triage Decision
-# agent, which only the triage overlay installs -- on an
-# extended-only platform that one resource cannot apply. apply_pkg
-# reports the non-zero exit and continues, so the dashboard step
-# below still runs.
-apply_pkg "$SCRIPT_DIR/eval"
-echo "   NOTE: experiments have no runs yet on a fresh platform --"
-echo "   pre-run before the demo (~15 min): ./preflight.sh does it"
-echo "   automatically (the bare 'sam eval run' needs the token"
-echo "   exported -- see scripts/lib/common.sh sam_auth_token)."
-
-echo "== 7/$STEPS Demo dashboard"
-kubectl apply -f "$SCRIPT_DIR/observability/dashboard-sam-insurance-ops.yaml"
-
-echo ""
-echo "Done (extended profile). Stage: cockpit/extended.html -- run"
-echo "./preflight.sh before going live (models probe, kyverno/monitoring"
-echo "health, cockpit LED, eval pre-runs)."
-
-fi

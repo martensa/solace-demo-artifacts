@@ -129,8 +129,8 @@ platform on 2026-09-16 (SAM 2.225.14).
 
 ## Install, verify, remove
 
-`../install.sh` (default profile) applies the directory, waits for
-the rollout and polls the platform for the card. By hand:
+`../install.sh` applies the directory, waits for the rollout and
+polls the platform for the card. By hand:
 
 ```bash
 kubectl apply -f external-agent/

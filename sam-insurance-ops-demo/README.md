@@ -1,37 +1,32 @@
-# Acme Insurance Demos (SAM v2) -- Claim Triage and Claims Operations
+# Acme Insurance Demo (SAM v2) -- Claim Triage
 
-Two live demos on one data set, layered as removable overlays on
-top of the base platform in `agent-mesh-deployment/` (SAM v2
-2.348.22 -- str 1.64.0, chart 2.1.164 -- namespace
-`sam-solace-lab`). The stage is Acme
+"Claim Triage in 30 Seconds" (governance-first; 12 minutes of talk
+in a 16-minute slot, optional depth to 20) is a live demo layered
+as a removable overlay on top of the base platform in
+`agent-mesh-deployment/` (SAM v2 2.348.22 -- str 1.64.0, chart
+2.1.164 -- namespace `sam-solace-lab`). The stage is Acme
 Insurance (motor and property, Germany-shaped geography), hail
 cell HZ-0913 over Landkreis Boeblingen on Saturday 2026-07-18 at
 18:40, and a frozen Monday morning (2026-07-20 10:00 UTC) with
 10,400 first notices of loss in three stores.
 
-- **Default profile -- "Claim Triage in 30 Seconds"** (10 min,
-  governance-first): Solace Agent Mesh as the control layer over
-  the agents a customer already has. One claim comes in as an
-  event, a four-node schema-bound workflow triages it in about 27
-  to 33 s through four platform agents and ONE external agent that
-  runs outside the platform, a decision card lands in a cockpit, a
-  named human approves -- and every claim of the talk (identity,
-  audit, latency, tokens, quality over time) is proven in
-  Activities, Grafana, Tempo and the Evaluations lab. Script:
-  [talk-track.md](talk-track.md).
-- **Extended profile -- "Event-Driven Claims Operations"**
-  (15 min + optional 5-min Act 2): the AI Worker Lifecycle
-  dramaturgy (hire in the Builder, click, react, prevent,
-  improve, fraud act). Script:
-  [talk-track-extended.md](talk-track-extended.md), installed
-  with `./install.sh --extended`.
+Solace Agent Mesh is the control layer over the agents a customer
+already has. One claim comes in as an event, a four-node
+schema-bound workflow triages it in about 27 to 33 s through four
+platform agents and ONE external agent that runs outside the
+platform, a decision card lands in a cockpit, a named human
+approves -- and every claim of the talk (identity, audit, latency,
+tokens, quality over time) is proven in Activities, Grafana, Tempo
+and the Evaluations lab. Script: [talk-track.md](talk-track.md).
 
-The two profiles are mutually exclusive on the platform: both
-subscribe to `acmeins/claims/fnol/received/...`, so `install.sh`
-removes the other profile's entrypoint (`claims-events` versus
-`claims-triage`) and says why.
+The former "extended" profile (the 15-minute event-driven claims
+operations demo, `./install.sh --extended`) was removed on
+2026-09-21; it is only in the git history. A lab installed from
+an older checkout can still carry its resources: `install.sh`
+deletes the ones that would interfere (`preflight.sh` too, next to
+a claim triage install), `uninstall.sh` removes all of them.
 
-## The scenario (default profile)
+## The scenario
 
 The cockpit publishes ONE persistent FNOL event for the selected
 claim on `acmeins/claims/fnol/received/<severity>/<claim_id>`.
@@ -80,105 +75,104 @@ developer-mcp -- headless: `./scripts/provision.sh --login` -- plus
 `sam auth login solace-lab --url https://sam.solace.lab`, see
 `agent-mesh-deployment/README.md`):
 
-### Default profile (triage / governance)
-
 ```bash
-./install.sh          # triage profile (default)
-./preflight.sh        # profile-aware checklist + dry fire
+./install.sh          # core, triage overlay, external agent, evals
+./preflight.sh        # checklist with auto-fix + dry fire
 ./demo-links.sh       # direct UI links for the window setup
-./uninstall.sh        # removes both overlays + the external agent
+./uninstall.sh        # removes the demo + the external agent
 ```
 
-`install.sh` is idempotent. Common steps: the host data stores
+`install.sh` is idempotent. Steps: the host data stores
 (postgres/pgadmin with the seeded `acme_insurance` database,
 MongoDB `acme-claims-mongo` on port 27017, Qdrant plus the
 `acme-knowledge-mcp` server on port 8765 with their first-run
 seeds), the additional model aliases (an idempotent re-apply of
 the model step of `provision.sh`: the LiteLLM aliases plus `google
-gemini`, which is skipped with a warning without its API key) and
-the insurance core package (`core/`). Triage steps: the external
-agent (`kubectl apply -f
-external-agent/`, rollout wait, poll for the discovered card
-"ClaimsIntakeAnalyst"); the triage overlay (`sam config apply`
-in `triage/`: the liaison and decision agents and the workflow);
-the entrypoint rendered from
+gemini`, which is skipped with a warning without its API key),
+the insurance core package (`core/`), the external agent
+(`kubectl apply -f external-agent/`, rollout wait, poll for the
+discovered card "ClaimsIntakeAnalyst"); the removal of what an
+install of the former extended profile left on the platform and
+what would interfere (the `claims-events` entrypoint, its agents,
+three workflows and three MongoDB connectors -- so the roster and
+the Connectors page show only this demo; the retired experiments
+stay until `uninstall.sh`); the triage overlay (`sam config apply` in
+`triage/`: the liaison and decision agents and the workflow); the
+entrypoint rendered from
 `triage/entrypoints/claims-triage.yaml.template` AFTER the
-workflow exists (`__WORKFLOW_RUNTIME__` ->
-`workflow_<id>`, see "Known limits") plus a wait for the
-gateway's "persistent receiver started"; the eval package plus
-the watchlist; the Grafana platform-DB grant and datasource; both
-dashboard ConfigMaps. It prints which cockpit page to open.
+workflow exists (`__WORKFLOW_RUNTIME__` -> `workflow_<id>`, see
+"Known limits") plus a wait for the gateway's "persistent
+receiver started"; the eval package plus the watchlist; the
+Grafana platform-DB grant and datasource; the governance
+dashboard ConfigMap (the retired `dashboard-sam-insurance-ops`
+ConfigMap is deleted). It prints which cockpit page to open.
+`install.sh` takes no flags (`--extended` and `--with-analyst`
+went with the extended profile and fail with a hint);
+`INS_EXPERT_TIER=<alias> ./install.sh` moves the two experts off
+`fast`.
 
-`preflight.sh` detects the profile from the entrypoint on the
-platform. Triage checks: external agent pod Running and card
-discovered, workflow deployed and running, entrypoint deployed,
-decision agent present, dashboards and datasource, `grafana_ro`
-SELECT on the platform DB, Tempo traces in the last 24 h (warn
-only), completed pre-runs for the five experiments, and a DRY
-FIRE (`node tools/fire-claim.js --claim CLM-0913-00002 --wait 90`)
-that must print a decision. `--skip-evals` skips the pre-run.
+`preflight.sh` needs the demo installed (entrypoint
+`claims-triage`; a lab with only the legacy `claims-events`
+entrypoint aborts with the hint `./uninstall.sh && ./install.sh`).
+It checks: the four platform agents, both connectors, the
+workflow deployed and running, the entrypoint deployed, no
+leftovers of the extended profile (deleted if found), the
+liaison's allow list, the external agent pod Running and its
+card discovered, the data stores, the broker WebSocket, the
+dashboard and datasource, `grafana_ro` SELECT on the platform DB,
+Tempo traces in the last 24 h (warn only), completed pre-runs for
+the three experiments (a warning if the legacy experiments
+`ins-ops-quality` / `ins-ops-model-benchmark` are still on the
+platform), and a DRY FIRE (`node tools/fire-claim.js --claim
+CLM-0913-00002 --wait 90`) that must print a decision.
+`--skip-evals` skips the pre-run.
 
-### Extended profile (lifecycle demo)
-
-```bash
-./install.sh --extended                 # clean state: analyst absent
-./install.sh --extended --with-analyst  # rehearsals: keep the analyst
-./preflight.sh
-./uninstall.sh
-```
-
-The extended flow is documented in `talk-track-extended.md`;
-window C is `cockpit/extended.html`.
-
-### Script flags
-
-`install.sh`: (no flag) triage profile; `--extended` the
-lifecycle profile (`mesh/`, the `claims-events` entrypoint, the
-Storm Intake Analyst left ABSENT for the live Builder beat);
-`--with-analyst` (with `--extended`) keeps the Storm Intake
-Analyst for rehearsals.
-
-`uninstall.sh`: (no flag) removes BOTH overlays (the
+`uninstall.sh`: (no flag) removes the demo overlay (the
 `claims-triage` entrypoint, `claim-triage` workflow, triage
 agents and the external agent via `kubectl delete -f
-external-agent/`; the extended profile's entrypoint, workflows,
-agents and intake connectors), the eval experiments and datasets
-INCLUDING run history, both dashboards, the insurance core, the
+external-agent/`), anything an older checkout installed that this
+demo no longer has (the extended profile's `claims-events`
+entrypoint, workflows, agents and intake connectors; the
+experiments `ins-ops-quality` and `ins-ops-model-benchmark` with
+their runs and the dataset `ins-ops-questions`, retired together
+with that profile; the `dashboard-sam-insurance-ops` ConfigMap),
+the eval experiments and datasets INCLUDING run
+history, the dashboard, the insurance core, the
 `acme-claims-mongo` container INCLUDING its data volume, and the
 knowledge-base stack INCLUDING the Qdrant volume and the
 embedding-model cache (the next `install.sh` re-downloads the
-model once, ~2 min); `--keep-core` removes only the overlays
-(fast re-install or profile switch); `--dry-run` previews;
-`--purge-data` additionally DROPS `acme_insurance`. Always kept:
-the SAM infrastructure (models, RBAC, developer-mcp,
-observability) and the shared postgres/pgadmin containers. NEVER
-`sam config apply --prune`.
+model once, ~2 min); `--keep-core` keeps the insurance core,
+MongoDB and the knowledge base (fast re-install) but still removes
+the overlay, the eval experiments with their run history, the
+watchlist and the dashboard (the next preflight re-runs the evals);
+`--dry-run` previews; `--purge-data` additionally
+DROPS `acme_insurance`. Always kept: the SAM infrastructure
+(models, RBAC, developer-mcp, observability) and the shared
+postgres/pgadmin containers. NEVER `sam config apply --prune`.
 
 ## Contents
 
-- `talk-track.md` -- the 10-minute governance script (default
-  profile); `talk-track-extended.md` -- the 15-minute lifecycle
-  script (extended profile, formerly `talk-track.md`)
-- `install.sh` / `uninstall.sh` / `preflight.sh` -- profile-aware
-  demo lifecycle and the automated Appendix A checklist with
-  auto-fix and dry fire (READY / NOT READY)
-- `demo-links.sh` -- direct SAM UI links for both profiles
-  (pages, the workflow "Claim Triage", agents incl. the external
-  analyst, entrypoint, Grafana uid `sam-claims-governance`, the
-  Tempo explore link; IDs are resolved per install)
+- `talk-track.md` -- the governance script (12 minutes of talk
+  in a 16-minute slot, optional depth to 20)
+- `install.sh` / `uninstall.sh` / `preflight.sh` -- the demo
+  lifecycle and the automated Appendix A checklist with auto-fix
+  and dry fire (READY / NOT READY)
+- `demo-links.sh` -- direct SAM UI links (pages, the workflow
+  "Claim Triage", agents incl. the external analyst, entrypoint,
+  Grafana uid `sam-claims-governance`, the Tempo explore link;
+  IDs are resolved per install)
 - `core/` -- the insurance CORE package (`sam config apply`):
   the `Acme Insurance DB` postgres and `Acme Claims Knowledge`
   MCP connectors, the `acme-insurance-schema` and
   `acme-knowledge-guide` skills, the two experts (both carry
   `modelProvider: ["${INS_EXPERT_TIER, fast}"]`, an environment
-  variable with an inline default that `install.sh` exports per
-  profile: `fast` (Haiku 4.5) for triage, `general` (Opus 4.8) for
-  `--extended`; every agent of the triage profile runs on `fast`);
-  kept by `--keep-core`. An exported value wins
+  variable with an inline default; `install.sh` exports `fast`
+  (Haiku 4.5), the tier every agent of the demo runs on); kept by
+  `--keep-core`. An exported value wins
   (`INS_EXPERT_TIER=... ./install.sh`, likewise `INS_DB_USERNAME` /
   `INS_DB_PASSWORD`): the package has no `variables:` block,
   because on CLI 2.348.22 a default there beats the environment.
-- `triage/` -- the default overlay (all CLI-applied):
+- `triage/` -- the demo overlay (all CLI-applied):
   `manifest.yaml`, `agents/Claims Intake Liaison.yaml` (fast tier,
   `toolsets: []`, and an `interAgentCommunication` allow list with
   exactly one entry, `ClaimsIntakeAnalyst` -- its whole reach into
@@ -198,31 +192,24 @@ observability) and the shared postgres/pgadmin containers. NEVER
   app YAML), `sam-claims-intake-agent-deployment.yaml`,
   `sam-claims-intake-agent-secret.yaml` (demo values, committed),
   `README.md` (what is external and why)
-- `mesh/`, `fallback/` -- the extended overlay (Fast Lane Clerk,
-  the three reporter/planner agents, the `stalled-cohort-report`,
-  `storm-readiness` and `cross-channel-fraud-report` workflows,
-  the `claims-events` entrypoint) and its break-glass configs
-- `cockpit/index.html` -- the single-card triage cockpit
-  (default profile): claim picker (CLM-0913-00001 clean,
+- `cockpit/index.html` -- the single-card triage cockpit: claim
+  picker (CLM-0913-00001 clean,
   CLM-0913-08103 suspicious), ONE button "Claim comes in",
   stepper, decision card, Approve, event stream, break-glass
   "Re-fire same claim" / "Reset"; solclientjs via
   `ws://localhost:8008`
-- `cockpit/extended.html` -- the extended profile's cockpit
-  (formerly `index.html`); `cockpit/solclient.js` -- the Solace
-  JavaScript API used by both cockpits and by `tools/fire-claim.js`
+- `cockpit/solclient.js` -- the Solace JavaScript API used by the
+  cockpit and by `tools/fire-claim.js`
 - `tools/fire-claim.js` -- node CLI: publishes the cockpit's FNOL
   payload for a claim (`--claim`, default CLM-0913-00002; knows
-  00001, 00002, 08103, 08891), waits `--wait` seconds for the
+  00001, 00002, 08103), waits `--wait` seconds for the
   decision, prints the decision JSON and elapsed seconds; exit 0
   on a decision, 1 on timeout. Used by preflight and rehearsals
-- `eval/` -- datasets `ins-ops-questions`, `ins-claims-rules`,
-  `ins-triage-decisions`, `ins-guardrails` and the experiments
-  under "Evaluation experiments"
+- `eval/` -- datasets `ins-claims-rules`, `ins-triage-decisions`,
+  `ins-guardrails` and the three experiments under "Evaluation
+  experiments"
 - `observability/` -- `dashboard-sam-claims-governance.yaml`
-  ("SAM Claims Governance", default profile, uid
-  `sam-claims-governance`) and `dashboard-sam-insurance-ops.yaml`
-  ("SAM Insurance Ops Demo", extended profile)
+  ("SAM Claims Governance", uid `sam-claims-governance`)
 - `postgres/`, `mongodb/`, `qdrant/` -- the three stores: the
   `acme_insurance` seed (`seed.sh`, idempotent), the intake store
   `acme_claims` (`fnol_intake`, `weather_cells`,
@@ -237,9 +224,8 @@ observability) and the shared postgres/pgadmin containers. NEVER
   server with `search_policy_wordings`, `search_claims_guidelines`,
   `search_partner_contracts`, `search_storm_playbooks`,
   `get_knowledge_document`; corpus in `seed/documents.yaml`)
-- `results/` -- the extended profile's results page (rehearsal
-  2026-09-10, SAM 2.225.14); `slides/` -- the demo's one deck, the
-  claim triage (see "Slides")
+- `slides/` -- the demo's one deck, the claim triage (see
+  "Slides")
 
 Companion files in `agent-mesh-deployment/` (shared
 infrastructure, applied by `install.sh`):
@@ -248,7 +234,7 @@ infrastructure, applied by `install.sh`):
 and `scripts/observability/grant-grafana-platform-db.sh`
 (idempotent SELECT grant for `grafana_ro`).
 
-## Data anchors (default profile)
+## Data anchors
 
 Frozen snapshot "now" = Monday 2026-07-20 10:00 UTC; hail cell
 HZ-0913 started 2026-07-18T18:40:00Z over district BOEBLINGEN.
@@ -278,9 +264,10 @@ HZ-0913 started 2026-07-18T18:40:00Z over district BOEBLINGEN.
   Expected: **HOLD / SPECIAL_INVESTIGATIONS** with the two
   indicators; per CG-FR-5 a human specialist decides.
 - **CLM-0913-00002** -- the pre-flight dry-fire claim (warms the
-  agents; never shown in the cockpit). **CLM-0913-08891**
-  (optional, Ford Focus, Herrenberg, 28 dents, windscreen
-  shattered) -> APPROVE / STANDARD.
+  agents; never shown in the cockpit). **CLM-0913-08891** (Ford
+  Focus, Herrenberg) is no longer a demo claim: its intake record
+  does not match the system of record (talk-track Appendix E), and
+  neither the cockpit nor `tools/fire-claim.js` carries it.
 
 ## What runs outside the platform, and why
 
@@ -369,9 +356,13 @@ Expert and Claims Triage Decision.
 | --- | --- | --- | --- | --- |
 | `ins-triage-decision` | `ins-triage-decisions` (3 rows: clean, suspicious, synthetic total loss -- the exact fan-in text of the decision node) | Claims Triage Decision | LLM Judge, Closed QA | pre-run; nothing runs live on stage (a live run in a technical session takes about 2 min: 102 s and 117 s measured on SAM 2.225.14) |
 | `ins-claims-rules` | `ins-claims-rules` (5 rulebook questions verified against `qdrant/seed/documents.yaml`) | Acme Claims Knowledge Expert | Factuality, Closed QA | pre-run |
-| `ins-guardrails` | `ins-guardrails` (prompt injection, destructive SQL, role escalation) | Acme Insurance Query Expert | Security, LLM Judge | pre-run |
-| `ins-ops-quality` | `ins-ops-questions` | Acme Insurance Query Expert | LLM Judge, Factuality | pre-run (production gate) |
-| `ins-ops-model-benchmark` | `ins-ops-questions` | Acme Insurance Query Expert pinned to `workflow`, `reasoning`, `fast` | LLM Judge, Factuality | pre-run (three models, one dataset) |
+| `ins-guardrails` | `ins-guardrails` (prompt injection, destructive SQL, role escalation) | Acme Insurance Query Expert | Security, LLM Judge | pre-run; beat 11 shows its report |
+
+The experiments `ins-ops-quality` and `ins-ops-model-benchmark`
+(dataset `ins-ops-questions`) were retired with the extended
+profile. `sam config apply` never prunes, so a lab installed from
+an older checkout still lists them: `preflight.sh` warns,
+`uninstall.sh` removes them with their run history.
 
 Run by hand from this directory. A bare `sam eval run` answers
 401 "Missing authorization header" even with a valid CLI login
@@ -385,16 +376,6 @@ load_env ../agent-mesh-deployment && resolve_sam_cli && sam_auth_token
 "$SAM_CLI" eval run ins-triage-decision \
   --url https://sam.solace.lab --threshold 0.8
 ```
-
-## The extended profile
-
-`./install.sh --extended` installs the lifecycle demo: the Storm
-Intake Analyst is hired live in the Builder before the click, the
-cockpit (`cockpit/extended.html`) runs the scripted storm
-timeline and the three reports land as event-driven runs. Run of
-show, measured landing times, the Builder prompt, its own known
-limits and the storyline of the full 10,400-claim set live in
-`talk-track-extended.md` and `results/acme-claims-results.html`.
 
 ## Known limits (short)
 
@@ -453,8 +434,7 @@ C).
 ## Slides
 
 `slides/SAM v2 - Claim Triage (governance demo).pptx` is the deck
-of this demo -- one deck per demo, and the claim triage with its
-one scenario is the current story. It was adapted from the
+of this demo -- one deck per demo. It was adapted from the former
 lifecycle deck and brought to SAM 2.348.22 on 2026-09-21. Slide 3
 is the one to open first: it shows the whole setup at a glance --
 the event mesh, the one entrypoint, the one workflow, which agent
@@ -463,8 +443,3 @@ that runs outside the platform, with the allow list that lets it
 be reached. Slide 2 describes the single scenario and both
 claims; slide 4 is the optional lifecycle recap. The slide 3 notes
 label every run time and evaluation score with its SAM version.
-
-The extended profile (`./install.sh --extended`,
-`talk-track-extended.md`) has no deck of its own any more: its
-lifecycle deck was removed on 2026-09-21 and is only in the git
-history.

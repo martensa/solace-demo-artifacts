@@ -19,9 +19,12 @@ set -euo pipefail
 # valid sam CLI login:
 #   sam auth login solace-lab --url https://sam.solace.lab
 #
-# Profile-aware: the block of the installed profile is printed
-# (claims-triage entrypoint => triage, claims-events => extended;
-# neither => both, with "(not on platform)" markers).
+# A leftover claims-events entrypoint of the removed extended
+# profile (installs from an older checkout) is reported as a
+# WARNING: next to claims-triage it answers the same FNOL events
+# (./preflight.sh or ./install.sh deletes it); without
+# claims-triage the lab still runs the old profile (re-install:
+# ./uninstall.sh && ./install.sh).
 # =============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -73,32 +76,35 @@ for n in want:
 # Fail fast (outside any pipeline) if the token is invalid.
 fetch /api/v1/platform/agents >/dev/null
 
-# Profile detection from the entrypoints on the platform.
+# Legacy check: the entrypoint of the removed extended profile.
 GW_NAMES=$(fetch /api/v1/platform/entrypoints | python3 -c "
 import json,sys
 try:
     for x in json.load(sys.stdin).get('data',[]): print(x.get('name',''))
 except Exception: pass")
-SHOW_TRIAGE=1; SHOW_EXT=1
-if grep -qxF claims-triage <<<"$GW_NAMES"; then SHOW_EXT=0
-elif grep -qxF claims-events <<<"$GW_NAMES"; then SHOW_TRIAGE=0
+if grep -qxF claims-events <<<"$GW_NAMES"; then
+  echo "WARNING: legacy entrypoint 'claims-events' (removed extended profile)"
+  if grep -qxF claims-triage <<<"$GW_NAMES"; then
+    echo "  answers the same FNOL events -- run ./preflight.sh (step 4) or"
+    echo "  ./install.sh before the show; both delete it."
+  else
+    echo "  and no claims-triage: this lab still runs the old profile --"
+    echo "  re-install the claim triage demo: ./uninstall.sh && ./install.sh"
+  fi
+  echo ""
 fi
 
-# =============================================================
-# TRIAGE profile ("Claim Triage in 30 Seconds")
-# =============================================================
-if [ "$SHOW_TRIAGE" -eq 1 ]; then
-echo "== Triage profile: control-layer pages (window A, sam_admin)"
+echo "== Control-layer pages (window A, sam_admin)"
 printf "   %-32s %s\n" "Agent Management (window A)" "$SAM_URL/#/agent-management"
 printf "   %-32s %s\n" "Models"                      "$SAM_URL/#/models"
 printf "   %-32s %s\n" "Connectors"                  "$SAM_URL/#/connectors"
 printf "   %-32s %s\n" "Workflows"                   "$SAM_URL/#/agents/workflows"
 printf "   %-32s %s\n" "Entrypoints"                 "$SAM_URL/#/entrypoints"
 printf "   %-32s %s\n" "Activities (window B)"       "$SAM_URL/#/activities"
-printf "   %-32s %s\n" "Evaluations (window E)"      "$SAM_URL/#/evaluations"
+printf "   %-32s %s\n" "Evaluations (window A, tab 6)" "$SAM_URL/#/evaluations"
 printf "   %-32s %s\n" "Evaluations lab"             "$SAM_URL/#/evaluations/lab?tab=experiments"
 
-echo "== Triage workflow (display-name link is STABLE across installs)"
+echo "== Workflow (display-name link is STABLE across installs)"
 printf "   %-32s %s\n" "Claim Triage" \
   "$SAM_URL/#/agents/workflows/Claim%20Triage"
 ids_by_name /api/v1/platform/workflows claim-triage \
@@ -111,7 +117,7 @@ ids_by_name /api/v1/platform/workflows claim-triage \
       fi
     done
 
-echo "== Triage agents"
+echo "== Agents"
 # In workflow-node order: policy, intake, rules, decision. The intake
 # node runs on the Claims Intake Liaison, whose
 # interAgentCommunication allow list names the external Claims Intake
@@ -129,88 +135,17 @@ ids_by_name /api/v1/platform/agents \
 printf "   %-32s %s\n" "Claims Intake Analyst (external)" \
   "discovered over the broker: Agent Management -> type 'discovered'"
 
-echo "== Triage entrypoint"
+echo "== Entrypoint"
 ids_by_name /api/v1/platform/entrypoints claims-triage \
   | while IFS=$'\t' read -r name id; do
       [ "$id" = "NOT-FOUND" ] \
-        && printf "   %-32s (not on platform)\n" "$name" \
+        && printf "   %-32s (not on platform -- ./install.sh)\n" "$name" \
         || printf "   %-32s %s/#/entrypoints/%s\n" "$name" "$SAM_URL" "$id"
     done
 
-echo "== Grafana (window D) + Tempo"
+echo "== Grafana (window A, tab 5) + Tempo"
 printf "   %-32s %s\n" "SAM Claims Governance" \
   "$GRAFANA_URL/d/sam-claims-governance"
 printf "   %-32s %s\n" "Tempo Explore" "$GRAFANA_URL/explore"
 printf "   %-32s %s\n" "  TraceQL for the claim" \
   '{ name =~ ".*a2a/v1/agent/request.*" }'
-fi
-
-# =============================================================
-# EXTENDED profile (the event-driven acts)
-# =============================================================
-if [ "$SHOW_EXT" -eq 1 ]; then
-echo "== Extended workflows (display-name links are STABLE across installs)"
-printf "   %-32s %s\n" "Stalled Cohort Report" \
-  "$SAM_URL/#/agents/workflows/Stalled%20Cohort%20Report"
-printf "   %-32s %s\n" "Storm Readiness" \
-  "$SAM_URL/#/agents/workflows/Storm%20Readiness"
-printf "   %-32s %s\n" "Cross-Channel Fraud Report" \
-  "$SAM_URL/#/agents/workflows/Cross-Channel%20Fraud%20Report"
-ids_by_name /api/v1/platform/workflows \
-    stalled-cohort-report storm-readiness cross-channel-fraud-report \
-  | while IFS=$'\t' read -r name id; do
-      if [ "$id" = "NOT-FOUND" ]; then
-        printf "   %-32s (not on platform)\n" "$name"
-      else
-        printf "   %-32s %s/#/agents/workflows/workflow_%s\n" \
-          "$name (by id)" "$SAM_URL" "${id//-/_}"
-      fi
-    done
-
-echo "== Extended agents"
-ids_by_name /api/v1/platform/agents \
-    "Orchestrator" \
-    "Acme Insurance Query Expert" "Acme Claims Knowledge Expert" \
-    "Fast Lane Clerk" \
-    "Claims Incident Reporter" "Storm Readiness Planner" \
-    "Fraud Case Reporter" \
-    "Storm Intake Analyst" \
-  | while IFS=$'\t' read -r name id; do
-      if [ "$id" = "NOT-FOUND" ]; then
-        if [ "$name" = "Storm Intake Analyst" ]; then
-          printf "   %-32s (absent = live Builder beat ready)\n" "$name"
-        else
-          printf "   %-32s (not on platform -- ./install.sh --extended)\n" "$name"
-        fi
-      else
-        printf "   %-32s %s/#/agent-management?id=%s\n" "$name" "$SAM_URL" "$id"
-      fi
-    done
-
-echo "== Extended connectors"
-ids_by_name /api/v1/platform/connectors \
-    "Acme Insurance DB" "Acme Claims Knowledge" \
-    "fnol-intake" "weather-cells" "scanner-results" \
-  | while IFS=$'\t' read -r name id; do
-      if [ "$id" = "NOT-FOUND" ]; then
-        printf "   %-32s (not on platform)\n" "$name"
-      else
-        printf "   %-32s %s/#/connectors/%s\n" "$name" "$SAM_URL" "$id"
-      fi
-    done
-
-echo "== Extended entrypoint"
-ids_by_name /api/v1/platform/entrypoints claims-events \
-  | while IFS=$'\t' read -r name id; do
-      [ "$id" = "NOT-FOUND" ] \
-        && printf "   %-32s (not on platform)\n" "$name" \
-        || printf "   %-32s %s/#/entrypoints/%s\n" "$name" "$SAM_URL" "$id"
-    done
-
-echo "== Fixed pages (window setup)"
-printf "   %-32s %s\n" "Agent Management (window A)" "$SAM_URL/#/agent-management"
-printf "   %-32s %s\n" "Entrypoints"                 "$SAM_URL/#/entrypoints"
-printf "   %-32s %s\n" "Activities (window B)"       "$SAM_URL/#/activities"
-printf "   %-32s %s\n" "Evaluations lab"             "$SAM_URL/#/evaluations/lab?tab=experiments"
-printf "   %-32s %s\n" "Grafana (window D)"          "$GRAFANA_URL/d/sam-insurance-ops"
-fi

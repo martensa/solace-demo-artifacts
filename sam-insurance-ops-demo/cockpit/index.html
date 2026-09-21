@@ -451,8 +451,9 @@ function onResult(topic, body) {
   }
   if (!r.hasData) {
     // A completed task WITHOUT a data part is not the workflow's
-    // result shape (spec 0.1) -- e.g. a clerk confirmation from the
-    // extended profile's entrypoint. Log it, keep waiting.
+    // result shape (spec 0.1) -- e.g. a clerk confirmation from a
+    // leftover claims-events entrypoint of the removed extended
+    // profile (older installs). Log it, keep waiting.
     logEvent("warn", "· result ignored", `no data part -- not a workflow ` +
       `result for ${fired.id}, still waiting for the decision`);
     return;

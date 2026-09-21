@@ -1,6 +1,5 @@
-# Triage overlay of the Acme Insurance demo (the DEFAULT profile
-# of ../install.sh; the old event-driven acts live in ../mesh as
-# the --extended profile). Two platform agents and the claim-triage
+# Triage overlay of the Acme Insurance demo (applied by
+# ../install.sh). Two platform agents and the claim-triage
 # workflow of the "Claim Triage in 30 Seconds" story. Applied with
 # `sam config apply` from this directory AFTER ../core: the
 # workflow nodes reference the two core experts and the CLI
@@ -19,7 +18,7 @@
 #
 # NEVER pass --prune: the platform hosts resources this manifest
 # does not manage (Orchestrator, developer-mcp, the core package,
-# the extended profile's mesh/ overlay, other demos ...).
+# other demos ...).
 kind: manifest
 name: ins-triage-demo
 description: >-

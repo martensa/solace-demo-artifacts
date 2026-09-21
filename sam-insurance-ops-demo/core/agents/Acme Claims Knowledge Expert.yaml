@@ -70,9 +70,10 @@ spec:
 
     Maintain a professional and clear communication style, focusing
     on precision and traceability of every cited clause.
-  # Tier from the environment variable INS_EXPERT_TIER (fast for the
-  # triage profile, general for --extended; inline default fast -- see
-  # core/manifest.yaml for why it is not a manifest variable).
+  # Tier from the environment variable INS_EXPERT_TIER (inline
+  # default fast, the tier every agent of the demo runs on; install.sh
+  # exports it -- see core/manifest.yaml for why it is not a manifest
+  # variable).
   modelProvider:
     - "${INS_EXPERT_TIER, fast}"
   toolsets:
@@ -91,8 +92,9 @@ spec:
   # but plan compares the declared name against the cleared name
   # field. There is no portable way around it (2.225.14, still in
   # 2.348.22, whose plan also diffs the outputModes; the id
-  # differs per install), and the skill must stay bound: the extended
-  # profile's expert writes its own SQL from it. Consequence: every
+  # differs per install), and the skill must stay bound: outside the
+  # claim-triage node (ad-hoc chat, the ins-claims-rules evaluation) the
+  # expert picks its searches from it. Consequence: every
   # ./install.sh redeploys the two experts (a few seconds, harmless);
   # preflight.sh only reinstalls when a resource is MISSING, so it
   # never bounces them on this diff.

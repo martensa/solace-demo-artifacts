@@ -110,9 +110,9 @@ data:
 
           # ------------------------------------------------------
           # Agent instruction -- compact per-claim version of the
-          # Storm Intake Analyst prompt (fallback/agents/). The
-          # plugin prepends its own MongoDB expert preamble plus the
-          # detected schema.
+          # former Storm Intake Analyst prompt (removed with the
+          # extended profile on 2026-09-21). The plugin prepends its
+          # own MongoDB expert preamble plus the detected schema.
           # ------------------------------------------------------
           instruction: |
             You are the Claims Intake Analyst of Acme Insurance. You

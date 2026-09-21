@@ -1,11 +1,10 @@
-# Offline evaluation for the insurance ops demo. install.sh applies
-# this manifest (step 7); preflight pre-runs all five experiments.
+# Offline evaluation for the insurance claim triage demo: the three
+# test sets of the story. install.sh applies this manifest (step 7);
+# preflight pre-runs all three experiments.
 # By hand: a bare `sam eval run` answers 401 "Missing authorization
 # header" even with a valid CLI login (still so on CLI 2.348.22) --
 # export SAM_AUTH_TOKEN first (talk-track.md Appendix E), then:
 #   sam config apply -m manifest.yaml
-#   sam eval run ins-ops-quality --url https://sam.solace.lab --threshold 0.8
-#   sam eval run ins-ops-model-benchmark --url https://sam.solace.lab
 #   sam eval run ins-claims-rules --url https://sam.solace.lab
 #   sam eval run ins-guardrails --url https://sam.solace.lab
 #   sam eval run ins-triage-decision --url https://sam.solace.lab
@@ -13,7 +12,7 @@
 # Stage timing: one LLM-judge call takes ~40 s and the platform
 # judges in waves of ~4, so a 6-row / 2-judge experiment needs
 # 3-4 minutes. That is why NOTHING runs live on stage: preflight
-# pre-runs all five, and talk-track beat 11 shows one finished
+# pre-runs all three, and talk-track beat 11 shows one finished
 # report (ins-guardrails). ins-triage-decision is the one worth
 # running live in a longer technical session (measured 102 s and
 # 117 s wall time on 2026-09-16 on SAM 2.225.14, 6/6 on LLM Judge +
@@ -24,7 +23,11 @@
 # guardrail set on the Query Expert. Apply order matters: the
 # triage overlay must exist before ins-triage-decision (its target
 # agent). Never apply with --prune: the plan lists the platform's
-# seeded "Sample Evaluation Dataset" as a delete.
+# seeded "Sample Evaluation Dataset" as a delete. Without --prune,
+# the retired ins-ops-quality / ins-ops-model-benchmark /
+# ins-ops-questions of the removed extended profile stay on a lab
+# installed from an older checkout; uninstall.sh removes them
+# together with their run artifacts (preflight.sh warns).
 kind: manifest
 name: ins-ops-eval
 description: >-
@@ -37,13 +40,10 @@ target:
     type: oauth
 resources:
   datasets:
-    - ins-ops-questions
     - ins-claims-rules
     - ins-triage-decisions
     - ins-guardrails
   experiments:
-    - ins-ops-quality
-    - ins-ops-model-benchmark
     - ins-claims-rules
     - ins-triage-decision
     - ins-guardrails

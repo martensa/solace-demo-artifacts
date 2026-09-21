@@ -1,7 +1,0 @@
-kind: dataset
-name: ins-ops-questions
-description: >-
-  Claims operations questions against the acme_insurance database --
-  the regression guard for the Acme Insurance Query Expert.
-spec:
-  examples_file: ins-ops-questions.csv
