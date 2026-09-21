@@ -1,15 +1,18 @@
-# Event-triggered stalled cohort workflow (the REACT act): a
-# triage_stalled event (published by the claims cockpit on the
-# sam VPN) is routed here by the claims-events event-mesh
-# entrypoint. Fans out to the Insurance DB and Knowledge
-# specialists in parallel; the Storm Intake Analyst follows the
-# Insurance DB node because fnol_intake carries no status or
-# partner -- it needs the cohort's claim_id range from the
-# claims data to select the cohort documents. Then merges into
-# a cohort report. fail_fast stays false: if the Storm Intake
-# Analyst does not exist yet (it is created LIVE in the demo via
-# the AI Builder), the report transparently notes the missing
-# intake section instead of failing.
+# Stalled cohort workflow (the REACT act, workflow variant): the
+# SOP view of what a triage_stalled event triggers. The
+# claims-events entrypoint hands that event to the Orchestrator,
+# not to this workflow (on 2.348.22 an event rule still cannot
+# hand its promptTemplate to a workflow), and the Orchestrator
+# runs the same fan-out and merges itself. Fans out to the
+# Insurance DB and Knowledge specialists in parallel; the Storm
+# Intake Analyst follows the Insurance DB node because
+# fnol_intake carries no status or partner -- it needs the
+# cohort's claim_id range from the claims data to select the
+# cohort documents. Then merges into a cohort report. fail_fast
+# stays false: if the Storm Intake Analyst does not exist yet
+# (it is created LIVE in the demo via the AI Builder), the
+# report transparently notes the missing intake section instead
+# of failing.
 kind: workflow
 name: stalled-cohort-report
 description: >-

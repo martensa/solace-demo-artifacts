@@ -1,11 +1,13 @@
-# Event-triggered storm readiness workflow (the PREVENT act): a
-# forecast_threshold_crossed event (published by the claims
-# cockpit on the sam VPN) is routed here by the claims-events
-# event-mesh entrypoint. Fans out to the Intake, Insurance DB
-# and Knowledge specialists in parallel, then merges into a
-# readiness recommendation -- before the forecast window opens.
-# fail_fast false for the same live-Builder reason as the
-# stalled-cohort workflow.
+# Storm readiness workflow (the PREVENT act, workflow variant):
+# the SOP view of what a forecast_threshold_crossed event
+# triggers. The claims-events entrypoint hands that event to the
+# Orchestrator, not to this workflow (on 2.348.22 an event rule
+# still cannot hand its promptTemplate to a workflow), and the
+# Orchestrator runs the same fan-out and merges itself. Fans out
+# to the Intake, Insurance DB and Knowledge specialists in
+# parallel, then merges into a readiness recommendation --
+# before the forecast window opens. fail_fast false for the same
+# live-Builder reason as the stalled-cohort workflow.
 kind: workflow
 name: storm-readiness
 description: >-

@@ -5,7 +5,7 @@
 > and opposite outcomes. 16 minutes with questions, optional depth to 20. Click
 > paths, names and expected cards follow the platform as built and measured on
 > 2026-09-16 (SAM 2.225.14). Re-checked on SAM 2.348.22 (str 1.64.0) on
-> 2026-09-21: install and uninstall, the dry fire (APPROVE in 28 s) and the
+> 2026-09-21: install and uninstall, the dry fire (APPROVE in 27-28 s) and the
 > evaluation runs; the full script was not re-rehearsed there.
 
 **The line you say verbatim three times** (frame, after the HOLD, close): *"Keep
@@ -447,9 +447,12 @@ cost**. Do not read the cost value.
 **DO**: the latest ins-guardrails report: three attacks, two evaluators
 (Security and LLM Judge), 6 of 6 passed. Do not open the Lab, do not open other
 reports, do not start a run. Before the talk, read the latest ins-claims-rules
-score (A9): both pre-runs on 2.348.22 read 9 of 10. If it still does, replace
-"ten out of ten" below with: "nine out of ten -- and the one miss is exactly
-what this test is for: it caught it before a customer did".
+score (A9): both pre-runs on 2.348.22 read 9 of 10. If it still does, open the
+failed row first. A wrong answer: replace "ten out of ten" below with "nine out
+of ten -- and the one miss is exactly what this test is for: it caught it
+before a customer did". A judge error (e.g. "unexpected end of JSON input"):
+say "nine out of ten -- one row the judge could not score; we re-run it", and
+do not claim a catch.
 
 **SAY**:
 
@@ -583,7 +586,14 @@ Only if slide 4 is adapted (Appendix A, A2).
 > Coaching: skills that teach the agents the schema and the rulebook.
 > Supervision: a human presses Approve, and the approval is an event. Teamwork:
 > one workflow, three steps in parallel, one merged decision. Improvement: three
-> test sets, all passing, and a dashboard for the people who run it."
+> test sets on three watched agents, and a dashboard for the people who run
+> it."
+
+IF asked whether that Approve was the platform's human-in-the-loop: "No. That
+Approve is the cockpit's, and it is an event after the decision. The
+platform's own human-in-the-loop -- tool approvals and questions -- pauses an
+agent in chat, Slack or Teams. An event-triggered workflow has nobody to ask,
+so here the human signs downstream, as an event."
 
 ### Not in a 20-minute slot
 
@@ -626,8 +636,9 @@ CLM-0913-00002. The manual checks after it cover what it does not.
   Liaison, Triage Decision; the entrypoint label reads claims-triage; there is
   no weather feed chip, no third Postgres cylinder, no "built live"; a dashed
   box shows the Claims Intake Analyst outside the platform. Slide 4 names no
-  Builder beat, no "8 agents", no GDV. The speaker notes of slide 3 are
-  rewritten (presenter view shows them). Any check fails: no deck (R11).
+  Builder beat, no "8 agents", no GDV, no "all passing". The speaker notes of
+  slide 3 are rewritten (presenter view shows them) and label every run time
+  and evaluation score with its SAM version. Any check fails: no deck (R11).
 - **A3** No profile switch and no re-install on show day: `./install.sh`
   redeploys the two experts on every run (Appendix E).
 
@@ -671,7 +682,11 @@ CLM-0913-00002. The manual checks after it cover what it does not.
   agents, and know the answer in Appendix C. That row is also your ten-second
   health tell on stage: no row, no outside agent (R4).
 - **A8** Tab 3: the liaison's configuration shows `allowList` with the single
-  entry `ClaimsIntakeAnalyst`, scrolled into view.
+  entry `ClaimsIntakeAnalyst`, scrolled into view. The spoken line "an agent
+  without this line has no way to call another agent at all" (beat 5, Appendix
+  C) was observed on 2.225.14 and not re-verified on 2.348.22: in rehearsal, ask
+  Claims Triage Decision in chat to call ClaimsIntakeAnalyst and expect a
+  refusal or no peer tool.
 - **A9** Tab 6: the latest **ins-guardrails** report (6 of 6) open. The scores
   in beat 11 and Appendix D were measured on SAM 2.225.14: check that the
   pre-runs on 2.348.22 read the same, and say what the reports say. On
@@ -841,7 +856,10 @@ Show: R4 if it happens live.
 
 > "Three test sets on the three agents that reason: the rulebook agent, the
 > database expert under attack, and the decision agent on the exact inputs the
-> workflow sends it. All passing today. Those agents are on a watchlist, and
+> workflow sends it. Today: six of six on the attacks, six of six on the
+> decisions, and on the rulebook what the latest report says (A9) -- if it shows
+> a miss, open that row before you call it a catch. Those agents are on a
+> watchlist, and
 > every run lands as a time series on the dashboard -- so a model swap or a
 > prompt edit is a measured decision."
 
@@ -936,7 +954,7 @@ Every figure below is measured or seeded. Anything not on this list, do not say.
 | --- | --- | --- |
 | The storm | Hail cell HZ-0913, Saturday 2026-07-18, 18:40, Landkreis Boeblingen | "twenty to seven on a Saturday evening" |
 | Claims after the cell | 10,400 | "ten thousand four hundred" |
-| Run time, event to decision | measured 2026-09-16 on SAM 2.225.14: 00002 26.8 s, 00001 27.7 s, 08103 30.6 s (later 31.1 s and 32.6 s), 08891 32.7 s, preflight dry fire 27 s; on SAM 2.348.22 (2026-09-21): preflight dry fire 28 s | "about half a minute"; exact only as printed on the card |
+| Run time, event to decision | measured 2026-09-16 on SAM 2.225.14: 00002 26.8 s, 00001 27.7 s, 08103 30.6 s (later 31.1 s and 32.6 s), 08891 32.7 s, preflight dry fire 27 s; on SAM 2.348.22 (2026-09-21): preflight dry fires 28 s and 27 s | "about half a minute"; exact only as printed on the card |
 | Node budget, typical run | measured on SAM 2.225.14: policy 13 s, intake 19 s (outside agent 5 s), rules 9 s, decision 12 s; critical path intake plus decision | "the outside agent is about five seconds" |
 | Claim 1, CLM-0913-00001 | Lena Hartmann, VW Golf, app, 16 dents roof and bonnet, no glass damage, drivable, EUR 640, POL-104211 ACTIVE, HC-7, deductible EUR 300, RN-3, Sindelfingen, photos 7 min after the cell start | APPROVE / FAST_LANE, drive-in slot at P-BRAENDLE |
 | Claim 2, CLM-0913-08103 | Ben Meier, Skoda Octavia, drive-in scanner, 60 dents claimed, EUR 6,800, reserve EUR 7,800, MOTOR_PARTIAL, deductible EUR 150, no RN-3; photos 7.3 days before the cell; scanner 14 vs 60 (76.7 percent) | HOLD / SPECIAL_INVESTIGATIONS, specialist within ten working days |

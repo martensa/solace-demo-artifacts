@@ -1,12 +1,15 @@
-# Event-triggered fraud and leakage workflow (Act 2): a
-# scanner_mismatch event (published by the claims cockpit on
-# the sam VPN) is routed here by the claims-events event-mesh
-# entrypoint. One mismatch is one indicator -- the workflow
-# widens the view to the whole event cohort: fans out to the
-# Intake, Insurance DB and Knowledge specialists in parallel,
-# then merges into a hold/release report for the special
-# investigations unit. fail_fast false for the same
-# live-Builder reason as the stalled-cohort workflow.
+# Fraud and leakage workflow (Act 2, workflow variant): the SOP
+# view of what a scanner_mismatch event triggers. The
+# claims-events entrypoint hands that event to the Orchestrator,
+# not to this workflow (on 2.348.22 an event rule still cannot
+# hand its promptTemplate to a workflow), and the Orchestrator
+# runs the same fan-out and merges itself. One mismatch is one
+# indicator -- the workflow widens the view to the whole event
+# cohort: fans out to the Intake, Insurance DB and Knowledge
+# specialists in parallel, then merges into a hold/release
+# report for the special investigations unit. fail_fast false
+# for the same live-Builder reason as the stalled-cohort
+# workflow.
 kind: workflow
 name: cross-channel-fraud-report
 description: >-

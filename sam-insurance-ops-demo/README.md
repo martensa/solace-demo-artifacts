@@ -69,8 +69,8 @@ CLM-0913-00001 APPROVE / FAST_LANE 27.7 s, CLM-0913-00002 APPROVE
 the external analyst itself is 5 s), rules 9 s, decision 12 s. The
 fan-out is parallel, so the critical path is intake plus decision.
 On SAM 2.348.22 the preflight dry fire (CLM-0913-00002) decided
-APPROVE in 28 s (2026-09-21); the per-claim and per-node times
-above were not re-measured there.
+APPROVE in 28 s and 27 s (two preflight runs, 2026-09-21); the
+per-claim and per-node times above were not re-measured there.
 
 ## Install / remove / preflight
 
@@ -237,8 +237,9 @@ observability) and the shared postgres/pgadmin containers. NEVER
   server with `search_policy_wordings`, `search_claims_guidelines`,
   `search_partner_contracts`, `search_storm_playbooks`,
   `get_knowledge_document`; corpus in `seed/documents.yaml`)
-- `results/`, `slides/` -- the extended profile's results page
-  and deck (see "Slides")
+- `results/` -- the extended profile's results page (rehearsal
+  2026-09-10, SAM 2.225.14); `slides/` -- the demo's one deck, the
+  claim triage (see "Slides")
 
 Companion files in `agent-mesh-deployment/` (shared
 infrastructure, applied by `install.sh`):
@@ -452,13 +453,18 @@ C).
 ## Slides
 
 `slides/SAM v2 - Claim Triage (governance demo).pptx` is the deck
-of the default profile, adapted from the lifecycle deck. Slide 3
+of this demo -- one deck per demo, and the claim triage with its
+one scenario is the current story. It was adapted from the
+lifecycle deck and brought to SAM 2.348.22 on 2026-09-21. Slide 3
 is the one to open first: it shows the whole setup at a glance --
 the event mesh, the one entrypoint, the one workflow, which agent
 reads which store, and the dashed boundary around the one agent
 that runs outside the platform, with the allow list that lets it
 be reached. Slide 2 describes the single scenario and both
-claims; slide 4 is the optional lifecycle recap.
+claims; slide 4 is the optional lifecycle recap. The slide 3 notes
+label every run time and evaluation score with its SAM version.
 
-`slides/SAM v2 - AI Worker Lifecycle Insurance.pptx` is the
-original deck of the EXTENDED profile and is left untouched.
+The extended profile (`./install.sh --extended`,
+`talk-track-extended.md`) has no deck of its own any more: its
+lifecycle deck was removed on 2026-09-21 and is only in the git
+history.

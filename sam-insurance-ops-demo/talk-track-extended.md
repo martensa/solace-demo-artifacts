@@ -8,7 +8,12 @@
 > `talk-track.md` ("Claim Triage in 30 Seconds"); the two
 > profiles are mutually exclusive on the platform (one entrypoint
 > at a time). Nothing else in this file changed, apart from the
-> SAM 2.348.22 version notes (2026-09-21).
+> SAM 2.348.22 version notes and the event-path merge corrections
+> (2026-09-21). This profile has no deck of its own any more: its
+> lifecycle deck was removed on 2026-09-21 (the demo's one deck is
+> the claim triage, `slides/SAM v2 - Claim Triage (governance
+> demo).pptx`); the slide references below point to the removed
+> deck, which is only in the git history.
 >
 > **Status: v0.2 — rehearsal-verified (2026-09-10, eight live
 > runs on SAM 2.225.14; not yet re-rehearsed on SAM 2.348.22 --
@@ -586,8 +591,9 @@ to the TEAMWORK tour in section 4 — do not spend them here.
    read-only service account, one collection each, provisioned
    by IT before the hire.
 2. **Models** — the aliases: `fast` for the clerk, `general`
-   for the experts, the analyst and the Orchestrator, `workflow`
-   for the merges — three tiers live, four model families in
+   for the experts, the analyst and the Orchestrator (which also
+   merges on the event path), `workflow` for the reporters of the
+   workflow variant — three tiers deployed, four model families in
    the benchmark (`reasoning` is the fourth); multi-model by
    task, no API key ever visible. The page lists ten aliases on
    2.348.22; `google gemini` calls the Gemini API directly, not
@@ -988,8 +994,10 @@ Fast Lane confirmation):
 
 ## 8. CLOSE — why event-driven (14:00–15:00)
 
-**DO**: flip back to slide 2 as the final image — the three
-movement cards are now what the audience just watched happen.
+**DO**: flip back to slide 2 as the final image — the two
+movement cards (React, Prevent) are now what the audience just
+watched happen; the Act 2 strip is the teaser for the optional
+fraud act that follows.
 
 **SAY**:
 
@@ -1313,9 +1321,10 @@ live Builder config has no model field, so the agent lands on
 the platform default `general` (Opus 4.8; observed on 2.225.14,
 not re-verified on 2.348.22) — the tier the fallback YAML pins
 as well. The multi-model story stays: clerk
-on `fast`, merge agents on `workflow`, `reasoning` in the model
-benchmark — three tiers live, four model families once the
-benchmark is counted.
+on `fast`, specialists and the merging Orchestrator on `general`,
+the workflow variant's reporters on `workflow`, `reasoning` in the
+model benchmark — three tiers deployed, four model families once
+the benchmark is counted.
 
 **"Math evaluation error" strings in a report**: the planner
 used «math» embeds that the renderer cannot evaluate. Fixed by
