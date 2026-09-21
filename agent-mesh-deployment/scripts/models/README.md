@@ -7,21 +7,22 @@ no CSRF handling.
 
 ## Files
 
-- `set-max-tokens.sh` -- set the max output tokens on a
-  (chart-seeded) model configuration.
+- `set-max-tokens.sh` -- set the max output tokens on the
+  chart-seeded model configurations (`general`, `planning`,
+  `report_gen` by default, or one `--model-alias`).
 - `manifest.yaml` + `models/*.yaml` -- declarative definitions of
-  the five additional model aliases (`workflow`, `reasoning`,
-  `coding`, `expert`, `fast`).
+  the six additional model aliases (`workflow`, `reasoning`,
+  `coding`, `expert`, `fast`, `google gemini`).
 - `apply-models.sh` -- applies the declarative package
   (idempotent create-or-update) and probes every model upstream
-  with a 1-token call. Called automatically by `start.sh` after
-  the pods are ready; `--probe-only` runs just the health probes
-  (pre-flight check).
+  with a tiny call. Run by `../provision.sh` (which `start.sh`
+  calls after the pods are ready); `--probe-only` runs just the
+  health probes (pre-flight check).
 
 ## Additional models
 
-Five aliases extend the chart-seeded set for per-task model
-selection. All run through the same LiteLLM proxy and API key
+Six aliases extend the chart-seeded set for per-task model
+selection. Five run through the same LiteLLM proxy and API key
 (`LLM_SERVICE_API_KEY` from `.env`, substituted at apply time):
 
 - `workflow` -- Claude Sonnet 5, `max_tokens` 32768. Fast,
@@ -42,6 +43,20 @@ selection. All run through the same LiteLLM proxy and API key
 - `fast` -- Claude Haiku 4.5, `max_tokens` 16384. Low-cost tier
   for high-volume routine tasks.
 
+The sixth bypasses the proxy:
+
+- `google gemini` -- Gemini 3.6 Flash, provider
+  `google_ai_studio`, called directly on the Gemini API
+  (`https://generativelanguage.googleapis.com/v1beta`) with its
+  own key, `GOOGLE_AI_STUDIO_API_KEY` in `.env`. `modelParams`
+  only sets `cache_strategy: 5m`. The alias keeps the space it
+  was created with in the UI (file `models/google-gemini.yaml`;
+  the manifest refers to it by its `name:`), so agents bound to
+  it keep resolving across rebuilds. Gemini 3.x thinks before it
+  answers (~70 thought tokens on a one-word reply), so the probe
+  uses a 512-token budget -- a small `max_tokens` returns an
+  empty answer.
+
 Parameter rules discovered while building this set (all verified
 live against the proxy on 2026-07-31):
 
@@ -56,9 +71,12 @@ live against the proxy on 2026-07-31):
   proxy, so the params differ per model by design.
 - The proxy's `azure-*` and `gemini-*` routes have broken
   backend credentials (Azure subscription key, Google service
-  account -- final state). That is why the set is
-  Claude / DeepSeek / Qwen; `deepseek-v4-pro` also runs over
-  the broken Azure route.
+  account -- final state). That is why the proxy set is
+  Claude / DeepSeek / Qwen, and Gemini goes to Google directly;
+  `deepseek-v4-pro` also runs over the broken Azure route.
+- The platform stores model API keys in PLAIN TEXT in the
+  platform DB (`model_configurations.model_auth_config`) -- a
+  DB dump contains them.
 
 ## Background: max output tokens
 
@@ -107,7 +125,9 @@ Agents and workflows run in the Agent-Workflow Executor (awe) and
 read the model configuration at startup via the model bootstrap
 queues. A model update alone does not affect running agents --
 `set-max-tokens.sh` restarts the awe deployment automatically
-unless `--no-restart` is passed.
+unless `--no-restart` is passed. It restarts once per run, and
+only if an alias actually changed (aliases already at the target
+value are skipped), so re-running it is cheap.
 
 ## Prerequisites
 
@@ -126,7 +146,8 @@ unless `--no-restart` is passed.
 Run from this directory:
 
 ```bash
-# Set max_tokens to the default (16384) and restart the agents
+# general + planning + report_gen to the default (16384),
+# one restart if anything changed
 ./set-max-tokens.sh
 
 # Set a specific value
@@ -138,13 +159,13 @@ Run from this directory:
 # Patch the model but do not restart the agents
 ./set-max-tokens.sh --no-restart 16384
 
-# Target a different model alias (default: general)
+# A single model alias only
 ./set-max-tokens.sh --model-alias planning 16384
 ```
 
 ### Environment variables
 
-- `MODEL_ALIAS` -- model alias to update (default `general`).
+- `MODEL_ALIAS` -- a single alias instead of the seeded three.
 - `SAM_NAMESPACE` -- Kubernetes namespace for the restart
   (default `sam-solace-lab`).
 

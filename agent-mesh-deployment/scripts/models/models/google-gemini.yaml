@@ -1,0 +1,23 @@
+# Google Gemini, called DIRECTLY on the Gemini API (Google AI
+# Studio) -- not through the LiteLLM proxy, whose gemini-* routes
+# are broken (see manifest.yaml). Re-created as-is from the alias
+# originally set up in the UI (restored 2026-09-21 after the 2.348.22
+# rebuild): the alias name keeps its space, so agents bound to
+# "google gemini" keep resolving. The key is a separate Google AI
+# Studio key, GOOGLE_AI_STUDIO_API_KEY in the repo .env.
+# cache_strategy 5m: Gemini implicit context caching window, as
+# chosen in the UI. Gemini 3.x thinks before it answers (~70
+# thought tokens on a one-word reply), so keep output limits
+# generous -- a tiny max_tokens returns an empty answer.
+kind: model
+name: google gemini
+description: Google Gemini
+spec:
+  provider: google_ai_studio
+  modelName: gemini-3.6-flash
+  apiBase: https://generativelanguage.googleapis.com/v1beta
+  authConfig:
+    type: apikey
+    api_key: ${GOOGLE_AI_STUDIO_API_KEY}
+  modelParams:
+    cache_strategy: 5m

@@ -7,16 +7,21 @@
 # Applied with:  sam config apply -m manifest.yaml  (see
 # apply-models.sh, which also probes each upstream afterwards).
 #
-# All five run through the same LiteLLM proxy and API key as the
-# seeded models. Upstream health was probe-verified 2026-07-31;
-# the azure-* and gemini-* routes on the proxy have broken
-# backend credentials (final state, not expected to be fixed),
-# which is why the set is Claude / DeepSeek / Qwen.
+# Five run through the same LiteLLM proxy and API key as the
+# seeded models (LLM_SERVICE_API_KEY). Upstream health was
+# probe-verified 2026-07-31; the azure-* and gemini-* routes on
+# the proxy have broken backend credentials (final state, not
+# expected to be fixed), which is why that set is Claude /
+# DeepSeek / Qwen. The sixth, "google gemini", bypasses the proxy
+# and calls the Gemini API directly with its own key
+# (GOOGLE_AI_STUDIO_API_KEY); apply-models.sh skips it with a
+# warning when that key is not set.
 kind: manifest
 name: additional-models
 description: >-
   Additional LLM models for per-task model selection: workflow,
-  reasoning, coding, expert and fast.
+  reasoning, coding, expert and fast (LiteLLM proxy), plus
+  google gemini (Gemini API direct).
 target:
   name: solace-lab
   url: https://sam.solace.lab
@@ -30,3 +35,4 @@ resources:
     - coding
     - expert
     - fast
+    - google gemini
