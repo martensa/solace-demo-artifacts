@@ -15,11 +15,13 @@ entrypoint) that this core builds on.
 ## Files
 
 - `manifest.yaml` -- the `sam config` manifest (target
-  `https://sam.solace.lab`, DB credential variables, resource
-  lists).
+  `https://sam.solace.lab`, resource lists; deliberately no
+  `variables:` block, see Notes).
 - `connectors/` -- one `kind: connector` (sql/postgres) per
-  retail database (CRM, OMS, PDM). Credentials come from the
-  `${RETAIL_DB_USERNAME}` / `${RETAIL_DB_PASSWORD}` variables.
+  retail database (CRM, OMS, PDM). Credentials come from
+  `${RETAIL_DB_USERNAME, postgres}` /
+  `${RETAIL_DB_PASSWORD, postgres}` (inline defaults; an
+  exported value wins).
 - `skills/` -- one instruction-only skill BUNDLE per database
   (`retail-*-schema`): `SKILL.md` documents the exact table,
   columns, types and query pitfalls (money casts, OMS line-item
@@ -37,8 +39,12 @@ entrypoint) that this core builds on.
 
 ## What each agent gets
 
-- **Connector** (`spec.connectors`): provides the
-  `execute_sql_query` tool against the live postgres database.
+- **Connector** (`spec.connectors`): provides a SQL query tool
+  against the live postgres database. On 2.348.22 the agent card
+  names it `<database>_sql_query_<first 8 hex of the connector
+  id>` (e.g. `retail_crm_sql_query_01a0c3ee`); the str executes
+  it as `execute_sql_query`, the name the system prompts use --
+  both work (eval gate 12/12 on 2.348.22).
 - **`data_analysis` toolset** (built-in, referenced by name):
   SQL on result artifacts (`create_sqlite_db`,
   `query_data_with_sql`) and Plotly chart generation
@@ -68,23 +74,29 @@ over A2A arrives under the key `text` (verified in the awe log:
 `inputKeys: ["text"]`) -- `{{workflow.input.message}}` stays
 an unresolved placeholder.
 
-Triggering (2.225.14): the WebUI chat picker lists agents only
-(workflow cards are filtered out); trigger the workflow by asking
+Triggering (2.225.14, still in 2.348.22): the WebUI chat picker
+lists agents only (workflow cards are filtered out); trigger the
+workflow by asking
 the Orchestrator to delegate to it, e.g. "Delegiere diese Aufgabe
 an den Workflow 'Retail 360 Report': ...". The first cold run can
 exceed the Orchestrator's delegation timeout -- it retries
 automatically. RBAC: callers need `workflow:*:invoke` AND
 `agent:*:invoke` -- every node hop is authorized against the
-caller (`power_user` and `data_engineer` have both; `sam_user`
-and `viewer` do not).
+caller (`power_user`, `data_engineer` and `sam_user` have both;
+`viewer` has neither).
 
-Known WebUI bug (2.225.14): the Builder's workflow list links by
-the platform name, but the detail page resolves the MESH card
-name -- clicking a CLI-created workflow shows "Workflow not
-found". Workaround: open the card-name URL directly, e.g.
+Known WebUI bug (2.225.14; the route part re-verified on
+2.348.22): the Builder's workflow list links by the platform
+name, but the detail page resolves only the MESH card name or
+the display name -- a link with the platform config name shows
+"Workflow not found". Workaround: open the display-name URL
+(stable across installs), e.g.
+`https://sam.solace.lab/#/agents/workflows/Retail%20360%20Report`,
+or the card-name URL
 `https://sam.solace.lab/#/agents/workflows/workflow_<uuid>` with
 the workflow's UUID in underscore form (get the UUID from
-`sam api /api/v1/platform/workflows`).
+`sam api /api/v1/platform/workflows`). `../demo-links.sh` prints
+both.
 
 ## Prerequisites
 
@@ -126,7 +138,9 @@ RETAIL_DB_PASSWORD='secret' sam config apply
 Re-running is safe: `sam config apply` reconciles creates and
 updates.
 
-CAUTION (2.225.14): the deploy phase only fires for resources
+CAUTION (observed on 2.225.14; not re-verified on 2.348.22,
+where a create run shows create + deploy per resource): the
+deploy phase only fires for resources
 whose config CHANGED in that apply. After a create-only run,
 re-running over unchanged resources is a silent no-op -- bump any
 config field (e.g. the workflow `appConfig.version`) to force the
@@ -145,4 +159,8 @@ deploy phase for that resource.
   unchanged skills are hash-diffed and skipped.
 - Secrets: `${VAR}` placeholders resolve at plan/apply time from
   the manifest `variables` block, the process environment, or a
-  `.env` file; the platform stores the resolved value.
+  `.env` file; the platform stores the resolved value. On CLI
+  2.348.22 a default under `variables:` beats an exported
+  environment variable (verified 2026-09-21), so this package
+  defaults INLINE (`${VAR, default}`) and has no `variables:`
+  block -- `RETAIL_DB_PASSWORD=secret` overrides work.

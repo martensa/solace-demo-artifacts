@@ -6,10 +6,18 @@ the base platform in `agent-mesh-deployment/`. Start with
 spoken script, click paths, pre-flight checklist, fallbacks,
 known limits and Q&A prep.
 
+Current for SAM Enterprise 2.348.22 (str 1.64.0, chart
+2.1.164), the version running in the local lab; install,
+uninstall, the shop paths and the eval gate were re-verified on
+2026-09-21. Observations from the first rehearsals on 2.225.14
+that were not re-tested carry a version label in the talk track.
+
 ## Install / remove
 
-With the base platform running (one-click deployment plus
-`sam auth login`, see `agent-mesh-deployment/README.md`):
+With the base platform running (see
+`agent-mesh-deployment/README.md`: `start.sh` ends with the
+browser login and `provision.sh` -- RBAC, models, max_tokens,
+developer-mcp; headless: `./scripts/provision.sh --login`):
 
 ```bash
 ./install.sh
@@ -93,6 +101,8 @@ host containers.
 - `shop/index.html` -- the Acme online shop: publishes order
   events straight to the sam VPN via solclientjs
   (`ws://localhost:8008`) and displays agent responses live
+  (failed orders go to the Orchestrator, created orders to the
+  Order Confirmation Clerk)
 - `postgres/` -- seed package for the `retail_crm`, `retail_oms`
   and `retail_pdm` databases in the host `postgres` container
   (`seed.sh` + pg_dump SQL files; idempotent, run by install.sh)

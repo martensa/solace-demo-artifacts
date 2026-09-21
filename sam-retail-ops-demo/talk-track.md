@@ -9,8 +9,14 @@ Conventions: **DO** = click path, **SAY** = spoken line
 (shorten freely, keep the bold claims). Slide numbers refer to
 `slides/SAM v2 – AI Worker Lifecycle Meetup.pptx` (3 slides:
 1 = lifecycle, 2 = demo scenario, 3 = the demo mapped onto the
-lifecycle). All verified numbers are from live runs on
-2026-08-03.
+lifecycle).
+
+Platform: SAM Enterprise 2.348.22 (str 1.64.0, chart 2.1.164),
+the version running in the local lab. The script was first
+rehearsed on 2.225.14: numbers without a version label come from
+the live runs on 2026-08-03 (SAM 2.225.14). Re-measured on
+2.348.22 on 2026-09-21: Clerk confirmation 5.9 s, Acai incident
+report after ~3 min (174.8 s), quality gate 12 of 12 checks.
 
 Flow note: the AI Builder is kicked off EARLY (right after the
 agent roster) so the build runs in the background during the
@@ -30,7 +36,7 @@ platform, not by discipline. Order of appearance:
 | 1 | `sam_admin` | Browser A | bootstrap admin (full) | Tour (3, 5), Builder (4, 6.1), first-day test (6.2), Evals (8.5) |
 | 2 | `power_user` | Browser B | ops: invoke agents/workflows, manage connectors, builder read-only | Activities (7.4); the event-triggered runs are attributed to it (`defaultUserIdentity`) |
 | 3 | `data_engineer` | Claude Code | invoke agents/workflows, read/create connectors | MCP finale (7.6) |
-| 4 | `viewer` (optional) | Incognito | chat only | Security aside: no Builder menu, fewer agents |
+| 4 | `viewer` (optional) | Incognito | read-only observer (no agent invoke) | Security aside: no Builder menu, no agent chat |
 
 Evals note: stay on `sam_admin` for 8.5 — evaluation management
 (datasets, evaluators, experiments) is not part of the demo
@@ -72,7 +78,8 @@ Tabs and windows, in the order you will need them:
    `https://sam.solace.lab` logged in as `power_user` /
    `power_user`, sidebar on **Activities**. Used only in 7.4 —
    Activities is a PER-USER view (admins included), and the
-   incident tasks are attributed to power_user.
+   incident tasks are attributed to power_user (re-verified on
+   2.348.22).
 4. Shop page: `sam-retail-ops-demo/shop/index.html` in a
    browser tab — status LED green (connected to
    `ws://localhost:8008`).
@@ -82,19 +89,25 @@ Tabs and windows, in the order you will need them:
    under this user on purpose: its role carries
    `agent:*:invoke`, and the governance dashboard later shows
    the IDE queries under `data_engineer@solace.lab` — do the
-   OAuth roundtrip BEFORE the demo, never on stage.
+   OAuth roundtrip BEFORE the demo, never on stage. Reconnect
+   `/mcp` after every `./install.sh`: the tool names embed the
+   agent UUID (`agent_<last 8 hex>_<skill>` on 2.348.22), and a
+   re-install issues new UUIDs.
 6. Grafana tab 1: `https://monitoring.solace.lab` logged in,
    folder **SAM** → dashboard **SAM Retail Ops Demo** open
    (10 s refresh, time range "Last 1 hour" — widen it if your
    last incident run is older).
 7. Grafana tab 2: **Explore → Tempo** with the search
    `sam-solace-lab/a2a` already executed and one trace OPEN —
-   8.3 is then a single tab switch, no live typing.
+   8.3 is then a single tab switch, no live typing. The spans
+   come from the broker via the event-mesh `otel-collector`
+   container (it must be running); SAM itself emits no OTel
+   spans (2.348.22).
 8. Terminal in the repo root (fallback commands ready).
 
 Optional cold open (zero risk, strong hook): before slide 1,
 show a finished incident report from rehearsal traffic
-(screenshot is fine) and say: "Four minutes after a customer
+(screenshot is fine) and say: "Three minutes after a customer
 hit an out-of-stock error, this root-cause report existed. No
 human wrote it. The next twenty minutes show you the workforce
 that did."
@@ -161,6 +174,11 @@ that did."
 **Agent Management**. (You verified the POS analyst is absent
 and the `retail-poslog` connector is PRESENT during pre-flight
 — Appendix A item 5; Agent Management is the source of truth.)
+The list also shows the platform's built-in agents: the
+Orchestrator, the Builder and, new in 2.348.22, the **Activity
+Monitor**. Skip the latter two, or give the Activity Monitor
+one sentence: a built-in agent you can ask about tasks and
+activities.
 
 **SAY**:
 
@@ -172,8 +190,9 @@ and the `retail-poslog` connector is PRESENT during pre-flight
 > **PDM** — one per system, each bound to its own connector. A
 > confirmation clerk for routine work, and two report
 > specialists, including the **Order Incident Reporter** — a
-> pure merge agent: zero tools, its only job is turning
-> specialist findings into one incident report. Job
+> pure merge agent: no connector, no toolset, no database
+> access; its only job is turning specialist findings into one
+> incident report. Job
 > descriptions instead of prompts, if you like.
 >
 > Now notice who's **missing**: nobody on this team can see the
@@ -188,8 +207,10 @@ and the `retail-poslog` connector is PRESENT during pre-flight
 Build). Paste the prompt below and send it. Watch for ~10 s
 that it actually starts building (if it asks a clarifying
 question instead, answer in one line — it is
-non-deterministic). Then leave it running and move on to
-section 5.
+non-deterministic; if it stops at "Here's the build plan for
+your review", reply "Approved - build it now exactly as
+specified, no further questions." -- seen on 2.348.22).
+Then leave it running and move on to section 5.
 
 Click rule: as soon as the full validation is green and the
 plan card is up, click **Build & Activate** yourself — do not
@@ -200,7 +221,12 @@ fixable in the UI (Review card or Agent Management -> edit),
 no fallback needed. NOTE: the Toolsets field in Agent
 Management shows EMPTY even on a correct build — it only
 mirrors UI-assigned toolsets; judge by the plan card, never by
-that field (verified 2026-08-11).
+that field (observed 2026-08-11 on 2.225.14; not re-verified on
+2.348.22).
+On 2.348.22 only the Builder run up to the green full
+validation was re-verified (2026-09-21); Build & Activate, the
+Review step and the deploy gate were last exercised on
+2.225.14 -- rehearse one full build + activate.
 
 **Break glass** (Builder fails or stalls — see Appendix C for
 the failure signature): run this in the terminal — it creates
@@ -321,6 +347,15 @@ DEFINITION OF DONE (verify every point, then stop)
   full build-manifest validation is green.
 ```
 
+Prompt status (2.348.22, re-verified 2026-09-21): the prompt
+passed both validators on the first try. Its connector wiring
+is still REQUIRED: the full build-manifest validation demands
+`connectors` at the app level of the agent config plus the
+manifest wiring (see Appendix C), and the Builder's own
+instruction ("no connector in the agent config") loops without
+it. Outside the prompt: builtin-group tools now validate with
+`tool_name` AND `group_name`; the prompt keeps `tool_name`.
+
 **SAY** (while pasting and sending):
 
 > "This prompt is a job posting: role, responsibilities,
@@ -355,9 +390,11 @@ tour is elastic filler: extend 5.3 if the Builder is slow, cut
 
 ### 5.1 Workflows — the standard operating procedure
 
-**DO**: Paste the direct link (the workflow link in the UI is
-broken in this build — known bug, use the URL). The app uses
-hash routing and matches the workflow's display name:
+**DO**: Paste the direct link — a link carrying the workflow's
+platform config name (e.g. `order-incident-report`) shows
+"Workflow not found" (known UI bug since 2.225.14; still the case
+on 2.348.22, re-verified 2026-09-21). The app uses hash routing
+and matches the workflow's display name:
 
 ```text
 https://sam.solace.lab/#/agents/workflows/Order%20Incident%20Report
@@ -391,6 +428,10 @@ links) after every install.
 > schema on purpose: facts arrive structured, the story stays
 > human."
 
+(The output-contract enforcement with auto-retry was observed on
+2.225.14; not re-verified on 2.348.22 — rehearse one direct
+workflow run before making that claim on stage.)
+
 ### 5.2 Connectors, Entrypoints (30 s each)
 
 **DO**: Sidebar → **Connectors**, then **Entrypoints**.
@@ -414,12 +455,16 @@ links) after every install.
 
 ### 5.3 Models — multi-model by task (1 min)
 
-**DO**: Sidebar → **Models**. Scroll so all nine are visible.
+**DO**: Sidebar → **Models**. Scroll so all ten are visible
+(2.348.22 adds the `google gemini` alias, which calls the
+Gemini API directly).
 
 **SAY**:
 
-> "Nine model aliases, three vendors — Anthropic, DeepSeek,
-> Qwen — all behind one LiteLLM proxy. The point of the alias:
+> "Ten model aliases, four vendors — Anthropic, DeepSeek, Qwen
+> and Google. Nine sit behind one LiteLLM proxy, Gemini is
+> called directly — and the agents can't tell the difference.
+> The point of the alias:
 > an agent binds `workflow` or `fast`, never a vendor, never an
 > API key. Swapping the model behind an alias needs no agent
 > change and no restart.
@@ -462,6 +507,10 @@ system prompt and the connector binding, then **Deploy**.
 > knows the real document shape, not just my description.
 > Deploy — contract signed, badge issued."
 
+(The 100-document schema sampling is documented for the
+2.225.14 MongoDB connector; not re-verified on 2.348.22, where
+the connector is still flagged experimental.)
+
 (If the deploy spinner lingers:)
 
 > "While the badge prints — the agent is registering itself on
@@ -480,7 +529,8 @@ sold at the registers, and were any of those transactions
 voided? Short answer with numbers.
 ```
 
-Expected (verified, ~21 s on DeepSeek): 5 receipts in total —
+Expected (verified, ~21 s on DeepSeek, measured on SAM
+2.225.14): 5 receipts in total —
 4 valid sales plus 1 void, 7 units overall (Miami stores,
 `MIA-…` receipt numbers); the void is excluded from revenue.
 Exact phrasing varies per run; the receipt/void/unit counts do
@@ -526,8 +576,9 @@ not.
 **DO**: Click **Order** on the Opus One Napa Valley 2019 card
 ($425).
 
-**SAY** (one sentence — the confirmation lands in ~7 s; let
-its arrival interrupt you, that interruption IS the beat):
+**SAY** (one sentence — the confirmation lands in ~6 s: 5.9 s
+measured on 2.348.22, ~7 s on 2.225.14; let its arrival
+interrupt you, that interruption IS the beat):
 
 > "A premium order — 425 dollars — and the **Order
 > Confirmation Clerk**, a deliberately small worker on the
@@ -535,7 +586,7 @@ its arrival interrupt you, that interruption IS the beat):
 
 **SAY** (as it lands):
 
-> "—and there it is. Seven seconds: returning customer, the
+> "—and there it is. Six seconds: returning customer, the
 > product has sold before, order looks good. That cost about
 > **three cents**, because routine, high-volume work runs on
 > the cheap tier. No human touched it."
@@ -568,8 +619,10 @@ event-triggered tasks are attributed to `power_user` via the
 entrypoint's `defaultUserIdentity`, so they appear in THIS
 window, not in the admin's; Activities is per-user for
 everyone. There is deliberately NO workflow run — the incident
-path runs through the Orchestrator, see Appendix C). Show the
-flow graph building up; click into one delegation branch.
+path runs through the Orchestrator, see Appendix C; on 2.348.22
+it delegated per agent and used no workflow tool, 2026-09-21).
+Show the flow graph building up; click into one delegation
+branch.
 
 **SAY**:
 
@@ -709,7 +762,8 @@ table "Token chargeback by user"), then glance at row 4.
 ### 8.3 The proof — Tempo (45 s)
 
 **DO**: Switch to Grafana tab 2 (the pre-opened trace — no
-live typing).
+live typing). Every span here is a broker span: SAM emits no
+OTel spans (2.348.22), so the claim below is literally true.
 
 **SAY**:
 
@@ -762,10 +816,16 @@ run group with the three per-model runs.
 (If someone asks, offer to run the gate live during Q&A —
 commands in Appendix D. Never start it inside the talk.)
 
-Measured reference (2026-08-03 pre-runs, Factuality / LLM
-Judge): Haiku 0.83/0.88 — Sonnet 5 0.83/0.88 — Opus 4.8
-(production gate) 0.79/0.88, 11 of 12 checks passed — DeepSeek
-V3.2 0.79/0.75, all runs passing overall. Benchmark runs
+Measured reference (2026-08-03 pre-runs, measured on SAM
+2.225.14; Factuality / LLM Judge): Haiku 0.83/0.88 — Sonnet 5
+0.83/0.88 — Opus 4.8 (production gate) 0.79/0.88, 11 of 12
+checks passed — DeepSeek V3.2 0.79/0.75, all runs passing
+overall. On 2.348.22 (2026-09-21) the production gate scored
+0.83/0.92 with 12 of 12 checks passed; the benchmark was not
+re-run there. The platform DB was rebuilt for 2.348.22, so the
+run group shown on stage is your fresh pre-run — check the
+Haiku-versus-Sonnet claim in the SAY block against it before
+going live. Benchmark runs
 execute in parallel and share the runtime, so per-run durations
 are not comparable latency numbers — use the dashboard's
 LLM-latency panel for that.
@@ -808,32 +868,43 @@ marked "not shown today").
 
 ## Appendix A — Pre-flight checklist (15 min before going live)
 
-**Automated: run `./preflight.sh`** — it checks every item
-below, applies the fix on failure (install.sh, seed, mongo
-reseed, analyst removal, dashboard apply, eval pre-run) and
-ends with READY / NOT READY. The list below is the manual
-reference; only the window setup (incl. Claude Code `/mcp`)
-and the shop LED glance remain human steps.
+**Automated: run `./preflight.sh`** — it checks the platform,
+cluster, model, data-store, dashboard and eval items below,
+applies the fix on failure (install.sh, seed, mongo reseed,
+analyst removal, dashboard apply, eval pre-run) and ends with
+READY / NOT READY. The list below is the manual reference.
+Human steps that remain: the otel-collector check (item 1),
+the Builder Test warm-up (item 9), the spool check (item 10),
+the shop smoke test (item 11), the window setup (incl. Claude
+Code `/mcp`) and the shop LED glance -- the script prints most
+of them as manual reminders.
 
 1. `docker ps` — solace-1/2, otel-collector, generator,
    consumer, postgres, pgadmin, retail-pos-mongo all running
    (postgres/pgadmin are host containers and stay Exited after
-   a reboot — `docker start postgres pgadmin`).
+   a reboot — `docker start postgres pgadmin`). `otel-collector`
+   feeds Tempo for 8.3 and `preflight.sh` does not check it —
+   look for it explicitly (it was found Exited on 2026-09-21).
 2. `kubectl get pods -n sam-solace-lab` — all Running. Rule:
    after a simultaneous gwe+awe restart, restart awe once more
-   AFTER gwe is ready (DB-agent loading race).
+   AFTER gwe is ready (DB-agent loading race; observed on
+   2.225.14, not re-verified on 2.348.22 — keep the rule).
 3. Fresh CLI login (needed for fallbacks and evals):
    `sam auth login solace-lab --url https://sam.solace.lab`
    (as `sam_admin`).
 4. Windows and tabs per section 0 (A: sam_admin, B:
    power_user, shop, Claude Code as data_engineer with `/mcp`
-   verified, two Grafana tabs incl. the pre-opened trace).
+   reconnected after the last install and verified, two Grafana
+   tabs incl. the pre-opened trace).
 5. Retail POS Analyst absent, `retail-poslog` connector
    PRESENT (pre-provisioned; the live Builder beat only creates
    the agent binding it — a plain `./install.sh` leaves exactly
    this state).
 6. Model upstreams green:
    `cd agent-mesh-deployment/scripts/models && ./apply-models.sh --probe-only`
+   (probes the direct `google gemini` alias only when
+   `GOOGLE_AI_STUDIO_API_KEY` is set; the demo does not use it,
+   but a rejected key fails this probe)
 7. Kyverno healthy: `kubectl get pods -n kyverno` all Running —
    a crashlooping admission controller silently blocks EVERY
    pod change (typical after the Mac switches networks; fix in
@@ -848,7 +919,10 @@ and the shop LED glance remain human steps.
    connector tool by itself (the first call after the restart
    takes ~1 s longer); only if an agent still reports "data
    source offline", touch the connector description +
-   `sam config apply`.
+   `sam config apply`. Same trigger (and after any rebuild):
+   run one throwaway test in the Builder's **Test** tab — the
+   first test plan after an str start takes ~90 s, later ones
+   ~4 s (Appendix C).
 10. sam-VPN spool check (the 10-GB trap) — healthy is under
     ~2 GB:
 
@@ -857,7 +931,7 @@ and the shop LED glance remain human steps.
     ```
 
 11. Shop smoke test: fire one Pike Place test order, wait for
-    the Clerk confirmation event (~7 s), then reload the page
+    the Clerk confirmation event (~6 s), then reload the page
     to clear the event log for a clean stage.
 12. Eval pre-runs exist (Experiments → both experiments show a
     completed run). If not (fresh platform): run them now,
@@ -871,9 +945,12 @@ and the shop LED glance remain human steps.
     is failure-proof.
 
 Setup from scratch (fresh platform): run the base one-click
-deployment in `agent-mesh-deployment/` (Keycloak scripts,
-`load-images.sh`, `start.sh`, `sam auth login`,
-`apply-rbac.sh`), then `./install.sh` in this directory — it
+deployment in `agent-mesh-deployment/`
+(`setup-keycloak-client.sh`, `setup-keycloak-users.sh`,
+`load-images.sh`, `start.sh` — it ends with the browser login
+and `provision.sh`: RBAC, models, max_tokens, developer-mcp;
+headless: `./scripts/provision.sh --login`), then
+`./install.sh` in this directory — it
 layers the demo idempotently (data stores, retail core,
 models, mesh overlay, eval package, dashboard).
 `./uninstall.sh` removes the demo again and leaves the base
@@ -916,31 +993,53 @@ receipts plus the demo stories in the same document schema.
 ## Appendix C — Known limits and recovery (moderate honestly)
 
 - **Builder can die with "Expected toolResult blocks at
-  messages.N"** (BedrockException): SAM 2.225.14 assembles a
+  messages.N"** (BedrockException; observed on 2.225.14, not
+  re-verified on 2.348.22): SAM assembles a
   malformed history on long Builder conversations; the
   conversation is poisoned — do NOT keep typing. Start a FRESH
   Build with AI with the same prompt, or break glass (section
   4). Keep the Builder chat to ONE prompt; if it asks more
   than one clarifying question, break glass.
-- **Builder loops on full-manifest validation** (hit in the
-  live build 2026-08-04; RESOLVED
+- **Builder loops on full-manifest validation** (2.225.14,
+  still the case on 2.348.22 -- re-verified 2026-09-21; hit in
+  the live build 2026-08-04, solved by the prompt wiring
   2026-08-11): the check is NOT unsatisfiable -- it
   demands a `connectors` declaration at the APP level of the
   agent config (sibling of app_config); INSIDE app_config the
   schema rejects the field, which is why every earlier attempt
-  flip-flopped. The prompt now mandates the app-level
-  placement and full validation is expected GREEN (the deploy
-  gate mirrors the LAST validation result -- a failed full run
+  flip-flopped. On 2.348.22 the Builder's own instruction still
+  says "no connector in the agent config", so it loops on its
+  own. The prompt mandates the app-level placement plus the
+  connector as a manifest component (origin platform, status
+  deployed; the Builder adds depends_on/connectors on the
+  agent's manifest component itself) and passed both
+  validators on the first try on 2.348.22 -- full validation
+  is expected GREEN (the deploy gate, observed on 2.225.14,
+  mirrors the LAST validation result -- a failed full run
   turns it red, so never leave a red full validation as the
   last word; re-run after fixing the placement). If it still
   loops: click **Build & Activate** once the configs are green,
-  or break glass. Bonus signature: if a "Builder"
+  or break glass. Bonus signature (observed on 2.225.14, not
+  re-verified on 2.348.22): if a "Builder"
   reply suddenly lists retail tools ("I don't have a tool
   called ValidateBuildManifest"), your message landed in a
   NORMAL chat session -- the Builder session is gone; reopen
   Build with AI or break glass.
+- **Builder pauses after the plan / writes the manifest first**
+  (2.348.22, verified 2026-09-21): the Builder may stop at
+  "Here's the build plan for your review" instead of building
+  -- reply in ONE line "Approved - build it now exactly as
+  specified, no further questions." and it builds without
+  asking again (manufacturing prompt). A component config now
+  only validates once `build_manifest.yaml` exists in the
+  session; if the Builder validates the agent config first it
+  gets "No build_manifest.yaml exists in this session", writes
+  the manifest and continues on its own (insurance prompt) --
+  no action needed, it costs one extra round.
 - **Workflow I/O panel lags one deploy cycle** (verified
-  2026-08-12): the detail page reads schemas from the workflow
+  2026-08-12 on 2.225.14; the schema card extension is still
+  there on 2.348.22, the lag itself is not re-verified): the
+  detail page reads schemas from the workflow
   agent's A2A card extension
   (`solace.com/a2a/extensions/sam/schemas`), which repopulates
   when the runtime instance restarts after `sam config apply` --
@@ -948,9 +1047,10 @@ receipts plus the demo stories in the same document schema.
   schema defined" from the stale card. The NODE-level contracts
   never show in this panel by design: they live in the DAG
   (workflow YAML view) and enforce at runtime on each
-  specialist's answer, with auto-retry.
+  specialist's answer, with auto-retry (observed on 2.225.14).
 - **Direct workflow runs: one node may receive a literal
-  `{{workflow.input}}`** (observed once, 2026-08-12, on the
+  `{{workflow.input}}`** (observed once on 2.225.14, not
+  re-verified on 2.348.22; 2026-08-12, on the
   FIRST-starting node of a direct order-incident-report run,
   while the sibling nodes rendered fine -- suspected rendering
   race in input processing, possibly related to the
@@ -964,7 +1064,9 @@ receipts plus the demo stories in the same document schema.
   capability and validated cleanly: PDM and POS delivered
   schema-conforming fields in the same run).
 - **Stale agent card after delete + rebuild** (observed
-  2026-08-12): after the POS analyst is deleted and rebuilt
+  2026-08-12 on 2.225.14; not re-verified on 2.348.22, where an
+  agent DELETE now also removes the agent's broker queue): after
+  the POS analyst is deleted and rebuilt
   (exactly the live Builder sequence), the mesh can keep the
   DELETED instance's agent card; name-based resolution then
   hits the dead instance -- symptom: WARN "multiple agent cards
@@ -990,7 +1092,11 @@ receipts plus the demo stories in the same document schema.
   is WHY the incident path runs
   through the Orchestrator (`targetAgent`) and why Activities
   shows a task, not a workflow run. The workflow stays deployed
-  for the 5.1 explanation.
+  for the 5.1 explanation. A workaround exists on 2.348.22
+  (target the runtime name `workflow_<uuid with _>` plus
+  `inputExpression: input.payload`; `promptTemplate` stays
+  ignored), but it embeds the per-install UUID -- the demo keeps
+  the Orchestrator path.
 - **An STR restart drops the connector tool packages** (Mongo
   per-collection AND `*_sql_query_*` tools) -- self-healing
   since 2.348.22: str answers the first call with "tool not in
@@ -1000,8 +1106,15 @@ receipts plus the demo stories in the same document schema.
   if an agent still says "data source offline".)
 - **Event tasks need `defaultUserIdentity`**: without it they
   run under the gateway identity and are INVISIBLE in
-  Activities (per-user view, admins included). The shop-events
-  rules attribute to `power_user`.
+  Activities (per-user view, admins included; the no-identity
+  case was observed on 2.225.14). The shop-events rules
+  attribute to `power_user` -- the per-user view and that
+  attribution are re-verified on 2.348.22.
+- **Entrypoint deploy**: the event receivers start ~1 s after
+  the deploy on 2.348.22 (20-40 s on 2.225.14); events published
+  BEFORE the deploy completes are still lost -- after an
+  install, fire the smoke-test order only once `shop-events`
+  shows deployed.
 - **After the Mac switches networks, the k3s API dies for
   pods**: Rancher Desktop pins the Mac LAN IP as
   `--node-external-ip` in `/etc/conf.d/k3s`; after a Wi-Fi/DHCP
@@ -1014,8 +1127,12 @@ receipts plus the demo stories in the same document schema.
   the kyverno pods and re-check.
 - **LLM budget**: the LiteLLM proxy enforces a hard cost limit
   (HTTP 429 `budget_exceeded`). Check headroom before the
-  event; an incident run costs ~110–135k tokens.
-- **Timing facts**: incident run 2.5–4 min. If it exceeds
+  event; an incident run costs ~110–135k tokens (measured on
+  SAM 2.225.14).
+- **Timing facts**: incident run 2.5–4 min on 2.225.14; on
+  2.348.22 (2026-09-21) the fan-out started at 23.8 s, the
+  Order Incident Reporter at 144.8 s, and the report landed at
+  174.8 s. If it exceeds
   ~5 min, check Activities for a stuck node and keep narrating
   over the graph/Performance view.
 
@@ -1028,7 +1145,11 @@ cd ~/Documents/GitHub/solace-demo-artifacts/sam-retail-ops-demo/fallback && sam 
 ```
 
 Eval runs (pre-run before the event; quality ~5 min, benchmark
-~10 min):
+~10 min). The export is REQUIRED: without an exported
+`SAM_AUTH_TOKEN`, `sam eval` fails with 401 "Missing
+authorization header" -- it does not fall back to the login
+cache (re-verified on 2.348.22). The token is short-lived:
+re-export it right before each run.
 
 ```bash
 export SAM_AUTH_TOKEN=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/Library/Application Support/sam/auth/solace-lab.json')))['sam_access_token'])")
@@ -1070,7 +1191,7 @@ cd ~/Documents/GitHub/solace-demo-artifacts/sam-retail-ops-demo && ./uninstall.s
    tracing for free — the pieces you would otherwise build."
 3. **"110k tokens and 3 minutes per incident — how does that
    scale?"** — "Tiering is the point: the high-volume path is
-   the 7-second Haiku clerk at cents. The deep investigation is
+   the six-second Haiku clerk at cents. The deep investigation is
    a triage team for NOVEL failures, not a per-order hot path —
    in production you dedupe upstream on the mesh (topic
    filters, correlation) so one root cause triggers one

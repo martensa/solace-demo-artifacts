@@ -1,10 +1,12 @@
 # MongoDB connector to the local POSLOG store (sam-retail-ops-demo/mongodb,
 # host container retail-pos-mongo, port 27017 published on the
 # host). sam_ro/sam_ro is a demo-only read-only user (repo
-# convention). The connector is EXPERIMENTAL in 2.225.14 and
-# generates ONE tool (<collection>_mongo_query_<suffix>) with
-# aggregate/insert/update/delete operations; schema introspection
-# samples up to 100 documents at startup.
+# convention). The connector is EXPERIMENTAL (2.225.14; still
+# flagged experimental in the 2.348.22 connector schemas) and
+# generates ONE tool (<collection>_mongo_query_<first 8 hex of the
+# connector id>) with aggregate/insert/update/delete operations;
+# schema introspection samples up to 100 documents at startup
+# (observed on 2.225.14; not re-verified on 2.348.22).
 kind: connector
 name: retail-poslog
 description: >-

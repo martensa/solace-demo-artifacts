@@ -63,7 +63,7 @@
   <div>
     <h1>Acme Retail — Online Shop</h1>
     <div class="sub">Checkout publiziert Events direkt auf das Solace Event Mesh
-      (VPN <b>sam</b>) &rarr; Event-Mesh-Entrypoint &rarr; SAM Workflow</div>
+      (VPN <b>sam</b>) &rarr; Event-Mesh-Entrypoint &rarr; SAM Agents</div>
   </div>
   <div id="led"></div><div id="ledlabel">connecting…</div>
 </header>
@@ -75,7 +75,7 @@
 "use strict";
 /* Products come straight from retail_pdm; the three failure cases
    are real data stories (stock 0, out-of-season, contaminated
-   inventory_status), see sam-retail-ops-demo/demo-script.md. */
+   inventory_status), see sam-retail-ops-demo/talk-track.md. */
 const PRODUCTS = [
   { id: "ITM_006", sku: "WIN_OPUS_750ML", name: "Opus One Napa Valley 2019",
     brand: "Opus One", price: 425.00, emoji: "🍷",
@@ -176,7 +176,7 @@ function connect() {
     connected = true;
     $("#led").classList.add("on");
     $("#ledlabel").textContent = "sam VPN · ws://localhost:8008";
-    // Workflow-/Agent-Antworten live anzeigen
+    // Agent-Antworten live anzeigen (Clerk: confirmation, Orchestrator: incident)
     session.subscribe(
       solace.SolclientFactory.createTopicDestination("acmeretail/shop/order/result/>"),
       true, "result-sub", 10000);

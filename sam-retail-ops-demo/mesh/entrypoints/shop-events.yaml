@@ -1,21 +1,23 @@
 # Event-Mesh entrypoint (meetup demo): shop order events on the
 # sam VPN trigger SAM without any human in the loop.
-#   failed  -> order-incident-report workflow -> incident report
-#   created -> Retail OMS Query Expert -> short order confirmation
+#   failed  -> Orchestrator -> OMS/PDM/POS experts in parallel ->
+#              Order Incident Reporter merges -> incident report
+#   created -> Order Confirmation Clerk -> short order confirmation
 # Both rules publish their result back onto the mesh
 # (acmeretail/shop/order/result/...), which the shop page
 # subscribes to -- the loop closes in the browser.
 #
 # The broker connection mirrors the SAM deployment values
 # (external broker solace-1, VPN sam). qos 1 + on_completion:
-# the event is only acknowledged after the workflow/agent
+# the event is only acknowledged after the target agent
 # finishes (redelivery on crash).
 kind: entrypoint
 name: shop-events
 description: >-
   Event-mesh entrypoint for the Acme Retail shop demo: failed
-  orders trigger the order-incident-report workflow, created
-  orders get a confirmation from the OMS expert.
+  orders go to the Orchestrator (fans out to OMS/PDM/POS, Order
+  Incident Reporter merges), created orders get a confirmation
+  from the Order Confirmation Clerk.
 spec:
   type: event_mesh
   deploy: true
@@ -31,14 +33,18 @@ spec:
           - topic: "acmeretail/shop/order/failed/>"
             qos: 1
         messageFormat: json
-        # NOTE (verified 2026-07-31): with targetWorkflowName the
-        # entrypoint delivers an EMPTY A2A message -- promptTemplate
-        # is only rendered for AGENT targets (A2A sniff:
-        # parts[0].text == ""). Therefore the incident path runs
-        # through the Reporter AGENT, which delegates to the OMS,
-        # PDM and POS experts itself. The order-incident-report
-        # workflow stays deployed and is used for the UI/Activities
-        # story; vendor gap reported.
+        # NOTE (verified 2026-07-31 on 2.225.14, still the case on
+        # 2.348.22): with targetWorkflowName the entrypoint
+        # publishes to the workflow's config name (the workflow
+        # listens on workflow_<uuid>) and delivers an EMPTY A2A
+        # message -- promptTemplate is only rendered for AGENT
+        # targets (A2A sniff: parts[0].text == ""). Therefore the
+        # incident path runs through an AGENT target. The
+        # order-incident-report workflow stays deployed for the UI
+        # story (5.1); vendor gap reported. (Workaround on
+        # 2.348.22: targetWorkflowName workflow_<uuid with _> +
+        # inputExpression input.payload -- not used here, the UUID
+        # changes on every install.)
         #
         # Target is the ORCHESTRATOR: only it can delegate to peer
         # agents (a standard agent reports "peer delegation lives at
@@ -48,7 +54,8 @@ spec:
         # Attribute event-triggered tasks to the power_user persona:
         # without an identity the task runs under the bare gateway
         # identity and is INVISIBLE in Activities (per-user view for
-        # everyone, admins included). power_user is the demo's
+        # everyone, admins included; per-user view + attribution
+        # re-verified on 2.348.22). power_user is the demo's
         # operations persona -- the incident runs show up in ITS
         # Activities and under its name in the chargeback dashboard.
         defaultUserIdentity: power_user@solace.lab

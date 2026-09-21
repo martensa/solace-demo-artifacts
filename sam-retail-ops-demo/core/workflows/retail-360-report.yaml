@@ -1,7 +1,8 @@
 # Retail 360 workflow: fan out to the three domain experts in
 # parallel (no depends_on between them), then merge their findings.
-# Triggered via Orchestrator delegation once deployed (the 2.225.14
-# WebUI chat picker lists agents only); the caller needs
+# Triggered via Orchestrator delegation once deployed (the WebUI
+# chat picker lists agents only -- 2.225.14 and 2.348.22); the
+# caller needs
 # workflow:*:invoke AND agent:*:invoke scopes (each node hop is
 # authorized against the caller).
 kind: workflow
@@ -13,7 +14,8 @@ description: >-
 spec:
   appConfig:
     # Bump this version to force a redeploy: the apply deploy phase
-    # only fires for resources whose config CHANGED (see README).
+    # only fires for resources whose config CHANGED (see README;
+    # observed on 2.225.14).
     version: "1.0.4"
     display_name: Retail 360 Report
     description: >-
@@ -26,8 +28,9 @@ spec:
     default_node_timeout: "420s"
     fail_fast: false
     # Agent-card skill advertisement: capability metadata for
-    # Orchestrator delegation and MCP tool naming (the 2.225.14
-    # WebUI chat picker hides workflow cards regardless).
+    # Orchestrator delegation and MCP tool naming (the WebUI chat
+    # picker hides workflow cards regardless -- 2.225.14 and
+    # 2.348.22).
     skills:
       - id: retail_360_report
         name: Retail 360 Report

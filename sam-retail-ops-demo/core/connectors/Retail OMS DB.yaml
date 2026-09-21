@@ -18,5 +18,5 @@ spec:
     database: retail_oms
     hostname: host.docker.internal
     port: 5432
-    username: ${RETAIL_DB_USERNAME}
-    password: ${RETAIL_DB_PASSWORD}
+    username: ${RETAIL_DB_USERNAME, postgres}
+    password: ${RETAIL_DB_PASSWORD, postgres}

@@ -1,7 +1,7 @@
 # The MongoDB POSLOG agent -- normally created LIVE in the demo
-# via the AI Builder (prompt in ../demo-script.md). This file is
-# the break-glass fallback and the reference for what the Builder
-# should produce.
+# via the AI Builder (prompt in ../talk-track.md, section 4).
+# This file is the break-glass fallback and the reference for
+# what the Builder should produce.
 kind: agent
 name: Retail POS Analyst
 description: >-

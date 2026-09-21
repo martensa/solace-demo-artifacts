@@ -5,19 +5,20 @@ set -euo pipefail
 # install.sh -- layer the Event-Driven Retail Ops demo onto a
 # running agent-mesh-deployment (idempotent; safe to re-run).
 # =============================================================
-# Prerequisites (from agent-mesh-deployment):
+# Prerequisites (from agent-mesh-deployment, SAM 2.348.22):
 #   ./scripts/setup-keycloak-client.sh + setup-keycloak-users.sh
 #   ./scripts/load-images.sh && ./scripts/start.sh
-#   sam auth login solace-lab --url https://sam.solace.lab
-#   ./scripts/rbac/apply-rbac.sh
+#     (ends with the browser login + provision.sh: RBAC, models,
+#     max_tokens, developer-mcp); headless, run it yourself:
+#   ./scripts/provision.sh --login
 #
 # What this installs on top:
 #   1. Host data stores: postgres+pgadmin (retail_* DBs seeded
 #      from postgres/), MongoDB (POSLOG) incl. first-run seed
 #   2. Retail core package (core/: CRM/OMS/PDM connectors, schema
 #      skills, query experts, Retail 360 Reporter + workflow)
-#   3. The 5 additional model aliases (idempotent re-apply; on a
-#      fresh install start.sh skipped them for lack of a login)
+#   3. The additional model aliases (idempotent re-apply of
+#      apply-models.sh; provision.sh normally created them already)
 #   4. Demo overlay (mesh/): clerk, incident reporter, incident
 #      workflow, shop-events entrypoint -- POS analyst is created
 #      first from fallback/ (workflow xref needs it), then the
@@ -56,6 +57,9 @@ sam_auth_token
 
 api() {  # api METHOD PATH -> body on stdout, code in API_CODE
   local method="$1" path="$2"
+  # 2.348.22 pages every list endpoint (default 20 per page, newest
+  # first): read the maximum page of 100 (the demos stay far below).
+  [ "$method" = GET ] && case "$path" in *\?*) ;; *) path="$path?pageSize=100" ;; esac
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
     -o /tmp/install-api-body.json -w "%{http_code}")
@@ -75,10 +79,13 @@ fi
 OTHER_EPS=$(api GET /api/v1/platform/entrypoints | python3 -c "
 import json,sys
 for g in json.load(sys.stdin).get('data',[]):
-    if g.get('name') in ('plant-events','claims-events'): print(g['name'])")
+    if g.get('name') in ('plant-events','claims-events','claims-triage'): print(g['name'])")
 # entrypoint:demo-dir pairs (macOS bash 3.2: no associative arrays)
+# (claims-triage = the insurance DEFAULT profile, claims-events
+# its --extended one)
 for pair in "plant-events:sam-manufacturing-ops-demo" \
-            "claims-events:sam-insurance-ops-demo"; do
+            "claims-events:sam-insurance-ops-demo" \
+            "claims-triage:sam-insurance-ops-demo"; do
   ep="${pair%%:*}"; dir="${pair#*:}"
   if grep -qxF "$ep" <<<"$OTHER_EPS"; then
     echo "ERROR: another demo overlay is installed (entrypoint" >&2

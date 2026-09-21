@@ -1,6 +1,7 @@
-# Merge agent for the order-incident-report workflow (meetup
-# demo): turns the OMS/PDM/POS findings into one incident report
-# for the OMS team and the developers.
+# Merge agent for the incident path (meetup demo): the
+# Orchestrator (shop-events path) and the order-incident-report
+# workflow hand it the OMS/PDM/POS findings; it turns them into
+# one incident report for the OMS team and the developers.
 kind: agent
 name: Order Incident Reporter
 description: >-
@@ -11,15 +12,22 @@ description: >-
 spec:
   type: standard
   # Multi-model demo beat: the report merge runs on the workflow
-  # model (Claude Sonnet 5, scripts/models/) while the OMS/PDM/POS
-  # specialists stay on general (Claude Opus 4.8) -- visibly
+  # model (Claude Sonnet 5, scripts/models/) while the OMS/PDM
+  # specialists stay on general (Claude Opus 4.8) and POS runs on
+  # reasoning (DeepSeek) -- visibly
   # different models in Activities and the token dashboard.
-  # NOTE: model aliases are platform-normalized to lowercase.
+  # NOTE: model aliases are platform-normalized to lowercase
+  # (observed on 2.225.14).
   modelProvider:
     - workflow
-  # Reiner Analyse-/Merge-Agent: KEINE Toolsets. Mit artifact-Tools
-  # versucht das LLM _notify_artifact_save aufzurufen (kein echtes
-  # Tool) und der Lauf schlaegt fehl -- verifiziert am 2026-07-31.
+  # Pure analysis/merge agent: NO toolsets (no connector, no
+  # database access). With the artifact toolset the LLM tried to
+  # call _notify_artifact_save (not a real tool) and the run
+  # failed -- observed 2026-07-31 on 2.225.14, not re-verified on
+  # 2.348.22. Note: on 2.348.22 `toolsets: []` no longer means
+  # zero tools -- the agent card still lists ~23 built-in
+  # artifact/data tools; the Acai merge ran fine that way
+  # (2026-09-21).
   toolsets: []
   skills:
     - id: order_incident_synthesis

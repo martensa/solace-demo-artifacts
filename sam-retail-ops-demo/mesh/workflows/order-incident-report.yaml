@@ -1,8 +1,12 @@
-# Event-triggered incident workflow (meetup demo): a failed shop
-# order (published by sam-retail-ops-demo/shop on the sam VPN) is routed
-# here by the shop-events event-mesh entrypoint. Fans out to OMS,
-# PDM and POS specialists in parallel, then merges into an
-# incident report. fail_fast stays false: if the Retail POS
+# Incident SOP workflow (meetup demo) for a failed shop order
+# (published by sam-retail-ops-demo/shop on the sam VPN). Fans out
+# to OMS, PDM and POS specialists in parallel, then merges into an
+# incident report. The live EVENT path does not run here: the
+# shop-events entrypoint targets the Orchestrator, because an
+# entrypoint -> workflow target is defective (2.225.14, still in
+# 2.348.22; see shop-events.yaml). This workflow is the SOP shown
+# in the UI (talk-track 5.1) and runs directly (Run form or
+# Orchestrator delegation). fail_fast stays false: if the Retail POS
 # Analyst does not exist yet (it is created LIVE in the demo via
 # the AI Builder), the report transparently notes the missing POS
 # section instead of failing.
@@ -18,7 +22,8 @@ spec:
     # NOTE: event-triggered runs deliver NO structured input keys
     # (awe logs inputKeys: []), so nodes must reference the raw
     # task text as {{workflow.input}} -- {{workflow.input.text}}
-    # stays an unresolved literal here (verified 2026-07-31).
+    # stays an unresolved literal here (observed 2026-07-31 on
+    # 2.225.14; not re-verified on 2.348.22).
     version: "1.1.2"
     display_name: Order Incident Report
     description: >-
@@ -37,7 +42,8 @@ spec:
     # shop event that (conceptually) triggers this SOP -- the
     # exact payload shape shop/index.html publishes on
     # acmeretail/shop/order/failed/>. Today the event PATH runs
-    # via the Orchestrator (promptTemplate quirk), so this
+    # via the Orchestrator (promptTemplate quirk; 2.225.14, still
+    # in 2.348.22), so this
     # schema is the published contract + the typed Run form in
     # the UI, not a gate on the event flow. Loose by design:
     # only the fields the SOP actually needs are required.
@@ -100,7 +106,8 @@ spec:
     nodes:
       # Output contracts (JSON Schema) on the three specialist
       # nodes: the platform validates the agent's answer against
-      # the schema and auto-retries on violation -- deterministic
+      # the schema and auto-retries on violation (observed on
+      # 2.225.14; not re-verified on 2.348.22) -- deterministic
       # hand-offs mid-workflow. The final report node stays
       # free-form markdown on purpose (it is read aloud).
       - id: oms

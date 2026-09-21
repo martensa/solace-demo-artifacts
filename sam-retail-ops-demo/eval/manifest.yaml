@@ -3,6 +3,10 @@
 #   sam config apply -m manifest.yaml
 #   sam eval run retail-ops-quality --url https://sam.solace.lab --threshold 0.8
 #   sam eval run retail-ops-model-benchmark --url https://sam.solace.lab
+# sam eval needs an exported SAM_AUTH_TOKEN (401 "Missing
+# authorization header" without it; no fallback to the login
+# cache -- re-verified on 2.348.22). Export command: talk-track.md
+# Appendix D.
 kind: manifest
 name: retail-ops-eval
 description: >-

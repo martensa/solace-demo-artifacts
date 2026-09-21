@@ -19,7 +19,7 @@ set -euo pipefail
 # data volume is anonymous and re-seeded from mongodb/seed on
 # every fresh `install.sh` anyway, so keeping it would only leave
 # a dangling volume behind.
-# Keeps: the 5 model aliases, RBAC, the developer-mcp entrypoint,
+# Keeps: the model aliases, RBAC, the developer-mcp entrypoint,
 # the shared host containers postgres/pgadmin (retail_* DBs stay
 # seeded unless --purge-data; install.sh re-seeds them).
 #
@@ -57,6 +57,9 @@ sam_auth_token
 
 api() {
   local method="$1" path="$2"
+  # 2.348.22 pages every list endpoint (default 20 per page, newest
+  # first): read the maximum page of 100 (the demos stay far below).
+  [ "$method" = GET ] && case "$path" in *\?*) ;; *) path="$path?pageSize=100" ;; esac
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
     -o /tmp/uninstall-api-body.json -w "%{http_code}")
