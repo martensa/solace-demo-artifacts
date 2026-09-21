@@ -19,11 +19,14 @@ KEYCLOAK_REALM="${KEYCLOAK_REALM:-solace-lab}"
 KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 
-SAM_GROUPS="admin user viewer data_engineer power_user"
+SAM_GROUPS="admin user viewer data_engineer power_user sam_manager"
 
 # Demo users to create. Username equals group name by default
-# (see user_to_group below for exceptions).
-SAM_USERS="viewer data_engineer power_user sam_admin sam_user"
+# (see user_to_group below for exceptions). sam_manager (group
+# sam_manager) maps to the built-in SAM role of the same name:
+# administer everything in SAM except RBAC -- the separation-of-
+# duties persona next to the bootstrap admin sam_admin.
+SAM_USERS="viewer data_engineer power_user sam_manager sam_admin sam_user"
 
 # Map a demo user to its Keycloak group.
 # Defaults to the username; dedicated 'sam_admin' and 'sam_user'

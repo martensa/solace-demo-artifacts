@@ -16,8 +16,8 @@ KEYCLOAK_REALM="${KEYCLOAK_REALM:-solace-lab}"
 KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 
-SAM_GROUPS="admin user viewer data_engineer power_user"
-SAM_USERS="viewer data_engineer power_user sam_admin sam_user"
+SAM_GROUPS="admin user viewer data_engineer power_user sam_manager"
+SAM_USERS="viewer data_engineer power_user sam_manager sam_admin sam_user"
 
 # --- Check dependencies -------------------------------------------
 if ! command -v jq >/dev/null 2>&1; then

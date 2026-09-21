@@ -53,7 +53,11 @@ Scope mapping from the v1 roles:
   - `power_user` -- invoke, workflows, agent-builder read, full
     connector management, deployment read.
 - `rbac/claim-mappings/` -- one `rbacClaimMapping` per Keycloak
-  group (`user`, `viewer`, `data_engineer`, `power_user`). The
+  group (`user`, `viewer`, `data_engineer`, `power_user`,
+  `sam_manager`). `sam_manager` maps to the platform's BUILT-IN
+  role of that name (2.348.22: everything except RBAC); a claim
+  mapping may target a built-in DB role, only the YAML role
+  `sam_admin` is off-limits. The
   provider name is `azure` -- the platform's generic OIDC catalog
   entry, which is what the Helm chart wires Keycloak into. Claim
   values are plain group names because the Keycloak group mapper

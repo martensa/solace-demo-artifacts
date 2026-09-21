@@ -53,8 +53,9 @@ SAM self-calls its external URL during the OAuth flow.
 
 Do not re-create any of these resources from this repository.
 All Keycloak-side configuration this repo owns is scoped to the
-`solace-agent-mesh` OIDC client plus `viewer`, `data_engineer`,
-`power_user` groups and demo users within the `solace-lab` realm.
+`solace-agent-mesh` OIDC client plus the `admin`, `user`,
+`viewer`, `data_engineer`, `power_user` and `sam_manager` groups
+and their demo users within the `solace-lab` realm.
 
 ## Start and Stop
 
@@ -215,6 +216,12 @@ YAML role `sam_admin`). Everything else is DB-managed and applied
 post-install from `scripts/rbac/` via `sam config apply`:
 roles `sam_user`, `viewer`, `data_engineer`, `power_user`, claim
 mappings for the Keycloak groups, and default roles `[sam_user]`.
+2.348.22 adds the BUILT-IN role `sam_manager` (platform-created,
+`builtin=1`: all SAM administration except `rbac:*`); the Keycloak
+group/user `sam_manager` maps to it (separation of duties -- only
+`sam_admin` manages RBAC). Demo installs and provision.sh still
+run as `sam_admin`: the sam CLI keeps one login per target, and
+provision.sh applies RBAC.
 
 Scope grammar is v2 style `<category>:<resource>:<verb>` (e.g.
 `agent:*:invoke`, `connector:_:create`, `deployment:_:read`).

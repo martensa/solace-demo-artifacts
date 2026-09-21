@@ -30,3 +30,4 @@ resources:
     - keycloak-group-viewer
     - keycloak-group-data-engineer
     - keycloak-group-power-user
+    - keycloak-group-sam-manager

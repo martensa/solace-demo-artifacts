@@ -1,0 +1,14 @@
+# Keycloak group "sam_manager" -> built-in role sam_manager (new in
+# 2.348.22, created by the platform, not by this package): administer
+# everything in SAM -- agents, builder, connectors, models,
+# entrypoints, evals, skills, tools, workflows -- except RBAC.
+# Separation of duties: the platform team builds and runs the mesh,
+# only sam_admin decides who may do what. A claim mapping may target
+# this built-in role (plan-verified); it may not target the YAML role
+# sam_admin.
+kind: rbacClaimMapping
+name: keycloak-group-sam-manager
+spec:
+  oidcProvider: azure
+  claimValue: sam_manager
+  roleNames: [sam_manager]

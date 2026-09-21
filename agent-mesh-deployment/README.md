@@ -177,10 +177,11 @@ existing client re-syncs `.env` with the current secret.
 ./scripts/setup-keycloak-users.sh
 ```
 
-This creates five groups (`admin`, `user`, `viewer`,
-`data_engineer`, `power_user`) and five demo users with password
-equal to the username. `sam_admin` (group `admin`) is the
-bootstrap admin seeded via the Helm values.
+This creates six groups (`admin`, `user`, `viewer`,
+`data_engineer`, `power_user`, `sam_manager`) and six demo users
+with password equal to the username. `sam_admin` (group `admin`)
+is the bootstrap admin seeded via the Helm values; `sam_manager`
+administers everything in SAM except RBAC (see "RBAC" below).
 
 ### 4. Load the SAM images into the private registry
 
@@ -706,7 +707,13 @@ Keycloak group mappings are DB-managed and live in
 - Roles `sam_user`, `viewer`, `data_engineer`, `power_user`
   (v2 scope grammar `<category>:<resource>:<verb>`)
 - Claim mappings for the Keycloak groups `user`, `viewer`,
-  `data_engineer`, `power_user`. The claim they match is
+  `data_engineer`, `power_user` and `sam_manager`. The last one
+  targets the built-in role `sam_manager` (new in 2.348.22,
+  created by the platform): full control over agents, builder,
+  connectors, models, entrypoints, evals, skills, tools and
+  workflows, but no RBAC -- separation of duties next to
+  `sam_admin`, who alone decides who may do what. The claim they
+  match is
   deployment-wide since 2.348.22 (`sam.oauthProvider.claimKey`,
   default `groups`, which the Keycloak group mapper emits), no
   longer a field of each mapping
