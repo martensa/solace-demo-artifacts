@@ -170,18 +170,49 @@ re-provisioning order.
 - The chart validates at install time that the ingress TLS secret
   exists -- `start.sh` applies and waits on the cert-manager
   Certificate before helm.
-- An STR restart LOSES ALL dynamically registered connector
-  tool packages -- MongoDB per-collection tools
-  (`<collection>_mongo_query_<uuid>`) AND the SQL connector
-  tools (`<name>_sql_query_<uuid>`): the durable topic
-  subscription survives, but invokes fail with "tool not in
-  manifest" and the agent reports the data source as offline.
-  The package is pushed to STR on connector CREATE and UPDATE;
-  an agent redeploy does NOT restore it (all verified
-  2026-08-03). Remedy: touch each connector config (e.g. a
-  one-word description tweak) and `sam config apply` -- the
-  update re-pushes the package, UUIDs stay stable. Check every
-  connector-backed agent after any STR restart.
+- STR restart vs connector tools -- SELF-HEALING since 2.348.22
+  (verified 2026-09-21 with a scratch SQL connector): the restart
+  still drops the dynamically registered tool package
+  (`<subtype>_sql_query_<connector-id prefix>`, Mongo
+  per-collection tools), and the first call after it gets "tool
+  not in manifest" from str -- but awe now re-registers it via
+  `init_request` and retries ("connector tool re-registered via
+  init_request; retrying"): the call succeeds ~1 s later. The
+  2.225.14 remedy (touch every connector config and re-apply) is
+  no longer needed.
+- Deleting a connector still leaves its tool subscription
+  (`.../sam_remote_tool/invoke/<tool>_<id prefix>`) on
+  `q/str/builtin-tools-worker` (re-verified on 2.348.22). Harmless
+  (the id prefix is never reused); stop.sh drops the whole queue.
+- The platform REST path for entrypoints was renamed in 2.348.22:
+  `/api/v1/platform/gateways` -> `/api/v1/platform/entrypoints`
+  and `/gatewayDeployments` -> `/entrypointDeployments` (same
+  response shape, deploy body still `{gatewayId, action}`); the
+  old paths return 404. The sam CLI already uses the new ones.
+- Event-mesh entrypoint -> WORKFLOW target is STILL broken on
+  2.348.22 (re-verified 2026-09-21, A2A sniff): with
+  `targetWorkflowName: <config name>` the gateway publishes to
+  `a2a/v1/agent/request/<config name>` (the workflow listens on
+  `workflow_<uuid with _>`, so nobody picks it up; redelivery at
+  the ack timeout) AND the message text is empty (promptTemplate
+  is rendered for agent targets only). The runtime-name workaround
+  still works: `targetWorkflowName: workflow_<uuid with _>` +
+  `inputExpression: "input.payload"` -> the workflow gets the
+  event JSON, runs, and successOutput (responseType full) carries
+  the output_mapping as a data part. promptTemplate stays ignored
+  for workflow targets even then.
+- AI Builder with an EXISTING connector (2.225.14 "validation
+  deadlock": the manifest validator demanded `connectors`, the
+  config validator forbade it) -- resolved on 2.348.22 at the
+  validation level: the wiring lives in the build MANIFEST
+  (`connectors:`/`depends_on:` of the agent component), the agent
+  config carries none, and both `validate_component_config` and
+  `validate_build_manifest` pass. The Builder then stops at
+  `request_build_activate`: with the default feature flag
+  `builder_server_apply=false` the FRONTEND saves the components
+  on the "Build & Activate" click and adds the connector ids from
+  the manifest (`/api/v1/platform/builder/builds` is not even
+  routed). That last step was not exercised headlessly.
 - Builder Test engine WORKS on 2.348.22 (verified 2026-09-21 via
   the WebUI's API path: POST /api/v1/sessions {id} -> POST
   /api/v1/platform/builder/sessions/{id}/test-agent
