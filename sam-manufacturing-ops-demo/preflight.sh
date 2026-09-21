@@ -84,6 +84,9 @@ resolve_sam_cli >/dev/null 2>&1 || resolve_sam_cli
 
 api() {  # api METHOD PATH -> body on stdout, code in API_CODE
   local method="$1" path="$2"
+  # 2.348.22 pages every list endpoint (default 20 per page, newest
+  # first): read the maximum page of 100 (the demos stay far below).
+  [ "$method" = GET ] && case "$path" in *\?*) ;; *) path="$path?pageSize=100" ;; esac
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
     -o /tmp/preflight-body.json -w "%{http_code}")
@@ -227,7 +230,7 @@ else
     EID=$(api GET /api/v1/platform/evaluations/experiments | id_of "$exp")
     if [ -z "$EID" ]; then bad "experiment '$exp' not on platform"; continue; fi
     if api GET "/api/v1/platform/evaluations/experiments/$EID/runs" \
-        | grep -q '"completed"'; then
+        | grep -qE '"(completed|completed_with_warnings)"'; then
       ok "experiment '$exp' has a completed run"
     else
       echo "          fix: running '$exp' (this is the ~15-min part) ..."
@@ -245,7 +248,7 @@ else
         (cd "$SCRIPT_DIR/eval" && "$SAM_CLI" config plan >/dev/null 2>&1) || true
         sam_auth_token >/dev/null 2>&1
         if api GET "/api/v1/platform/evaluations/experiments/$EID/runs" \
-            | grep -q '"completed"'; then DONE=1; break; fi
+            | grep -qE '"(completed|completed_with_warnings)"'; then DONE=1; break; fi
         sleep 30
       done
       if [ "$DONE" -eq 1 ]; then
@@ -263,7 +266,10 @@ echo "   - Windows: A sam_admin (Agent Management), B power_user"
 echo "     (Activities), C cockpit/index.html (LED green), D Grafana."
 echo "   - Links: ./demo-links.sh"
 echo "   - Rehearsed break-glass buttons? RESET the cockpit after."
-echo "   - Never open the Builder's Test tab on stage."
+echo "   - Builder Test tab works since 2.348.22 -- warm it up once"
+echo "     after any str restart (first test plan ~90 s, then ~4 s)."
+echo "   - Tempo broker spans (chapter 8) need the event-mesh"
+echo "     otel-collector container Up (not checked here)."
 echo ""
 echo "== Result: $PASS ok, $FIXED fixed, $FAILED failed"
 if [ "$FAILED" -eq 0 ]; then

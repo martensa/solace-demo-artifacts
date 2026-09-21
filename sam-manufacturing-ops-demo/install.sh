@@ -6,11 +6,12 @@ set -euo pipefail
 # onto a running agent-mesh-deployment (idempotent; safe to
 # re-run).
 # =============================================================
-# Prerequisites (from agent-mesh-deployment):
+# Prerequisites (from agent-mesh-deployment, SAM 2.348.22):
 #   ./scripts/setup-keycloak-client.sh + setup-keycloak-users.sh
 #   ./scripts/load-images.sh && ./scripts/start.sh
-#   sam auth login solace-lab --url https://sam.solace.lab
-#   ./scripts/rbac/apply-rbac.sh
+#     start.sh runs provision.sh --login (sam CLI login, RBAC,
+#     models, max_tokens, developer-mcp); headless or after a
+#     failed step: ./scripts/provision.sh --login (idempotent)
 #
 # What this installs on top:
 #   1. Host data stores: postgres+pgadmin (mfg_* DBs seeded from
@@ -18,8 +19,9 @@ set -euo pipefail
 #      first-run seed
 #   2. Manufacturing core package (core/: CRM/OMS/PDM/SCM
 #      connectors, schema skills, query experts)
-#   3. The 5 additional model aliases (idempotent re-apply; on a
-#      fresh install start.sh skipped them for lack of a login)
+#   3. The additional model aliases (idempotent re-apply --
+#      provision.sh normally applied them already; google
+#      gemini is skipped without GOOGLE_AI_STUDIO_API_KEY)
 #   4. Demo overlay (mesh/): clerk, quality incident reporter,
 #      supply chain watcher, the two workflows and the
 #      plant-events entrypoint -- the Shop Floor Analyst is
@@ -59,6 +61,9 @@ sam_auth_token
 
 api() {  # api METHOD PATH -> body on stdout, code in API_CODE
   local method="$1" path="$2"
+  # 2.348.22 pages every list endpoint (default 20 per page, newest
+  # first): read the maximum page of 100 (the demos stay far below).
+  [ "$method" = GET ] && case "$path" in *\?*) ;; *) path="$path?pageSize=100" ;; esac
   API_CODE=$(curl -sk -m 20 -X "$method" "$SAM_URL$path" \
     -H "Authorization: Bearer $SAM_AUTH_TOKEN" \
     -o /tmp/install-api-body.json -w "%{http_code}")
@@ -78,10 +83,13 @@ fi
 OTHER_EPS=$(api GET /api/v1/platform/entrypoints | python3 -c "
 import json,sys
 for g in json.load(sys.stdin).get('data',[]):
-    if g.get('name') in ('shop-events','claims-events'): print(g['name'])")
+    if g.get('name') in ('shop-events','claims-events','claims-triage'): print(g['name'])")
 # entrypoint:demo-dir pairs (macOS bash 3.2: no associative arrays)
+# (claims-triage = the insurance DEFAULT profile, claims-events
+# its --extended one)
 for pair in "shop-events:sam-retail-ops-demo" \
-            "claims-events:sam-insurance-ops-demo"; do
+            "claims-events:sam-insurance-ops-demo" \
+            "claims-triage:sam-insurance-ops-demo"; do
   ep="${pair%%:*}"; dir="${pair#*:}"
   if grep -qxF "$ep" <<<"$OTHER_EPS"; then
     echo "ERROR: another demo overlay is installed (entrypoint" >&2
@@ -138,8 +146,8 @@ if [ "$WITH_ANALYST" -eq 0 ]; then
   # The two MongoDB connectors STAY installed (workplace
   # infrastructure, like the postgres connectors): the live
   # Builder beat only creates the AGENT binding them -- one
-  # config, no connector sub-tasks, no cross-component
-  # validation (optimization after the bumpy 2026-08-11 run).
+  # config, no connector sub-tasks (optimization after the
+  # bumpy 2026-08-11 run).
   echo "   removing Shop Floor Analyst (live Builder demo; connectors stay)"
   SFA_ID=$(api GET /api/v1/platform/agents | python3 -c "
 import json,sys

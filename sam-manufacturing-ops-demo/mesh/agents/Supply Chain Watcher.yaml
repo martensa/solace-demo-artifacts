@@ -1,4 +1,6 @@
-# Merge agent for the supply-replenishment workflow: the
+# Merge agent of the replenishment path (the Orchestrator's
+# threshold-crossed route from plant-events, and the
+# supply-replenishment workflow shown in the UI): the
 # PROACTIVE movement. Standing brief: production never stops.
 # Turns SCM/Shop-Floor/OMS findings into one replenishment
 # recommendation before the line runs dry.
@@ -13,11 +15,13 @@ spec:
   type: standard
   # Workflow tier (Claude Sonnet 5), same reasoning as the
   # Quality Incident Reporter: visibly different model than the
-  # general-tier specialists in Activities and the dashboards.
+  # general-tier experts (and the reasoning-tier Shop Floor
+  # Analyst) in Activities and the dashboards.
   modelProvider:
     - workflow
   # Pure analysis/merge agent: NO toolsets (see Quality Incident
-  # Reporter -- artifact toolsets break merge-only agents).
+  # Reporter -- artifact toolsets break merge-only agents,
+  # observed on 2.225.14).
   toolsets: []
   skills:
     - id: replenishment_recommendation

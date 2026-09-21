@@ -33,7 +33,8 @@ spec:
           - topic: "acmemfg/plant/quality/eol-failed/>"
             qos: 1
         messageFormat: json
-        # NOTE (verified 2026-07-31, retail): with
+        # NOTE (verified 2026-07-31, retail, on 2.225.14; still
+        # in 2.348.22 -- re-verified 2026-09-21): with
         # targetWorkflowName the entrypoint delivers an EMPTY A2A
         # message -- promptTemplate is only rendered for AGENT
         # targets. Therefore the incident path runs through the

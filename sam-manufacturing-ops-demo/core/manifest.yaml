@@ -23,11 +23,13 @@ target:
   url: https://sam.solace.lab
   auth:
     type: oauth
-variables:
-  # Demo defaults (repo convention); override via environment at
-  # apply time, e.g. MFG_DB_PASSWORD=secret ./install.sh
-  MFG_DB_USERNAME: "postgres"
-  MFG_DB_PASSWORD: "postgres"
+# Environment variables of this package (no `variables:` block on
+# purpose): MFG_DB_USERNAME / MFG_DB_PASSWORD, default postgres,
+# defaulted INLINE in the connectors -- `${VAR, default}` -- so an
+# exported value (e.g. from agent-mesh-deployment/.env) wins. A
+# default under `variables:` beats the environment on CLI 2.348.22
+# (verified 2026-09-21).
+# e.g. MFG_DB_PASSWORD=secret ./install.sh
 resources:
   connectors:
     - Acme CRM DB

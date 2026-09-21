@@ -1,8 +1,12 @@
-# Event-triggered quality incident workflow (movement 1): an EOL
-# test failure (published by the plant cockpit on the sam VPN) is
-# routed here by the plant-events event-mesh entrypoint. Fans out
-# to the OMS, PDM and Shop Floor specialists in parallel, then
-# merges into an incident report. fail_fast stays false: if the
+# Quality incident workflow (movement 1): deployed as the
+# standard operating procedure shown in the UI (Workflows /
+# Activities story). The eol-failed event itself does NOT run
+# through it: plant-events targets the ORCHESTRATOR, because the
+# promptTemplate renders for agent targets only -- a workflow
+# target gets an empty message (2.225.14, still in 2.348.22; see
+# the NOTE in ../entrypoints/plant-events.yaml). Fans out to the
+# OMS, PDM and Shop Floor specialists in parallel, then merges
+# into an incident report. fail_fast stays false: if the
 # Shop Floor Analyst does not exist yet (it is created LIVE in
 # the demo via the AI Builder), the report transparently notes
 # the missing telemetry section instead of failing.
@@ -19,7 +23,9 @@ spec:
     # NOTE: event-triggered runs deliver NO structured input keys
     # (awe logs inputKeys: []), so nodes must reference the raw
     # task text as {{workflow.input}} -- {{workflow.input.text}}
-    # stays an unresolved literal (verified 2026-07-31, retail).
+    # stays an unresolved literal (verified 2026-07-31, retail,
+    # on 2.225.14; not re-verified on 2.348.22 -- this demo does
+    # not event-trigger its workflows).
     version: "1.0.0"
     display_name: Quality Incident Report
     description: >-

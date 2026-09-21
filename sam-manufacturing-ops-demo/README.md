@@ -19,14 +19,25 @@ click:
    lands before the line stops.
 
 Start with [talk-track.md](talk-track.md) -- the demo script
-(v1.0, rehearsal-hardened: measured timings, READ-ALOUD quotes
-from the real reports, Builder green-path prompt, failure
-signatures with stage responses).
+(v1.0, rehearsal-hardened on SAM 2.225.14: measured timings,
+READ-ALOUD quotes from the real reports, Builder green-path
+prompt, failure signatures with stage responses).
+
+Platform: SAM Enterprise 2.348.22 (str 1.64.0, chart 2.1.164),
+the version running in the local lab. Re-verified on 2.348.22
+(2026-09-21): clean install/uninstall cycles, the
+released-order -> clerk event path (5.1 s), the
+`mfg-ops-quality` eval (12/12) and the Builder prompt (full
+validation green after one plan approval). The two-movement timings and
+report quotes in the talk track still come from the 2.225.14
+dress rehearsal (2026-08-11).
 
 ## Install / remove
 
-With the base platform running (one-click deployment plus
-`sam auth login`, see `agent-mesh-deployment/README.md`):
+With the base platform running (`./scripts/start.sh`; in a
+terminal it runs `./scripts/provision.sh --login` -- sam CLI
+login, RBAC, models, `max_tokens`, developer-mcp -- otherwise run
+that yourself afterwards; see `agent-mesh-deployment/README.md`):
 
 ```bash
 ./install.sh

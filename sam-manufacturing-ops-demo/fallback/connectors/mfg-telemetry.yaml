@@ -2,9 +2,11 @@
 # host port 27017 -- only one demo's mongo runs at a time; stop
 # retail-pos-mongo first).
 # sam_ro/sam_ro is a demo-only read-only user (repo convention).
-# The connector is EXPERIMENTAL in 2.225.14 and generates ONE
-# tool per collection (<collection>_mongo_query_<suffix>); schema
-# introspection samples up to 100 documents at startup.
+# The connector is EXPERIMENTAL (2.225.14, still in 2.348.22) and
+# generates ONE tool per collection
+# (<collection>_mongo_query_<8 hex connector id>); schema
+# introspection samples up to 100 documents at startup (observed
+# on 2.225.14; not re-verified on 2.348.22).
 kind: connector
 name: mfg-telemetry
 description: >-

@@ -1,6 +1,8 @@
-# Merge agent for the quality-incident-report workflow: turns
-# the OMS/PDM/Shop-Floor findings into one incident report for
-# the quality manager and the plant team.
+# Merge agent of the quality incident path (the Orchestrator's
+# eol-failed route from plant-events, and the
+# quality-incident-report workflow shown in the UI): turns the
+# OMS/PDM/Shop-Floor findings into one incident report for the
+# quality manager and the plant team.
 kind: agent
 name: Quality Incident Reporter
 description: >-
@@ -11,15 +13,21 @@ description: >-
 spec:
   type: standard
   # Multi-model demo beat: the report merge runs on the workflow
-  # model (Claude Sonnet 5) while the OMS/PDM/Shop-Floor
-  # specialists stay on general (Claude Opus 4.8) -- visibly
-  # different models in Activities and the token dashboard.
-  # NOTE: model aliases are platform-normalized to lowercase.
+  # model (Claude Sonnet 5) while the OMS/PDM experts stay on
+  # general (Claude Opus 4.8) and the Shop Floor Analyst on
+  # reasoning (DeepSeek V3.2) -- visibly different models in
+  # Activities and the token dashboard.
+  # NOTE: model aliases are platform-normalized to lowercase
+  # (observed on 2.225.14; the 2.348.22 aliases are lowercase).
   modelProvider:
     - workflow
   # Pure analysis/merge agent: NO toolsets. With artifact tools
   # the LLM tries to call _notify_artifact_save (not a real tool)
-  # and the run fails -- verified 2026-07-31 in the retail demo.
+  # and the run fails -- verified 2026-07-31 in the retail demo
+  # on 2.225.14; not re-verified on 2.348.22. toolsets: [] means
+  # no platform toolset, not zero tools: the 2.348.22 agent card
+  # still lists the built-in artifact/data tools -- no connector,
+  # no toolset, no database access.
   toolsets: []
   skills:
     - id: quality_incident_synthesis

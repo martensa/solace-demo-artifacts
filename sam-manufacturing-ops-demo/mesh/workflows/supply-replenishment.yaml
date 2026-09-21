@@ -1,8 +1,10 @@
-# Event-triggered replenishment workflow (movement 2, the
-# PROACTIVE beat): a stock-threshold-crossed event (published by
-# the plant cockpit on the sam VPN) is routed here by the
-# plant-events event-mesh entrypoint. Fans out to the SCM, Shop
-# Floor and OMS specialists in parallel, then merges into a
+# Replenishment workflow (movement 2, the PROACTIVE beat):
+# deployed as the standard operating procedure shown in the UI
+# (Workflows / Activities story). The threshold-crossed event
+# itself does NOT run through it: plant-events targets the
+# ORCHESTRATOR (same reason as quality-incident-report; see the
+# NOTE in ../entrypoints/plant-events.yaml). Fans out to the SCM,
+# Shop Floor and OMS specialists in parallel, then merges into a
 # replenishment recommendation -- before the line stops.
 # fail_fast false for the same live-Builder reason as the
 # quality workflow.
@@ -16,7 +18,8 @@ spec:
   appConfig:
     # Bump to force a redeploy (deploy phase fires on change
     # only). Event-triggered runs deliver NO structured input
-    # keys -> reference the raw task text as {{workflow.input}}.
+    # keys -> reference the raw task text as {{workflow.input}}
+    # (observed on 2.225.14; not re-verified on 2.348.22).
     version: "1.0.0"
     display_name: Supply Replenishment
     description: >-

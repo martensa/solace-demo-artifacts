@@ -15,5 +15,5 @@ spec:
     database: mfg_scm
     hostname: host.docker.internal
     port: 5432
-    username: ${MFG_DB_USERNAME}
-    password: ${MFG_DB_PASSWORD}
+    username: ${MFG_DB_USERNAME, postgres}
+    password: ${MFG_DB_PASSWORD, postgres}

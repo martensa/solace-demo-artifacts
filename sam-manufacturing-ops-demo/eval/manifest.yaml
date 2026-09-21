@@ -3,6 +3,11 @@
 #   sam config apply -m manifest.yaml
 #   sam eval run mfg-ops-quality --url https://sam.solace.lab --threshold 0.8
 #   sam eval run mfg-ops-model-benchmark --url https://sam.solace.lab
+# Export SAM_AUTH_TOKEN before the eval runs (sam_auth_token in
+# agent-mesh-deployment/scripts/lib/common.sh): without it
+# `sam eval` answers 401 even with a valid CLI login (still on
+# 2.348.22). ../preflight.sh runs both experiments (token
+# included) when they have no completed run yet.
 kind: manifest
 name: mfg-ops-eval
 description: >-

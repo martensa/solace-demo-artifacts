@@ -3,8 +3,18 @@
 > **Status: v1.0 — rehearsal-hardened.** Structure, beats,
 > click paths, the Builder green-path prompt and the section-7
 > timings/READ-ALOUD quotes are verified against the full dress
-> rehearsal of 2026-08-11 (one click, 13/13 tasks completed,
-> real report texts).
+> rehearsal of 2026-08-11 on SAM 2.225.14 (one click, 13/13
+> tasks completed, real report texts).
+>
+> **Platform: SAM 2.348.22** (str 1.64.0, chart 2.1.164), the
+> version in the local lab. Re-verified on 2.348.22 on
+> 2026-09-21: install/uninstall, the released-order -> clerk
+> event path (5.1 s), the `mfg-ops-quality` eval (12/12) and the
+> Builder prompt itself (run live: full validation true, "Your
+> build is ready!" after one plan approval). Not yet
+> re-rehearsed on 2.348.22: the two-movement run, the Build &
+> Activate click and the first task, so their timings, token
+> counts and quotes remain the 2.225.14 measurements.
 
 Conventions: **DO** = click path / stage direction (plain
 prose), **SAY** = spoken line — always a `>` blockquote;
@@ -108,7 +118,10 @@ click -> one event -> react + prevent -> no human in the loop).
 **DO**: window A -> Agent Management. Verified during pre-flight:
 the Shop Floor Analyst is ABSENT while the
 `mfg-telemetry`/`mfg-consumption` connectors are PRESENT
-(pre-provisioned workplace infrastructure).
+(pre-provisioned workplace infrastructure). Since 2.348.22 the
+list also shows the platform's built-in **Activity Monitor**
+next to the Orchestrator -- a platform service, not part of the
+team; if asked, say so in one sentence.
 
 **SAY**:
 
@@ -134,28 +147,37 @@ the Shop Floor Analyst is ABSENT while the
 (Quick Build). Paste the prompt below and send it. Watch for
 ~10 s that it actually starts building (if it asks a clarifying
 question instead, answer in one line — it is
-non-deterministic). Then leave it running and move on to
-section 5. Reference result =
+non-deterministic; if it stops at "Here's the build plan for
+your review", reply "Approved - build it now exactly as
+specified, no further questions." -- seen on 2.348.22).
+Then leave it running and move on to section 5. Reference result =
 `fallback/agents/Shop Floor Analyst.yaml`.
 
 The two MongoDB connectors (`mfg-telemetry`,
 `mfg-consumption`) are PRE-PROVISIONED by install.sh — the
 Builder only creates the AGENT that binds them. One config, no
-connector sub-tasks, no cross-component validation: this is the
-optimization after the bumpy 2026-08-11 run (see Appendix C).
+connector sub-tasks, only the agent config to generate: this is
+the optimization after the bumpy 2026-08-11 run (see Appendix
+C).
 
-Click rule: as soon as the agent config has validated and the
-plan card is up, click **Build & Activate** yourself — do not
-wait for the Builder to keep validating. In the Review step,
+Click rule: once the Builder reports the build ready (full
+validation green -- "Your build is ready!" on 2.348.22; the
+earlier "Here's the build plan for your review" is NOT that
+point), click **Build & Activate** yourself — do not wait for
+more validation rounds. Only the run up to the green full validation
+was re-verified on 2.348.22; Build & Activate and the Review
+step were last exercised on 2.225.14 -- rehearse one full
+build + activate. In the Review step,
 check TWO fields before deploying:
 
 1. NAME must read exactly "Shop Floor Analyst" (observed
-   2026-08-11: the Builder can normalize it to
-   "ShopFloorAnalyst" — the workflows reference the exact
-   name).
+   2026-08-11 on 2.225.14, not re-verified on 2.348.22: the
+   Builder can normalize it to "ShopFloorAnalyst" — the
+   workflows reference the exact name).
 2. TOOLS in the plan card: the agent config must contain the
    two builtin tool groups (data_analysis +
-   artifact_management). NOTE: after deploy, the Toolsets
+   artifact_management). NOTE (observed on 2.225.14, not
+   re-verified on 2.348.22): after deploy, the Toolsets
    field in Agent Management may show EMPTY even when the
    tools are fine — that field only mirrors UI-assigned
    toolsets; the truth is the runtime (verified via awe logs:
@@ -306,6 +328,19 @@ DEFINITION OF DONE (verify every point, then stop)
   full build-manifest validation is green.
 ```
 
+Why the prompt spells out the wiring (step 5): the connector
+placement found on 2.225.14 (2026-08-11) is still required on
+2.348.22 (re-verified 2026-09-21). The full build-manifest
+validation demands `connectors` at the APP level of the agent
+config, the config validator rejects it inside app_config, and
+the Builder's own instruction says "no connector in the agent
+config" -- without the explicit placement it loops. With it,
+both validators pass (this prompt verified on 2.348.22 on
+2026-09-21: full validation true, "Your build is ready!" after
+one plan approval -- see Appendix C). Outside this prompt:
+builtin-group tools validate with `tool_name` AND `group_name`
+on 2.348.22; the prompt keeps `tool_name`.
+
 **SAY** (while pasting and sending):
 
 > "This prompt is a job posting: role, responsibilities,
@@ -331,7 +366,9 @@ tour is elastic filler: extend the models stop if the Builder
 is slow, cut toolsets/skills if it finished early.
 
 1. **Workflows** — open `quality-incident-report` (direct link
-   via `./demo-links.sh`): the standard operating procedure.
+   via `./demo-links.sh`; use its display-name link -- a link
+   by the config name still shows "Workflow not found" on
+   2.348.22): the standard operating procedure.
    Three specialists investigate in parallel, a fourth merges;
    `fail_fast` off — a missing specialist is reported
    transparently instead of failing. All YAML in git, applied
@@ -342,7 +379,11 @@ is slow, cut toolsets/skills if it finished early.
 4. **Models** — the aliases: `fast` for routine confirmations,
    `general` for the experts, `workflow` for the merges,
    `reasoning` for the analyst — multi-model by task, no API
-   key ever visible.
+   key ever visible. The page lists ten aliases on 2.348.22;
+   this demo uses four. `google gemini` is the one that calls
+   its provider directly (Gemini API) instead of going through
+   the LiteLLM proxy -- a second provider path under the same
+   governance.
 5. **Toolsets and skills** — versioned schema knowledge
    (`mfg-*-schema`), first cut on overrun.
 
@@ -405,11 +446,15 @@ sam VPN via ws://localhost:8008). ONE click: **Release orders**.
 Timeline after the click (scripted in the cockpit,
 deterministic):
 
-Timings below are MEASURED (dress rehearsal 2026-08-11, all
-13 tasks completed, zero failures):
+Timings below are MEASURED on SAM 2.225.14 (dress rehearsal
+2026-08-11, all 13 tasks completed, zero failures); the
+delegation order and READ-ALOUD lines come from the same run.
+On 2.348.22 only the clerk path is re-measured so far (5.1 s);
+the two movements are not yet re-timed:
 
 - **0:00** -- two order-released events; the clerk confirms both
-  in ~6 s each (fast tier). The good case, 30 seconds.
+  in ~6 s each (fast tier; 5.1 s on 2.348.22). The good case,
+  30 seconds.
 - **0:25** -- Graz L3 starts failing (HD-22 units vs the old
   spec). Let the counters climb.
 - **~0:45** -- 6th fail publishes ONE `eol-failed` event; the
@@ -496,9 +541,14 @@ by the run the audience just watched:
    A2A hop is a broker span), and the offline evals in the
    Evaluations lab: the `mfg-ops-quality` gate plus the
    three-model `mfg-ops-model-benchmark` on the PDM expert —
-   pre-run before the event.
+   pre-run before the event. Tempo holds broker spans only:
+   SAM itself emits no OTel spans (2.348.22), and the spans need
+   the event-mesh `otel-collector` container running (Appendix
+   A). To follow one task through gwe/awe/str in Loki, filter by
+   the SAM traceID/taskID the log lines carry.
 
-Cost beat, with the rehearsal's REAL numbers (task metadata):
+Cost beat, with the rehearsal's REAL numbers (task metadata,
+measured on SAM 2.225.14):
 
 > "What did that just cost? The entire incident
 > investigation — five agents across five systems — was
@@ -530,12 +580,13 @@ react + prevent -> no human in the loop.
 
 ## Appendix A — Pre-flight checklist (15 min before going live)
 
-**Automated: run `./preflight.sh`** — it checks every item
+**Automated: run `./preflight.sh`** — it checks items 1-6
 below, applies the fix on failure (install.sh, seed, mongo
 reseed, analyst removal, dashboard apply, eval pre-run) and
 ends with READY / NOT READY. The list below is the manual
-reference; only the window setup and the break-glass rehearsal
-remain human steps.
+reference; the window setup, the break-glass rehearsal, the
+otel-collector (8) and the optional Builder warm-up (9) remain
+human steps.
 
 1. Base platform healthy: models probe
    (`agent-mesh-deployment/scripts/models/apply-models.sh
@@ -553,9 +604,20 @@ remain human steps.
 5. Cockpit LED green; break-glass buttons tested in rehearsal;
    then RESET.
 6. Evals pre-run (~15 min): `sam eval run mfg-ops-quality`,
-   `sam eval run mfg-ops-model-benchmark`.
+   `sam eval run mfg-ops-model-benchmark`. Export the token
+   first (`sam_auth_token` in
+   `agent-mesh-deployment/scripts/lib/common.sh`): a bare
+   `sam eval run` answers 401 even with a valid CLI login
+   (still on 2.348.22). `preflight.sh` handles this itself.
 7. Windows: A = sam_admin (Agent Management), B = power_user
    (Activities), C = cockpit, D = Grafana dashboard.
+8. Tempo (chapter 8): the event-mesh `otel-collector` container
+   must be Up (`docker start otel-collector`; `preflight.sh`
+   does not check it), otherwise Tempo shows no broker spans.
+9. Builder Test tab (optional): it works since 2.348.22 (the
+   2.225.14 30 s kill is fixed). If you plan to show it, warm
+   it up once after any str restart -- the first test plan
+   takes ~90 s, later ones ~4 s.
 
 ## Appendix B — Extra queries and product stories
 
@@ -576,18 +638,29 @@ remain human steps.
 
 ## Appendix C — Known limits (moderate honestly)
 
-Platform-level limitations (verified on this build): entrypoint
-promptTemplate renders only for AGENT targets, hence the
-Orchestrator route while the workflows carry the UI story;
-event-triggered runs deliver no structured input keys
-({{workflow.input}} raw); merge agents must have no toolsets.
+Platform-level limitations: entrypoint promptTemplate renders
+only for AGENT targets (2.225.14, still in 2.348.22 --
+re-verified 2026-09-21), hence the Orchestrator route while the
+workflows carry the UI story. A workflow target by config name
+sends an empty message to a topic the workflow does not listen
+on; the workaround (`targetWorkflowName` workflow_<uuid with _>
+plus `inputExpression` input.payload) runs the workflow on
+2.348.22 but still ignores the promptTemplate, so this demo
+keeps the Orchestrator route. Observed on 2.225.14, not
+re-verified on 2.348.22: event-triggered runs deliver no
+structured input keys ({{workflow.input}} raw); merge agents
+must have no toolsets. Note for 2.348.22: `toolsets: []` means
+no platform toolset, not zero tools -- the merge agents' cards
+still list the built-in artifact/data tools; they have no
+connector, no toolset, no database access.
 Manufacturing-specific: the cockpit timeline is scripted —
 deterministic on purpose; say so if asked ("the data stores are
 real, the event timing is compressed for stage").
 
-Builder failure signatures (all observed 2026-08-11, and the
-reason the connectors are now pre-provisioned so the live build
-creates ONLY the agent):
+Builder failure signatures (all observed 2026-08-11 on SAM
+2.225.14, and the reason the connectors are now pre-provisioned
+so the live build creates ONLY the agent; not re-verified on
+2.348.22 unless an entry says so):
 
 - Name normalization: "ShopFloorAnalyst" without spaces,
   connector "mfg-plant-mongodb". The workflows and the
@@ -599,12 +672,13 @@ creates ONLY the agent):
   connector creation out to parallel sub-tasks, one can claim
   "MongoDB is not supported (only DynamoDB, Neo4j, Neptune)".
   It IS supported (`document_db`/`mongodb`, experimental in
-  this build) -- the fallback configs prove it. With the
-  agent-only build this path no longer exists.
+  2.225.14, still in 2.348.22) -- the fallback configs prove
+  it. With the agent-only build this path no longer exists.
 - "Couldn't confirm full validation -- deploy stays disabled
   until it succeeds": the deploy gate reflects the LAST
-  validation result. RESOLVED 2026-08-11: the full validation
-  is NOT unsatisfiable -- it passes
+  validation result. RESOLVED 2026-08-11 (2.225.14, still the
+  case on 2.348.22 -- re-verified 2026-09-21): the full
+  validation is NOT unsatisfiable -- it passes
   when (a) the two connectors are manifest components with
   origin: platform / status: deployed AND (b) the agent config
   declares `connectors` at the APP level, as a sibling of
@@ -622,24 +696,41 @@ creates ONLY the agent):
   build): the cross-component validator demands a connectors
   declaration, the app_config schema rejects the field INSIDE
   app_config, and the Builder oscillates between adding and
-  removing it, burning minutes. Root cause resolved: the field
-  belongs at the APP level (sibling of app_config) -- see the
-  deploy-gate entry below; the prompt now states the exact
-  placement, so neither the flip-flop nor the failing full
-  validation should occur.
+  removing it, burning minutes. Root cause resolved (2.225.14,
+  still the case on 2.348.22 -- re-verified 2026-09-21): the
+  field belongs at the APP level (sibling of app_config) -- see
+  the deploy-gate entry above. On 2.348.22 the Builder's own
+  instruction even says "no connector in the agent config", so
+  without the prompt's explicit placement it still loops; with
+  it, neither the flip-flop nor the failing full validation
+  should occur.
+- **Builder pauses after the plan / writes the manifest first**
+  (2.348.22, verified 2026-09-21): the Builder may stop at
+  "Here's the build plan for your review" instead of building
+  -- reply in ONE line "Approved - build it now exactly as
+  specified, no further questions." and it builds without
+  asking again (manufacturing prompt). A component config now
+  only validates once `build_manifest.yaml` exists in the
+  session; if the Builder validates the agent config first it
+  gets "No build_manifest.yaml exists in this session", writes
+  the manifest and continues on its own (insurance prompt) --
+  no action needed, it costs one extra round.
 - Toolset loss (observed 2026-08-11, RESOLVED same day): one
   run deployed with no runtime tools beyond the connector
   queries (no artifacts, no charts). Root cause: the tool
   groups never made it into the agent config. With the prompt's
-  TOOLSETS block (builtin-group entries via `tool_name`, not
-  `group_name`) the tools reach the runtime -- verified in the
+  TOOLSETS block (builtin-group entries via `tool_name`; on
+  2.225.14 `group_name` was rejected, on 2.348.22 both
+  validate) the tools reach the runtime -- verified in the
   awe logs (create_chart_from_plotly_config registered).
-  CAVEAT: the platform's Toolsets field in Agent Management
-  shows EMPTY either way -- it only mirrors UI-assigned
-  toolsets, not app_config tools. Judge by the plan card / awe
-  logs, never by that field.
+  CAVEAT (observed on 2.225.14, not re-verified on 2.348.22):
+  the platform's Toolsets field in Agent Management shows
+  EMPTY either way -- it only mirrors UI-assigned toolsets, not
+  app_config tools. Judge by the plan card / awe logs, never by
+  that field.
 
-Artifact pass-through: charts rendered by a delegated agent
+Artifact pass-through (observed on 2.225.14, not re-verified on
+2.348.22): charts rendered by a delegated agent
 (e.g. the analyst's torque-trend PNG) live in THAT agent's
 session; the merge report references them but may not embed
 them, and the final answer says so transparently. Not a bug to
@@ -657,7 +748,9 @@ reconciled the two on its own, which is exactly what you want
 an analyst to do."
 
 - **Stale agent card after delete + rebuild** (observed
-  2026-08-12): after the Shop Floor Analyst is deleted and rebuilt
+  2026-08-12 on SAM 2.225.14; not re-verified on 2.348.22,
+  where an agent DELETE now also removes the agent's broker
+  queue): after the Shop Floor Analyst is deleted and rebuilt
   (exactly the live Builder sequence), the mesh can keep the
   DELETED instance's agent card; name-based resolution then
   hits the dead instance -- symptom: WARN "multiple agent cards
@@ -670,9 +763,10 @@ an analyst to do."
   pre-flight glance after any rebuild rehearsal.
 
 Merge agents may WARN with a pseudo-tool `_continue_generation`
-(observed 2026-08-11 at the Quality Incident Reporter, three
-WARN lines): the model tries to continue a long answer via a
-tool that does not exist. NOT fatal -- the task completed and
+(observed 2026-08-11 on SAM 2.225.14 at the Quality Incident
+Reporter, three WARN lines; not re-verified on 2.348.22): the
+model tries to continue a long answer via a tool that does not
+exist. NOT fatal -- the task completed and
 the report was delivered. Only if a report visibly ends
 mid-sentence, tighten the "under 25 lines" rule in the merge
 agent's prompt.
@@ -684,5 +778,5 @@ The Builder depends on the external LLM gateway
 succeeded). On stage: retry ONCE, and if it fails again switch
 to the break-glass without commentary —
 `cd fallback && sam config apply` (NEVER `--prune`) creates
-the Shop Floor Analyst + connectors in seconds and the demo
-continues at "Review and deploy".
+the Shop Floor Analyst (the connectors already exist) in
+seconds and the demo continues at 6.2.
