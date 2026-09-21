@@ -401,16 +401,144 @@ Operational notes (learned the hard way):
 
 ## Upgrade
 
-To upgrade SAM to a new version, point `.env` at the new delivery
-package (chart directory and image tarballs), update the image
-tags in `local-k8s-values.yaml`
-(`samDeployment.gwe.image.tag`, `samDeployment.str.image.tag`)
-and the constants in `scripts/load-images.sh`, then:
+A new SAM delivery changes the Helm chart, the gwe/str images and
+the image-baked component configs at the same time, so an upgrade
+is a clean rebuild rather than a rolling `helm upgrade`. The
+platform database is dropped with the namespace, so every
+DB-managed object is re-provisioned afterwards -- the order is in
+"Rebuilding after teardown".
+
+Have the new delivery package unpacked (or at least the chart
+tarball and the image tarballs to hand) and a `sam` CLI of the
+matching version on the PATH before starting.
+
+### 1. Review the new chart (no cluster changes)
+
+```bash
+./scripts/upgrade-preflight.sh \
+  --new /path/to/new/solace-agent-mesh-<ver>.tgz
+```
+
+`--new` takes the unpacked chart directory, the packaged `.tgz`, or
+a directory holding exactly one packaged chart. `--old` defaults to
+`SAM_CHART_PATH` from `.env`, i.e. the chart currently deployed.
+
+The report answers the two questions an upgrade raises:
+
+- Does `local-k8s-values.yaml` still fit? The values schema is
+  `additionalProperties: false`, so a key the new chart renamed or
+  removed fails the install. Section 3 lists any such key, section
+  4 the full schema diff (marking the removed keys this deployment
+  sets), and section 6 runs `helm lint` plus `helm template` with
+  the real values file.
+- Which tags belong in the pins? Section 2 prints the image
+  defaults of the new chart -- the gwe, str, s3Init, dbInit,
+  postgresql and seaweedfs versions the delivery expects. Section
+  5 flags chart defaults that changed underneath an override
+  (e.g. the seaweedfs tag), where an override may have become
+  redundant or newly wrong.
+
+Fix `local-k8s-values.yaml` until sections 3 and 6 are clean.
+
+### 2. Tear the old deployment down
+
+```bash
+./scripts/stop.sh
+```
+
+This removes the Helm release, the namespace with its PVCs and
+released PVs, the observability objects in the `monitoring`
+namespace, the `sam-observability` Helm plugin, the CoreDNS
+NodeHosts entry, the cached and now version-mismatched `sam` CLI
+plus its login cache, and the Keycloak client, groups and users.
+Nothing of the old version is left in the cluster.
+
+### 3. Repoint and re-pin
+
+- `.env`: `SAM_CHART_PATH`, `SAM_APP_IMAGE_TAR`,
+  `SAM_STR_IMAGE_TAR`, `SAM_CLI_TAR` to the new package.
+- `local-k8s-values.yaml`: `samDeployment.gwe.image.tag` and
+  `samDeployment.str.image.tag` to the versions from preflight
+  section 2, plus any values change preflight asked for.
+  `scripts/load-images.sh` and `scripts/purge-images.sh` read
+  their tags from this file, so there is nothing else to keep in
+  sync.
+
+The Keycloak client secret changes with step 2, so re-create the
+client and paste the new secret into `.env`:
+
+```bash
+./scripts/setup-keycloak-client.sh
+./scripts/setup-keycloak-users.sh
+```
+
+### 4. Load the new images and re-base the config overlays
 
 ```bash
 ./scripts/load-images.sh
-./scripts/start.sh
 ```
+
+`scripts/observability/` replaces three component configs in
+full, so a delivery that changed them would be silently overridden
+by the stale copies. `start.sh` refuses to deploy on drift; check
+and re-base up front, now that the new images are local:
+
+```bash
+./scripts/observability/check-config-drift.sh \
+  solace-agent-mesh:<app-ver> solace-agent-mesh-str:<str-ver>
+```
+
+On drift, refresh each reported base from the new image, review
+the vendor diff, and keep the `management_server` block out of it
+(it is re-appended from `kustomize/configs/management_server.yaml`):
+
+```bash
+docker run --rm --entrypoint cat solace-agent-mesh:<app-ver> \
+  /etc/sam/configs/gwe/gwe.yaml \
+  > scripts/observability/kustomize/configs/gwe.yaml.base
+```
+
+The three bases are `gwe.yaml.base` (`/etc/sam/configs/gwe/gwe.yaml`
+in the app image), `awe-sam.yaml.base`
+(`/etc/sam/configs/awe/sam.yaml`, app image) and `str.yaml.base`
+(`/etc/sam/configs/str/str.yaml`, str image).
+
+### 5. Install and re-provision
+
+```bash
+./scripts/start.sh
+sam auth login solace-lab --url https://sam.solace.lab
+./scripts/rbac/apply-rbac.sh
+(cd scripts/models && ./set-max-tokens.sh)
+./scripts/models/apply-models.sh
+./scripts/entrypoints/apply-entrypoints.sh
+```
+
+`start.sh` runs the models and entrypoints hooks itself, but at
+that point the `sam` login does not exist yet, so both warn and
+are re-run here. Steps 4 onwards of "Rebuilding after teardown"
+apply unchanged -- including the demo installs, which are yours to
+run afterwards.
+
+### 6. Drop the old images
+
+The old gwe/str images stay in the local Docker daemon and in
+`registry.solace.lab` (several GB per version), both outside the
+deleted namespace. Once the new version is up and verified:
+
+```bash
+./scripts/purge-images.sh --dry-run   # review
+./scripts/purge-images.sh             # remove
+```
+
+It keeps exactly the tags `local-k8s-values.yaml` pins and drops
+every other tag of the SAM repositories, so it stays correct
+across upgrades. `./scripts/stop.sh --purge-images` does the same
+inline, which is right for abandoning a version but not for an
+upgrade: the old images are the fallback until the new ones are
+proven. Registry deletion needs the registry to run with
+`REGISTRY_STORAGE_DELETE_ENABLED=true`; the script reports it
+rather than failing when it does not.
 
 To inspect current values:
 
@@ -522,6 +650,10 @@ agent-mesh-deployment/
     setup-keycloak-users.sh       Create groups + demo users
     teardown-keycloak-users.sh    Delete groups + demo users
     load-images.sh                Load offline images -> registry
+    purge-images.sh               Drop unpinned SAM images
+                                  (local daemon + registry)
+    upgrade-preflight.sh          Compare a new delivery chart
+                                  with the deployed one
     start.sh                      Deploy SAM (local chart path)
     stop.sh                       Full teardown
     lib/                          Shared helpers (sam CLI, .env)

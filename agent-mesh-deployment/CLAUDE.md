@@ -67,7 +67,16 @@ docker login registry.solace.lab    # once
 # standalone: scripts/models/apply-models.sh and
 # scripts/entrypoints/apply-entrypoints.sh
 ./scripts/stop.sh                   # full teardown
+./scripts/stop.sh --purge-images    # ... plus the SAM images
 ```
+
+Version upgrade (new delivery package): run
+`./scripts/upgrade-preflight.sh --new <chart>` first -- it decides
+whether `local-k8s-values.yaml` needs changes before anything is
+torn down. The full ordered procedure (preflight, teardown,
+re-pin, re-base the observability config bases against the new
+images, install, re-provision, purge the old images) is the
+README's "Upgrade" section.
 
 This deployment is pure SAM INFRASTRUCTURE (platform, RBAC,
 models, developer-mcp entrypoint, observability). It carries NO
@@ -169,10 +178,36 @@ reference DB-managed roles, never the YAML `sam_admin`.
 - `manifests/sam-tls-certificate.yaml` -- cert-manager
   Certificate for the ingress TLS secret
 - `scripts/load-images.sh` -- Loads the offline image tarballs
-  and pushes them to `registry.solace.lab`
+  and pushes them to `registry.solace.lab`. The refs come from
+  `local-k8s-values.yaml` (`samDeployment.gwe/str.image`), which
+  is the single source of truth for the pinned versions; the
+  script retags whatever name the tarball restores onto the pin
+  and says so when the two differ.
+- `scripts/purge-images.sh` -- Drops every tag of the SAM
+  repositories that `local-k8s-values.yaml` does NOT pin, from
+  the local Docker daemon and from `registry.solace.lab`
+  (`--dry-run` to review). Registry deletes need
+  `REGISTRY_STORAGE_DELETE_ENABLED=true` on the registry; without
+  it the script reports HTTP 405 instead of failing.
+- `scripts/upgrade-preflight.sh` -- Compares a new delivery chart
+  with the deployed one (`--new` takes an unpacked dir, a `.tgz`
+  or a dir holding one `.tgz`; `--old` defaults to
+  `SAM_CHART_PATH`). Prints the new image defaults to pin, checks
+  every key of `local-k8s-values.yaml` against the new
+  `values.schema.json` (strict schema: a renamed key fails the
+  install), diffs the two schemas, flags chart defaults that
+  changed under an override, and runs `helm lint` + `helm
+  template` with the real values. Run it BEFORE the teardown.
 - `scripts/start.sh` -- Sources `.env`, installs from
   `SAM_CHART_PATH`
-- `scripts/stop.sh` -- Full teardown including Keycloak client
+- `scripts/stop.sh` -- Full teardown. Beyond the release and the
+  namespace it removes what lives OUTSIDE the namespace and would
+  otherwise survive: the `sam-alerts` PrometheusRule and the
+  `grafana-datasource-sam-platform-config` ConfigMap in
+  `monitoring`, released PVs, the `sam-observability` Helm
+  plugin, the cached `sam` CLI (`scripts/lib/.cache/`) and its
+  login cache, and the Keycloak client/groups/users.
+  `--purge-images` also runs `purge-images.sh`.
 - `scripts/lib/common.sh` -- shared helpers (.env loading, sam
   CLI resolution, SAM_AUTH_TOKEN export) sourced by the rbac,
   models and entrypoints scripts and the demo install/uninstall
