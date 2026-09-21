@@ -27,17 +27,17 @@ counterpart.
 
 Scope mapping from the v1 roles:
 
-| v1 (Helm quickstart style)  | v2 (this directory)      |
-|-----------------------------|--------------------------|
-| `agent:*:delegate`          | `agent:*:invoke`         |
-| `artifact:read` / `write`   | implied by agent invoke  |
+| v1 (Helm quickstart style)    | v2 (this directory)     |
+|-------------------------------|-------------------------|
+| `agent:*:delegate`            | `agent:*:invoke`        |
+| `artifact:read` / `write`     | implied by agent invoke |
 | `tool:basic:*`, `tool:data:*` | implied by agent invoke |
-| `sam:deployments:read`      | `deployment:_:read`      |
-| `sam:connectors:read`       | `connector:*:read`       |
-| `sam:connectors:create`     | `connector:_:create`     |
-| `sam:connectors:*`          | `connector:*:*`          |
-| `sam:agent_builder:read`    | `agent_builder:*:read`   |
-| (not available in v1)       | `workflow:*:invoke`      |
+| `sam:deployments:read`        | `deployment:_:read`     |
+| `sam:connectors:read`         | `connector:*:read`      |
+| `sam:connectors:create`       | `connector:_:create`    |
+| `sam:connectors:*`            | `connector:*:*`         |
+| `sam:agent_builder:read`      | `agent_builder:*:read`  |
+| (not available in v1)         | `workflow:*:invoke`     |
 
 ## Files
 
@@ -91,9 +91,16 @@ sam auth login solace-lab --url https://sam.solace.lab
 
 The sam CLI is resolved by `../lib/common.sh`: `SAM_CLI_PATH`
 from `.env`, then the PATH, then auto-extracted from
-`SAM_CLI_TAR` into `../lib/.cache/` (gitignored). The CLI ships
-in the SAM delivery package as
-`solace-agent-mesh-<version>-cli-<os>-<arch>.tar.gz`.
+`SAM_CLI_TAR` into `../lib/.cache/` (gitignored). Some SAM
+delivery packages ship the CLI as
+`solace-agent-mesh-<version>-cli-<os>-<arch>.tar.gz`; 2.348.22 does
+not, so install it and set `SAM_CLI_PATH` (see the deployment
+README, "Installing the sam CLI").
+
+Since 2.348.22 a claim mapping carries no claim key of its own
+(`spec.claimKey` was removed, `roleName` became the list
+`roleNames`): the claim it matches is deployment-wide
+(`sam.oauthProvider.claimKey`, default `groups`).
 
 Re-running is safe: `sam config apply` reconciles create/update;
 deletions require `--prune` and are not part of the push-button

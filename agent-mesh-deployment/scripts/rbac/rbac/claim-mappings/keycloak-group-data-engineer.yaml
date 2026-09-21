@@ -3,6 +3,5 @@ kind: rbacClaimMapping
 name: keycloak-group-data-engineer
 spec:
   oidcProvider: azure
-  claimKey: groups
   claimValue: data_engineer
-  roleName: data_engineer
+  roleNames: [data_engineer]

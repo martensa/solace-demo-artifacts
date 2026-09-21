@@ -2,11 +2,14 @@
 # v1 built-in). oidcProvider names the platform's provider catalog
 # entry (the generic OIDC entry is called "azure"); claim values
 # are plain group names because the Keycloak group-membership
-# mapper is configured with full.path=false.
+# mapper is configured with full.path=false. Which claim is read
+# is NOT set here: since 2.348.22 it is deployment-wide
+# (sam.oauthProvider.claimKey -> EXTERNAL_AUTH_CLAIM_KEY, default
+# "groups", which is the claim that mapper emits). 2.348.22 also
+# dropped spec.claimKey and turned roleName into roleNames.
 kind: rbacClaimMapping
 name: keycloak-group-user
 spec:
   oidcProvider: azure
-  claimKey: groups
   claimValue: user
-  roleName: sam_user
+  roleNames: [sam_user]

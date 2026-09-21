@@ -3,6 +3,5 @@ kind: rbacClaimMapping
 name: keycloak-group-power-user
 spec:
   oidcProvider: azure
-  claimKey: groups
   claimValue: power_user
-  roleName: power_user
+  roleNames: [power_user]

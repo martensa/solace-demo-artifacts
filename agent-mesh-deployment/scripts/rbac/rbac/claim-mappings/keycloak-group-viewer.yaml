@@ -3,6 +3,5 @@ kind: rbacClaimMapping
 name: keycloak-group-viewer
 spec:
   oidcProvider: azure
-  claimKey: groups
   claimValue: viewer
-  roleName: viewer
+  roleNames: [viewer]
