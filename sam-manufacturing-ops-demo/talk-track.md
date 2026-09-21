@@ -723,8 +723,10 @@ so the live build creates ONLY the agent; not re-verified on
   only validates once `build_manifest.yaml` exists in the
   session; if the Builder validates the agent config first it
   gets "No build_manifest.yaml exists in this session", writes
-  the manifest and continues on its own (insurance prompt) --
-  no action needed, it costs one extra round.
+  the manifest and continues on its own (seen with the former
+  insurance Builder prompt, removed with that demo's extended
+  profile on 2026-09-21) -- no action needed, it costs one extra
+  round.
 - Toolset loss (observed 2026-08-11, RESOLVED same day): one
   run deployed with no runtime tools beyond the connector
   queries (no artifacts, no charts). Root cause: the tool

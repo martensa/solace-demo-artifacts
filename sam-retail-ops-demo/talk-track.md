@@ -1037,8 +1037,10 @@ receipts plus the demo stories in the same document schema.
   only validates once `build_manifest.yaml` exists in the
   session; if the Builder validates the agent config first it
   gets "No build_manifest.yaml exists in this session", writes
-  the manifest and continues on its own (insurance prompt) --
-  no action needed, it costs one extra round.
+  the manifest and continues on its own (seen with the former
+  insurance Builder prompt, removed with that demo's extended
+  profile on 2026-09-21) -- no action needed, it costs one extra
+  round.
 - **Workflow I/O panel lags one deploy cycle** (verified
   2026-08-12 on 2.225.14; the schema card extension is still
   there on 2.348.22, the lag itself is not re-verified): the

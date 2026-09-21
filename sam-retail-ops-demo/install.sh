@@ -81,8 +81,10 @@ import json,sys
 for g in json.load(sys.stdin).get('data',[]):
     if g.get('name') in ('plant-events','claims-events','claims-triage'): print(g['name'])")
 # entrypoint:demo-dir pairs (macOS bash 3.2: no associative arrays)
-# (claims-triage = the insurance DEFAULT profile, claims-events
-# its --extended one)
+# (claims-triage = the insurance demo; claims-events = its removed
+# extended profile, still matched so a lab installed from an older
+# insurance checkout is caught -- the insurance uninstall.sh still
+# removes it)
 for pair in "plant-events:sam-manufacturing-ops-demo" \
             "claims-events:sam-insurance-ops-demo" \
             "claims-triage:sam-insurance-ops-demo"; do

@@ -318,8 +318,7 @@ subshell keeps you here for the next command:
 ```
 
 ```bash
-(cd ../sam-insurance-ops-demo && ./install.sh)              # triage (default)
-(cd ../sam-insurance-ops-demo && ./install.sh --extended)   # 15-min original
+(cd ../sam-insurance-ops-demo && ./install.sh)
 ```
 
 - Retail -- "Acme Retail": order events, the incident workflow,
@@ -329,12 +328,10 @@ subshell keeps you here for the next command:
 - Manufacturing -- plant events, quality-incident and
   replenishment workflows
   ([README](../sam-manufacturing-ops-demo/README.md)).
-- Insurance -- "Acme Insurance": by default the claim triage
-  governance demo (one FNOL event -> one decision in ~30 s, with
-  an external v1 intake agent); `--extended` installs the 15-min
-  event-driven claims operations original instead. Both profiles
-  subscribe to overlapping FNOL topics, so switching removes the
-  other profile's entrypoint
+- Insurance -- "Acme Insurance": the claim triage governance demo
+  (one FNOL event -> one decision in ~30 s, with an external v1
+  intake agent that runs outside the platform); its former
+  `--extended` profile was removed on 2026-09-21
   ([README](../sam-insurance-ops-demo/README.md)).
 
 Only ONE demo runs at a time (shared host data stores, one MongoDB
