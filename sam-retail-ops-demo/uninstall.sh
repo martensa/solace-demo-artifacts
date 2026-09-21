@@ -93,7 +93,7 @@ fi
 echo "== Demo overlay"
 # Order: entrypoint first (stops event intake), then workflow,
 # then agents, then connector.
-remove "entrypoint" /api/v1/platform/gateways      "shop-events"
+remove "entrypoint" /api/v1/platform/entrypoints      "shop-events"
 remove "workflow"   /api/v1/platform/workflows     "order-incident-report"
 remove "agent"      /api/v1/platform/agents        "Order Incident Reporter"
 remove "agent"      /api/v1/platform/agents        "Order Confirmation Clerk"

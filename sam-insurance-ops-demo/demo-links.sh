@@ -67,7 +67,7 @@ for n in want:
 fetch /api/v1/platform/agents >/dev/null
 
 # Profile detection from the entrypoints on the platform.
-GW_NAMES=$(fetch /api/v1/platform/gateways | python3 -c "
+GW_NAMES=$(fetch /api/v1/platform/entrypoints | python3 -c "
 import json,sys
 try:
     for x in json.load(sys.stdin).get('data',[]): print(x.get('name',''))
@@ -123,7 +123,7 @@ printf "   %-32s %s\n" "Claims Intake Analyst (external)" \
   "discovered over the broker: Agent Management -> type 'discovered'"
 
 echo "== Triage entrypoint"
-ids_by_name /api/v1/platform/gateways claims-triage \
+ids_by_name /api/v1/platform/entrypoints claims-triage \
   | while IFS=$'\t' read -r name id; do
       [ "$id" = "NOT-FOUND" ] \
         && printf "   %-32s (not on platform)\n" "$name" \
@@ -193,7 +193,7 @@ ids_by_name /api/v1/platform/connectors \
     done
 
 echo "== Extended entrypoint"
-ids_by_name /api/v1/platform/gateways claims-events \
+ids_by_name /api/v1/platform/entrypoints claims-events \
   | while IFS=$'\t' read -r name id; do
       [ "$id" = "NOT-FOUND" ] \
         && printf "   %-32s (not on platform)\n" "$name" \

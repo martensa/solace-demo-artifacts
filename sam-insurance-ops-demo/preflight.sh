@@ -242,7 +242,7 @@ api GET /api/v1/platform/agents >/dev/null
 API_OK="${API_CODE:-}"
 PROFILE=""
 if [ "$API_OK" = "200" ]; then
-  GW=$(api GET /api/v1/platform/gateways | names_of)
+  GW=$(api GET /api/v1/platform/entrypoints | names_of)
   if grep -qxF claims-triage <<<"$GW"; then PROFILE=triage
   elif grep -qxF claims-events <<<"$GW"; then PROFILE=extended
   fi
@@ -320,7 +320,7 @@ collect_missing() {  # -> sets MISSING from the live platform
   AG=$(api GET /api/v1/platform/agents | names_of)
   CO=$(api GET /api/v1/platform/connectors | names_of)
   WF=$(api GET /api/v1/platform/workflows | names_of)
-  GW=$(api GET /api/v1/platform/gateways | names_of)
+  GW=$(api GET /api/v1/platform/entrypoints | names_of)
   for a in "${REQUIRED_AGENTS[@]}";     do grep -qxF "$a" <<<"$AG" || MISSING+="agent:$a "; done
   for c in "${REQUIRED_CONNECTORS[@]}"; do grep -qxF "$c" <<<"$CO" || MISSING+="connector:$c "; done
   for w in "${REQUIRED_WORKFLOWS[@]}";  do grep -qxF "$w" <<<"$WF" || MISSING+="workflow:$w "; done
@@ -350,17 +350,17 @@ if [ "$PROFILE" = "triage" ]; then
   else
     bad "workflow claim-triage deploymentStatus='$WF_DEP' -- fix: bump appConfig.version in triage/workflows/claim-triage.yaml, then ./install.sh (re-renders the entrypoint)"
   fi
-  EP_DEP=$(api GET /api/v1/platform/gateways | field_of claims-triage deploymentStatus)
+  EP_DEP=$(api GET /api/v1/platform/entrypoints | field_of claims-triage deploymentStatus)
   if [ "$EP_DEP" = "deployed" ]; then
     ok "entrypoint claims-triage deployed"
   else
-    EPID=$(api GET /api/v1/platform/gateways | id_of claims-triage)
+    EPID=$(api GET /api/v1/platform/entrypoints | id_of claims-triage)
     echo "          fix: deploying entrypoint claims-triage ($EPID, status '$EP_DEP') ..."
-    api_json POST /api/v1/platform/gatewayDeployments \
+    api_json POST /api/v1/platform/entrypointDeployments \
       "{\"gatewayId\":\"$EPID\",\"action\":\"deploy\"}" >/dev/null
     for _ in $(seq 1 8); do
       sleep 5
-      EP_DEP=$(api GET /api/v1/platform/gateways | field_of claims-triage deploymentStatus)
+      EP_DEP=$(api GET /api/v1/platform/entrypoints | field_of claims-triage deploymentStatus)
       [ "$EP_DEP" = "deployed" ] && break
     done
     if [ "$EP_DEP" = "deployed" ]; then fixd "entrypoint claims-triage deployed (receivers follow in ~30 s)"

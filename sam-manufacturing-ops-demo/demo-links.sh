@@ -109,7 +109,7 @@ ids_by_name /api/v1/platform/connectors \
     done
 
 echo "== Entrypoints"
-ids_by_name /api/v1/platform/gateways plant-events \
+ids_by_name /api/v1/platform/entrypoints plant-events \
   | while IFS=$'\t' read -r name id; do
       [ "$id" = "NOT-FOUND" ] \
         && printf "   %-32s (not on platform)\n" "$name" \

@@ -127,8 +127,8 @@ fi
 # Order: entrypoints first (stops event intake), then workflows,
 # then agents, then connectors -- for both profiles.
 echo "== Entrypoints (stop event intake first)"
-remove "entrypoint" /api/v1/platform/gateways      "claims-triage"
-remove "entrypoint" /api/v1/platform/gateways      "claims-events"
+remove "entrypoint" /api/v1/platform/entrypoints      "claims-triage"
+remove "entrypoint" /api/v1/platform/entrypoints      "claims-events"
 
 echo "== Triage overlay (triage/ + external agent)"
 remove "workflow"   /api/v1/platform/workflows     "claim-triage"

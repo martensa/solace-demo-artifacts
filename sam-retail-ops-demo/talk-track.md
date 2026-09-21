@@ -842,11 +842,13 @@ and the shop LED glance remain human steps.
    especially `tempo-0` (an OOM during block compaction shows
    as exit 137 / "Error", NOT OOMKilled; limit is 4Gi since
    2026-08-03).
-9. If str restarted since the last connector change: smoke-test
-   ALL connector agents (CRM/OMS/PDM/POS + Clerk, one short
-   question each). On "data source offline": touch the
-   connector description + `sam config apply` (the update
-   re-pushes the tool package; an agent redeploy does NOT).
+9. If str restarted since the last connector change: one short
+   question to each connector agent (CRM/OMS/PDM/POS + Clerk)
+   as a warm-up. Since 2.348.22 the platform re-registers a lost
+   connector tool by itself (the first call after the restart
+   takes ~1 s longer); only if an agent still reports "data
+   source offline", touch the connector description +
+   `sam config apply`.
 10. sam-VPN spool check (the 10-GB trap) — healthy is under
     ~2 GB:
 
@@ -981,17 +983,21 @@ receipts plus the demo stories in the same document schema.
   only then does the str retry without it. It remembers that, so
   every later plan comes back in ~4 s. Run one throwaway test in
   the pre-flight after any rebuild or str restart.
-- **Event-trigger → workflow is defective in 2.225.14**: with
-  `targetWorkflowName` the entrypoint delivers an EMPTY A2A
-  message (sniff-verified). That is WHY the incident path runs
+- **Event-trigger → workflow is defective (2.225.14, still in
+  2.348.22)**: with `targetWorkflowName` the entrypoint delivers
+  an EMPTY A2A message, addressed to the workflow's config name
+  that nothing listens on (sniff-verified on both versions). That
+  is WHY the incident path runs
   through the Orchestrator (`targetAgent`) and why Activities
   shows a task, not a workflow run. The workflow stays deployed
   for the 5.1 explanation.
-- **An STR restart loses ALL connector tool packages** (Mongo
-  per-collection AND `*_sql_query_*` tools): agents report
-  "data source offline", str logs "tool not in manifest".
-  Recovery: minimal edit to the connector description +
-  `sam config apply`; an agent redeploy does NOT help.
+- **An STR restart drops the connector tool packages** (Mongo
+  per-collection AND `*_sql_query_*` tools) -- self-healing
+  since 2.348.22: str answers the first call with "tool not in
+  manifest", the platform re-registers the tool and retries, and
+  the answer arrives ~1 s later. (2.225.14 needed a manual
+  connector touch + `sam config apply`; keep that as the fallback
+  if an agent still says "data source offline".)
 - **Event tasks need `defaultUserIdentity`**: without it they
   run under the gateway identity and are INVISIBLE in
   Activities (per-user view, admins included). The shop-events

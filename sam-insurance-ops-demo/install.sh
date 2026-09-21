@@ -136,10 +136,10 @@ apply_pkg() {  # apply_pkg DIR -> filtered CLI output (warns on a non-zero exit)
 }
 remove_entrypoint() {  # remove_entrypoint NAME REASON... (no-op if absent)
   local name="$1" id; shift
-  id=$(id_of /api/v1/platform/gateways "$name")
+  id=$(id_of /api/v1/platform/entrypoints "$name")
   [ -z "$id" ] && return 0
   echo "   removing entrypoint '$name' -- $*"
-  api DELETE "/api/v1/platform/gateways/$id" >/dev/null
+  api DELETE "/api/v1/platform/entrypoints/$id" >/dev/null
   echo "   '$name' deleted (HTTP $API_CODE)"
 }
 
@@ -161,7 +161,7 @@ fi
 
 # Only ONE demo overlay runs at a time (shared host stores, one
 # mongo on 27017, one stage). Refuse to install over another one.
-OTHER_EPS=$(api GET /api/v1/platform/gateways | python3 -c "
+OTHER_EPS=$(api GET /api/v1/platform/entrypoints | python3 -c "
 import json,sys
 for g in json.load(sys.stdin).get('data',[]):
     if g.get('name') in ('shop-events','plant-events'): print(g['name'])")

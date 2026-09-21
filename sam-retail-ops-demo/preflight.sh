@@ -134,7 +134,7 @@ missing=""
 AG=$(api GET /api/v1/platform/agents | names_of)
 CO=$(api GET /api/v1/platform/connectors | names_of)
 WF=$(api GET /api/v1/platform/workflows | names_of)
-GW=$(api GET /api/v1/platform/gateways | names_of)
+GW=$(api GET /api/v1/platform/entrypoints | names_of)
 for a in "${REQUIRED_AGENTS[@]}";     do grep -qxF "$a" <<<"$AG" || missing+="agent:$a "; done
 for c in "${REQUIRED_CONNECTORS[@]}"; do grep -qxF "$c" <<<"$CO" || missing+="connector:$c "; done
 for w in "${REQUIRED_WORKFLOWS[@]}";  do grep -qxF "$w" <<<"$WF" || missing+="workflow:$w "; done
@@ -146,7 +146,7 @@ if [ -n "$missing" ]; then
   AG=$(api GET /api/v1/platform/agents | names_of)
   CO=$(api GET /api/v1/platform/connectors | names_of)
   WF=$(api GET /api/v1/platform/workflows | names_of)
-  GW=$(api GET /api/v1/platform/gateways | names_of)
+  GW=$(api GET /api/v1/platform/entrypoints | names_of)
   missing=""
   for a in "${REQUIRED_AGENTS[@]}";     do grep -qxF "$a" <<<"$AG" || missing+="agent:$a "; done
   for c in "${REQUIRED_CONNECTORS[@]}"; do grep -qxF "$c" <<<"$CO" || missing+="connector:$c "; done
