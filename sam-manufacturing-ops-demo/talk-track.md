@@ -9,10 +9,12 @@
 > **Platform: SAM 2.348.22** (str 1.64.0, chart 2.1.164), the
 > version in the local lab. Re-verified on 2.348.22 on
 > 2026-09-21: install/uninstall, the released-order -> clerk
-> event path (5.1 s), the `mfg-ops-quality` eval (12/12) and the
-> Builder prompt itself (run live: full validation true, "Your
-> build is ready!" after one plan approval). Not yet
-> re-rehearsed on 2.348.22: the two-movement run, the Build &
+> event path (5.1 s), one eol-failed -> Orchestrator incident
+> run (report 241 s after the event, same false-reject
+> verdict), the `mfg-ops-quality` eval (12/12) and the Builder
+> prompt itself (run live: full validation true, "Your build is
+> ready!" after one plan approval). Not yet re-rehearsed on
+> 2.348.22: the two-movement run as a whole, the Build &
 > Activate click and the first task, so their timings, token
 > counts and quotes remain the 2.225.14 measurements.
 
@@ -91,7 +93,8 @@ Change, Two Movements") for the story — company, plants, the
 ECO trigger and the two movement cards. Switch to slide 3 (the
 architecture stage) at "the interesting part". Slide 2 returns
 in the WRAP: its bottom strip IS the causal-chain closer (one
-click -> one event -> react + prevent -> no human in the loop).
+click -> plant events -> react + prevent -> no human in the
+loop).
 
 **SAY** (core of it):
 
@@ -449,8 +452,11 @@ deterministic):
 Timings below are MEASURED on SAM 2.225.14 (dress rehearsal
 2026-08-11, all 13 tasks completed, zero failures); the
 delegation order and READ-ALOUD lines come from the same run.
-On 2.348.22 only the clerk path is re-measured so far (5.1 s);
-the two movements are not yet re-timed:
+On 2.348.22 the clerk path (5.1 s) and one eol-failed incident
+run are re-measured (report 241 s after the event, in the
+cockpit about T+4:35 -- right around the threshold event at
+T+4:40; 2.225.14: ~5:15); the two-movement run as a whole is
+not yet re-timed:
 
 - **0:00** -- two order-released events; the clerk confirms both
   in ~6 s each (fast tier; 5.1 s on 2.348.22). The good case,
@@ -471,7 +477,8 @@ the two movements are not yet re-timed:
   asked a question".
 - **~5:15** -- the incident report lands in the cockpit. (Both
   movements overlap for a minute -- that is fine and even makes
-  the point: the team walks and chews gum.)
+  the point: the team walks and chews gum. On 2.348.22 the
+  overlap may shrink to zero.)
 
   **READ ALOUD** (wording varies per run; the rehearsal run
   produced these lines -- pick the bottom line + one kicker):
@@ -490,7 +497,10 @@ the two movements are not yet re-timed:
   > The parts were never the problem. The data was."
 - **~8:15** -- the replenishment recommendation lands.
 
-  **READ ALOUD** (rehearsal wording):
+  **READ ALOUD** (rehearsal wording, 2.225.14; the PO-margin
+  sentence depended on the run date -- in the seed the open PO
+  arrives after the stock runs out, which slide 2 now says; if
+  the live report differs, read its own sentence):
 
   > "The safety-stock buffer was sized for a **120/day plan**,
   > but the ECO ramp is burning **3.5 to 4 times** that --
@@ -564,12 +574,12 @@ measured on SAM 2.225.14):
 **DO**: show slide 4 ("The Demo in the Lifecycle") and walk
 the checkmarks stage by stage — hired live (Shop Floor
 Analyst), onboarded with governed system access, coached with
-versioned schema skills, teamwork event-driven (react +
-prevent, 8 agents on 4 models), improvement measured to the
+versioned schema skills, teamwork event-driven (clerk, react
+and prevent: 8 agents on 4 models), improvement measured to the
 token. Then flip back to slide 2 as the final image — the
 movement cards are now what the audience just watched happen,
-and the bottom strip is the closer: one click -> one event ->
-react + prevent -> no human in the loop.
+and the bottom strip is the closer: one click -> plant events
+-> react + prevent -> no human in the loop.
 
 > "One engineering change, badly propagated, and the same
 > platform caught both consequences: the quality incident it

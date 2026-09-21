@@ -26,11 +26,13 @@ prompt, failure signatures with stage responses).
 Platform: SAM Enterprise 2.348.22 (str 1.64.0, chart 2.1.164),
 the version running in the local lab. Re-verified on 2.348.22
 (2026-09-21): clean install/uninstall cycles, the
-released-order -> clerk event path (5.1 s), the
-`mfg-ops-quality` eval (12/12) and the Builder prompt (full
-validation green after one plan approval). The two-movement timings and
-report quotes in the talk track still come from the 2.225.14
-dress rehearsal (2026-08-11).
+released-order -> clerk event path (5.1 s), one eol-failed ->
+Orchestrator incident run (report 241 s after the event, same
+false-reject verdict), the `mfg-ops-quality` eval (12/12) and
+the Builder prompt (full validation green after one plan
+approval). The two-movement run as a whole and the report quotes
+in the talk track still come from the 2.225.14 dress rehearsal
+(2026-08-11).
 
 ## Install / remove
 
@@ -133,7 +135,9 @@ host containers.
   theme-aware results page rendering both workflow reports
   (KPIs, findings, options, the one concrete action) with the
   rehearsal-verified numbers; the leave-behind / recap view of
-  what the audience watched happen
+  what the audience watched happen (its PO-margin sentence is
+  2.225.14 rehearsal output that depended on the run date -- in
+  the seed the open PO lands after the stockout, as slide 2 says)
 - `cockpit/index.html` -- the Acme plant operations cockpit:
   publishes plant events straight to the sam VPN via
   solclientjs (`ws://localhost:8008`), runs the scripted
@@ -164,16 +168,21 @@ kit) and raises the EOL torque spec from 18.0 to 22.0 Nm.
 `slides/SAM v2 - AI Worker Lifecycle Manufacturing.pptx` --
 four slides:
 
-1. AI Worker Lifecycle (unchanged)
+1. AI Worker Lifecycle (the generic vision slide; the HITL
+   bullet reads "chat approvals" -- interactive HITL, shipped
+   since 2.225.14, is answered in chat channels only)
 2. The Use Case: One Engineering Change, Two Movements -- the
    story slide: stage (company, plants, IT/OT, the ECO trigger)
-   plus one card per movement (React in ~5 min, Prevent in
-   ~8 min, with the real report quotes and EUR figures) and the
-   causal-chain strip; doubles as the WRAP closer
+   plus one card per movement (React in ~4 min, 241 s after the
+   event on 2.348.22; Prevent "minutes later", with the report
+   quotes and
+   the seeded EUR figures) and the causal-chain strip; doubles
+   as the WRAP closer
 3. Live Demo: Event-Driven Manufacturing Operations -- the
-   architecture stage: four dynamic DB agents (PDM/OMS/CRM/SCM,
+   architecture stage: four SQL query experts (PDM/OMS/CRM/SCM,
    `mfg_*`), the plant store (MongoDB `mfg_plant`), plants and
    EOL stations streaming over the event mesh, story beats 1-2-3
 4. The Demo in the Lifecycle -- stage-by-stage checkmarks
    (Shop Floor Analyst built live, mfg-*-schema skills,
-   event-driven react + prevent with 8 agents on 4 models)
+   one click, event-driven: clerk + react + prevent with 8
+   agents on 4 models)
