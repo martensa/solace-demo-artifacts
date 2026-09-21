@@ -415,21 +415,23 @@ matching version on the PATH before starting.
 ### 1. Review the new chart (no cluster changes)
 
 ```bash
-./scripts/upgrade-preflight.sh \
-  --new /path/to/new/solace-agent-mesh-<ver>.tgz
+./scripts/upgrade-preflight.sh --new "/path/to/SAM Enterprise Update <ver>"
 ```
 
-`--new` takes the unpacked chart directory, the packaged `.tgz`, or
-a directory holding exactly one packaged chart. `--old` defaults to
-`SAM_CHART_PATH` from `.env`, i.e. the chart currently deployed.
+`--new` takes the delivery package directory -- the chart is found
+in a subfolder such as `Charts/`, three levels deep at most -- or a
+packaged chart (`.tgz`), or an unpacked chart directory. Archives
+are classified by content, so the image tarballs in `Images/` are
+not mistaken for charts. `--old` defaults to `SAM_CHART_PATH` from
+`.env`, i.e. the chart currently deployed.
 
-The report answers the two questions an upgrade raises:
+The report answers the questions an upgrade raises:
 
 - Does `local-k8s-values.yaml` still fit? The values schema is
   `additionalProperties: false`, so a key the new chart renamed or
   removed fails the install. Section 3 lists any such key, section
   4 the full schema diff (marking the removed keys this deployment
-  sets), and section 6 runs `helm lint` plus `helm template` with
+  sets), and section 7 runs `helm lint` plus `helm template` with
   the real values file.
 - Which tags belong in the pins? Section 2 prints the image
   defaults of the new chart -- the gwe, str, s3Init, dbInit,
@@ -437,8 +439,12 @@ The report answers the two questions an upgrade raises:
   5 flags chart defaults that changed underneath an override
   (e.g. the seaweedfs tag), where an override may have become
   redundant or newly wrong.
+- What goes into `.env`? Section 6 lists the image and CLI
+  tarballs found in the package as ready-to-paste
+  `SAM_APP_IMAGE_TAR` / `SAM_STR_IMAGE_TAR` / `SAM_CLI_TAR`
+  assignments.
 
-Fix `local-k8s-values.yaml` until sections 3 and 6 are clean.
+Fix `local-k8s-values.yaml` until sections 3 and 7 are clean.
 
 ### 2. Tear the old deployment down
 
@@ -456,7 +462,11 @@ Nothing of the old version is left in the cluster.
 ### 3. Repoint and re-pin
 
 - `.env`: `SAM_CHART_PATH`, `SAM_APP_IMAGE_TAR`,
-  `SAM_STR_IMAGE_TAR`, `SAM_CLI_TAR` to the new package.
+  `SAM_STR_IMAGE_TAR`, `SAM_CLI_TAR` to the new package --
+  preflight section 6 prints the three tarball paths verbatim.
+  `SAM_CHART_PATH` must be an UNPACKED chart directory
+  (`start.sh` checks for `Chart.yaml` in it), so unpack the
+  packaged chart once and point it there.
 - `local-k8s-values.yaml`: `samDeployment.gwe.image.tag` and
   `samDeployment.str.image.tag` to the versions from preflight
   section 2, plus any values change preflight asked for.

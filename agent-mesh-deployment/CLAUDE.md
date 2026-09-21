@@ -190,9 +190,13 @@ reference DB-managed roles, never the YAML `sam_admin`.
   `REGISTRY_STORAGE_DELETE_ENABLED=true` on the registry; without
   it the script reports HTTP 405 instead of failing.
 - `scripts/upgrade-preflight.sh` -- Compares a new delivery chart
-  with the deployed one (`--new` takes an unpacked dir, a `.tgz`
-  or a dir holding one `.tgz`; `--old` defaults to
-  `SAM_CHART_PATH`). Prints the new image defaults to pin, checks
+  with the deployed one. `--new` takes the delivery package
+  directory (the chart is found in a subfolder such as `Charts/`,
+  max three levels deep), a `.tgz` or an unpacked dir; archives
+  are classified by CONTENT, so the image tarballs in `Images/`
+  are not mistaken for charts. `--old` defaults to
+  `SAM_CHART_PATH`. Prints the new image defaults to pin, the
+  package's image/CLI tarballs as `.env` lines, checks
   every key of `local-k8s-values.yaml` against the new
   `values.schema.json` (strict schema: a renamed key fails the
   install), diffs the two schemas, flags chart defaults that

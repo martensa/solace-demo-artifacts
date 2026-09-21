@@ -23,15 +23,19 @@ set -euo pipefail
 #   5. Default drift    new chart defaults for the keys we
 #                       override (an override may have become
 #                       redundant, or newly wrong)
-#   6. helm lint + helm template with our values -- the
+#   6. Package        the image and CLI tarballs sitting next to
+#                       the chart, as ready-to-paste .env lines
+#   7. helm lint + helm template with our values -- the
 #                       authoritative check
 #
 # Usage:
-#   ./upgrade-preflight.sh --new <chart-dir> [--old <chart-dir>]
+#   ./upgrade-preflight.sh --new <path> [--old <path>]
 #
-#   --new   unpacked chart directory of the NEW delivery
-#   --old   unpacked chart directory of the currently deployed
-#           delivery (default: $SAM_CHART_PATH from .env).
+#   --new   the NEW delivery: its package directory (the chart is
+#           found in a subfolder such as Charts/), a packaged chart
+#           (.tgz), or an unpacked chart directory
+#   --old   the currently deployed delivery, same forms
+#           (default: $SAM_CHART_PATH from .env).
 #           Omit to skip sections 4 and 5.
 # =============================================================
 
@@ -68,54 +72,60 @@ if [ -z "$OLD_CHART" ] && [ -f "$PROJECT_DIR/.env" ]; then
 fi
 
 # --- Resolve a chart argument to an unpacked directory -------------
-# Accepts the unpacked chart directory, a packaged chart (.tgz), or a
-# directory holding exactly one packaged chart -- the delivery package
-# ships the chart as a tarball, so this saves an unpack step.
+# Accepts the unpacked chart directory, a packaged chart (.tgz), or the
+# delivery package directory: the package keeps the chart in a
+# subfolder (Charts/) next to the image tarballs (Images/), so
+# subdirectories are searched as well.
+#
+# Archives are classified by CONTENT, not by name -- the image
+# tarballs are .tar.gz too, so only an archive that really carries a
+# Chart.yaml counts as a chart.
+SEARCH_DEPTH=3
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-resolve_chart() { # <lowercase-label> <path> -> chart directory
-  local label="$1" path="$2" tgz="" dest upper
-  # tr rather than ${label^^}: /bin/bash on macOS is 3.2
+is_chart_archive() { # <file> -- true if the archive holds a Chart.yaml
+  # Size-adaptive: a packaged chart is ~100 KB, so its listing is read
+  # in full and a Chart.yaml deep in the archive is still found. Only
+  # for the multi-GB image tarballs is the listing cut short, which
+  # keeps them from being decompressed in full just to classify them.
+  #
+  # pipefail is off inside the subshell: `grep -q` and `head` close
+  # the pipe as soon as they are done, so tar dies of SIGPIPE and
+  # would otherwise fail the whole pipeline.
+  local size_kb
+  size_kb=$(du -k "$1" 2>/dev/null | cut -f1 | tr -d ' ')
+  [ -n "$size_kb" ] || size_kb=0
+  ( set +o pipefail
+    if [ "$size_kb" -lt 51200 ]; then
+      tar -tzf "$1" 2>/dev/null | grep -qE '(^|/)Chart\.yaml$'
+    else
+      tar -tzf "$1" 2>/dev/null | head -400 \
+        | grep -qE '(^|/)Chart\.yaml$'
+    fi )
+}
+
+# Subchart Chart.yaml files live under charts/ and are never the chart
+# we are looking for.
+find_chart_candidates() { # <dir> -> newline-separated paths
+  find "$1" -maxdepth "$SEARCH_DEPTH" -type f -name Chart.yaml 2>/dev/null \
+    | grep -v '/charts/' \
+    | while IFS= read -r f; do dirname "$f"; done
+  find "$1" -maxdepth "$SEARCH_DEPTH" -type f \
+    \( -name '*.tgz' -o -name '*.tar.gz' \) 2>/dev/null \
+    | while IFS= read -r f; do
+        if is_chart_archive "$f"; then printf '%s\n' "$f"; fi
+      done
+}
+
+unpack_chart() { # <lowercase-label> <archive> -> chart directory
+  local label="$1" tgz="$2" dest chart_yaml upper
   upper=$(printf '%s' "$label" | tr '[:lower:]' '[:upper:]')
-
-  if [ -d "$path" ] && [ -f "$path/Chart.yaml" ]; then
-    echo "$path"; return 0
-  fi
-
-  if [ -f "$path" ]; then
-    case "$path" in
-      *.tgz|*.tar.gz) tgz="$path" ;;
-    esac
-  elif [ -d "$path" ]; then
-    # Exactly one packaged chart in the directory? (newline-separated
-    # string rather than an array: empty arrays under `set -u` are not
-    # safe on bash 3.2)
-    local found count
-    found=$(find "$path" -maxdepth 1 -type f \
-      \( -name '*.tgz' -o -name '*.tar.gz' \) | sort)
-    count=$(printf '%s' "$found" | grep -c . || true)
-    if [ "$count" -eq 1 ]; then
-      tgz="$found"
-    elif [ "$count" -gt 1 ]; then
-      echo "ERROR: $upper path '$path' holds several packaged charts;" >&2
-      printf '%s\n' "$found" | sed 's/^/  /' >&2
-      echo "Point --$label at one of them." >&2
-      return 1
-    fi
-  fi
-
-  if [ -z "$tgz" ]; then
-    echo "ERROR: $upper chart '$path' is neither an unpacked chart" >&2
-    echo "(directory with Chart.yaml) nor a packaged chart (.tgz)." >&2
-    return 1
-  fi
-
   dest="$WORK_DIR/$label"
   mkdir -p "$dest"
   tar -xzf "$tgz" -C "$dest"
-  local chart_yaml
-  chart_yaml=$(find "$dest" -maxdepth 2 -name Chart.yaml | head -1)
+  chart_yaml=$(find "$dest" -maxdepth 2 -name Chart.yaml \
+    | grep -v '/charts/' | head -1)
   if [ -z "$chart_yaml" ]; then
     echo "ERROR: no Chart.yaml inside $tgz." >&2
     return 1
@@ -123,6 +133,63 @@ resolve_chart() { # <lowercase-label> <path> -> chart directory
   echo "Unpacked $upper chart: $tgz" >&2
   dirname "$chart_yaml"
 }
+
+resolve_chart() { # <lowercase-label> <path> -> chart directory
+  # tr rather than ${label^^}: /bin/bash on macOS is 3.2
+  local label="$1" path="$2" upper cands count first
+  upper=$(printf '%s' "$label" | tr '[:lower:]' '[:upper:]')
+
+  # Already unpacked?
+  if [ -d "$path" ] && [ -f "$path/Chart.yaml" ]; then
+    printf '%s\n' "$path"; return 0
+  fi
+
+  # A packaged chart named directly?
+  if [ -f "$path" ]; then
+    if is_chart_archive "$path"; then
+      unpack_chart "$label" "$path"
+      return $?
+    fi
+    echo "ERROR: $upper '$path' is not a packaged Helm chart" >&2
+    echo "(the archive contains no Chart.yaml)." >&2
+    return 1
+  fi
+
+  if [ ! -d "$path" ]; then
+    echo "ERROR: $upper path '$path' does not exist." >&2
+    return 1
+  fi
+
+  # A directory to search. (Newline-separated string rather than an
+  # array: empty arrays under `set -u` are not safe on bash 3.2, and
+  # the package paths contain spaces.)
+  cands=$(find_chart_candidates "$path")
+  count=$(printf '%s' "$cands" | grep -c . || true)
+
+  if [ "$count" -eq 0 ]; then
+    echo "ERROR: no Helm chart under '$path'." >&2
+    echo "Searched $SEARCH_DEPTH levels deep for a directory with a" >&2
+    echo "Chart.yaml and for archives containing one (image tarballs" >&2
+    echo "are recognised by content and skipped)." >&2
+    return 1
+  fi
+  if [ "$count" -gt 1 ]; then
+    echo "ERROR: several charts under '$path':" >&2
+    printf '%s\n' "$cands" | sed 's/^/  /' >&2
+    echo "Point --$label at one of them." >&2
+    return 1
+  fi
+
+  first=$(printf '%s\n' "$cands" | head -1)
+  if [ -d "$first" ]; then
+    printf '%s\n' "$first"; return 0
+  fi
+  unpack_chart "$label" "$first"
+}
+
+# Keep the raw argument: if it was the package directory, section 7
+# reports the image and CLI tarballs sitting next to the chart.
+NEW_INPUT="$NEW_CHART"
 
 NEW_CHART=$(resolve_chart new "$NEW_CHART") || exit 1
 if [ -n "$OLD_CHART" ]; then
@@ -391,9 +458,45 @@ else:
         print("  No chart default changed for any key we override.")
 PY
 
-# --- Section 6: helm lint + template ------------------------------
+# --- Section 6: the rest of the delivery package ------------------
+# Only meaningful when --new pointed at the package (or a folder in
+# it) rather than at a bare chart.
+if [ -d "$NEW_INPUT" ]; then
+  PKG_LIST="$WORK_DIR/pkg.txt"
+  : > "$PKG_LIST"
+  find "$NEW_INPUT" -maxdepth "$SEARCH_DEPTH" -type f \
+    \( -name '*.tgz' -o -name '*.tar.gz' \) 2>/dev/null | sort \
+    | while IFS= read -r f; do
+        if is_chart_archive "$f"; then continue; fi
+        case "$(basename "$f")" in
+          *-app-*) printf 'SAM_APP_IMAGE_TAR=%s\n' "$f" >> "$PKG_LIST" ;;
+          *-str-*) printf 'SAM_STR_IMAGE_TAR=%s\n' "$f" >> "$PKG_LIST" ;;
+          *-cli-*) printf 'SAM_CLI_TAR=%s\n' "$f" >> "$PKG_LIST" ;;
+          *)       printf '# unclassified: %s\n' "$f" >> "$PKG_LIST" ;;
+        esac
+      done
+
+  if [ -s "$PKG_LIST" ]; then
+    echo ""
+    echo "== 6. Delivery package artifacts (for .env)"
+    sed 's/^/  /' "$PKG_LIST"
+    echo ""
+    echo "  SAM_CHART_PATH must be an UNPACKED chart directory"
+    echo "  (start.sh checks for \$SAM_CHART_PATH/Chart.yaml). If the"
+    echo "  package ships the chart packaged, unpack it once:"
+    echo "    tar -xzf <chart>.tgz -C <somewhere>"
+    echo "  and point SAM_CHART_PATH at the directory that holds"
+    echo "  Chart.yaml."
+    echo ""
+    echo "  Cross-check the versions in these filenames against the"
+    echo "  image defaults in section 2 before pinning them in"
+    echo "  local-k8s-values.yaml."
+  fi
+fi
+
+# --- Section 7: helm lint + template ------------------------------
 echo ""
-echo "== 6. helm lint + helm template with local-k8s-values.yaml"
+echo "== 7. helm lint + helm template with local-k8s-values.yaml"
 if ! command -v helm >/dev/null 2>&1; then
   echo "  SKIPPED: helm not found in PATH."
   exit 0
