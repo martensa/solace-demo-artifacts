@@ -6,8 +6,9 @@
 > rehearsal of 2026-08-11 on SAM 2.225.14 (one click, 13/13
 > tasks completed, real report texts).
 >
-> **Platform: SAM 2.348.22** (str 1.64.0, chart 2.1.164), the
-> version in the local lab. Re-verified on 2.348.22 on
+> **Platform: verified on SAM 2.348.22** (str 1.64.0, chart
+> 2.1.164); the lab runs 2.493.0 since 2026-11-03 (packages
+> validate, no live rehearsal there yet). Re-verified on 2.348.22 on
 > 2026-09-21: install/uninstall, the released-order -> clerk
 > event path (5.1 s), one eol-failed -> Orchestrator incident
 > run (report 241 s after the event, same false-reject

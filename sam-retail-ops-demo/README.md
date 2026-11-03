@@ -6,11 +6,13 @@ the base platform in `agent-mesh-deployment/`. Start with
 spoken script, click paths, pre-flight checklist, fallbacks,
 known limits and Q&A prep.
 
-Current for SAM Enterprise 2.348.22 (str 1.64.0, chart
-2.1.164), the version running in the local lab; install,
-uninstall, the shop paths and the eval gate were re-verified on
-2026-09-21. Observations from the first rehearsals on 2.225.14
-that were not re-tested carry a version label in the talk track.
+Verified on SAM Enterprise 2.348.22 (str 1.64.0, chart
+2.1.164): install, uninstall, the shop paths and the eval gate
+were re-verified on 2026-09-21. The local lab runs 2.493.0 (str
+1.76.4, chart 2.2.30) since 2026-11-03; there the declarative
+packages validate with CLI 2.493.0, a live run is still open.
+Observations from the first rehearsals on 2.225.14 that were not
+re-tested carry a version label in the talk track.
 
 ## Install / remove
 

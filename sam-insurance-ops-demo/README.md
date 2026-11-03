@@ -3,8 +3,10 @@
 "Claim Triage in 30 Seconds" (governance-first; 12 minutes of talk
 in a 16-minute slot, optional depth to 20) is a live demo layered
 as a removable overlay on top of the base platform in
-`agent-mesh-deployment/` (SAM v2 2.348.22 -- str 1.64.0, chart
-2.1.164 -- namespace `sam-solace-lab`). The stage is Acme
+`agent-mesh-deployment/` (namespace `sam-solace-lab`; verified on
+SAM v2 2.348.22 -- str 1.64.0, chart 2.1.164 -- the lab runs
+2.493.0 since 2026-11-03, packages validate, no live run there
+yet). The stage is Acme
 Insurance (motor and property, Germany-shaped geography), hail
 cell HZ-0913 over Landkreis Boeblingen on Saturday 2026-07-18 at
 18:40, and a frozen Monday morning (2026-07-20 10:00 UTC) with

@@ -11,8 +11,9 @@ Conventions: **DO** = click path, **SAY** = spoken line
 1 = lifecycle, 2 = demo scenario, 3 = the demo mapped onto the
 lifecycle).
 
-Platform: SAM Enterprise 2.348.22 (str 1.64.0, chart 2.1.164),
-the version running in the local lab. The script was first
+Platform: verified on SAM Enterprise 2.348.22 (str 1.64.0, chart
+2.1.164); the lab runs 2.493.0 since 2026-11-03 (packages validate,
+no live rehearsal there yet). The script was first
 rehearsed on 2.225.14: numbers without a version label come from
 the live runs on 2026-08-03 (SAM 2.225.14). Re-measured on
 2.348.22 on 2026-09-21: Clerk confirmation 5.9 s, Acai incident
