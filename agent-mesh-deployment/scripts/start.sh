@@ -92,7 +92,10 @@ if [ -z "${SAM_CHART_PATH:-}" ] || [ ! -f "$SAM_CHART_PATH/Chart.yaml" ]; then
   echo "Current value: '${SAM_CHART_PATH:-<unset>}'"
   exit 1
 fi
-CHART_VERSION=$(awk '$1 == "version:" {print $2; exit}' \
+# Top-level key only: every v2 Chart.yaml (2.0.23, 2.1.164, 2.2.30)
+# lists the dependencies, each with its own indented "version:",
+# before the chart's own "version:".
+CHART_VERSION=$(awk '/^version:/ {print $2; exit}' \
   "$SAM_CHART_PATH/Chart.yaml")
 echo "Using local chart: $SAM_CHART_PATH (version ${CHART_VERSION:-unknown})"
 

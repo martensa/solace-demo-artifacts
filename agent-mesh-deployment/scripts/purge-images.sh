@@ -5,8 +5,9 @@ set -euo pipefail
 # purge-images.sh -- remove SAM images that the current
 # local-k8s-values.yaml does NOT pin.
 # =============================================================
-# After a version upgrade the old gwe/str images stay behind in
-# two places, both outside the deleted namespace:
+# After a version upgrade the old gwe/str (and, when the delivery
+# moves them, postgres/seaweedfs) images stay behind in two
+# places, both outside the deleted namespace:
 #
 #   1. the local Docker daemon (docker load from the offline
 #      tarballs, plus the registry.solace.lab retag) -- several
@@ -16,12 +17,24 @@ set -euo pipefail
 # This script treats local-k8s-values.yaml as the single source
 # of truth: the tags pinned there are KEPT, every other tag of
 # the SAM repositories is purged. Nothing is hardcoded, so it
-# stays correct across upgrades.
+# stays correct across upgrades. For postgres and
+# chrislusf/seaweedfs only the registry.solace.lab refs count as
+# SAM's: the bare Docker Hub names (local postgres:*, used by
+# other workloads too) are never touched -- see PINNED below.
+# A registry tag that shares its manifest with a pinned tag is
+# kept as well (deleting the manifest would drop the pin too).
+# This fails closed: when a pinned tag's digest cannot be
+# resolved, its whole repository is skipped. A repository whose
+# tag list cannot be read -- or a registry with no stored login --
+# is reported as NOT checked; any of these makes the run exit 1
+# after purging what it could check.
 #
 # Registry deletion needs the registry to run with
 # REGISTRY_STORAGE_DELETE_ENABLED=true. If it does not, the
 # manifest DELETE returns 405 and the script says so instead of
-# failing -- the local daemon is cleaned either way.
+# failing -- the local daemon is cleaned either way. A DELETE
+# frees no registry disk by itself: after one, the script prints
+# the registry's garbage-collect command.
 #
 # Usage:
 #   ./purge-images.sh [--dry-run] [--yes] [--local-only]
@@ -61,18 +74,59 @@ done
 [ -f "$VALUES" ] || { echo "ERROR: $VALUES not found." >&2; exit 1; }
 
 # --- Tags pinned by the current values file ------------------------
-# Emits "<repository> <tag>" for gwe and str.
+# Emits "<repository> <tag> <scope>" for every image block the
+# deployment pulls from $REGISTRY (deduplicated: db-init/s3-init
+# share their repository:tag with postgresql/seaweedfs).
+#   scope "own":    gwe, str -- repositories only SAM uses, so the
+#                   bare local name (docker load) is managed too.
+#   scope "mirror": postgres, chrislusf/seaweedfs -- Docker Hub
+#                   names that other workloads use as well (the
+#                   demo postgres container, db-designer, iam).
+#                   Only the $REGISTRY/<repo> refs are managed;
+#                   bare local postgres:* / chrislusf/seaweedfs:*
+#                   images are NEVER touched.
+# A block on $REGISTRY without a usable repository/tag aborts the
+# run (as load-images.sh's pinned_ref does) -- a partial pin list
+# would mark the missing pin's tags as unpinned.
+read_pins() {
+  python3 - "$VALUES" "$REGISTRY" <<'PY'
+import sys, yaml
+values, registry = sys.argv[1:3]
+v = yaml.safe_load(open(values))
+blocks = (
+    ('samDeployment.gwe.image', 'own'),
+    ('samDeployment.str.image', 'own'),
+    ('persistence-layer.postgresql.image', 'mirror'),
+    ('samDeployment.dbInit.image', 'mirror'),
+    ('persistence-layer.seaweedfs.image', 'mirror'),
+    ('samDeployment.s3Init.image', 'mirror'),
+)
+seen = set()
+for path, scope in blocks:
+    node = v
+    for key in path.split('.'):
+        node = (node or {}).get(key)
+    if not isinstance(node, dict) or node.get('registry') != registry:
+        continue  # not served from our registry -> not ours to purge
+    repo, tag = node.get('repository'), node.get('tag')
+    if not repo or not tag:
+        sys.exit(f"ERROR: {path}: repository/tag not set in {values}")
+    if any(c.isspace() for c in f"{repo}{tag}"):
+        sys.exit(f"ERROR: {path}: whitespace in repository/tag in {values}")
+    entry = (str(repo), str(tag), scope)
+    if entry not in seen:
+        seen.add(entry)
+        print(*entry)
+PY
+}
+# Captured first, so a parser failure stops the script (set -e does
+# not see the exit status of a `< <(...)` process substitution).
 # (a read loop rather than mapfile: /bin/bash on macOS is 3.2)
+PINS_OUT=$(read_pins)
 PINNED=()
 while IFS= read -r line; do
   [ -n "$line" ] && PINNED+=("$line")
-done < <(python3 -c "
-import yaml
-v = yaml.safe_load(open('$VALUES'))
-for comp in ('gwe', 'str'):
-    i = v['samDeployment'][comp]['image']
-    print(i['repository'], i['tag'])
-")
+done <<< "$PINS_OUT"
 
 if [ "${#PINNED[@]}" -eq 0 ]; then
   echo "ERROR: could not read the pinned image tags from $VALUES." >&2
@@ -80,22 +134,35 @@ if [ "${#PINNED[@]}" -eq 0 ]; then
 fi
 
 echo "Pinned by local-k8s-values.yaml (kept):"
+# fields of a PINNED entry "<repository> <tag> <scope>"
+f_repo()  { echo "${1%% *}"; }
+f_tag()   { local t="${1#* }"; echo "${t%% *}"; }
+f_scope() { echo "${1##* }"; }
+
 for p in "${PINNED[@]}"; do
-  echo "  ${p% *}:${p#* }"
+  echo "  $(f_repo "$p"):$(f_tag "$p")"
 done
 echo ""
 
 repo_is_pinned() { # <repository> <tag>
-  local r t
+  local p
   for p in "${PINNED[@]}"; do
-    r="${p% *}"; t="${p#* }"
-    [ "$1" = "$r" ] && [ "$2" = "$t" ] && return 0
+    [ "$1" = "$(f_repo "$p")" ] && [ "$2" = "$(f_tag "$p")" ] && return 0
   done
   return 1
 }
 
+# SAM_REPOS: every managed repository (registry + prefixed local
+# refs). OWN_REPOS: the subset whose BARE local name is ours too.
 SAM_REPOS=()
-for p in "${PINNED[@]}"; do SAM_REPOS+=("${p% *}"); done
+OWN_REPOS=()
+for p in "${PINNED[@]}"; do
+  r=$(f_repo "$p")
+  case " ${SAM_REPOS[*]-} " in *" $r "*) ;; *) SAM_REPOS+=("$r") ;; esac
+  if [ "$(f_scope "$p")" = "own" ]; then
+    case " ${OWN_REPOS[*]-} " in *" $r "*) ;; *) OWN_REPOS+=("$r") ;; esac
+  fi
+done
 
 # --- Collect the local Docker images to purge ----------------------
 LOCAL_PURGE=()
@@ -106,17 +173,25 @@ if [ "$DO_LOCAL" -eq 1 ]; then
   else
     while read -r ref; do
       [ -n "$ref" ] || continue
-      # ref is either <repo>:<tag> or <registry>/<repo>:<tag>
+      case "$ref" in *"<none>"*) continue ;; esac
+      # ref is either <repo>:<tag> or $REGISTRY/<repo>:<tag>
       local_tag="${ref##*:}"
       local_repo="${ref%:*}"
-      local_repo="${local_repo#"$REGISTRY"/}"
-      case " ${SAM_REPOS[*]} " in
+      case "$local_repo" in
+        "$REGISTRY"/*)
+          local_repo="${local_repo#"$REGISTRY"/}"
+          managed=" ${SAM_REPOS[*]} " ;;
+        *)
+          # bare name: only gwe/str -- never postgres, seaweedfs
+          # or anything else pulled from Docker Hub.
+          managed=" ${OWN_REPOS[*]-} " ;;
+      esac
+      case "$managed" in
         *" $local_repo "*) ;;
         *) continue ;;
       esac
       repo_is_pinned "$local_repo" "$local_tag" || LOCAL_PURGE+=("$ref")
-    done < <(docker images --format '{{.Repository}}:{{.Tag}}' \
-               | grep -E '(^|/)solace-agent-mesh(-str)?:' || true)
+    done < <(docker images --format '{{.Repository}}:{{.Tag}}')
   fi
 fi
 
@@ -154,33 +229,113 @@ if helper:
 
 reg_curl() { curl -sS -u "$REG_AUTH" "$@"; }
 
+manifest_digest() { # <repository> <tag> -> sha256:... (empty if none)
+  reg_curl -o /dev/null -D - \
+    -H 'Accept: application/vnd.docker.distribution.manifest.v2+json' \
+    -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+    -H 'Accept: application/vnd.docker.distribution.manifest.list.v2+json' \
+    -H 'Accept: application/vnd.oci.image.index.v1+json' \
+    "https://$REGISTRY/v2/$1/manifests/$2" 2>/dev/null \
+    | tr -d '\r' | awk -F': ' 'tolower($1)=="docker-content-digest"{print $2}'
+}
+
 REG_PURGE=()
+# " <repo>@<digest> ..." -- the manifests of the pinned tags, checked
+# again right before every DELETE.
+KEEP_DIGESTS=" "
+# Repositories the registry check could not cover (unreadable tag
+# list, unresolvable pinned digest). Non-empty -> exit status 1.
+REG_UNCHECKED=""
 if [ "$DO_REGISTRY" -eq 1 ]; then
   if ! registry_ready; then
     echo "WARNING: no stored credentials for $REGISTRY in"
     echo "  ~/.docker/config.json -- run 'docker login $REGISTRY' to"
     echo "  include the registry in the purge. Skipping it for now."
     DO_REGISTRY=0
+    # A missing login is an unchecked registry too, not a clean one.
+    REG_UNCHECKED=" ${SAM_REPOS[*]}"
   else
     for repo in "${SAM_REPOS[@]}"; do
-      tags=$(reg_curl "https://$REGISTRY/v2/$repo/tags/list" 2>/dev/null \
-               | python3 -c "
+      # A failed tag list (401 after a credential change, 5xx,
+      # registry down) must not read as "no tags".
+      resp=$(reg_curl -w '\n%{http_code}' \
+               "https://$REGISTRY/v2/$repo/tags/list" 2>/dev/null || true)
+      code="${resp##*$'\n'}"
+      body="${resp%$'\n'*}"
+      case "$code" in [0-9][0-9][0-9]) ;; *) code="000" ;; esac
+      if [ "$code" = "200" ] && tags=$(python3 -c '
 import json, sys
-try:
-    print('\n'.join(json.load(sys.stdin).get('tags') or []))
-except Exception:
-    pass
-" || true)
+d = json.load(sys.stdin)
+if not isinstance(d, dict) or d.get("errors") or "tags" not in d:
+    sys.exit(1)
+print("\n".join(d["tags"] or []))
+' 2>/dev/null <<< "$body"); then
+        :
+      elif [ "$code" = "404" ] && [ "${body#*NAME_UNKNOWN}" != "$body" ]; then
+        echo "NOTE: $REGISTRY/$repo does not exist -- nothing to purge there."
+        continue
+      else
+        echo "WARNING: $REGISTRY/$repo not readable (HTTP $code) -- registry NOT checked"
+        REG_UNCHECKED+=" $repo"
+        continue
+      fi
+      # Digests of the pinned tags: an unpinned tag that points at
+      # the SAME manifest must not be deleted -- a manifest DELETE
+      # by digest removes every tag on it, the pinned one included.
+      # Fail closed: a pinned digest that cannot be resolved skips
+      # the whole repository.
+      keep_digests=" "
+      skip_repo=0
       while read -r tag; do
         [ -n "$tag" ] || continue
-        repo_is_pinned "$repo" "$tag" || REG_PURGE+=("$repo:$tag")
+        repo_is_pinned "$repo" "$tag" || continue
+        d=$(manifest_digest "$repo" "$tag" || true)
+        if [ -z "$d" ]; then
+          echo "WARNING: cannot resolve the digest of pinned $repo:$tag --"
+          echo "  $repo skipped, nothing purged from it."
+          skip_repo=1
+          break
+        fi
+        keep_digests+="$d "
+        KEEP_DIGESTS+="$repo@$d "
+      done <<< "$tags"
+      if [ "$skip_repo" -eq 1 ]; then
+        REG_UNCHECKED+=" $repo"
+        continue
+      fi
+      while read -r tag; do
+        [ -n "$tag" ] || continue
+        repo_is_pinned "$repo" "$tag" && continue
+        d=$(manifest_digest "$repo" "$tag" || true)
+        if [ -n "$d" ]; then
+          case "$keep_digests" in
+            *" $d "*)
+              echo "NOTE: $repo:$tag shares its manifest with a pinned tag -- kept."
+              continue ;;
+          esac
+        fi
+        REG_PURGE+=("$repo:$tag")
       done <<< "$tags"
     done
+    [ -z "$REG_UNCHECKED" ] && echo "Registry checked: ${SAM_REPOS[*]}"
   fi
 fi
 
+# True (and prints why) if part of the registry was not checked.
+registry_unchecked() {
+  [ -n "$REG_UNCHECKED" ] || return 1
+  echo ""
+  echo "WARNING: the registry was NOT checked for:$REG_UNCHECKED"
+  echo "  (see the WARNING above) -- unpinned tags there were not"
+  echo "  purged. Fix the registry access and re-run."
+}
+
 # --- Report --------------------------------------------------------
 if [ "${#LOCAL_PURGE[@]}" -eq 0 ] && [ "${#REG_PURGE[@]}" -eq 0 ]; then
+  if registry_unchecked; then
+    echo "Nothing to purge in what WAS checked."
+    exit 1
+  fi
   echo "Nothing to purge: no unpinned SAM images found."
   exit 0
 fi
@@ -198,6 +353,7 @@ fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "--dry-run: nothing removed."
+  registry_unchecked && exit 1
   exit 0
 fi
 
@@ -214,28 +370,32 @@ fi
 # manifest is not -- fail loudly there while the local copy is
 # still around.)
 DELETE_DISABLED=0
+DELETED=0
 for ref in "${REG_PURGE[@]+"${REG_PURGE[@]}"}"; do
   repo="${ref%:*}"; tag="${ref##*:}"
-  digest=$(reg_curl -o /dev/null -D - \
-    -H 'Accept: application/vnd.docker.distribution.manifest.v2+json' \
-    -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
-    -H 'Accept: application/vnd.docker.distribution.manifest.list.v2+json' \
-    -H 'Accept: application/vnd.oci.image.index.v1+json' \
-    "https://$REGISTRY/v2/$repo/manifests/$tag" 2>/dev/null \
-    | tr -d '\r' | awk -F': ' 'tolower($1)=="docker-content-digest"{print $2}')
+  digest=$(manifest_digest "$repo" "$tag" || true)
 
   if [ -z "$digest" ]; then
     echo "WARNING: no digest for $ref -- skipped."
     continue
   fi
+  # Re-check against the pinned manifests: the DELETE removes every
+  # tag on this digest.
+  case "$KEEP_DIGESTS" in
+    *" $repo@$digest "*)
+      echo "NOTE: $ref shares its manifest with a pinned tag -- kept."
+      continue ;;
+  esac
 
   code=$(reg_curl -o /dev/null -w '%{http_code}' -X DELETE \
-    "https://$REGISTRY/v2/$repo/manifests/$digest" 2>/dev/null || echo "000")
+    "https://$REGISTRY/v2/$repo/manifests/$digest" 2>/dev/null || true)
   case "$code" in
-    202|200|404) echo "Deleted from registry: $ref" ;;
-    405|501)     echo "Registry refuses deletes (HTTP $code) for $ref"
-                 DELETE_DISABLED=1 ;;
-    *)           echo "WARNING: delete of $ref returned HTTP $code" ;;
+    202|200) echo "Deleted from registry: $ref"
+             DELETED=$((DELETED + 1)) ;;
+    404)     echo "Already gone from registry: $ref" ;;
+    405|501) echo "Registry refuses deletes (HTTP $code) for $ref"
+             DELETE_DISABLED=1 ;;
+    *)       echo "WARNING: delete of $ref returned HTTP ${code:-000}" ;;
   esac
 done
 
@@ -248,6 +408,20 @@ registry storage but are never pulled again (nothing references
 them). To clear them, enable deletion on the registry Deployment in
 solace-lab-infrastructure and re-run this script, or recreate the
 registry volume.
+EOF
+fi
+
+if [ "$DELETED" -gt 0 ]; then
+  cat <<'EOF'
+
+A manifest DELETE frees no disk space: the layer blobs stay on the
+registry-data PVC until the registry's garbage collector runs. Run
+it while nothing pushes to the registry, then restart the registry
+(its in-memory blob cache still lists the deleted layers, and a
+later push would skip uploading them):
+  kubectl -n oci exec deploy/registry -- \
+    registry garbage-collect /etc/docker/registry/config.yml
+  kubectl -n oci rollout restart deploy/registry
 EOF
 fi
 
@@ -266,5 +440,9 @@ if [ "$DO_LOCAL" -eq 1 ]; then
   docker image prune -f >/dev/null 2>&1 || true
 fi
 
+if registry_unchecked; then
+  echo "Image purge INCOMPLETE."
+  exit 1
+fi
 echo ""
 echo "Image purge complete."

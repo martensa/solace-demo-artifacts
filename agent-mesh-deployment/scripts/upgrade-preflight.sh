@@ -14,7 +14,8 @@ set -euo pipefail
 #   2. Image defaults   the tags the new chart expects (gwe, str,
 #                       s3Init, dbInit, postgresql, seaweedfs) --
 #                       these are the values to pin in
-#                       local-k8s-values.yaml and load-images.sh
+#                       local-k8s-values.yaml (load-images.sh and
+#                       purge-images.sh read the pins from there)
 #   3. Values schema    every key local-k8s-values.yaml sets,
 #                       checked against the new values.schema.json
 #                       (the schema is additionalProperties:false,
@@ -23,10 +24,14 @@ set -euo pipefail
 #   5. Default drift    new chart defaults for the keys we
 #                       override (an override may have become
 #                       redundant, or newly wrong)
-#   6. Package        the image and CLI tarballs sitting next to
-#                       the chart, as ready-to-paste .env lines
+#   6. Package          the image tarballs in the package (app,
+#                       str, postgres, seaweedfs) and the CLI
+#                       tarball, as ready-to-paste .env lines;
+#                       the embedded broker image as a comment
 #   7. helm lint + helm template with our values -- the
-#                       authoritative check
+#                       authoritative check; every rendered image
+#                       that is not on registry.solace.lab is
+#                       reported as an OFFLINE GAP
 #   8. Declarative      every `sam config` package (scripts/rbac,
 #      packages         models, entrypoints, desktop and the demo
 #                       packages next to this directory) planned
@@ -45,8 +50,11 @@ set -euo pipefail
 #   ./upgrade-preflight.sh --new <path> [--old <path>]
 #
 #   --new   the NEW delivery: its package directory (the chart is
-#           found in a subfolder such as Charts/), a packaged chart
-#           (.tgz), or an unpacked chart directory
+#           found up to three levels deep -- in a Charts/ subfolder
+#           as in 2.348.22, or bare next to the image tarballs as
+#           in 2.493.0), a packaged chart (.tgz / .tar.gz), or an
+#           unpacked chart directory. Section 6 reports only for
+#           the package directory.
 #   --old   the currently deployed delivery, same forms
 #           (default: $SAM_CHART_PATH from .env).
 #           Omit to skip sections 4 and 5.
@@ -68,12 +76,13 @@ while [ $# -gt 0 ]; do
       exit 0 ;;
     *)
       if [ -e "$1" ]; then
-        # An unquoted glob such as ~/Downloads/SAM*Enterprise*Update*
+        # An unquoted glob such as ~/Downloads/SAM*
         # expands to one word per match -- with two delivery packages
         # side by side, the second one lands here.
         echo "ERROR: more than one path given -- a glob matched several" >&2
-        echo "  delivery packages. Make it version-specific, e.g." >&2
-        echo "  --new ~/Downloads/SAM*Enterprise*Update*<version>*" >&2
+        echo "  delivery packages. Name exactly one package (quote it," >&2
+        echo "  or use a glob that matches only it), e.g." >&2
+        echo "  --new \"$HOME/Downloads/SAM Download\" (name the one package)" >&2
         echo "  (extra path: $1)" >&2
       else
         echo "Unknown argument: $1" >&2
@@ -98,9 +107,9 @@ fi
 
 # --- Resolve a chart argument to an unpacked directory -------------
 # Accepts the unpacked chart directory, a packaged chart (.tgz), or the
-# delivery package directory: the package keeps the chart in a
-# subfolder (Charts/) next to the image tarballs (Images/), so
-# subdirectories are searched as well.
+# delivery package directory: the chart sits in a subfolder (Charts/
+# next to Images/, 2.348.22) or bare next to the image tarballs
+# (2.493.0), so subdirectories are searched as well.
 #
 # Archives are classified by CONTENT, not by name -- the image
 # tarballs are .tar.gz too, so only an archive that really carries a
@@ -721,7 +730,10 @@ PY
 
 # --- Section 6: the rest of the delivery package ------------------
 # Only meaningful when --new pointed at the package (or a folder in
-# it) rather than at a bare chart.
+# it) rather than at a bare chart. The deployment is fully offline:
+# load-images.sh loads every image it runs from these tarballs, so
+# each one maps to a .env variable. The embedded broker image is
+# listed as a comment only (global.broker.embedded is false).
 if [ -d "$NEW_INPUT" ]; then
   PKG_LIST="$WORK_DIR/pkg.txt"
   : > "$PKG_LIST"
@@ -731,14 +743,24 @@ if [ -d "$NEW_INPUT" ]; then
         if is_chart_archive "$f"; then continue; fi
         # Quoted: .env is SOURCED by start.sh, and these paths
         # routinely contain spaces (the package directory name).
+        # The name-anchored patterns go first, the -app-/-str-/-cli-
+        # infixes after them.
         case "$(basename "$f")" in
-          *-app-*) printf 'SAM_APP_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
-          *-str-*) printf 'SAM_STR_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
-          *-cli-*) printf 'SAM_CLI_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
-          postgres-*|seaweedfs-*)
-                   printf '# bundled persistence image: %s\n' "$f" \
-                     >> "$PKG_LIST" ;;
-          *)       printf '# unclassified: %s\n' "$f" >> "$PKG_LIST" ;;
+          postgres-*)
+            printf 'SAM_POSTGRES_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
+          seaweedfs-*)
+            printf 'SAM_SEAWEEDFS_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
+          solace-pubsub-*)
+            printf '# embedded broker image (unused: %s): %s\n' \
+              "global.broker.embedded false" "$f" >> "$PKG_LIST" ;;
+          *-app-*)
+            printf 'SAM_APP_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
+          *-str-*)
+            printf 'SAM_STR_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
+          *-cli-*)
+            printf 'SAM_CLI_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
+          *)
+            printf '# unclassified: %s\n' "$f" >> "$PKG_LIST" ;;
         esac
       done
 
@@ -756,16 +778,23 @@ if [ -d "$NEW_INPUT" ]; then
     echo ""
     echo "  Cross-check the versions in these filenames against the"
     echo "  image defaults in section 2 before pinning them in"
-    echo "  local-k8s-values.yaml."
+    echo "  local-k8s-values.yaml. postgres and seaweedfs are pinned"
+    echo "  twice (persistence-layer.* and samDeployment.dbInit /"
+    echo "  s3Init, same repository:tag -- load-images.sh refuses to"
+    echo "  run when they differ)."
 
-    if grep -q '^# bundled persistence image' "$PKG_LIST"; then
+    PKG_MISSING=""
+    for v in SAM_APP_IMAGE_TAR SAM_STR_IMAGE_TAR \
+             SAM_POSTGRES_IMAGE_TAR SAM_SEAWEEDFS_IMAGE_TAR; do
+      grep -q "^$v=" "$PKG_LIST" || PKG_MISSING="$PKG_MISSING $v"
+    done
+    if [ -n "$PKG_MISSING" ]; then
       echo ""
-      echo "  The bundled persistence images (postgres, seaweedfs) are"
-      echo "  NOT loaded here: global.imageRegistry is \"\" and those"
-      echo "  images are pulled from Docker Hub. They matter only for"
-      echo "  an air-gapped install -- which would also let the chart"
-      echo "  default tag seaweedfs:3.97-compliant be used instead of"
-      echo "  the 3.97 override, since that build ships in the package."
+      echo "  NOT IN THIS PACKAGE:$PKG_MISSING"
+      echo "  load-images.sh needs a tarball for every pinned image"
+      echo "  that is not already in the local Docker daemon (the"
+      echo "  deployment pulls nothing from Docker Hub) -- keep such a"
+      echo "  variable on a tarball that matches the pin."
     fi
 
     if ! grep -q '^SAM_CLI_TAR=' "$PKG_LIST"; then
@@ -815,8 +844,34 @@ if helm template agent-mesh "$NEW_CHART" \
      --values "$VALUES" "${STUBS[@]}" \
      > "$RENDER_OUT" 2>&1; then
   echo "  template OK -- images that would be pulled:"
-  grep -hoE '^\s+image:\s*"?[^"]+"?' "$RENDER_OUT" \
-    | sed 's/.*image:[[:space:]]*//; s/"//g' | sort -u | sed 's/^/    /'
+  IMAGES_OUT="$WORK_DIR/images.txt"
+  # "image: x" and the list-item form "- image: x". grep finding
+  # nothing must not abort the script (set -e + pipefail) -- the
+  # empty result is reported below.
+  { grep -hoE '^[[:space:]]*(-[[:space:]]+)?image:[[:space:]]*"?[^"]+"?' \
+      "$RENDER_OUT" || true; } \
+    | sed 's/.*image:[[:space:]]*//; s/"//g; s/[[:space:]]*$//' \
+    | sed '/^$/d' | sort -u > "$IMAGES_OUT"
+  sed 's/^/    /' "$IMAGES_OUT"
+  # The deployment is fully offline: every image must come from
+  # registry.solace.lab (pinned in local-k8s-values.yaml, loaded by
+  # load-images.sh). Anything else is an image the chart added or
+  # moved without a pin here -- it would be pulled from the
+  # internet, or fail to pull at all.
+  OFFLINE_GAPS=$(grep -v '^registry\.solace\.lab/' "$IMAGES_OUT" || true)
+  if [ -n "$OFFLINE_GAPS" ]; then
+    printf '%s\n' "$OFFLINE_GAPS" | sed 's/^/  OFFLINE GAP: /'
+    echo "  NOT fully offline: $(printf '%s\n' "$OFFLINE_GAPS" | grep -c .)" \
+      "rendered image(s) outside registry.solace.lab."
+    echo "  Pin each to registry.solace.lab in local-k8s-values.yaml;"
+    echo "  an image new to the chart also needs its own entry in"
+    echo "  load-images.sh and purge-images.sh."
+  elif [ -s "$IMAGES_OUT" ]; then
+    echo "  Fully offline: all $(grep -c . "$IMAGES_OUT") rendered images" \
+      "come from registry.solace.lab."
+  else
+    echo "  WARNING: no image references found in the rendered output."
+  fi
 else
   echo "  TEMPLATE FAILED:"
   sed 's/^/    /' "$RENDER_OUT"

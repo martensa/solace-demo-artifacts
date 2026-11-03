@@ -1,5 +1,5 @@
 # Helm values for Solace Agent Mesh v2 (chart solace-agent-mesh
-# 2.1.164, appVersion 2.348.22) on the local solace-lab cluster
+# 2.2.30, appVersion 2.493.0, str 1.76.4) on the local solace-lab cluster
 # (Rancher Desktop / k3s).
 #
 # v2 architecture: three Go components replace the v1 core pod --
@@ -132,9 +132,12 @@ ingress:
 global:
   # The chart defaults global.imageRegistry to "gcr.io/gcp-maas-prod"
   # (Solace's private MaaS registry) and PREPENDS it to every image
-  # whose per-image registry is empty -- including the bundled
-  # postgres/seaweedfs. Set it empty so those resolve from Docker Hub;
-  # the SAM app/str images carry their own registry below.
+  # whose per-image registry is empty. Keep it empty: every image
+  # block below (gwe, str, s3Init, dbInit, persistence-layer
+  # postgresql/seaweedfs) carries registry.solace.lab itself, so the
+  # deployment is fully offline. A new chart image without a pin
+  # would fall back to Docker Hub -- upgrade-preflight.sh section 7
+  # lists the rendered images.
   imageRegistry: ""
   # Applied to ALL pods including the sam-doctor pre-install hook
   # (which runs the gwe image from registry.solace.lab). The secret
@@ -161,7 +164,7 @@ samDeployment:
     image:
       registry: "registry.solace.lab"
       repository: "solace-agent-mesh"
-      tag: "2.348.22"
+      tag: "2.493.0"
       pullPolicy: IfNotPresent
   # str has its own image (Go+Python tool venvs). Never blank its
   # repository -- it would silently inherit the gwe image and break
@@ -170,19 +173,26 @@ samDeployment:
     image:
       registry: "registry.solace.lab"
       repository: "solace-agent-mesh-str"
-      tag: "1.64.0"
+      tag: "1.76.4"
       pullPolicy: IfNotPresent
-  # S3 (SeaweedFS) init container used with bundled persistence.
-  # The chart default tag "3.97-compliant" is a Solace-private
-  # rebuild absent from Docker Hub; pin the valid upstream tag.
-  # The 2.348.22 package ships that build as an image tarball, so an
-  # air-gapped install could load it and drop this override -- here
-  # Docker Hub is reachable, so the upstream tag stays simpler.
+  # Init containers of the bundled persistence (gwe/awe/str
+  # s3-init, gwe/awe db-init). Loaded from the delivery package
+  # into registry.solace.lab by scripts/load-images.sh, like
+  # gwe/str -- the deployment pulls nothing from Docker Hub.
+  # Each repository:tag must equal its persistence-layer
+  # counterpart below (load-images.sh checks this).
   s3Init:
     image:
-      tag: "3.97"
-  # dbInit uses postgres:18.0-trixie (valid Docker Hub tag) -- chart
-  # default is fine with imageRegistry "".
+      registry: "registry.solace.lab"
+      repository: "chrislusf/seaweedfs"
+      tag: "3.97-compliant"
+      pullPolicy: IfNotPresent
+  dbInit:
+    image:
+      registry: "registry.solace.lab"
+      repository: "postgres"
+      tag: "18.0-trixie"
+      pullPolicy: IfNotPresent
 
 # Extra env for ALL SAM containers (gwe/awe/str), rendered into the
 # chart's shared env ConfigMap. Helm merges this map with the chart
@@ -206,16 +216,21 @@ samDoctor:
   failOnError: false
 
 # Bundled persistence (postgresql + seaweedfs) subchart overrides.
-# postgres:18.0-trixie is a valid Docker Hub tag, but the seaweedfs
-# default tag "3.97-compliant" is a Solace-private build absent from
-# Docker Hub -- pin the valid upstream tag "3.97" (same override as
-# the s3Init image above). Subchart pullPolicy defaults to Always;
-# IfNotPresent avoids re-pulls from Docker Hub on every pod start.
+# Same images as samDeployment.dbInit / s3Init, from
+# registry.solace.lab (offline). The subchart templates render
+# only registry/repository/tag/pullPolicy -- digest is ignored.
+# Subchart pullPolicy defaults to Always; IfNotPresent avoids a
+# registry round-trip on every pod start.
 persistence-layer:
   postgresql:
     image:
+      registry: "registry.solace.lab"
+      repository: "postgres"
+      tag: "18.0-trixie"
       pullPolicy: IfNotPresent
   seaweedfs:
     image:
-      tag: "3.97"
+      registry: "registry.solace.lab"
+      repository: "chrislusf/seaweedfs"
+      tag: "3.97-compliant"
       pullPolicy: IfNotPresent

@@ -97,8 +97,8 @@ The sam CLI is resolved by `../lib/common.sh`: `SAM_CLI_PATH`
 from `.env`, then the PATH, then auto-extracted from
 `SAM_CLI_TAR` into `../lib/.cache/` (gitignored). Some SAM
 delivery packages ship the CLI as
-`solace-agent-mesh-<version>-cli-<os>-<arch>.tar.gz`; 2.348.22 does
-not, so install it and set `SAM_CLI_PATH` (see the deployment
+`solace-agent-mesh-<version>-cli-<os>-<arch>.tar.gz`; 2.348.22 and
+2.493.0 do not, so install it and set `SAM_CLI_PATH` (see the deployment
 README, "Installing the sam CLI").
 
 Since 2.348.22 a claim mapping carries no claim key of its own

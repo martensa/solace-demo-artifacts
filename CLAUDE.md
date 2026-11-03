@@ -68,7 +68,7 @@ Version upgrades: `agent-mesh-deployment/README.md` "Upgrade"
 
 SAM v2 (Go stack): the chart and images come from the offline
 delivery package; `.env` points at the local copies
-(`SAM_CHART_PATH`, image and CLI tarballs).
+(`SAM_CHART_PATH`, image tarballs, `SAM_CLI_PATH`).
 
 ## Terraform Conventions
 

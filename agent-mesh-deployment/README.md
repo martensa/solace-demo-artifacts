@@ -22,16 +22,27 @@ There is no separate agent-deployer in v2.
 
 ### Offline artifacts (SAM delivery package)
 
-The v2 chart and images are distributed as an offline delivery
-package and are deliberately not checked in. `.env` points at the
-local copies:
+The v2 chart and every image the deployment runs are distributed
+as an offline delivery package and are deliberately not checked
+in. The deployment is fully offline: all images are loaded from
+the package into the private registry, nothing is pulled from
+Docker Hub. `.env` points at the local copies:
 
 - `SAM_CHART_PATH` -- unpacked Helm chart directory
 - `SAM_APP_IMAGE_TAR` -- app image tarball (gwe/awe)
 - `SAM_STR_IMAGE_TAR` -- str image tarball
+- `SAM_POSTGRES_IMAGE_TAR` -- postgres image tarball (bundled
+  PostgreSQL and the db-init containers)
+- `SAM_SEAWEEDFS_IMAGE_TAR` -- seaweedfs image tarball (bundled
+  SeaweedFS and the s3-init containers)
 - `SAM_CLI_PATH` or `SAM_CLI_TAR` -- the sam CLI (an installed
   binary, or the CLI tarball when the package ships one;
-  2.348.22 does not)
+  2.348.22 and 2.493.0 do not)
+
+The package also carries the embedded broker image
+(`solace-pubsub-enterprise-...`). It is not used
+(`global.broker.embedded: false`, SAM connects to the event-mesh
+broker) and not loaded.
 
 ### Cluster Infrastructure (from `solace-lab-infrastructure`)
 
@@ -51,8 +62,8 @@ the companion repository
   - Kyverno policy `inject-registry-pull-secret`
 - **Private Registry** -- `registry/`
   - Available at `https://registry.solace.lab`
-  - Holds the SAM app and str images
-    (loaded by `scripts/load-images.sh`)
+  - Holds every image the deployment runs: SAM app, str,
+    postgres and seaweedfs (loaded by `scripts/load-images.sh`)
 - **Keycloak** -- `keycloak/`
   - OIDC provider at `https://auth.solace.lab` with the
     `solace-lab` realm
@@ -83,14 +94,14 @@ requires cluster-internal hostname resolution.
 - `helm` 3
 - `docker` (for the image load step)
 - `bash`, `curl`, `jq`, `python3`
-- the `sam` CLI from the delivery package (see below)
+- the `sam` CLI matching the delivery version (see below)
 
 ### Installing the sam CLI
 
 The CLI is a single static binary. Some delivery packages ship it
 as `solace-agent-mesh-<version>-cli-<os>-<arch>.tar.gz`; others do
-not (2.348.22 has only `Charts/` and `Images/`) -- then get the
-matching CLI separately. Install it for interactive use
+not (neither 2.348.22 nor 2.493.0 does) -- then get the matching
+CLI separately. Install it for interactive use
 (`sam auth login`, `sam config`, `sam api`) and for the scripts:
 
 ```bash
@@ -142,9 +153,11 @@ distribution. `global.persistence.namespaceId` (kept at
 `sam-solace-lab`) namespaces the broker topics.
 
 Bundled persistence (PostgreSQL + SeaweedFS from the
-`persistence-layer` subchart) provides the datastores; both images
-are public on Docker Hub and are not mirrored into the private
-registry.
+`persistence-layer` subchart) provides the datastores. Their
+images (`postgres:18.0-trixie`, `chrislusf/seaweedfs:3.97-compliant`,
+the chart defaults) ship in the delivery package and are mirrored
+into the private registry like the SAM images, so every pod pulls
+from `registry.solace.lab`.
 
 ## Quick Start
 
@@ -157,8 +170,10 @@ cp .env.example .env
 Edit `.env` and set `LLM_SERVICE_API_KEY`,
 `GOOGLE_AI_STUDIO_API_KEY` (the `google gemini` model alias) and
 the offline artifact paths (`SAM_CHART_PATH`, `SAM_APP_IMAGE_TAR`,
-`SAM_STR_IMAGE_TAR`, plus `SAM_CLI_PATH` or `SAM_CLI_TAR`). The
-Keycloak client secret is filled in by the next step.
+`SAM_STR_IMAGE_TAR`, `SAM_POSTGRES_IMAGE_TAR`,
+`SAM_SEAWEEDFS_IMAGE_TAR`, plus `SAM_CLI_PATH` or `SAM_CLI_TAR`;
+quote any path that contains a space). The Keycloak client secret
+is filled in by the next step.
 
 ### 2. Create the Keycloak OIDC client
 
@@ -192,8 +207,14 @@ docker login registry.solace.lab   # once
 ./scripts/load-images.sh
 ```
 
-Loads the offline image tarballs into Docker, retags them for
-`registry.solace.lab` and pushes them.
+Loads the four offline image tarballs (app, str, postgres,
+seaweedfs) into Docker, retags them for `registry.solace.lab` and
+pushes them. Repositories and tags come from
+`local-k8s-values.yaml`; the script refuses to run when an image
+block there does not point at `registry.solace.lab`, or when
+`samDeployment.dbInit` / `s3Init` differ from their
+`persistence-layer` counterparts. An image already in the local
+daemon is only pushed again (`FORCE=1` reloads it).
 
 ### 5. Deploy
 
@@ -216,6 +237,14 @@ The script performs the following steps:
 8. Waits for pods and prints the release status
 9. Provisions the platform content (next step) -- in a terminal
    it opens the browser for the `sam` CLI login first
+
+Run it directly in a terminal and do not pipe it (e.g. through
+`| tee`): without a TTY it stops after the deploy and only prints
+`./scripts/provision.sh --login`. Re-running it against a
+deployed release makes `helm upgrade` a no-op for the SAM pods;
+`start.sh` still restarts CoreDNS (NodeHosts upsert) on every run
+and, in a terminal, re-runs `provision.sh` (awe restarts only if
+`max_tokens` changed).
 
 The chart's `sam-doctor` pre-install hook checks broker, LLM and
 OIDC reachability; it is configured warn-only
@@ -479,24 +508,29 @@ preflight section 8 validates the declarative packages with it.
 ### 1. Review the new delivery (no cluster changes)
 
 ```bash
-./scripts/upgrade-preflight.sh --new ~/Downloads/SAM*Enterprise*Update*2.348.22*
+./scripts/upgrade-preflight.sh --new "$HOME/Downloads/SAM Download"
 ```
 
 `--new` takes the delivery package directory -- the chart is found
-in a subfolder such as `Charts/`, three levels deep at most -- or a
-packaged chart (`.tgz`), or an unpacked chart directory. Archives
-are classified by content, so the image tarballs in `Images/` are
-not mistaken for charts. `--old` defaults to `SAM_CHART_PATH` from
+three levels deep at most, in a subfolder such as `Charts/`
+(2.348.22) or as a bare `solace-agent-mesh-<chart>.tar.gz` next to
+the image tarballs (2.493.0) -- or the packaged chart (`.tgz` /
+`.tar.gz`) directly, or an unpacked chart directory. Archives are
+classified by content, so the image tarballs are not mistaken for
+charts. Section 6 (the `.env` lines) appears only when `--new` is
+the package directory. `--old` defaults to `SAM_CHART_PATH` from
 `.env`, i.e. the chart currently deployed.
 
 Delivery package directories are routinely named with spaces, and
-sometimes with a trailing one (the 2.348.22 package directory
-name ends in a space) or a non-breaking space that no terminal
-shows. Use a version-specific glob
-(`SAM*Enterprise*Update*<version>*`; a bare `SAM*Enterprise*Update*`
-matches every package still in `~/Downloads`, and the previous one
-stays there while `.env` points into it) or tab completion rather
-than typing the name. When the given
+the naming and layout change between deliveries: 2.348.22 came as
+`SAM Enterprise Update 2.348.22` plus an invisible trailing space,
+with `Charts/` and `Images/` subfolders; 2.493.0 came as
+`SAM Download` (one space, no version in the name) with everything
+at the top level. A name may also carry a non-breaking space that
+no terminal shows. Quote the path, or use a glob or tab completion,
+rather than typing the name; a glob must match exactly one package
+(the previous one stays in `~/Downloads` while `.env` points into
+it, so do not let a new delivery overwrite it). When the given
 path does not exist but exactly one entry beside it matches once
 whitespace and punctuation are ignored, that entry is used and the
 substitution is reported; with two candidates it refuses and lists
@@ -514,12 +548,19 @@ The report answers the questions an upgrade raises:
   defaults of the new chart -- the gwe, str, s3Init, dbInit,
   postgresql and seaweedfs versions the delivery expects. Section
   5 flags chart defaults that changed underneath an override
-  (e.g. the seaweedfs tag), where an override may have become
-  redundant or newly wrong.
+  (e.g. a persistence image tag), where an override may have
+  become redundant or newly wrong.
 - What goes into `.env`? Section 6 lists the image and CLI
-  tarballs found in the package as ready-to-paste
-  `SAM_APP_IMAGE_TAR` / `SAM_STR_IMAGE_TAR` / `SAM_CLI_TAR`
-  assignments.
+  tarballs found in the package as ready-to-paste, quoted
+  `SAM_APP_IMAGE_TAR` / `SAM_STR_IMAGE_TAR` /
+  `SAM_POSTGRES_IMAGE_TAR` / `SAM_SEAWEEDFS_IMAGE_TAR` /
+  `SAM_CLI_TAR` assignments, shows the unused embedded broker
+  image as a comment, and names any of the four images the
+  package lacks.
+- Does the deployment stay offline? Section 7 lists the images
+  the chart would pull and prints `OFFLINE GAP: <image>` for
+  every one that is not on `registry.solace.lab` -- an image the
+  new chart added, or a pin that lost its registry.
 - Do the declarative packages still parse? Section 8 runs
   `sam config plan` (read-only) over every package -- `scripts/`
   rbac, models, entrypoints, desktop, and the demo packages next
@@ -536,8 +577,9 @@ The report answers the questions an upgrade raises:
   `mesh/` needs its `core/` first. `scripts/desktop` targets the
   SAM desktop app and is only validated while that app runs.
 
-Fix `local-k8s-values.yaml` until sections 3 and 7 are clean, and
-every section 8 `FAIL` before tearing anything down.
+Fix `local-k8s-values.yaml` until sections 3 and 7 are clean (no
+`OFFLINE GAP` either), and every section 8 `FAIL` before tearing
+anything down.
 
 ### 2. Tear the old deployment down
 
@@ -557,8 +599,9 @@ cluster then.
 ### 3. Repoint and re-pin
 
 - `.env`: `SAM_CHART_PATH`, `SAM_APP_IMAGE_TAR`,
-  `SAM_STR_IMAGE_TAR` (and `SAM_CLI_TAR` if the package ships a
-  CLI) to the new package -- preflight section 6 prints the
+  `SAM_STR_IMAGE_TAR`, `SAM_POSTGRES_IMAGE_TAR`,
+  `SAM_SEAWEEDFS_IMAGE_TAR` (and `SAM_CLI_TAR` if the package
+  ships a CLI) to the new package -- preflight section 6 prints the
   tarball paths as ready-to-paste, already quoted assignments.
   `.env` is sourced, so a path containing a space MUST stay
   quoted or the variable ends up empty. Remove a `SAM_CLI_TAR`
@@ -568,15 +611,23 @@ cluster then.
   without spaces (command below).
 - `local-k8s-values.yaml`: `samDeployment.gwe.image.tag` and
   `samDeployment.str.image.tag` to the versions from preflight
-  section 2, plus any values change preflight asked for.
-  `scripts/load-images.sh` and `scripts/purge-images.sh` read
-  their tags from this file, so there is nothing else to keep in
-  sync.
+  section 2, plus any values change preflight asked for. If the
+  delivery moves postgres or seaweedfs, re-pin the tag in BOTH
+  places of the pair (`persistence-layer.postgresql` +
+  `samDeployment.dbInit`, `persistence-layer.seaweedfs` +
+  `samDeployment.s3Init`). `scripts/load-images.sh` and
+  `scripts/purge-images.sh` read their tags from this file, so
+  there is nothing else to keep in sync.
+
+The 2.493.0 package keeps the chart as a bare `.tar.gz` at its top
+level (2.348.22 had it in `Charts/`). The package path contains a
+space, so it stays quoted:
 
 ```bash
-V=2.1.164   # chart version, preflight section 1
+V=2.2.30   # chart version, preflight section 1
+PKG="$HOME/Downloads/SAM Download"
 mkdir -p ~/Downloads/solace-agent-mesh-$V
-tar -xzf ~/Downloads/SAM*Update*2.348.22*/Charts/solace-agent-mesh-$V.tar.gz \
+tar -xzf "$PKG/solace-agent-mesh-$V.tar.gz" \
   -C ~/Downloads/solace-agent-mesh-$V --strip-components=1
 ```
 
@@ -594,6 +645,12 @@ script writes the new secret into `.env`) and the demo users:
 ./scripts/load-images.sh
 ```
 
+It loads and pushes all four pinned images (app, str, postgres,
+seaweedfs); one whose registry tag is still in the local daemon
+(typically an unchanged persistence image) is only pushed again.
+For postgres and seaweedfs only the `registry.solace.lab/...` tag
+stays in the daemon: the bare Docker Hub name the tarball restores
+is untagged again unless it existed before the load.
 No config re-basing is needed any more: metrics come from the
 env switch in `local-k8s-values.yaml`, not from overlaid config
 files. `start.sh` checks that the new images still honour that
@@ -625,8 +682,15 @@ new version is proven. Then:
 ```
 
 It keeps exactly the tags `local-k8s-values.yaml` pins and drops
-every other tag of the SAM repositories, so it stays correct
-across upgrades. Other repositories (the v1
+every other tag of the managed repositories, so it stays correct
+across upgrades. gwe and str are managed in the registry and in
+the local daemon (bare names included). postgres and
+`chrislusf/seaweedfs` are managed only as `registry.solace.lab/...`
+tags: the bare Docker Hub names (`postgres:*` and the like, which
+the demo postgres container and other lab workloads use) are never
+touched. An unpinned registry tag that shares its manifest with a
+pinned one is kept, because deleting that manifest would remove
+the pinned tag too. Other repositories (the v1
 `solace-agent-mesh-enterprise` and `solace/solace-agent-mesh`
 images the lab agents in `sam-solace-lab-agents` run on) are never
 touched. `./scripts/stop.sh --purge-images` does the same inline,
@@ -635,7 +699,24 @@ Registry deletion needs the registry to run with
 `REGISTRY_STORAGE_DELETE_ENABLED=true`; the script reports it
 rather than failing when it does not. Registry credentials come
 from the `docker login` session, also when Docker keeps them in
-the macOS keychain (`credsStore: osxkeychain`).
+the macOS keychain (`credsStore: osxkeychain`). A repository the
+script cannot read (no or expired login, registry down) is reported as
+`registry NOT checked`, and so is one whose pinned tag's digest
+cannot be resolved (nothing is purged from it); the run then ends
+with a non-zero exit status.
+
+A manifest delete frees no disk space by itself: the layer blobs
+stay on the registry's `registry-data` PVC until its garbage
+collector runs. After a purge that deleted registry manifests,
+run it while nothing pushes to the registry, then restart the
+registry so its in-memory blob cache forgets the deleted layers
+(the script prints both commands):
+
+```bash
+kubectl -n oci exec deploy/registry -- \
+  registry garbage-collect /etc/docker/registry/config.yml
+kubectl -n oci rollout restart deploy/registry
+```
 
 Only the REGISTRY copy is a dependable fallback: the local copy
 of an old image may already be gone. Rancher Desktop shares the
@@ -669,8 +750,9 @@ Consumed by the scripts only (never passed to Helm):
 - `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_ADMIN_USER`,
   `KEYCLOAK_ADMIN_PASSWORD` -- Keycloak setup/teardown
 - `SAM_CHART_PATH` -- offline chart directory (start.sh)
-- `SAM_APP_IMAGE_TAR`, `SAM_STR_IMAGE_TAR` -- image tarballs
-  (load-images.sh)
+- `SAM_APP_IMAGE_TAR`, `SAM_STR_IMAGE_TAR`,
+  `SAM_POSTGRES_IMAGE_TAR`, `SAM_SEAWEEDFS_IMAGE_TAR` -- image
+  tarballs (load-images.sh)
 - `SAM_CLI_TAR` / `SAM_CLI_PATH` -- sam CLI (provision.sh and
   the scripts it runs, the preflight and the demo
   install/uninstall scripts, via scripts/lib/)
@@ -699,15 +781,18 @@ defined in `local-k8s-values.yaml`. Key sections:
   `gcr.io/gcp-maas-prod` would be prepended to every image),
   pull secret, external broker toggle, bundled persistence with
   `namespaceId: sam-solace-lab`
-- **samDeployment** -- gwe and str images from
-  `registry.solace.lab` (awe inherits the gwe image), seaweedfs
-  init tag pin
+- **samDeployment** -- gwe and str images plus the persistence
+  init containers (`dbInit` = postgres, `s3Init` = seaweedfs), all
+  from `registry.solace.lab` (awe inherits the gwe image)
 - **environmentVariables** -- extra env for all SAM containers:
   `SAM_OBSERVABILITY_ENABLED` switches on `/metrics` (merged with
   the chart's default `NO_PROXY`)
-- **persistence-layer** -- seaweedfs tag pin `3.97` (the chart
-  default `3.97-compliant` is a Solace-private tag absent from
-  Docker Hub)
+- **persistence-layer** -- the postgresql and seaweedfs images
+  from `registry.solace.lab` (`postgres:18.0-trixie`,
+  `chrislusf/seaweedfs:3.97-compliant`, the chart defaults loaded
+  from the delivery package), `pullPolicy: IfNotPresent`; each
+  must name the same repository:tag as its `dbInit` / `s3Init`
+  counterpart
 
 ### CA Trust
 
