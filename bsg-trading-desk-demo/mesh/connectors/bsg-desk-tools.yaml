@@ -1,0 +1,21 @@
+# MCP connector to the deterministic tools of the demo
+# (app/bsgdemo/tools_server.py, Deployment bsg-tools in bsg-demo).
+# Pattern verified on 2.348.22 with "Acme Claims Knowledge"
+# (mcp/remote, streamable-http, auth none: the platform lists the
+# tools directly at create/update, no static manifest).
+# Gate 0: SAM's str pod must reach the in-cluster Service (no
+# NetworkPolicy between sam-solace-lab and bsg-demo).
+kind: connector
+name: bsg-desk-tools
+description: >-
+  Deterministic tools of the BSG trading desk demo: create, list and
+  stop watches on the live quote feed, enrich an alert with the last
+  15 minutes of quotes, reference prices and news, and publish the
+  desk note onto the mesh.
+spec:
+  type: mcp
+  subtype: remote
+  values:
+    server_url: http://bsg-tools.bsg-demo.svc:8765/mcp
+    connection_type: streamable-http
+    auth_type: none

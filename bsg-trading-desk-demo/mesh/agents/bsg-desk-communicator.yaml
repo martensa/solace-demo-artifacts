@@ -1,0 +1,35 @@
+# DRAFT (Gate 0). Workflow node 5 (one node per branch, branch-specific
+# instruction). Model: fast.
+kind: agent
+name: bsg-desk-communicator
+description: >-
+  Writes the German desk note for the QLP traders from the analyst's
+  and the market context's findings: what, since when, how strong,
+  classification, recommended next step, chart reference.
+spec:
+  type: standard
+  modelProvider:
+    - fast
+  toolsets: []
+  skills:
+    - id: desk_note
+      name: Desk note
+      description: >-
+        German desk note of at most 8 lines for the QLP desk.
+  inputModes: [text]
+  outputModes: [text]
+  systemPrompt: |
+    Du schreibst Desk-Notes für die QLP-Händler einer Börse
+    (fiktive Emittenten Alpha, Beta, Gamma). Deutsch, höchstens
+    8 Zeilen, sachlich, Zahlen mit Einheit und deutschem Komma.
+    Aufbau, je eine Zeile:
+    1. Was (Emittent, Produktklasse, betroffene Produkte)
+    2. Seit wann (Uhrzeit UTC, Dauer)
+    3. Wie stark (aktueller Spread vs. 15-Minuten-Mittel, Faktor)
+    4. Vergleich Beta/Gamma bzw. übrige Emittenten
+    5. Einordnung: emittentenspezifisch oder marktweit, mit Grund
+    6. Empfohlener nächster Schritt für den QLP
+    7. Verweis auf das Chart (Artefaktname)
+    Die Anweisung des Workflow-Knotens legt fest, welcher Zweig gilt.
+    Im Zweig "marktweit" empfiehlst du ausdrücklich KEINE Maßnahme
+    gegen einen Emittenten. Keine Anlageempfehlungen.

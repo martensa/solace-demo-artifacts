@@ -1,0 +1,52 @@
+# MCP server of the deterministic tools. SAM's tool runtime (str) in
+# sam-solace-lab reaches it in-cluster:
+#   http://bsg-tools.bsg-demo.svc:8765/mcp   (connector bsg-desk-tools)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bsg-tools
+  labels: {app: bsg-tools}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: bsg-tools}
+  template:
+    metadata:
+      labels: {app: bsg-tools}
+    spec:
+      imagePullSecrets:
+        - name: registry-pull-secret
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      containers:
+        - name: bsg-tools
+          image: bsg-demo
+          command: ["python", "-m", "bsgdemo.tools_server"]
+          env:
+            - {name: MCP_PORT, value: "8765"}
+            - {name: MCP_PATH, value: /mcp}
+          envFrom:
+            - configMapRef: {name: bsg-demo-config}
+            - secretRef: {name: bsg-broker}
+          ports:
+            - {name: mcp, containerPort: 8765}
+          readinessProbe:
+            httpGet: {path: /health, port: mcp}
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 200m, memory: 256Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 50Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bsg-tools
+spec:
+  selector: {app: bsg-tools}
+  ports:
+    - {name: mcp, port: 8765, targetPort: mcp}

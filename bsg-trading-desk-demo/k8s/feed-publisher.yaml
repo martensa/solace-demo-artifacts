@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feed-publisher
+  labels: {app: feed-publisher}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: feed-publisher}
+  template:
+    metadata:
+      labels: {app: feed-publisher}
+    spec:
+      imagePullSecrets:
+        - name: registry-pull-secret
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      containers:
+        - name: feed-publisher
+          image: bsg-demo
+          command: ["python", "-m", "bsgdemo.publisher"]
+          envFrom:
+            - configMapRef: {name: bsg-demo-config}
+            - secretRef: {name: bsg-broker}
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {cpu: 200m, memory: 256Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 50Mi}

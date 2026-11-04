@@ -1,0 +1,21 @@
+# Non-secret configuration shared by all four components.
+# The broker is solace-1 (event-mesh-deployment, Docker Compose on the
+# host), reached like SAM itself via host.docker.internal (CoreDNS
+# NodeHosts entry maintained by agent-mesh-deployment/scripts/start.sh).
+# MQTT 1883 is the plain MQTT port of solace-1; same VPN as SAM (sam).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bsg-demo-config
+data:
+  MQTT_HOST: host.docker.internal
+  MQTT_PORT: "1883"
+  WATCHER_URL: http://feed-watcher.bsg-demo.svc:8080
+  # demo-ui: Step 1 goes through the SAM event-mesh entrypoint
+  # (bsg/desk/requests/> -> bsg-desk-assistant). "direct" = fallback.
+  ENTRY_MODE: entrypoint
+  GRAFANA_URL: https://monitoring.solace.lab/d/sam-bsg-trading-desk?from=now-15m&to=now
+  VISUALIZER_URL: https://sam.solace.lab/
+  # Read-only MQTT filters for SAM's own A2A status events on the sam
+  # VPN (empty until Gate 0 has identified the topics).
+  SAM_STATUS_TOPICS: ""

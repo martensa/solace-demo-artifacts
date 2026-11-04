@@ -1,0 +1,14 @@
+# TEMPLATE -- rendered next to bsg-desk-events.yaml by scripts/install.sh.
+kind: manifest
+name: bsg-trading-desk-entrypoint
+description: >-
+  Rendered companion of the bsg-trading-desk-demo manifest: the
+  bsg-desk-events entrypoint bound to the workflow's runtime name.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  entrypoints:
+    - bsg-desk-events

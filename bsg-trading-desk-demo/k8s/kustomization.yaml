@@ -1,0 +1,21 @@
+# Kubernetes part of the BSG trading desk demo (namespace bsg-demo).
+# Applied by `make demo-up` (kubectl apply -k k8s); the broker
+# Secret bsg-broker is created by the Makefile from .env.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: bsg-demo
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: bsg-trading-desk-demo
+    includeSelectors: false
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - feed-publisher.yaml
+  - feed-watcher.yaml
+  - bsg-tools.yaml
+  - demo-ui.yaml
+images:
+  - name: bsg-demo
+    newName: registry.solace.lab/bsg-demo/bsg-demo
+    newTag: "0.1.0"

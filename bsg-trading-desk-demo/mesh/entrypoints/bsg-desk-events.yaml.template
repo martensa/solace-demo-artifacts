@@ -1,0 +1,76 @@
+# TEMPLATE -- rendered by scripts/install.sh into mesh/.rendered/
+# (git-ignored) AFTER the bsg-alert-triage workflow exists.
+#
+# Event-mesh entrypoint -> WORKFLOW target is broken on 2.225.14 and
+# still on 2.348.22 (agent-mesh-deployment/CLAUDE.md): the gateway
+# publishes to the config name and sends an empty message. Workaround
+# verified there: targetWorkflowName = RUNTIME name
+# workflow_<uuid with '_'> + inputExpression "input.payload"; the
+# workflow then receives {"text": "<payload JSON>"}. Gate 0 re-checks
+# this on 2.493.0 (if fixed: plain targetWorkflowName bsg-alert-triage).
+#
+# Broker connection mirrors the SAM deployment (solace-1, VPN sam),
+# same as the other demos. qos 1 + on_completion: an alert is acked
+# only after the run finished -> exactly one run per alert, redelivery
+# on crash. Runs are attributed to power_user (decided 2026-11-04) so
+# they show up in that user's Activities and chargeback.
+kind: entrypoint
+name: bsg-desk-events
+description: >-
+  Event-mesh entrypoint of the BSG trading desk demo: quote alerts on
+  bsg/alerts/> start the bsg-alert-triage workflow; trader requests on
+  bsg/desk/requests/> go to the bsg-desk-assistant.
+spec:
+  type: event_mesh
+  deploy: true
+  values:
+    broker_url: "ws://host.docker.internal:8008"
+    broker_vpn: sam
+    broker_username: "__BROKER_USERNAME__"
+    broker_password: "__BROKER_PASSWORD__"
+    tls_skip_verify: "false"
+    event_rules:
+      - name: bsg_alerts
+        subscriptions:
+          - topic: "bsg/alerts/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: __WORKFLOW_RUNTIME__
+        inputExpression: "input.payload"
+        # Required by the schema; ignored for workflow targets.
+        promptTemplate: "{payload}"
+        defaultUserIdentity: power_user@solace.lab
+        acknowledgmentPolicy:
+          mode: on_completion
+          timeoutSeconds: 90
+        successOutput:
+          enabled: true
+          topic: "bsg/desk/results"
+          topicType: static
+          responseType: full
+        errorOutput:
+          enabled: true
+          topic: "bsg/desk/errors"
+          topicType: static
+      - name: bsg_desk_requests
+        subscriptions:
+          - topic: "bsg/desk/requests/>"
+            qos: 1
+        messageFormat: json
+        targetAgent: bsg-desk-assistant
+        defaultUserIdentity: power_user@solace.lab
+        promptTemplate: >-
+          Auftrag eines QLP-Händlers aus der Desk-UI (JSON, Feld
+          prompt): {payload}
+        acknowledgmentPolicy:
+          mode: on_completion
+          timeoutSeconds: 120
+        successOutput:
+          enabled: true
+          topic: "bsg/desk/replies"
+          topicType: static
+          responseType: full
+        errorOutput:
+          enabled: true
+          topic: "bsg/desk/errors"
+          topicType: static

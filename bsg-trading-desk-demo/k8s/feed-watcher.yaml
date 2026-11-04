@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feed-watcher
+  labels: {app: feed-watcher}
+spec:
+  replicas: 1  # watches live in memory: exactly one watcher
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: feed-watcher}
+  template:
+    metadata:
+      labels: {app: feed-watcher}
+    spec:
+      imagePullSecrets:
+        - name: registry-pull-secret
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001}
+      containers:
+        - name: feed-watcher
+          image: bsg-demo
+          command: ["python", "-m", "bsgdemo.watcher"]
+          env:
+            - {name: DB_PATH, value: /data/feed.db}
+            - {name: PORT, value: "8080"}
+          envFrom:
+            - configMapRef: {name: bsg-demo-config}
+            - secretRef: {name: bsg-broker}
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 200m, memory: 256Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 50Mi}
+        - name: data
+          emptyDir: {sizeLimit: 200Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: feed-watcher
+spec:
+  selector: {app: feed-watcher}
+  ports:
+    - {name: http, port: 8080, targetPort: http}

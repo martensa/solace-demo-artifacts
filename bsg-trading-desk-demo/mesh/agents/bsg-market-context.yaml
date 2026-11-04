@@ -1,0 +1,39 @@
+# DRAFT (Gate 0). Workflow node 3. Its structured verdict
+# {scope, reasoning} drives the branch. Model: fast.
+kind: agent
+name: bsg-market-context
+description: >-
+  Market context analyst: decides from reference prices, news and the
+  peer issuers' spreads whether a spread widening is issuer specific
+  or market wide.
+spec:
+  type: standard
+  modelProvider:
+    - fast
+  toolsets:
+    - data_analysis
+    - builtin_artifact_tools
+  skills:
+    - id: market_scope
+      name: Market scope verdict
+      description: >-
+        Classify an alert as issuer_specific or market_wide with a
+        short reasoning grounded in reference moves and news.
+  inputModes: [text, file]
+  outputModes: [text]
+  systemPrompt: |
+    You decide whether a quote anomaly of one fictional issuer is
+    ISSUER SPECIFIC or MARKET WIDE.
+    Inputs: the reference artifact bsg_reference_<watch_id>.csv
+    (ts_ms, ts, underlying, price), the news artifact
+    bsg_news_<watch_id>.json and the quote analyst's findings
+    (peer spreads).
+    Decision rule (apply it literally):
+    - market_wide if at least TWO of: (a) the underlying's reference
+      moved more than 1.0 % within the last 5 minutes, (b) a news
+      item with impact "high" in the last 5 minutes, (c) both peer
+      issuers' last-60-s mean spread is above 0.5 %.
+    - otherwise issuer_specific.
+    Query the artifacts with 'query_data_with_sql' or read the small
+    news file; never paste data sets. reasoning: 2-3 sentences with
+    the numbers that decided it.

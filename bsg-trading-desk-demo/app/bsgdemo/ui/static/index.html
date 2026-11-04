@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BSG Trading Desk</title>
+<style>
+  :root {
+    --bg: #0d1420; --panel: #152033; --panel2: #1b2940; --line: #2a3b57;
+    --text: #e8eef7; --muted: #9db0cc; --accent: #00c895; --warn: #ffb020;
+    --bad: #ff5a5f; --info: #4aa3ff; --alpha: #00c895; --beta: #4aa3ff; --gamma: #c792ea;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 20px/1.35 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 24px; padding: 12px 20px;
+    border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 26px; margin: 0; letter-spacing: .3px; }
+  header .sub { color: var(--muted); font-size: 16px; }
+  header .links { margin-left: auto; display: flex; gap: 12px; }
+  a.btnlink, button { font: inherit; font-size: 18px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel2); color: var(--text);
+    padding: 8px 14px; text-decoration: none; }
+  button.primary { background: var(--accent); color: #04130e; border-color: var(--accent);
+    font-weight: 600; }
+  button.secondary { border-color: var(--warn); color: var(--warn); }
+  button:disabled { opacity: .45; cursor: default; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block;
+    background: var(--bad); margin-right: 6px; }
+  .dot.ok { background: var(--accent); }
+  main { display: grid; grid-template-columns: 27% 38% 35%; gap: 14px; padding: 14px;
+    height: calc(100vh - 66px); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; overflow: auto; min-height: 0; }
+  section h2 { font-size: 20px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; }
+  .issuer { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
+    margin-bottom: 10px; background: var(--panel2); }
+  .issuer .head { display: flex; align-items: center; gap: 10px; font-weight: 700;
+    font-size: 22px; }
+  .badge { font-size: 15px; font-weight: 600; padding: 2px 10px; border-radius: 999px;
+    background: #20324d; color: var(--muted); }
+  .badge.review { background: var(--warn); color: #261800; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td { padding: 2px 4px; font-size: 17px; white-space: nowrap; }
+  td.isin { color: var(--muted); font-size: 15px; }
+  td.sp { text-align: right; font-weight: 700; }
+  td.sp.hot { color: var(--bad); }
+  tr.stale td { opacity: .4; }
+  .step { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px;
+    margin-bottom: 10px; background: var(--panel2); }
+  .step.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .step .title { display: flex; align-items: center; gap: 10px; font-size: 22px;
+    font-weight: 700; margin-bottom: 8px; }
+  .num { width: 34px; height: 34px; border-radius: 50%; background: var(--line);
+    display: inline-flex; align-items: center; justify-content: center; }
+  .step.done .num { background: var(--accent); color: #04130e; }
+  textarea { width: 100%; font: inherit; font-size: 18px; background: #0f1a2b;
+    color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px;
+    min-height: 82px; resize: vertical; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .kv { font-size: 17px; color: var(--muted); }
+  .kv b { color: var(--text); font-family: ui-monospace, Consolas, monospace; font-size: 16px; }
+  .banner { background: var(--warn); color: #261800; border-radius: 8px; padding: 6px 10px;
+    font-weight: 600; margin-top: 8px; font-size: 17px; }
+  .nodes { list-style: none; margin: 0; padding: 0; }
+  .nodes li { display: flex; align-items: center; gap: 10px; padding: 5px 0;
+    border-bottom: 1px dashed var(--line); font-size: 18px; }
+  .nodes li .st { width: 26px; text-align: center; }
+  .nodes li .t { margin-left: auto; color: var(--muted); font-size: 15px;
+    font-variant-numeric: tabular-nums; }
+  .nodes li.running { color: var(--info); }
+  .nodes li.done { color: var(--accent); }
+  .nodes li.failed { color: var(--bad); }
+  .nodes li.skipped { opacity: .4; }
+  .nodes .kind { font-size: 13px; color: var(--muted); border: 1px solid var(--line);
+    border-radius: 6px; padding: 0 6px; }
+  .note { white-space: pre-wrap; background: #0f1a2b; border-left: 4px solid var(--accent);
+    padding: 8px 12px; border-radius: 6px; font-size: 18px; margin-top: 8px; }
+  .branch { font-weight: 700; }
+  .branch.issuer_specific { color: var(--warn); }
+  .branch.market_wide { color: var(--info); }
+  .stream { list-style: none; margin: 0; padding: 0; }
+  .stream li { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 17px; }
+  .stream .time { color: var(--muted); font-size: 14px; margin-right: 8px;
+    font-variant-numeric: tabular-nums; }
+  .stream .tag { font-size: 13px; font-weight: 700; padding: 1px 8px; border-radius: 6px;
+    margin-right: 6px; background: var(--line); }
+  .tag.alert, .tag.error { background: var(--bad); }
+  .tag.note { background: var(--accent); color: #04130e; }
+  .tag.watch { background: var(--info); color: #04101f; }
+  .tag.action, .tag.fallback { background: var(--warn); color: #261800; }
+  .stream .detail { color: var(--muted); font-size: 15px; white-space: pre-wrap;
+    word-break: break-word; }
+  svg text { fill: var(--muted); font-size: 12px; }
+  .timer { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Trading Desk Assistant</h1>
+    <div class="sub">Börse Stuttgart Demo · fiktive Emittenten · Solace Agent Mesh</div>
+  </div>
+  <div class="sub"><span id="conn" class="dot"></span><span id="connText">Mesh</span></div>
+  <div class="links">
+    <a id="lnkGrafana" class="btnlink" target="_blank" rel="noopener">Grafana</a>
+    <a id="lnkViz" class="btnlink" target="_blank" rel="noopener">SAM Activities</a>
+    <button id="btnReset" title="Ausgangszustand herstellen">Reset</button>
+  </div>
+</header>
+<main>
+  <section>
+    <h2>Live-Ticker</h2>
+    <div id="scenario" class="kv"></div>
+    <div id="ticker"></div>
+  </section>
+
+  <section>
+    <h2>Ablauf</h2>
+    <div class="step active" id="s1">
+      <div class="title"><span class="num">1</span>Watch starten</div>
+      <textarea id="prompt"></textarea>
+      <div class="row"><button class="primary" id="btnStep1">Auftrag an den Desk-Assistenten</button>
+        <span id="s1mode" class="kv"></span></div>
+      <div id="s1out"></div>
+    </div>
+    <div class="step" id="s2">
+      <div class="title"><span class="num">2</span>Szenario auslösen</div>
+      <div class="row">
+        <button class="primary" id="btnWide">Alpha: Spread weitet sich</button>
+        <button class="secondary" id="btnMarket">Marktweit: Volatilitätssprung</button>
+      </div>
+      <div id="s2out" class="kv"></div>
+    </div>
+    <div class="step" id="s3">
+      <div class="title"><span class="num">3</span>Workflow <span class="kv">bsg-alert-triage</span>
+        <span class="timer" id="wfTimer" style="margin-left:auto"></span></div>
+      <ul class="nodes" id="nodes"></ul>
+      <div id="noteBox"></div>
+    </div>
+    <div class="step" id="s4">
+      <div class="title"><span class="num">4</span>Mensch entscheidet</div>
+      <div class="row"><button class="primary" id="btnAction" disabled>Plausibilitätsprüfung starten</button></div>
+      <div id="s4out" class="kv"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ereignis-Stream</h2>
+    <ul class="stream" id="stream"></ul>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtT = (t) => new Date(t * 1000).toLocaleTimeString("de-DE");
+const num = (v, d) => Number(v).toLocaleString("de-DE", {minimumFractionDigits: d, maximumFractionDigits: d});
+const CLASS_DE = {"dax-turbo": "DAX-Turbo", "nasdaq-knockout": "NASDAQ-KO", "discount-cert": "Discount"};
+const ISSUER_DE = {alpha: "Alpha", beta: "Beta", gamma: "Gamma"};
+const NODES = [
+  ["enrich", "Alert anreichern", "Tool"],
+  ["analyst", "bsg-quote-analyst", "Agent"],
+  ["context", "bsg-market-context", "Agent"],
+  ["branch", "Verzweigung auf scope", "Switch"],
+  ["communicator", "bsg-desk-communicator", "Agent"],
+  ["publish", "Desk-Note publizieren", "Tool"],
+];
+let state = {}; let cfg = {}; let wf = null; let lastNote = null; let watch = null;
+
+function resetWorkflow() {
+  wf = {t0: null, nodes: Object.fromEntries(NODES.map(([id]) => [id, {s: "pending"}])), branch: null};
+  renderNodes(); $("noteBox").innerHTML = ""; $("wfTimer").textContent = "";
+}
+function setNode(id, s, note) {
+  if (!wf || !wf.nodes[id]) return;
+  const n = wf.nodes[id];
+  if (n.s === "done" && s === "running") return;
+  n.s = s; n.note = note || n.note;
+  if (s === "running" && !n.start) n.start = Date.now() / 1000;
+  if ((s === "done" || s === "failed") && !n.end) n.end = Date.now() / 1000;
+  renderNodes();
+}
+function renderNodes() {
+  const icon = {pending: "○", running: "◐", done: "●", failed: "✕", skipped: "–"};
+  $("nodes").innerHTML = NODES.map(([id, label, kind]) => {
+    const n = wf.nodes[id];
+    let lbl = label;
+    if (id === "branch" && wf.branch) lbl += ` → <span class="branch ${wf.branch}">${wf.branch === "market_wide" ? "marktweit" : "emittentenspezifisch"}</span>`;
+    const t = n.end && n.start ? (n.end - n.start).toFixed(1) + " s" : (n.start ? "läuft" : "");
+    return `<li class="${n.s}"><span class="st">${icon[n.s]}</span>${lbl} <span class="kind">${kind}</span>` +
+      `${n.note ? `<span class="kv">${esc(n.note)}</span>` : ""}<span class="t">${t}</span></li>`;
+  }).join("");
+}
+function tick() {
+  if (wf && wf.t0 && !wf.tEnd) $("wfTimer").textContent = ((Date.now() / 1000) - wf.t0).toFixed(0) + " s";
+}
+setInterval(tick, 250);
+
+function stepDone(n) { $("s" + n).classList.add("done"); $("s" + n).classList.remove("active");
+  const nx = $("s" + (n + 1)); if (nx) nx.classList.add("active"); }
+
+function renderTicker() {
+  const q = state.quotes || []; const st = state.issuer_status || {};
+  const now = Date.now();
+  $("ticker").innerHTML = (cfg.issuers || ["alpha", "beta", "gamma"]).map((iss) => {
+    const rows = q.filter((x) => x.issuer === iss).sort((a, b) => a.isin.localeCompare(b.isin));
+    const review = st[iss] === "in_review";
+    return `<div class="issuer"><div class="head"><span style="color:var(--${iss})">■</span>${ISSUER_DE[iss]}` +
+      `<span class="badge ${review ? "review" : ""}">${review ? "in Prüfung" : "normal"}</span></div><table>` +
+      rows.map((r) => {
+        const stale = now - r.ts_ms > 3000;
+        return `<tr class="${stale ? "stale" : ""}"><td class="isin" title="${r.isin}">…${r.isin.slice(-4)}</td><td>${CLASS_DE[r.product_class] || r.product_class}</td>` +
+          `<td>${num(r.bid, 3)} / ${num(r.ask, 3)}</td><td class="sp ${r.spread_pct > 0.5 ? "hot" : ""}">${num(r.spread_pct, 2)} %</td></tr>`;
+      }).join("") + "</table></div>";
+  }).join("");
+  const sc = state.scenario || {};
+  $("scenario").innerHTML = sc.scenario && sc.scenario !== "normal"
+    ? `Szenario aktiv: <b>${esc(sc.scenario)}</b> ${sc.issuer ? esc(ISSUER_DE[sc.issuer] || sc.issuer) : ""} · noch ${sc.remaining_s} s`
+    : "Normalbetrieb";
+}
+
+function streamAdd(ev) {
+  const d = ev.data || {}; let tag = ev.kind, text = "", detail = "";
+  switch (ev.kind) {
+    case "request": text = "Auftrag an bsg-desk-assistant"; detail = d.prompt; break;
+    case "reply": text = "Antwort des Desk-Assistenten"; detail = d.text; break;
+    case "watch": tag = "watch"; text = `Watch ${esc(d.watch_id || "")} ${d.event === "created" ? "angelegt" : esc(d.event)}`;
+      detail = d.topic_filter ? `${d.topic_filter}\n${d.metric} ${d.op} ${d.threshold} für ${d.hold_seconds} s` : (d.reason || ""); break;
+    case "watch_cmd": return;
+    case "alert": text = `Alert ${d.alert_id} · ${ISSUER_DE[d.issuer] || d.issuer} ${d.isin}`;
+      detail = `${d.metric} = ${d.observed_value} (${d.op} ${d.threshold}) seit ${d.held_seconds} s · ${(d.affected_products || []).length} Produkte`; break;
+    case "progress": text = `Knoten ${d.node}: ${d.phase}`; detail = d.error || d.detail || ""; break;
+    case "note": text = `Desk-Note (${d.branch === "market_wide" ? "marktweit" : "emittentenspezifisch"})`; detail = d.note; break;
+    case "result": text = "Workflow beendet (Entrypoint-Ergebnis)"; break;
+    case "error": text = "Fehler im Workflow"; detail = d.text; break;
+    case "action": text = `Aktion: ${d.action} ${d.issuer ? ISSUER_DE[d.issuer] || d.issuer : ""}`; break;
+    case "issuer_status": tag = "action"; text = `Status ${ISSUER_DE[d.issuer] || d.issuer}: ${d.status === "in_review" ? "in Prüfung" : "normal"}`; break;
+    case "scenario": text = `Szenario: ${d.scenario} ${d.issuer || ""}`; break;
+    case "news": text = `News: ${d.headline}`; break;
+    case "fallback": text = d.text; break;
+    case "sam": text = "SAM-Status"; detail = d.topic; break;
+    default: text = ev.kind;
+  }
+  const li = document.createElement("li");
+  li.innerHTML = `<span class="time">${fmtT(ev.ts)}</span><span class="tag ${tag}">${esc(tag)}</span>${esc(text)}` +
+    (detail ? `<div class="detail">${esc(detail)}</div>` : "");
+  $("stream").prepend(li);
+  while ($("stream").children.length > 200) $("stream").lastChild.remove();
+}
+
+function onEvent(ev, live) {
+  const d = ev.data || {};
+  streamAdd(ev);
+  if (ev.kind === "reply") $("s1out").innerHTML += `<div class="note">${esc(d.text)}</div>`;
+  if (ev.kind === "watch" && d.event === "created") {
+    watch = d;
+    $("s1out").innerHTML = `<div class="row kv">Watch-ID <b>${esc(d.watch_id)}</b></div>` +
+      `<div class="kv">Topic-Filter <b>${esc(d.topic_filter)}</b></div>` +
+      `<div class="kv">Bedingung <b>${esc(d.metric)} ${esc(d.op)} ${d.threshold} · ${d.hold_seconds} s halten · TTL ${d.ttl_minutes} min</b></div>` +
+      (d.description && d.description.startsWith("FALLBACK") ? `<div class="banner">Fallback: Watch direkt publiziert, ohne Agent</div>` : "");
+    stepDone(1);
+  }
+  if (ev.kind === "watch" && d.event === "rejected") $("s1out").innerHTML += `<div class="banner">Watch abgelehnt: ${esc(d.reason)}</div>`;
+  if (ev.kind === "scenario" && d.scenario !== "normal") { wf = wf || null; state.scenarioStart = ev.ts; }
+  if (ev.kind === "alert") {
+    resetWorkflow(); wf.t0 = ev.ts; wf.alert = d;
+    const dt = state.scenarioStart ? ` · ${(ev.ts - state.scenarioStart).toFixed(0)} s nach Szenario-Start` : "";
+    $("s2out").innerHTML = `Alert <b>${esc(d.alert_id)}</b> auf <b>bsg/alerts/${esc(d.watch_id)}</b>${dt}`;
+    setNode("enrich", "running"); stepDone(2);
+  }
+  if (ev.kind === "progress" && wf) {
+    const map = {enrich: "enrich", publish: "publish"};
+    const id = map[d.node] || d.node;
+    if (d.phase === "started") setNode(id, "running");
+    if (d.phase === "finished") {
+      setNode(id, "done");
+      if (id === "enrich") setNode("analyst", "running", "");
+    }
+    if (d.phase === "failed") setNode(id, "failed", d.error);
+  }
+  if (ev.kind === "sam" && wf) {
+    const s = JSON.stringify(d.payload || "");
+    for (const [id] of NODES) if (s.includes(`"${id}`)) setNode(id, "running", "SAM-Status");
+  }
+  if (ev.kind === "note") {
+    if (!wf) resetWorkflow();
+    lastNote = d; wf.branch = d.branch; wf.tEnd = ev.ts;
+    for (const [id] of NODES) if (wf.nodes[id].s !== "failed") setNode(id, "done");
+    const total = wf.t0 ? ` · ${(ev.ts - wf.t0).toFixed(1)} s vom Alert bis zur Note` : "";
+    $("wfTimer").textContent = wf.t0 ? (ev.ts - wf.t0).toFixed(1) + " s" : "";
+    $("noteBox").innerHTML = `<div class="kv">Zweig: <span class="branch ${esc(d.branch)}">${d.branch === "market_wide" ? "marktweit – keine Emittentenmaßnahme" : "emittentenspezifisch"}</span>${total}</div>` +
+      `<div class="note">${esc(d.note)}</div><div id="chart"></div>` +
+      `<div class="kv">Chart-Artefakt: <b>${esc(d.chart_ref || "–")}</b> · Run: <b>${esc(d.workflow_run_id || "–")}</b></div>`;
+    drawChart(d.issuer || (wf.alert && wf.alert.issuer));
+    const iss = d.issuer || "alpha";
+    $("btnAction").disabled = false;
+    $("btnAction").textContent = `Plausibilitätsprüfung für ${ISSUER_DE[iss] || iss} starten`;
+    $("btnAction").dataset.issuer = iss;
+    stepDone(3);
+  }
+  if (ev.kind === "error" && wf) { for (const [id] of NODES) if (wf.nodes[id].s === "running") setNode(id, "failed"); }
+  if (ev.kind === "issuer_status" && d.status === "in_review") {
+    $("s4out").innerHTML = `Action-Event auf <b>bsg/desk/actions</b> · ${ISSUER_DE[d.issuer] || d.issuer} ist <b>in Prüfung</b>`;
+    stepDone(4);
+  }
+}
+
+async function drawChart(issuer) {
+  const pc = (wf && wf.alert && wf.alert.product_class) || "dax-turbo";
+  const r = await fetch(`/api/chart?product_class=${encodeURIComponent(pc)}`); if (!r.ok) return;
+  const data = await r.json(); const W = 560, H = 180, P = 30;
+  const all = Object.values(data).flat(); if (!all.length) return;
+  const t0 = Math.min(...all.map((p) => p[0])), t1 = Math.max(...all.map((p) => p[0]));
+  const vmax = Math.max(1.0, ...all.map((p) => p[1]));
+  const x = (t) => P + (W - 2 * P) * (t - t0) / Math.max(t1 - t0, 1);
+  const y = (v) => H - P + 8 - (H - 2 * P) * v / vmax;
+  const lines = Object.entries(data).map(([iss, pts]) =>
+    `<polyline fill="none" stroke="var(--${iss})" stroke-width="${iss === issuer ? 3 : 1.5}" points="${pts.map((p) => x(p[0]).toFixed(1) + "," + y(p[1]).toFixed(1)).join(" ")}"/>` +
+    `<text x="${W - P + 2}" y="${y(pts[pts.length - 1][1])}">${ISSUER_DE[iss] || iss}</text>`).join("");
+  $("chart").innerHTML = `<svg viewBox="0 0 ${W + 30} ${H}" width="100%">` +
+    `<line x1="${P}" x2="${W - P}" y1="${y(0.5)}" y2="${y(0.5)}" stroke="var(--bad)" stroke-dasharray="4 4"/>` +
+    `<text x="2" y="${y(0.5) + 4}">0,5 %</text><text x="2" y="${y(0) + 4}">0 %</text>${lines}` +
+    `<text x="${P}" y="${H - 4}">Spread in %, letzte 15 min (5-s-Mittel je Emittent, ${CLASS_DE[pc] || pc})</text></svg>`;
+}
+
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  return r.json();
+}
+$("btnStep1").onclick = async () => {
+  const r = await post("/api/step1", {prompt: $("prompt").value});
+  $("s1mode").textContent = r.mode === "direct" ? "Fallback: direkt publiziert" : `gesendet (${r.request_id}) – Agent arbeitet …`;
+};
+$("btnWide").onclick = () => post("/api/scenario", {scenario: "wide_spread", issuer: "alpha", duration_s: 30});
+$("btnMarket").onclick = () => post("/api/scenario", {scenario: "market_wide", duration_s: 30});
+$("btnAction").onclick = () => post("/api/action", {issuer: $("btnAction").dataset.issuer || "alpha",
+  action: "plausibility_check", note_ref: lastNote && lastNote.alert_id});
+$("btnReset").onclick = async () => { if (confirm("Demo auf Ausgangszustand zurücksetzen?")) await post("/api/reset"); };
+
+function resetUi() {
+  $("stream").innerHTML = ""; $("s1out").innerHTML = ""; $("s1mode").textContent = "";
+  $("s2out").innerHTML = ""; $("s4out").innerHTML = ""; resetWorkflow();
+  $("btnAction").disabled = true; $("btnAction").textContent = "Plausibilitätsprüfung starten";
+  for (const n of [1, 2, 3, 4]) $("s" + n).classList.remove("done", "active");
+  $("s1").classList.add("active"); state.scenarioStart = null; lastNote = null;
+}
+
+(async function init() {
+  cfg = await (await fetch("/api/config")).json();
+  $("prompt").value = cfg.default_prompt;
+  $("lnkGrafana").href = cfg.grafana_url; $("lnkViz").href = cfg.visualizer_url;
+  if (cfg.entry_mode === "direct") $("s1mode").innerHTML = `<span class="banner">Fallback-Modus: ohne Agent</span>`;
+  resetWorkflow();
+  const es = new EventSource("/api/events");
+  es.addEventListener("snapshot", (e) => { resetUi(); JSON.parse(e.data).forEach((ev) => onEvent(ev, false)); });
+  es.addEventListener("ev", (e) => { const ev = JSON.parse(e.data); if (ev.kind === "reset") resetUi(); else onEvent(ev, true); });
+  es.addEventListener("ticker", (e) => { Object.assign(state, JSON.parse(e.data)); renderTicker(); });
+  es.onopen = () => { $("conn").classList.add("ok"); $("connText").textContent = "Mesh verbunden"; };
+  es.onerror = () => { $("conn").classList.remove("ok"); $("connText").textContent = "getrennt – verbinde neu …"; };
+})();
+</script>
+</body>
+</html>

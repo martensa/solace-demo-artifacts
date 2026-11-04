@@ -1,0 +1,9 @@
+# BSG trading desk demo -- one image, four commands (see Dockerfile).
+# Pinned to the versions tested on 2026-11-04 (unit tests + local
+# smoke test against mosquitto). mcp is pinned to the same release
+# the insurance demo's MCP server runs against SAM (2.2.0).
+paho-mqtt==2.1.0
+fastapi==0.162.0
+uvicorn==0.54.0
+httpx==0.28.1
+mcp[cli]==2.2.0

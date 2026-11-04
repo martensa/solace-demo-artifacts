@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-ui
+  labels: {app: demo-ui}
+spec:
+  replicas: 1  # SSE fan-out is in-process
+  selector:
+    matchLabels: {app: demo-ui}
+  template:
+    metadata:
+      labels: {app: demo-ui}
+    spec:
+      imagePullSecrets:
+        - name: registry-pull-secret
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      containers:
+        - name: demo-ui
+          image: bsg-demo
+          command: ["python", "-m", "bsgdemo.ui.server"]
+          env:
+            - {name: PORT, value: "8080"}
+          envFrom:
+            - configMapRef: {name: bsg-demo-config}
+            - secretRef: {name: bsg-broker}
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 200m, memory: 256Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 50Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-ui
+spec:
+  selector: {app: demo-ui}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+---
+# Same pattern as the SAM ingress (agent-mesh-deployment
+# local-k8s-values.yaml): NGINX + cert-manager lab CA. Buffering off
+# so the SSE event stream reaches the browser immediately.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: demo-ui
+  annotations:
+    cert-manager.io/cluster-issuer: solace-lab-ca-issuer
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: bsg-desk-tls
+      hosts: [bsg-desk.solace.lab]
+  rules:
+    - host: bsg-desk.solace.lab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: demo-ui, port: {name: http}}

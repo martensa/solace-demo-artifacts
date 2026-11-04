@@ -1,0 +1,29 @@
+# DRAFT -- verify against SAM 2.493.0 in Gate 0 before the first
+# apply (README "Gate 0"). Schema follows the demos verified on
+# 2.348.22 (sam-retail-ops-demo, sam-insurance-ops-demo).
+#
+# Apply order (scripts/install.sh):
+#   1. this manifest: connector, agents, workflow
+#   2. entrypoints/ rendered from the template once the workflow's
+#      runtime name is known (event-mesh -> workflow bug, see there)
+kind: manifest
+name: bsg-trading-desk-demo
+description: >-
+  BSG trading desk demo: deterministic MCP tools, four desk agents
+  plus the alert runner, and the bsg-alert-triage workflow.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  connectors:
+    - bsg-desk-tools
+  agents:
+    - bsg-desk-assistant
+    - bsg-alert-runner
+    - bsg-quote-analyst
+    - bsg-market-context
+    - bsg-desk-communicator
+  workflows:
+    - bsg-alert-triage
