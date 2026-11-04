@@ -32,13 +32,15 @@
 #   whether SAM turns an MCP response's embedded resources into named
 #   artifacts is unverified, so the numbers travel as structured data and
 #   the 15-minute series stays in the demo UI's own chart.
-# - This connector's MCP tools put their structured result straight
-#   under `{{<node>.output.<field>}}`. The connector reference's
-#   `{{<node>.output.mcp_structured_content.<field>}}` form does NOT
-#   apply here -- a run with it fails the consuming node with
-#   `field "mcp_structured_content" not found in node output; that
-#   value has 9 fields`, which is the summary's own keys. Measured on
-#   2.493.0 with this connector, 2026-11-04.
+# - A connector-backed MCP tool's result is read as
+#   `{{<node>.output.mcp_structured_content.<field>}}`, and only when
+#   the tool actually returns structured content. The MCP SDK emits it
+#   solely for a tool whose return type is a model -- with a plain
+#   `dict` the node output is the bare envelope
+#   (`mcp_tool_output`, `message_to_llm`, `status`), which is the
+#   "that value has 3 fields" failure. Both tools therefore return
+#   Pydantic models, and the connector's manifest carries the
+#   outputSchema the server advertises. Measured on 2.493.0.
 kind: workflow
 name: bsg-alert-triage
 description: >-
@@ -48,7 +50,7 @@ description: >-
   the German desk note and publishes it onto the mesh.
 spec:
   appConfig:
-    version: "1.0.1"
+    version: "1.0.2"
     description: >-
       From a quote alert to a desk note in under 60 seconds: enrich,
       analyse, classify, branch, write, publish.
@@ -130,7 +132,7 @@ spec:
           # enrich node only echoes the fields it was given, so taking
           # the alert from the workflow input keeps every field.
           alert: "{{workflow.input}}"
-          statistics: "{{enrich.output.statistics}}"
+          statistics: "{{enrich.output.mcp_structured_content.statistics}}"
         output_schema_override:
           type: object
           required: [issuer, spread_since_alert_pct, spread_window_mean_pct,
@@ -160,7 +162,7 @@ spec:
           reference_move_pct, high_impact_news.
         input:
           alert: "{{workflow.input}}"
-          statistics: "{{enrich.output.statistics}}"
+          statistics: "{{enrich.output.mcp_structured_content.statistics}}"
         output_schema_override:
           type: object
           required: [scope, reasoning]

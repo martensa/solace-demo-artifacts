@@ -43,8 +43,10 @@ import urllib.request
 HEADERS = {"Content-Type": "application/json",
            "Accept": "application/json, text/event-stream"}
 
-# Hand-written because an MCP tool does not advertise its result shape.
-# Keep in sync with app/bsgdemo/tools_server.py.
+# Fallback only. enrich_alert and publish_desk_note return Pydantic
+# models, so the server advertises their outputSchema in tools/list and
+# build() prefers that. These entries still document the contract and
+# cover a tool that goes back to a plain return type.
 OUTPUT_SCHEMAS: dict[str, dict] = {
     # Keep this the LEAN shape (detail=false). A response over
     # mcp_tool_response_save_threshold_bytes (2048) is stored as an
@@ -130,7 +132,11 @@ def build(tools: list[dict]) -> list[dict]:
         entry = {"name": tool["name"],
                  "description": " ".join((tool.get("description") or "").split()),
                  "inputSchema": tool.get("inputSchema", {"type": "object"})}
-        if tool["name"] in OUTPUT_SCHEMAS:
+        # The server advertises an outputSchema for every tool that
+        # returns a model; prefer it over the fallback below.
+        if tool.get("outputSchema"):
+            entry["outputSchema"] = tool["outputSchema"]
+        elif tool["name"] in OUTPUT_SCHEMAS:
             entry["outputSchema"] = OUTPUT_SCHEMAS[tool["name"]]
         out.append(entry)
     missing = sorted(set(OUTPUT_SCHEMAS) - {t["name"] for t in tools})

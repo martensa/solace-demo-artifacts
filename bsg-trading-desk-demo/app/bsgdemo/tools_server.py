@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any
 
 import httpx
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 try:  # mcp >= 2.0
     from mcp.server.mcpserver import MCPServer as _ServerClass
@@ -201,6 +201,42 @@ def _parse_alert(alert: Any) -> dict[str, Any]:
     return a
 
 
+class EnrichResult(BaseModel):
+    """Result of enrich_alert.
+
+    It is a model, not a plain dict, on purpose: the MCP SDK only emits
+    an output schema and `structured_content` for a tool whose return
+    type is a model. Without that, SAM's workflow sees the raw envelope
+    (`mcp_tool_output`, `message_to_llm`, `status`) and no field of the
+    response resolves -- the consuming node then fails with
+    "field ... not found in node output; that value has 3 fields".
+    """
+
+    watch_id: str = ""
+    issuer: str = ""
+    peer_issuers: list[str] = Field(default_factory=list)
+    primary_underlying: str = ""
+    window_minutes: float = 0.0
+    statistics: dict[str, Any] = Field(default_factory=dict)
+    # detail=true only
+    alert: dict[str, Any] | None = None
+    affected_products: list[Any] | None = None
+    datasets: dict[str, Any] | None = None
+    attachments: list[Any] | None = None
+    # failure path
+    error: str | None = None
+    hint: str | None = None
+
+
+class PublishResult(BaseModel):
+    """Result of publish_desk_note -- a model for the same reason."""
+
+    status: str = ""
+    topic: str = ""
+    lines: int = 0
+    error: str | None = None
+
+
 def enrich(alert: Any, detail: bool = True) -> tuple[dict[str, Any], dict[str, str]]:
     """Deterministic enrichment; returns (summary, {filename: content}).
 
@@ -284,7 +320,7 @@ def enrich_alert(
                                               "alert. Leave false in a workflow: a response "
                                               "over 2048 bytes is stored as an artifact and "
                                               "its fields stop resolving.")] = False,
-) -> dict:
+) -> EnrichResult:
     """Workflow step 'Alert anreichern': fetch the last 15 minutes of
     quotes (alerting issuer plus the two peers as comparison), the
     reference prices and the news from the watcher, and return a compact
@@ -308,11 +344,12 @@ def enrich_alert(
         summary, files = enrich(a, detail=detail)
     except (ValueError, KeyError, json.JSONDecodeError) as exc:
         _progress(wid, "enrich", "failed", error=str(exc))
-        return {"error": f"bad alert payload: {exc}",
-                "hint": "pass the alert JSON unchanged, or watch_id plus issuer"}
+        return EnrichResult(
+            error=f"bad alert payload: {exc}",
+            hint="pass the alert JSON unchanged, or watch_id plus issuer")
     except httpx.HTTPError as exc:
         _progress(wid, "enrich", "failed", error=str(exc))
-        return {"error": f"watcher unreachable: {exc}", "hint": "retry once"}
+        return EnrichResult(error=f"watcher unreachable: {exc}", hint="retry once")
     _progress(wid, "enrich", "finished", datasets=list(files))
     if ENRICH_EMBED and detail:
         # Kept for the local smoke test and for a client that can take
@@ -324,7 +361,7 @@ def enrich_alert(
              "bytes": len(content)}
             for name, content in files.items()
         ]
-    return summary
+    return EnrichResult(**summary)
 
 
 @mcp.tool()
@@ -336,7 +373,7 @@ def publish_desk_note(
     alert_id: Annotated[str, Field(description="alert_id of the alert.")] = "",
     chart_ref: Annotated[str, Field(description="Artifact name or URI of the chart.")] = "",
     workflow_run_id: Annotated[str, Field(description="Workflow run / task id.")] = "",
-) -> dict:
+) -> PublishResult:
     """Workflow step 'Desk-Note publizieren': publish the final desk note
     on bsg/desk/notes/{watch_id} for the trading desk UI."""
     lines = [ln for ln in note.strip().splitlines() if ln.strip()]
@@ -349,8 +386,9 @@ def publish_desk_note(
     _progress(watch_id, "publish", "finished", branch=branch)
     # A dict, so the MCP response carries structuredContent and a
     # workflow can address the fields.
-    return {"status": "published", "topic": topics.DESK_NOTE.format(watch_id=watch_id),
-            "lines": len(lines)}
+    return PublishResult(status="published",
+                         topic=topics.DESK_NOTE.format(watch_id=watch_id),
+                         lines=len(lines))
 
 
 @mcp.tool()
@@ -405,9 +443,14 @@ def dump_tools() -> None:
         out = []
         for t in tools:
             d = t.model_dump(exclude_none=True) if hasattr(t, "model_dump") else dict(t)
-            out.append({"name": d.get("name"),
-                        "description": d.get("description") or "",
-                        "inputSchema": d.get("inputSchema") or {"type": "object"}})
+            entry = {"name": d.get("name"),
+                     "description": d.get("description") or "",
+                     "inputSchema": (d.get("inputSchema") or d.get("input_schema")
+                                     or {"type": "object"})}
+            schema = d.get("outputSchema") or d.get("output_schema")
+            if schema:
+                entry["outputSchema"] = schema
+            out.append(entry)
         return out
 
     print(json.dumps(asyncio.run(_list()), indent=1))
