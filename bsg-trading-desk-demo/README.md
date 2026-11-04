@@ -20,9 +20,11 @@ Work in progress. Built so far, without access to the lab cluster:
 - `k8s/` -- Kustomize for namespace `bsg-demo`.
 - `mesh/` -- SAM manifests as DRAFTS that follow the schema verified
   on 2.348.22 in the other demos of this repo. NOT applied yet:
-  Gate 0 below has to run on the cluster first.
-- Not started: the Grafana dashboard (needs the `tasks` columns of
-  2.493.0) and the end-to-end acceptance on the cluster.
+  Gate 0 ran on 2026-11-04 (result below) and left two decisions
+  open; the `__GATE0__` markers stay until they are settled.
+- Not started: the Grafana dashboard (the `tasks` columns are now
+  known, see Gate 0 item 6) and the end-to-end acceptance on the
+  cluster.
 
 ## Architecture
 
@@ -73,21 +75,24 @@ Topic layout (prefix `bsg/`):
   `bsg/desk/results`, `bsg/desk/errors`
 - `bsg/desk/actions`, `bsg/desk/issuer-status/{issuer}`
 
-## Environment (from this repo, to be confirmed in Gate 0)
+## Environment (measured in Gate 0 on 2026-11-04)
 
 - SAM v2 Enterprise, Go edition, 2.493.0 (chart 2.2.30), release
   `agent-mesh` in `sam-solace-lab`. Resources are applied
   declaratively with `sam config apply` (no `sam run` in v2).
 - Broker `solace-1` runs in Docker Compose on the host
   (`event-mesh-deployment`), not in the cluster. SAM uses VPN `sam`
-  via `ws://host.docker.internal:8008`; the demo uses the same VPN
-  over MQTT `host.docker.internal:1883`.
+  via `ws://host.docker.internal:8008`. The demo was drafted for the
+  same VPN over MQTT `host.docker.internal:1883` -- which Gate 0
+  showed to be the `default` VPN, not `sam`. See "Open decisions".
 - Models: `general` for the desk assistant, `fast` for all workflow
   agents (latency budget below 60 s from alert to note).
 - Observability: SAM emits no OTel spans; traces come from the
-  broker. Token usage per user comes from the platform DB `tasks`
-  table (Grafana datasource `SAM Platform DB`). The existing
-  dashboards have no filter variables, hence an own dashboard.
+  broker, and telemetry is configured on both the `default` and the
+  `sam` VPN. Token usage per user comes from the `tasks` table of
+  the WebUI database, which is what the Grafana datasource
+  `sam-platform-db` points at. The existing dashboards have no
+  filter variables, hence an own dashboard.
 
 ## Decisions and assumptions
 
@@ -127,23 +132,177 @@ Assumptions:
   the agent nodes in between are shown as inferred unless SAM's own
   status topics are wired in (`SAM_STATUS_TOPICS`).
 
-## Gate 0 (on the lab cluster, before `make mesh-up`)
+## Gate 0 (ran on the lab on 2026-11-04 -- result)
 
-1. `kubectl config current-context`, `helm list -A`; confirm SAM
-   2.493.0 and the `sam` CLI version.
-2. Workflow schema of 2.493.0 (docs and `sam` CLI): branch node
-   type (stop if absent), tool node type, artifact hand-over between
-   nodes, run id variable. Replace the `__GATE0__` markers in
-   `mesh/workflows/bsg-alert-triage.yaml`.
-3. Whether an MCP tool result with embedded resources becomes an
-   artifact (`ENRICH_EMBED`); else adjust `bsg-alert-runner`.
-4. Entrypoint to workflow: is the 2.348.22 bug fixed? Set
-   `ENTRYPOINT_WORKFLOW_TARGET` accordingly.
-5. Network: SAM `str` pod reaches `bsg-tools.bsg-demo.svc:8765`;
-   pods in `bsg-demo` reach `host.docker.internal:1883`; Kyverno
-   accepts the Deployments; DNS for `bsg-desk.solace.lab`.
-6. A2A status topics of a workflow run on VPN `sam` (A2A sniff) for
-   `SAM_STATUS_TOPICS`, and the `tasks` columns for the dashboard.
+Everything below was measured against the running lab, not assumed.
+Sources for the schema items: `sam config schema show workflow`, the
+offline documentation (`sam docs`) and the CLI's own authoring
+reference (`sam ai-assistance skill install`).
+
+### 1. Cluster and versions -- OK
+
+Context `rancher-desktop`; release `agent-mesh` revision 2 in
+`sam-solace-lab`, chart `solace-agent-mesh-2.2.30`, app version
+2.493.0; images `solace-agent-mesh:2.493.0` and
+`solace-agent-mesh-str:1.76.4`; `sam` CLI 2.493.0. `solace-1` is up;
+`solace-2` is `Exited (137)` and this demo does not need it.
+
+### 2. Workflow schema of 2.493.0
+
+- Branch node EXISTS: `type: switch`, with
+  `cases: [{condition, node}]` and `default:` (`when` is an alias for
+  `condition`, `then` for `node`). Every switch target must list the
+  switch node in its `depends_on`, and converging after the branch
+  uses the `coalesce` operator. The stop rule of decision 1 therefore
+  does not trigger.
+- Tool node EXISTS: `type: tool` with `tool_name:`, or
+  `connector: <name>` plus `tool: <base name>` for a connector from
+  the platform store. This is the premise of decision 2 -- see
+  "Open decisions".
+- Artifact hand-over: a tool node's output is the tool's structured
+  data plus `created_artifact` (the name pinned to the version it
+  wrote, e.g. `quotes.csv:1`), `created_artifact_name` and
+  `created_artifact_version` -- but only when the call saved exactly
+  one artifact. `enrich_alert` saves several, so it has to name its
+  data sets in its own structured data, which it does.
+- Run id: `{{workflow.run_id}}` and `{{workflow.task_id}}` resolve in
+  any node.
+- Correction to the drafts: node-level schemas are
+  `output_schema_override` and `input_schema_override`. A node
+  written with `output_schema:` declares nothing, and every
+  `{{node.output.<field>}}` reference then degrades silently -- the
+  switch case never matches and falls through to `default`, and
+  `output_mapping` returns the literal `{{...}}` text. Unlike
+  2.348.22, the node instruction must now also name the keys.
+
+### 3. MCP tool results and artifacts
+
+An MCP response becomes an artifact only above
+`mcp_tool_response_save_threshold_bytes` (default 2048), and
+`extract_fields` (JMESPath, read back under
+`{{node.output.extracted_fields.<key>}}`) rides along with saved
+responses only. `tool_config`, and therefore `extract_fields`, is not
+available on a connector-backed MCP tool; that needs a `tools:` entry
+with `tool_type: mcp` in the workflow itself. The demo does not need
+it: `enrich_alert` returns its data set names directly.
+
+### 4. Entrypoint to workflow
+
+An event-mesh rule targets a workflow with `targetWorkflowName`, and
+entrypoints resolve the friendly `name:` to the generated
+`workflow_<id>` card, so the runtime-name workaround should be
+unnecessary (`ENTRYPOINT_WORKFLOW_TARGET=name`, to be confirmed on
+the first run). A workflow rule ignores `promptTemplate` and needs
+`inputExpression` instead; without it the workflow receives empty
+input and the rule still saves and deploys. With an `input_schema`, a
+JSON object payload arrives as addressable fields
+(`workflow.input.<field>`), which beats the `{"text": ...}` path the
+draft assumes -- but the schema must then declare every field the
+alert carries and must not also accept `text`, or the payload falls
+back to the text form.
+
+### 5. Network, Kyverno, DNS
+
+- Workflows run in the `awe` pod, not `str` as this list previously
+  said. From `awe`, `host.docker.internal` resolves to 192.168.5.2
+  and TCP 1883, 8008 and 8080 are open. Cross-namespace DNS works and
+  `sam-solace-lab` has no NetworkPolicy, so
+  `bsg-tools.bsg-demo.svc:8765` will be reachable.
+- Kyverno accepts everything in `k8s/`: a server-side dry run of
+  `kubectl apply -k k8s` passed for all nine objects, and the policy
+  `sync-registry-pull-secret` placed `registry-pull-secret` into the
+  namespace on its own. The probe namespace was removed again.
+- `registry.solace.lab` answers and `~/.docker/config.json` holds an
+  entry for it.
+- DNS for `bsg-desk.solace.lab` is MISSING: it does not resolve and
+  `/etc/hosts` has no entry for it. Adding one needs sudo; until then
+  the demo runs through `make port-forward`. While editing that file:
+  its line 16 is malformed -- the `openmetadata.solace.lab` entry and
+  the `db-designer` entry sit on one line without a line break.
+- BLOCKER: MQTT 1883 belongs to the `default` VPN, not to `sam`. See
+  "Open decisions".
+
+### 6. Status topics and the dashboard
+
+- The lab's A2A namespace is `sam-solace-lab`, so the status topics
+  are `sam-solace-lab/a2a/v1/gateway/status/<gatewayID>/<taskID>` and
+  `sam-solace-lab/a2a/v1/agent/status/<agent>/<subTaskID>`. They live
+  on VPN `sam`, which has no MQTT listener (item 5), so
+  `SAM_STATUS_TOPICS` can only be filled if option A1 below is taken.
+  No workflow run existed yet to sniff.
+- The `tasks` table is in the WebUI database `sam-solace-lab_webui`,
+  which is what the Grafana datasource `sam-platform-db` points at
+  (the datasource `SAM Platform Config DB` is the other one, the
+  platform database). Columns available for the dashboard:
+  `handler_type`, `handler_name`, `agent_name`, `parent_task_id`,
+  `total_input_tokens`, `total_output_tokens`,
+  `total_cached_input_tokens`, `token_usage_details`, `start_time`
+  and `end_time` (epoch milliseconds), `status`, `error_message`,
+  `user_id`, `trigger_kind`, `trigger_source`, `entrypoint_name`.
+- The WebUI database is EMPTY after the 2.493.0 upgrade (`tasks`,
+  `task_events`, `sessions` and the rest all at zero rows), so the
+  chargeback panels of the other demo dashboards stay blank until new
+  tasks run. On the platform only `Orchestrator`, `Activity Monitor`
+  and the `developer-mcp` gateway are registered.
+- Model aliases `fast`, `general` and `workflow` (claude-sonnet-5)
+  exist. There is no model of type `decision`, so decision nodes are
+  unusable -- `switch` is the branch.
+
+### 7. Needs the owner
+
+`sam auth login` is a browser OIDC flow against `auth.solace.lab` and
+needs the owner's password, so `make mesh-up` cannot run unattended.
+`bsg-trading-desk-demo/.env` does not exist yet either.
+
+## Open decisions (Gate 0)
+
+### A. Which VPN carries the demo feed
+
+Measured on `solace-1` over SEMP: VPN `default` has
+`serviceMqttPlainTextEnabled: true` on port 1883, while VPN `sam` has
+MQTT plain text, TLS, WebSocket and WebSocket-TLS all disabled. MQTT
+selects the VPN by port, so a client on
+`host.docker.internal:1883` lands on `default` and never on `sam`.
+SAM's own eleven clients sit on VPN `sam` over SMF and web transport
+(8008), where the VPN comes from the handshake rather than the port.
+As drafted, the feed and the entrypoint would sit on two VPNs and
+never see each other.
+
+- Option A1 (recommended): move MQTT plain text 1883 from VPN
+  `default` to VPN `sam`. Nothing uses MQTT on `default` (zero MQTT
+  sessions, only the `trace` client), nothing in the repository
+  refers to 1883 except this demo and the event-mesh README, and
+  1883 is already published by docker-compose. That is one Terraform
+  change in `event-mesh-deployment` plus a live SEMP swap (disable on
+  `default` first, then enable on `sam`): no container recreate, no
+  change in `app/`, and the demo matches its own design.
+- Option A2: leave the broker untouched, run the feed on VPN
+  `default`, and point the event-mesh entrypoint and connector at
+  `default` as well -- SMF carries the VPN name, so that is config
+  only. No infrastructure change at all, but the demo's events no
+  longer share a VPN with SAM's A2A traffic, `SAM_STATUS_TOPICS`
+  stays empty, and the `bsg/` topics become visible to the Event
+  Management Agent on the `default` VPN.
+
+Not recommended: a second MQTT port for VPN `sam`. That needs a new
+docker-compose port mapping, so `solace-1` has to be recreated -- and
+it keeps no volume, its configuration lives in the container's
+writable layer.
+
+### B. Tool nodes instead of the alert runner
+
+Decision 2 was taken on the assumption that 2.493.0 has no tool node.
+It has one. Recommendation: make `enrich` and `publish` `type: tool`
+nodes against the `bsg-desk-tools` connector and drop the agent
+`bsg-alert-runner`, so the deterministic steps run with no LLM in the
+loop at all -- faster, and a stronger story on stage. The agent
+remains in the git history if the connector path turns out unusable.
+
+Either way one ordering constraint holds: a platform MCP connector
+only stores its tool list when it is saved while its MCP server is
+reachable, and a workflow whose node names a tool outside that list is
+refused. So `k8s-up` has to run before `mesh-up`, which `install.sh`
+already does, or the connector needs an inline `manifest`.
 
 ## Setup
 
@@ -178,7 +337,11 @@ uses `sam config apply --prune`.
 
 ## Open points
 
-- Gate 0 items above.
+- The two open decisions of Gate 0 (A: VPN for the feed, B: tool
+  nodes instead of the alert runner).
+- An `/etc/hosts` entry for `bsg-desk.solace.lab` (needs sudo).
+- `.env` with the broker credentials of the chosen VPN, and
+  `sam auth login` for `make mesh-up`.
 - Cancelling running workflow runs in `make demo-reset` (platform
   API endpoint unknown); today runs end within the 90 s timeout.
 - Grafana dashboard `sam-bsg-trading-desk` (tokens and duration per
