@@ -13,23 +13,30 @@ script: [RUNBOOK.md](RUNBOOK.md).
 Work in progress. Built so far, without access to the lab cluster:
 
 - `app/` -- feed publisher, deterministic watcher, MCP tools server
-  and presenter UI (one Python image). 21 unit tests plus a smoke
-  test of the whole deterministic path against a local MQTT broker
-  (mosquitto) pass: a watch from the tool call, exactly one alert
-  10 s after the scenario start, enrichment, desk note, action.
-- `k8s/` -- Kustomize for namespace `bsg-demo`.
-- `mesh/` -- SAM manifests as DRAFTS that follow the schema verified
-  on 2.348.22 in the other demos of this repo. NOT applied yet:
-  Gate 0 ran on 2026-11-04 (result below) and left two decisions
-  open; the `__GATE0__` markers stay until they are settled.
-- Not started: the Grafana dashboard (the `tasks` columns are now
-  known, see Gate 0 item 6) and the end-to-end acceptance on the
-  cluster.
+  and presenter UI (one Python image). 22 unit tests pass, and the
+  smoke test of the whole deterministic path passes against the real
+  broker `solace-1`, twice: with the components run locally and with
+  them running in the cluster. A watch from the tool call, exactly
+  one alert 10.3 s after the scenario start, enrichment with three
+  data sets, desk note, issuer status, reset.
+- `k8s/` -- APPLIED. Namespace `bsg-demo` runs `feed-publisher`,
+  `feed-watcher`, `bsg-tools` and `demo-ui`; the quotes of all three
+  issuers flow through `solace-1`, the Ingress serves
+  `bsg-desk.solace.lab` over TLS from the lab CA, and the `awe` pod
+  reaches the MCP server at `bsg-tools.bsg-demo.svc:8765` (checked
+  with a real `initialize` call).
+- `mesh/` -- rewritten for the 2.493.0 schema Gate 0 established
+  (tool nodes, a switch node, `output_schema_override`, an
+  `input_schema` that makes the alert arrive as fields). NOT applied
+  yet: `sam auth login` is a browser flow and the cached token has
+  expired.
+- Not started: the Grafana dashboard (the `tasks` columns are known,
+  see Gate 0 item 6) and the end-to-end acceptance of the SAM half.
 
 ## Architecture
 
 ```text
-bsg-demo namespace                solace-1, VPN sam         sam-solace-lab
+bsg-demo namespace            solace-1, VPN default         sam-solace-lab
 feed-publisher --MQTT--> bsg/quotes|reference|news --> feed-watcher
 demo-ui --MQTT--> bsg/control/*, bsg/desk/actions --> publisher, watcher
 demo-ui --MQTT--> bsg/desk/requests/{id} --> entrypoint --> bsg-desk-assistant
@@ -98,12 +105,19 @@ Topic layout (prefix `bsg/`):
 
 Decided with the owner on 2026-11-04:
 
-- No branch node in 2.493.0: stop and report version and upgrade
-  path, no workaround.
-- No tool node in workflows: the agent `bsg-alert-runner` (model
-  `fast`, one MCP tool per step) runs `enrich_alert` and
-  `publish_desk_note`. The data stays deterministic; only the call
-  goes through an LLM.
+- Branch node: stop and report if 2.493.0 has none. It has one
+  (`type: switch`), so this did not trigger.
+- Tool nodes: the version does have them, which removed the premise
+  of the original decision. Settled after Gate 0: `enrich` and
+  `publish` are `type: tool` nodes on the `bsg-desk-tools`
+  connector, so the deterministic steps run with no model in them at
+  all, and the agent `bsg-alert-runner` is gone.
+- VPN: the demo's feed stays on the `default` VPN of `solace-1`,
+  which is the one MQTT 1883 serves, and the SAM entrypoint reads it
+  there. The broker is not changed. The cost of that is
+  `SAM_STATUS_TOPICS`: SAM's own A2A status events live on the `sam`
+  VPN, which has no MQTT listener, so the UI cannot read them and
+  the agent nodes between `enrich` and `publish` stay inferred.
 - Event-triggered runs are attributed to `power_user@solace.lab`
   (`defaultUserIdentity`). Show the runs in SAM Activities as
   `power_user`. The other demos use the same persona, so the demo
@@ -122,9 +136,19 @@ Assumptions:
 - `enrich_alert` resamples quotes to 5 s per product (about 1,000
   rows for three issuers and one class over 15 minutes) to keep
   the artifacts small.
-- The market context verdict uses a fixed rule (two of: reference
-  move above 1 % in 5 minutes, high-impact news, both peers above
-  0.5 %), so both branches are reproducible.
+- The market context verdict uses a fixed rule, two of: the
+  underlying's reference moved more than 1 % in the last 60 s, at
+  least one high-impact news item in the last 5 minutes, both peer
+  issuers above the alert's threshold. Every part of it is a
+  comparison of two numbers the enrichment hands over, so both
+  branches are reproducible and no model does date arithmetic.
+- The figure every comparison rests on is
+  `mean_spread_pct_since_alert`: the mean spread over exactly the
+  seconds the alert's condition has held. The 60 s mean dilutes a
+  10 s anomaly with 50 s of normal quotes, and the 15 minute window
+  can still hold the previous run of the same scenario -- so neither
+  of those separates an issuer specific anomaly from a market wide
+  one.
 - The UI draws its own spread chart from the watcher next to the
   agent's chart artifact name; showing the agent's PNG needs an
   authenticated artifact URL (open point).
@@ -307,14 +331,20 @@ already does, or the connector needs an inline `manifest`.
 ## Setup
 
 ```bash
-cp .env.example .env            # broker credentials of VPN sam
+cp .env.example .env            # credentials of the default VPN
 pip install -r app/requirements-dev.txt
 make test                       # unit tests
 make k8s-up                     # build, push, deploy bsg-demo
 make port-forward               # in a second shell
 make smoke                      # deterministic path, no SAM
-make mesh-up                    # after Gate 0
+sam auth login solace-lab       # browser; the CLI cache expires daily
+make mesh-up                    # connector, agents, workflow, entrypoint
 ```
+
+`make mesh-up` refuses to run before `make k8s-up`: a platform MCP
+connector only stores its tool list while its server is reachable, and
+on 2.493.0 a workflow tool node naming a tool outside that list is
+refused at save and at deploy.
 
 Local run without a cluster (any MQTT broker on 1883):
 
@@ -337,11 +367,11 @@ uses `sam config apply --prune`.
 
 ## Open points
 
-- The two open decisions of Gate 0 (A: VPN for the feed, B: tool
-  nodes instead of the alert runner).
+- `sam auth login solace-lab` (browser), then `make mesh-up` and the
+  end-to-end run. Everything else is in place.
 - An `/etc/hosts` entry for `bsg-desk.solace.lab` (needs sudo).
-- `.env` with the broker credentials of the chosen VPN, and
-  `sam auth login` for `make mesh-up`.
+  Until then the UI is reachable through `make port-forward` on
+  `http://localhost:8090`.
 - Cancelling running workflow runs in `make demo-reset` (platform
   API endpoint unknown); today runs end within the 90 s timeout.
 - Grafana dashboard `sam-bsg-trading-desk` (tokens and duration per

@@ -162,7 +162,7 @@ const NODES = [
   ["enrich", "Alert anreichern", "Tool"],
   ["analyst", "bsg-quote-analyst", "Agent"],
   ["context", "bsg-market-context", "Agent"],
-  ["branch", "Verzweigung auf scope", "Switch"],
+  ["route", "Verzweigung auf scope", "Switch"],
   ["communicator", "bsg-desk-communicator", "Agent"],
   ["publish", "Desk-Note publizieren", "Tool"],
 ];
@@ -275,7 +275,8 @@ function onEvent(ev, live) {
     if (d.phase === "started") setNode(id, "running");
     if (d.phase === "finished") {
       setNode(id, "done");
-      if (id === "enrich") setNode("analyst", "running", "");
+      // analyst and context are parallel successors of enrich.
+      if (id === "enrich") { setNode("analyst", "running", ""); setNode("context", "running", ""); }
     }
     if (d.phase === "failed") setNode(id, "failed", d.error);
   }
