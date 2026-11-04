@@ -129,10 +129,21 @@ async def run(a: argparse.Namespace) -> int:
             res = await s.call_tool("enrich_alert", {"alert": json.dumps(alert)})
             summary = json.loads(text_of(res))
             res_blocks = [c for c in res.content if getattr(c, "type", "") == "resource"]
-            check("datasets" in summary and summary["statistics"]["spread"]["alpha"]
-                  ["mean_spread_pct_last_60s"] > 0.5,
-                  f"enrich summary: alpha last-60s spread "
-                  f"{summary['statistics']['spread']['alpha']['mean_spread_pct_last_60s']}")
+            # Assert on the breach itself and on the alert window, which
+            # covers exactly the anomaly. The 60 s mean dilutes a 10 s
+            # anomaly with 50 s of normal quotes and the 15 min window can
+            # still hold the previous run of this very scenario, so
+            # neither of those is a stable assertion.
+            spread = summary["statistics"]["spread"]
+            alpha_since = spread["alpha"]["mean_spread_pct_since_alert"]
+            peers_since = {i: spread[i]["mean_spread_pct_since_alert"]
+                           for i in ("beta", "gamma") if i in spread}
+            check(alert["observed_value"] > 0.5,
+                  f"alert observed_value {alert['observed_value']} (> 0.5)")
+            check("datasets" in summary and alpha_since is not None and alpha_since > 0.5,
+                  f"enrich summary: alpha since the alert {alpha_since} (> 0.5)")
+            check(all(v is not None and alpha_since > 2 * v for v in peers_since.values()),
+                  f"alpha {alpha_since} vs peers {peers_since} (expected > 2x)")
             check(len(res_blocks) == 3, f"enrich attached {len(res_blocks)} data sets")
             check(len(text_of(res)) < 8000, f"summary stays small ({len(text_of(res))} chars)")
             check(sn.wait(f"bsg/desk/progress/{wid}", 3) is not None, "progress event published")

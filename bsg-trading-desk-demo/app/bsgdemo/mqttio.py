@@ -2,8 +2,9 @@
 
 Market data on exchanges is commonly distributed over MQTT from the
 Solace appliances, so every demo component talks MQTT to solace-1
-(plain MQTT port 1883 of the sam VPN). Configuration comes from the
-environment; the password from a Kubernetes Secret.
+(plain MQTT port 1883, which belongs to the `default` VPN -- the `sam`
+VPN has no MQTT listener, see the README). Configuration comes from
+the environment; the password from a Kubernetes Secret.
 
   MQTT_HOST       host.docker.internal
   MQTT_PORT       1883

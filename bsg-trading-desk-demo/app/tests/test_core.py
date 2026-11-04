@@ -223,3 +223,33 @@ def test_store_recent_resample_csv_and_stats():
     assert stats["beta"]["mean_spread_pct_window"] == pytest.approx(0.2)
     refs = ref_stats(st.reference("dax", 15, 0), now)
     assert refs["dax"]["change_pct_window"] < 0
+
+
+def test_spread_stats_since_alert_isolates_the_anomaly():
+    """The alert window must show the anomaly even when the 15 min window
+    and the last 60 s are both diluted by normal quotes."""
+    st = Store(":memory:")
+    now = int(time.time() * 1000)
+    since = now - 10_000                      # the condition started 10 s ago
+    for k in range(600):                      # 5 minutes of normal quotes
+        ts = now - 310_000 + k * 500
+        st.add_quote({**q("DE000DEMO0001", 0.14, ts, issuer="alpha"), "ts": "x"})
+        st.add_quote({**q("DE000DEMO0006", 0.18, ts, issuer="beta"), "ts": "x"})
+    for k in range(20):                       # the last 10 s: alpha widens
+        ts = since + k * 500
+        st.add_quote({**q("DE000DEMO0001", 0.8, ts, issuer="alpha"), "ts": "x"})
+        st.add_quote({**q("DE000DEMO0006", 0.18, ts, issuer="beta"), "ts": "x"})
+    rows = st.recent("alpha,beta", None, "dax-turbo", 15, 0)
+
+    plain = spread_stats(rows, now)
+    assert "mean_spread_pct_since_alert" not in plain["alpha"]
+    # Both of the existing figures hide the anomaly below the 0.5 threshold.
+    assert plain["alpha"]["mean_spread_pct_window"] < 0.5
+    assert plain["alpha"]["mean_spread_pct_last_60s"] < 0.5
+
+    scoped = spread_stats(rows, now, since_ms=since)
+    assert scoped["alpha"]["mean_spread_pct_since_alert"] == pytest.approx(0.8)
+    assert scoped["alpha"]["quotes_since_alert"] == 20
+    assert scoped["beta"]["mean_spread_pct_since_alert"] == pytest.approx(0.18)
+    assert (scoped["alpha"]["mean_spread_pct_since_alert"]
+            > 2 * scoped["beta"]["mean_spread_pct_since_alert"])

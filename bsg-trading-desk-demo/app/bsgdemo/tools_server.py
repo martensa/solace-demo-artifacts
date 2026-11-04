@@ -213,8 +213,12 @@ def enrich(alert: Any) -> tuple[dict[str, Any], dict[str, str]]:
     ref_csv = http.get("/reference", params={**common, "format": "csv",
                                              "resample_s": ENRICH_RESAMPLE_S}).text
     news = http.get("/news", params=common).json()
-    stats = http.get("/stats", params={**common, "issuer": issuers,
-                                       "product_class": pclass}).json()
+    # since_ms isolates the anomaly: the 60 s mean mixes it with normal
+    # quotes and the 15 min window can still hold the previous run.
+    stats_params = {**common, "issuer": issuers, "product_class": pclass}
+    if a.get("condition_since_ms"):
+        stats_params["since_ms"] = int(a["condition_since_ms"])
+    stats = http.get("/stats", params=stats_params).json()
     wid = a["watch_id"]
     files = {
         f"bsg_quotes_{wid}.csv": quotes_csv,

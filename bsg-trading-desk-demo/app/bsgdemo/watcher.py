@@ -187,14 +187,25 @@ def to_csv(rows: list[dict[str, Any]], cols: tuple[str, ...]) -> str:
     return buf.getvalue()
 
 
-def spread_stats(rows: list[dict[str, Any]], now: int, recent_s: float = 60) -> dict[str, Any]:
+def spread_stats(rows: list[dict[str, Any]], now: int, recent_s: float = 60,
+                 since_ms: int | None = None) -> dict[str, Any]:
     """Per issuer: mean/median/max spread over the window and the last
-    ``recent_s`` seconds (deterministic numbers for the enrich step)."""
+    ``recent_s`` seconds (deterministic numbers for the enrich step).
+
+    With ``since_ms`` -- the moment an alert's condition started -- every
+    issuer also gets ``mean_spread_pct_since_alert`` over exactly that
+    period. The 60 s mean dilutes a 10 s anomaly with 50 s of normal
+    quotes, and the 15 minute window still carries the previous run of
+    the same scenario, so neither number isolates the anomaly. This one
+    does, which is what makes "issuer specific" provable: the alerting
+    issuer is far above its own window while the peers are not.
+    """
     out: dict[str, Any] = {}
     cut = now - int(recent_s * 1000)
     for issuer in sorted({r["issuer"] for r in rows}):
-        all_s = [r["spread_pct"] for r in rows if r["issuer"] == issuer]
-        rec_s = [r["spread_pct"] for r in rows if r["issuer"] == issuer and r["ts_ms"] >= cut]
+        mine = [r for r in rows if r["issuer"] == issuer]
+        all_s = [r["spread_pct"] for r in mine]
+        rec_s = [r["spread_pct"] for r in mine if r["ts_ms"] >= cut]
         out[issuer] = {
             "quotes": len(all_s),
             "mean_spread_pct_window": round(statistics.fmean(all_s), 4) if all_s else None,
@@ -203,6 +214,11 @@ def spread_stats(rows: list[dict[str, Any]], now: int, recent_s: float = 60) -> 
             f"mean_spread_pct_last_{int(recent_s)}s": round(statistics.fmean(rec_s), 4) if rec_s else None,
             f"quotes_last_{int(recent_s)}s": len(rec_s),
         }
+        if since_ms:
+            alert_s = [r["spread_pct"] for r in mine if r["ts_ms"] >= since_ms]
+            out[issuer]["mean_spread_pct_since_alert"] = (
+                round(statistics.fmean(alert_s), 4) if alert_s else None)
+            out[issuer]["quotes_since_alert"] = len(alert_s)
     return out
 
 
@@ -403,7 +419,10 @@ def build_app(watcher: Watcher) -> FastAPI:
 
     @app.get("/stats")
     def stats(issuer: str | None = None, product_class: str | None = None,
-              minutes: float = Query(15, gt=0, le=RETENTION_MIN)):
+              minutes: float = Query(15, gt=0, le=RETENTION_MIN),
+              since_ms: int | None = Query(None, gt=0,
+                                           description="Start of an alert's condition; "
+                                                       "adds mean_spread_pct_since_alert")):
         now = now_ms()
         rows = store.recent(issuer, None, product_class, minutes, 0)
         unds = sorted({catalog.CLASS_UNDERLYING[c] for c in
@@ -411,7 +430,8 @@ def build_app(watcher: Watcher) -> FastAPI:
                        if c in catalog.CLASS_UNDERLYING})
         refs = store.reference(",".join(unds), minutes, 0)
         return {"window_minutes": minutes, "as_of": iso_ms(now),
-                "spread": spread_stats(rows, now), "reference": ref_stats(refs, now),
+                "spread": spread_stats(rows, now, since_ms=since_ms),
+                "reference": ref_stats(refs, now),
                 "news_count": len(store.news(minutes)),
                 "high_impact_news": [n for n in store.news(minutes) if n.get("impact") == "high"]}
 

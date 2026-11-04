@@ -2,7 +2,9 @@
 # The broker is solace-1 (event-mesh-deployment, Docker Compose on the
 # host), reached like SAM itself via host.docker.internal (CoreDNS
 # NodeHosts entry maintained by agent-mesh-deployment/scripts/start.sh).
-# MQTT 1883 is the plain MQTT port of solace-1; same VPN as SAM (sam).
+# MQTT 1883 belongs to the `default` VPN of solace-1 -- the `sam` VPN
+# has every MQTT listener disabled (Gate 0, decision A). The SAM
+# entrypoint and connector therefore use the `default` VPN too.
 apiVersion: v1
 kind: ConfigMap
 metadata:
