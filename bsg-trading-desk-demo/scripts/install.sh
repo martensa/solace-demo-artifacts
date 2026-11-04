@@ -31,12 +31,16 @@ install_k8s() {
 
 install_mesh() {
   echo "== SAM mesh (connector, agents, workflow)"
-  if grep -rq "__GATE0__" "$DEMO_DIR/mesh/workflows/"; then
-    echo "ERROR: mesh/workflows still contains __GATE0__ placeholders." >&2
-    echo "Gate 0 (README) must settle the branch node, the artifact" >&2
-    echo "hand-over and the run id against SAM 2.493.0 first." >&2
+  # The MCP server must be live before the connector is saved: the
+  # platform stores the tool list it discovers then, and a workflow tool
+  # node naming a tool outside that list is refused (Gate 0, item 3).
+  if ! kubectl -n "$NS" get deploy bsg-tools >/dev/null 2>&1; then
+    echo "ERROR: deployment bsg-tools is not in namespace $NS." >&2
+    echo "Run ./scripts/install.sh k8s first (make k8s-up): the MCP" >&2
+    echo "connector only stores its tool list against a live server." >&2
     exit 2
   fi
+  kubectl -n "$NS" rollout status deploy/bsg-tools --timeout=120s
   sam_login
   local rc=0
   (cd "$DEMO_DIR/mesh" && "$SAM_CLI" config apply) || rc=$?
@@ -48,20 +52,25 @@ install_mesh() {
   if [ -z "$wf_id" ]; then
     echo "ERROR: workflow bsg-alert-triage not on the platform after apply" >&2; exit 1
   fi
-  # ENTRYPOINT_WORKFLOW_TARGET=name once Gate 0 shows the bug is fixed.
-  if [ "${ENTRYPOINT_WORKFLOW_TARGET:-runtime}" = name ]; then
-    target=bsg-alert-triage
-  else
+  # 2.493.0 resolves a workflow's friendly name to its generated
+  # workflow_<id> card, so the config name is the target. Set
+  # ENTRYPOINT_WORKFLOW_TARGET=runtime to put the 2.348.22 workaround
+  # back if a run ever shows the old bug again.
+  if [ "${ENTRYPOINT_WORKFLOW_TARGET:-name}" = runtime ]; then
     target="workflow_${wf_id//-/_}"
+  else
+    target=bsg-alert-triage
   fi
   local out="$DEMO_DIR/mesh/.rendered" tpl="$DEMO_DIR/mesh/entrypoints"
   rm -rf "$out" && mkdir -p "$out/entrypoints"
-  sed "s/__WORKFLOW_RUNTIME__/$target/g" "$tpl/manifest.yaml.template" > "$out/manifest.yaml"
-  sed -e "s/__WORKFLOW_RUNTIME__/$target/g" \
+  cp "$tpl/manifest.yaml.template" "$out/manifest.yaml"
+  sed -e "s/__WORKFLOW_TARGET__/$target/g" \
+      -e "s/__BROKER_VPN__/${SAM_BROKER_VPN:-default}/g" \
       -e "s/__BROKER_USERNAME__/${SAM_BROKER_USERNAME:-$MQTT_USERNAME}/g" \
       -e "s/__BROKER_PASSWORD__/${SAM_BROKER_PASSWORD:-$MQTT_PASSWORD}/g" \
       "$tpl/bsg-desk-events.yaml.template" > "$out/entrypoints/bsg-desk-events.yaml"
-  echo "   targetWorkflowName -> $target (mesh/.rendered/, git-ignored)"
+  echo "   targetWorkflowName -> $target, VPN ${SAM_BROKER_VPN:-default}"
+  echo "   (mesh/.rendered/, git-ignored)"
   (cd "$out" && "$SAM_CLI" config apply)
 
   if ls "$DEMO_DIR"/observability/*.yaml >/dev/null 2>&1; then

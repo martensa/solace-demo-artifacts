@@ -3,8 +3,14 @@
 # Pattern verified on 2.348.22 with "Acme Claims Knowledge"
 # (mcp/remote, streamable-http, auth none: the platform lists the
 # tools directly at create/update, no static manifest).
-# Gate 0: SAM's str pod must reach the in-cluster Service (no
-# NetworkPolicy between sam-solace-lab and bsg-demo).
+#
+# That tool listing is why the Kubernetes part has to be up first: the
+# platform stores the list it discovers while saving, and on 2.493.0 a
+# workflow tool node naming a tool outside that list is refused at save
+# and at deploy. Re-save the connector after changing a tool's name or
+# signature. Gate 0 measured the path: workflows run in the `awe` pod,
+# cross-namespace DNS resolves and sam-solace-lab has no NetworkPolicy,
+# so bsg-tools.bsg-demo.svc:8765 is reachable.
 kind: connector
 name: bsg-desk-tools
 description: >-

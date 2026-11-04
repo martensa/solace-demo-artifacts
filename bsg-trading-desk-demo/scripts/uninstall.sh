@@ -10,6 +10,8 @@ echo "== SAM resources"
 if sam_login; then
   delete_named entrypoint /api/v1/platform/entrypoints bsg-desk-events
   delete_named workflow /api/v1/platform/workflows bsg-alert-triage
+  # bsg-alert-runner is listed although the demo no longer installs it
+  # (2.493.0 has tool nodes), so an uninstall also clears an older run.
   for a in bsg-desk-assistant bsg-alert-runner bsg-quote-analyst \
            bsg-market-context bsg-desk-communicator; do
     delete_named agent /api/v1/platform/agents "$a"

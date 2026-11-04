@@ -1,36 +1,37 @@
-# DRAFT -- NOT APPLICABLE YET. scripts/install.sh refuses to apply the
-# mesh while this file contains the marker __GATE0__.
+# bsg-alert-triage: one run per alert from bsg/alerts/{watch_id}, started
+# by the event-mesh entrypoint bsg-desk-events.
 #
-# bsg-alert-triage: one run per alert from bsg/alerts/{watch_id}
-# (event-mesh entrypoint bsg-desk-events, runtime-name workaround).
+#   enrich (tool, deterministic)
+#     -> analyst  (agent)  \
+#     -> context  (agent)  /  run in parallel
+#     -> route (switch on context.scope)
+#          issuer_specific -> communicator_issuer \
+#          market_wide     -> communicator_market /
+#     -> publish (tool, deterministic)
 #
-#   enrich (deterministic) -> analyst -> context -> BRANCH on scope
-#     issuer_specific -> communicator_issuer -> publish (deterministic)
-#     market_wide     -> communicator_market -> publish (deterministic)
+# Written against SAM 2.493.0, whose schema Gate 0 established
+# (`sam config schema show workflow --type <node-type>`, `sam docs`,
+# `sam ai-assistance skill install`). What that changed against the
+# 2.348.22 shape the other demos in this repo use:
 #
-# What is taken from the versions verified in this repo (2.225.14 /
-# 2.348.22, see sam-insurance-ops-demo/triage/workflows/claim-triage.yaml):
-# - A node WITHOUT `input:` receives the raw workflow input (the event
-#   path delivers {"text": "<alert JSON>"}) as its input FILE plus its
-#   `instruction`. A node WITH `input:` receives only that map, and
-#   templates must be WHOLE-string values ({{workflow.input.text}},
-#   {{node.output}}); embedded templates stay literal.
-# - output_schema on a node = contract validated by the platform
-#   (auto-retry on violation). Instructions describe CONTENT only,
-#   never the answer format (else the structured artifact stays empty).
-# - output_mapping is required; bump `version` to force a redeploy.
-#
-# GATE 0 (SAM 2.493.0 docs + `sam` CLI schema), decided with the
-# owner on 2026-11-04:
-# 1. Branch node: if 2.493.0 has no switch/conditional node type, STOP
-#    and report version + upgrade path (no workaround).
-# 2. Tool node: if there is a native tool/function node, enrich and
-#    publish call the bsg-desk-tools MCP tools directly; otherwise
-#    they run on the agent bsg-alert-runner (as drafted below).
-# 3. Artifact hand-over between nodes (enrich -> analyst/context):
-#    how 2.493.0 passes artifacts (names in the output, artifact refs,
-#    shared session) -- adjust the inputs below.
-# 4. A template variable for the run id (for publish_desk_note).
+# - The deterministic steps are `type: tool` nodes on the MCP connector
+#   bsg-desk-tools, so no model sits in them at all. A node-level
+#   `connector:` is the only way to reach a connector from the store.
+# - The branch is `type: switch` with `cases: [{condition, node}]`; every
+#   target must list the switch in its `depends_on`, and the two branches
+#   converge through `coalesce`.
+# - Node-level schemas are `output_schema_override`. A node written with
+#   plain `output_schema:` declares NOTHING: the switch case would never
+#   match and would fall through to `default`, and `output_mapping` would
+#   return the literal `{{...}}` text. 2.493.0 also wants the keys named
+#   in the instruction, the opposite of the 2.348.22 rule.
+# - With this `input_schema` the entrypoint delivers the alert as
+#   addressable fields (`workflow.input.<field>`), not as
+#   `{"text": "<json>"}`, so every node reads what it needs by name.
+# - Nothing depends on an artifact coming out of the MCP tool call:
+#   whether SAM turns an MCP response's embedded resources into named
+#   artifacts is unverified, so the numbers travel as structured data and
+#   the 15-minute series stays in the demo UI's own chart.
 kind: workflow
 name: bsg-alert-triage
 description: >-
@@ -40,13 +41,12 @@ description: >-
   the German desk note and publishes it onto the mesh.
 spec:
   appConfig:
-    version: "0.1.0"
-    display_name: BSG Alert Triage
+    version: "1.0.0"
     description: >-
       From a quote alert to a desk note in under 60 seconds: enrich,
       analyse, classify, branch, write, publish.
     workflow_timeout: "90s"
-    default_node_timeout: "45s"
+    default_node_timeout: "40s"
     fail_fast: true
     skills:
       - id: bsg_alert_triage
@@ -54,18 +54,33 @@ spec:
         description: >-
           Triage one quote alert of the BSG demo feed into a desk note
           (issuer specific or market wide).
-    # Loose on purpose: the event path delivers {"text": "<alert>"}.
+    # Every field the watcher puts on an alert, so the payload is read
+    # as fields. No `text` property on purpose: declaring one would let
+    # the payload fall back to the wrapped form.
     input_schema:
       type: object
+      required: [watch_id, issuer]
       properties:
-        text:
-          type: string
-          description: Event path only -- the alert payload as JSON string.
-        watch_id: {type: string}
         alert_id: {type: string}
+        watch_id: {type: string}
+        watch: {type: object}
         issuer: {type: string}
         isin: {type: string}
         product_class: {type: string}
+        underlying: {type: string}
+        metric: {type: string}
+        op: {type: string}
+        threshold: {type: number}
+        observed_value: {type: number}
+        held_seconds: {type: number}
+        condition_since_ms: {type: integer}
+        triggered_ms: {type: integer}
+        triggered_at: {type: string}
+        affected_products: {type: array}
+        peer_issuers: {type: array}
+        issuer_status: {type: [string, "null"]}
+        live_reference: {type: [number, "null"]}
+        watcher_api: {type: string}
     output_schema:
       type: object
       required: [branch, note]
@@ -74,72 +89,72 @@ spec:
         note: {type: string}
         chart_artifact: {type: string}
     nodes:
-      # (1) deterministic: Alert anreichern
+      # (1) Alert anreichern -- deterministic, no model.
       - id: enrich
-        type: agent
-        agent_name: bsg-alert-runner
-        instruction: >-
-          Run the deterministic step enrich_alert on the alert in your
-          input file, passing the alert JSON unchanged.
-        output_schema:
-          type: object
-          required: [watch_id, issuer, product_class, datasets]
-          properties:
-            watch_id: {type: string}
-            alert_id: {type: string}
-            issuer: {type: string}
-            product_class: {type: string}
-            datasets:
-              type: array
-              items: {type: string}
-              description: Artifact names of the attached data sets.
-            statistics:
-              type: string
-              description: The tool's statistics block, verbatim JSON text.
+        type: tool
+        connector: bsg-desk-tools
+        tool: enrich_alert
+        timeout: "20s"
+        input:
+          watch_id: "{{workflow.input.watch_id}}"
+          issuer: "{{workflow.input.issuer}}"
+          product_class: "{{workflow.input.product_class}}"
+          condition_since_ms: "{{workflow.input.condition_since_ms}}"
+          alert_id: "{{workflow.input.alert_id}}"
+          underlying: "{{workflow.input.underlying}}"
+          observed_value: "{{workflow.input.observed_value}}"
 
-      # (2) Agent bsg-quote-analyst
+      # (2) Spreads einordnen. Depends only on enrich, so it runs in
+      # parallel with (3).
       - id: analyst
         type: agent
         agent_name: bsg-quote-analyst
         depends_on: [enrich]
         instruction: >-
-          Analyse the spread anomaly of the alerting issuer against its
-          15-minute history and against the peer issuers, using the
-          quotes data set named in the enrichment, and create the
-          spread chart.
+          Compare the alerting issuer's spreads against its own
+          15-minute history and against both peer issuers over exactly
+          the seconds the alert's condition has held, and draw the
+          comparison chart. Return exactly these keys: issuer,
+          spread_since_alert_pct, spread_window_mean_pct,
+          factor_vs_window, peer_spread_since_alert_pct,
+          affected_products, chart_artifact, findings.
         input:
-          alert: "{{workflow.input.text}}"
-          enrichment: "{{enrich.output}}"
-        output_schema:
+          # The whole alert, exactly as the watcher published it: the
+          # enrich node only echoes the fields it was given, so taking
+          # the alert from the workflow input keeps every field.
+          alert: "{{workflow.input}}"
+          statistics: "{{enrich.output.statistics}}"
+        output_schema_override:
           type: object
-          required: [issuer, spread_last_60s_pct, spread_window_mean_pct,
-                     factor_vs_window, peer_spread_last_60s_pct,
+          required: [issuer, spread_since_alert_pct, spread_window_mean_pct,
+                     factor_vs_window, peer_spread_since_alert_pct,
                      affected_products, chart_artifact, findings]
           properties:
             issuer: {type: string}
-            spread_last_60s_pct: {type: number}
+            spread_since_alert_pct: {type: number}
             spread_window_mean_pct: {type: number}
             factor_vs_window: {type: number}
-            peer_spread_last_60s_pct:
+            peer_spread_since_alert_pct:
               type: object
               additionalProperties: {type: number}
             affected_products: {type: integer}
             chart_artifact: {type: string}
             findings: {type: string}
 
-      # (3) Agent bsg-market-context -> structured verdict for the branch
+      # (3) Marktkontext -- the structured verdict that drives the branch.
       - id: context
         type: agent
         agent_name: bsg-market-context
-        depends_on: [analyst]
+        depends_on: [enrich]
         instruction: >-
-          Decide whether the anomaly is issuer specific or market wide
-          from the reference prices, the news and the peer spreads.
+          Decide from the reference prices, the news and the peer
+          issuers' spreads whether this anomaly is issuer specific or
+          market wide. Return exactly these keys: scope, reasoning,
+          reference_move_pct, high_impact_news.
         input:
-          alert: "{{workflow.input.text}}"
-          enrichment: "{{enrich.output}}"
-          analysis: "{{analyst.output}}"
-        output_schema:
+          alert: "{{workflow.input}}"
+          statistics: "{{enrich.output.statistics}}"
+        output_schema_override:
           type: object
           required: [scope, reasoning]
           properties:
@@ -150,69 +165,84 @@ spec:
             reference_move_pct: {type: number}
             high_impact_news: {type: boolean}
 
-      # (4) BRANCH on {{context.output.scope}}
-      # __GATE0__ replace with the branch node of SAM 2.493.0 (switch /
-      # conditional), routing issuer_specific -> communicator_issuer and
-      # market_wide -> communicator_market. No workaround if absent.
+      # (4) Verzweigung. It also waits for the analyst, which keeps the
+      # chart finished before (6) reads its name.
+      - id: route
+        type: switch
+        depends_on: [analyst, context]
+        cases:
+          - condition: "'{{context.output.scope}}' == 'issuer_specific'"
+            node: communicator_issuer
+          - condition: "'{{context.output.scope}}' == 'market_wide'"
+            node: communicator_market
+        # An unresolvable verdict is the cautious branch: watch the
+        # market, do not act against an issuer.
+        default: communicator_market
 
-      # (5a) Agent bsg-desk-communicator, branch issuer_specific
+      # (5a) Zweig emittentenspezifisch.
       - id: communicator_issuer
         type: agent
         agent_name: bsg-desk-communicator
-        depends_on: [context]
+        depends_on: [route]
         instruction: >-
-          Zweig emittentenspezifisch: Schreibe die Desk-Note. Empfohlener
-          nächster Schritt: Plausibilitätsprüfung der Quotes dieses
-          Emittenten durch den QLP starten.
+          Zweig emittentenspezifisch. Schreibe die Desk-Note. Als
+          empfohlenen nächsten Schritt nennst du die
+          Plausibilitätsprüfung der Quotes dieses Emittenten durch den
+          QLP. Gib genau den Schlüssel note zurück.
         input:
           analysis: "{{analyst.output}}"
           context: "{{context.output}}"
-        output_schema:
+          alert: "{{workflow.input}}"
+        output_schema_override:
           type: object
           required: [note]
           properties:
             note: {type: string}
 
-      # (5b) Agent bsg-desk-communicator, branch market_wide
+      # (5b) Zweig marktweit.
       - id: communicator_market
         type: agent
         agent_name: bsg-desk-communicator
-        depends_on: [context]
+        depends_on: [route]
         instruction: >-
-          Zweig marktweit: Schreibe die Desk-Note. Marktweite Bewegung,
-          keine Emittentenmaßnahme; empfohlener nächster Schritt:
-          Marktlage beobachten, Watch aktiv lassen.
+          Zweig marktweit. Schreibe die Desk-Note. Es handelt sich um
+          eine marktweite Bewegung, also KEINE Maßnahme gegen einen
+          Emittenten; als empfohlenen nächsten Schritt nennst du,
+          die Marktlage zu beobachten und die Watch aktiv zu lassen.
+          Gib genau den Schlüssel note zurück.
         input:
           analysis: "{{analyst.output}}"
           context: "{{context.output}}"
-        output_schema:
+          alert: "{{workflow.input}}"
+        output_schema_override:
           type: object
           required: [note]
           properties:
             note: {type: string}
 
-      # (6) deterministic: Desk-Note publizieren
-      # __GATE0__ input must take the note of whichever communicator ran
-      # (branch-node output reference of 2.493.0) and the run id.
+      # (6) Desk-Note publizieren -- deterministic, no model. coalesce
+      # picks the note of whichever branch ran.
       - id: publish
-        type: agent
-        agent_name: bsg-alert-runner
+        type: tool
+        connector: bsg-desk-tools
+        tool: publish_desk_note
         depends_on: [communicator_issuer, communicator_market]
-        instruction: >-
-          Run the deterministic step publish_desk_note with watch_id,
-          alert_id and issuer from the enrichment, the note, the branch
-          (the context's scope) and the chart artifact name.
+        timeout: "20s"
         input:
-          enrichment: "{{enrich.output}}"
-          context: "{{context.output}}"
-          analysis: "{{analyst.output}}"
-        output_schema:
-          type: object
-          required: [status, topic]
-          properties:
-            status: {type: string}
-            topic: {type: string}
+          watch_id: "{{workflow.input.watch_id}}"
+          alert_id: "{{workflow.input.alert_id}}"
+          issuer: "{{workflow.input.issuer}}"
+          branch: "{{context.output.scope}}"
+          chart_ref: "{{analyst.output.chart_artifact}}"
+          workflow_run_id: "{{workflow.run_id}}"
+          note:
+            coalesce:
+              - "{{communicator_issuer.output.note}}"
+              - "{{communicator_market.output.note}}"
     output_mapping:
       branch: "{{context.output.scope}}"
-      note: "__GATE0__"
+      note:
+        coalesce:
+          - "{{communicator_issuer.output.note}}"
+          - "{{communicator_market.output.note}}"
       chart_artifact: "{{analyst.output.chart_artifact}}"

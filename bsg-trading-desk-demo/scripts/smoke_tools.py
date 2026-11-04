@@ -126,9 +126,15 @@ async def run(a: argparse.Namespace) -> int:
             check(latency <= 15, f"alert {latency:.1f} s after scenario start (<= 15 s)")
             alert = hit[2]
             t1 = time.time()
-            res = await s.call_tool("enrich_alert", {"alert": json.dumps(alert)})
+            # The workflow's tool node passes single fields, so exercise
+            # that path here rather than the whole-payload one.
+            res = await s.call_tool("enrich_alert", {
+                "watch_id": wid, "issuer": alert["issuer"],
+                "product_class": alert["product_class"],
+                "condition_since_ms": alert["condition_since_ms"],
+                "alert_id": alert["alert_id"], "underlying": alert["underlying"],
+                "observed_value": alert["observed_value"]})
             summary = json.loads(text_of(res))
-            res_blocks = [c for c in res.content if getattr(c, "type", "") == "resource"]
             # Assert on the breach itself and on the alert window, which
             # covers exactly the anomaly. The 60 s mean dilutes a 10 s
             # anomaly with 50 s of normal quotes and the 15 min window can
@@ -144,7 +150,8 @@ async def run(a: argparse.Namespace) -> int:
                   f"enrich summary: alpha since the alert {alpha_since} (> 0.5)")
             check(all(v is not None and alpha_since > 2 * v for v in peers_since.values()),
                   f"alpha {alpha_since} vs peers {peers_since} (expected > 2x)")
-            check(len(res_blocks) == 3, f"enrich attached {len(res_blocks)} data sets")
+            check(len(summary.get("attachments", [])) == 3,
+                  f"enrich attached {len(summary.get('attachments', []))} data sets")
             check(len(text_of(res)) < 8000, f"summary stays small ({len(text_of(res))} chars)")
             check(sn.wait(f"bsg/desk/progress/{wid}", 3) is not None, "progress event published")
             print(f"     enrich took {time.time() - t1:.2f} s; "

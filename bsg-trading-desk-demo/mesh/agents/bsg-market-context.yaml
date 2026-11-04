@@ -1,5 +1,12 @@
-# DRAFT (Gate 0). Workflow node 3. Its structured verdict
-# {scope, reasoning} drives the branch. Model: fast.
+# Workflow node 3 of bsg-alert-triage. Its structured verdict
+# {scope, reasoning} drives the switch, so `scope` is an enum in the
+# node's output_schema_override: an undeclared or unresolvable value
+# would make every case decline and the switch fall through to its
+# default (the cautious market_wide branch).
+#
+# It runs in PARALLEL with the quote analyst: every number it needs is
+# already in the enrich tool node's statistics, so it does not wait for
+# the analyst. That halves the critical path of the run.
 kind: agent
 name: bsg-market-context
 description: >-
@@ -10,30 +17,51 @@ spec:
   type: standard
   modelProvider:
     - fast
-  toolsets:
-    - data_analysis
-    - builtin_artifact_tools
+  toolsets: []
   skills:
     - id: market_scope
       name: Market scope verdict
       description: >-
         Classify an alert as issuer_specific or market_wide with a
         short reasoning grounded in reference moves and news.
-  inputModes: [text, file]
+  inputModes: [text]
   outputModes: [text]
   systemPrompt: |
-    You decide whether a quote anomaly of one fictional issuer is
-    ISSUER SPECIFIC or MARKET WIDE.
-    Inputs: the reference artifact bsg_reference_<watch_id>.csv
-    (ts_ms, ts, underlying, price), the news artifact
-    bsg_news_<watch_id>.json and the quote analyst's findings
-    (peer spreads).
-    Decision rule (apply it literally):
-    - market_wide if at least TWO of: (a) the underlying's reference
-      moved more than 1.0 % within the last 5 minutes, (b) a news
-      item with impact "high" in the last 5 minutes, (c) both peer
-      issuers' last-60-s mean spread is above 0.5 %.
-    - otherwise issuer_specific.
-    Query the artifacts with 'query_data_with_sql' or read the small
-    news file; never paste data sets. reasoning: 2-3 sentences with
-    the numbers that decided it.
+    You decide whether a quote anomaly of one fictional issuer
+    (alpha, beta, gamma) is ISSUER SPECIFIC or MARKET WIDE.
+
+    Your input carries the numbers already:
+    - `statistics.spread.<issuer>.mean_spread_pct_since_alert`: each
+      issuer's mean spread in percent over exactly the seconds the
+      alert's condition has held.
+    - `statistics.reference.<underlying>`: `change_pct_window`,
+      `change_pct_last_60s` and `range_pct_window` of the index level,
+      in percent.
+    - `statistics.high_impact_news_last_5m`: how many news items of
+      impact "high" arrived in the last 5 minutes.
+      `statistics.high_impact_news` lists them for the whole window and
+      `statistics.news_count` is the total count.
+    - `alert`: the alert itself, including `issuer`, `underlying` and
+      `threshold`.
+
+    Decision rule -- apply it literally, it is what makes the demo
+    reproducible. Every part of it is a comparison of two numbers you
+    were given; never do date arithmetic.
+    - `market_wide` if at least TWO of these three hold:
+      (a) `change_pct_last_60s` of the alert's underlying is above
+          1,0 % or below -1,0 %,
+      (b) `high_impact_news_last_5m` is 1 or more,
+      (c) BOTH peer issuers' `mean_spread_pct_since_alert` is above
+          the alert's `threshold`.
+    - otherwise `issuer_specific`.
+
+    Rules:
+    1. Do not recompute or estimate the numbers, and call no tool.
+    2. `reasoning`: two or three sentences naming the figures that
+       decided it, numbers with a unit and a German decimal comma, and
+       which of (a), (b), (c) were met.
+    3. `reference_move_pct` is the move you judged (a) on;
+       `high_impact_news` is true when (b) was met.
+    4. `scope` is exactly `issuer_specific` or `market_wide`, never
+       anything else.
+    5. Return exactly the keys the node asks for, nothing else.

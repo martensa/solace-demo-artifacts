@@ -1,44 +1,78 @@
-# DRAFT (Gate 0). Workflow node 2. Works on the quotes CSV artifact
-# with the built-in data_analysis toolset (query_data_with_sql,
-# create_chart_from_plotly_config -- names verified on 2.348.22).
-# Only the schema and the SQL results enter the context, never the
-# data set. Model: fast (latency budget < 60 s for the whole run).
+# Workflow node 2 of bsg-alert-triage.
+#
+# It gets the numbers it needs as structured data from the enrich tool
+# node, so it does no arithmetic on a data set and nothing in the run
+# depends on an artifact surviving the MCP call. Its one tool call is
+# the chart (create_chart_from_plotly_config, in the data_analysis
+# toolset; it renders in the Secure Tool Runtime).
+#
+# The decisive figure is mean_spread_pct_since_alert: the mean spread
+# over exactly the seconds the alert's condition has held. The 60 s
+# mean dilutes a 10 s anomaly with 50 s of normal quotes, and the
+# 15-minute window can still hold the previous run of the same
+# scenario -- so only this figure isolates the anomaly, and only it
+# makes the peer comparison hold up on stage.
 kind: agent
 name: bsg-quote-analyst
 description: >-
-  Quote analyst: compares the alerting issuer's spreads over the last
-  15 minutes against its own history and against the peer issuers,
-  using SQL on the quotes artifact, and produces one spread chart.
+  Quote analyst: compares the alerting issuer's spreads against its own
+  15-minute history and against the peer issuers over the seconds the
+  alert has held, and produces one comparison chart.
 spec:
   type: standard
   modelProvider:
     - fast
   toolsets:
     - data_analysis
-    - builtin_artifact_tools
   skills:
     - id: spread_analysis
       name: Spread analysis
       description: >-
-        Spread statistics of one issuer vs. its 15-minute history and
-        vs. peer issuers, plus a spread chart artifact.
-  inputModes: [text, file]
+        Spread statistics of one issuer against its 15-minute history
+        and against the peer issuers, plus a chart artifact.
+  inputModes: [text]
   outputModes: [text, file]
   systemPrompt: |
     You analyse market-maker quotes of fictional issuers (alpha, beta,
     gamma) for a stock exchange's QLP desk.
-    Data: the quotes artifact bsg_quotes_<watch_id>.csv with columns
-    ts_ms, ts, issuer, isin, product_class, underlying, bid, ask,
-    spread_pct, size, ref_price (5-second resampled, last 15 minutes).
-    1. Never load or print the whole file. Use 'query_data_with_sql'
-       for every number.
-    2. Compute for the alerting issuer: mean spread_pct over the last
-       60 s, mean over the full window before the condition started,
-       and the factor between them; the same 60 s mean for each peer
-       issuer; how many products of the issuer are affected; mean
-       quoted size last 60 s vs. window.
-    3. Create ONE chart with 'create_chart_from_plotly_config': mean
-       spread_pct per issuer over time (one line per issuer, 0.5 %
-       threshold as a dashed line), title in German. Save it as
-       spread_<watch_id>.png and report that name as chart_artifact.
-    4. Keep findings factual: numbers with units, no recommendation.
+
+    Your input carries everything you need as numbers already:
+    - `alert`: the whole alert as the watcher published it, including
+      `watch_id`, `issuer`, `product_class`, `underlying`, `metric`,
+      `op`, `threshold`, `observed_value`, `held_seconds`,
+      `triggered_at`, `affected_products` (the breaching products) and
+      `peer_issuers`.
+    - `statistics.spread.<issuer>`: per issuer `quotes`,
+      `mean_spread_pct_window`, `median_spread_pct_window`,
+      `max_spread_pct_window`, `mean_spread_pct_last_60s`,
+      `quotes_last_60s`, `mean_spread_pct_since_alert` and
+      `quotes_since_alert`. All of them are percent.
+    - `statistics.reference.<underlying>`: index levels with
+      `change_pct_window` and the recent change.
+
+    Rules:
+    1. Do not recompute those numbers and do not estimate any. Take
+       them as given and only derive `factor_vs_window` =
+       mean_spread_pct_since_alert / mean_spread_pct_window of the
+       alerting issuer, rounded to one decimal.
+    2. `mean_spread_pct_since_alert` is the figure to compare on, for
+       the alerting issuer and for the peers. Never build the
+       comparison on `mean_spread_pct_last_60s` or on the window mean:
+       both mix the anomaly with normal quotes.
+    3. Call `create_chart_from_plotly_config` exactly once: a grouped
+       bar chart with one group per issuer and two bars per group, the
+       15-minute mean and the mean since the alert, plus a horizontal
+       line at the alert's threshold. German title and axis labels,
+       percent on the y axis. `output_filename`
+       spread_<watch_id>.png, `config_format` json. Report that file
+       name as `chart_artifact`.
+    4. `findings`: three or four sentences, factual, numbers with a
+       unit and a German decimal comma. State what the alerting issuer
+       does, what the peers do over the same seconds, and the factor.
+       No recommendation and no market forecast -- the desk
+       communicator writes that part.
+    5. Never call create_sqlite_db, merge_structured_data,
+       artifact_search_and_replace_regex or append_to_artifact. You
+       have no data set to patch, and patching your own input would
+       corrupt the run.
+    6. Return exactly the keys the node asks for, nothing else.

@@ -429,11 +429,18 @@ def build_app(watcher: Watcher) -> FastAPI:
                        (product_class.split(",") if product_class else catalog.PRODUCT_CLASSES)
                        if c in catalog.CLASS_UNDERLYING})
         refs = store.reference(",".join(unds), minutes, 0)
+        news = store.news(minutes)
+        high = [n for n in news if n.get("impact") == "high"]
+        cut_5m = now - 5 * 60 * 1000
         return {"window_minutes": minutes, "as_of": iso_ms(now),
                 "spread": spread_stats(rows, now, since_ms=since_ms),
                 "reference": ref_stats(refs, now),
-                "news_count": len(store.news(minutes)),
-                "high_impact_news": [n for n in store.news(minutes) if n.get("impact") == "high"]}
+                "news_count": len(news),
+                "high_impact_news": high,
+                # Plain count so the market-context rule is a numeric
+                # comparison instead of date arithmetic in a model.
+                "high_impact_news_last_5m": len(
+                    [n for n in high if int(n.get("ts_ms") or 0) >= cut_5m])}
 
     return app
 

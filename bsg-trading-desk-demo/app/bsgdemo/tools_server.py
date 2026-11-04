@@ -47,7 +47,6 @@ except ModuleNotFoundError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP as _ServerClass
     _MCP_V2 = False
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import EmbeddedResource, TextContent, TextResourceContents
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
@@ -252,34 +251,58 @@ def enrich(alert: Any) -> tuple[dict[str, Any], dict[str, str]]:
 
 @mcp.tool()
 def enrich_alert(
-    alert: Annotated[str, Field(description="The alert payload exactly as received (JSON).")],
-) -> list:
+    alert: Annotated[str, Field(description="The whole alert payload as JSON. Give "
+                                            "this OR the single fields below.")] = "",
+    watch_id: Annotated[str, Field(description="watch_id of the alert.")] = "",
+    issuer: Annotated[str, Field(description="Issuer of the alert (alpha, beta, gamma).")] = "",
+    product_class: Annotated[str, Field(description="Product class of the alert, "
+                                                    "or * for all.")] = "",
+    condition_since_ms: Annotated[int, Field(description="Epoch ms at which the alert's "
+                                                         "condition started.")] = 0,
+    alert_id: Annotated[str, Field(description="alert_id of the alert.")] = "",
+    underlying: Annotated[str, Field(description="Underlying of the alert, optional.")] = "",
+    observed_value: Annotated[float, Field(description="Observed metric value, optional.")] = 0.0,
+) -> dict:
     """Workflow step 'Alert anreichern': fetch the last 15 minutes of
     quotes (alerting issuer plus the two peers as comparison), the
     reference prices and the news from the watcher, and return a compact
-    summary with deterministic spread / reference statistics. The data
-    sets are attached (CSV/JSON); only the summary belongs in the context."""
-    wid = "unknown"
+    summary with deterministic spread / reference statistics -- including
+    the mean spread of every issuer over exactly the seconds the alert's
+    condition has held, which is the number that separates an issuer
+    specific anomaly from a market wide one.
+
+    A workflow tool node passes the single fields; a caller holding the
+    whole payload passes `alert` instead."""
+    wid = watch_id or "unknown"
     try:
-        wid = _parse_alert(alert)["watch_id"]
+        payload: Any = alert or {
+            "watch_id": watch_id, "issuer": issuer, "product_class": product_class,
+            "condition_since_ms": condition_since_ms, "alert_id": alert_id,
+            "underlying": underlying, "observed_value": observed_value,
+        }
+        a = _parse_alert(payload)
+        wid = a["watch_id"]
         _progress(wid, "enrich", "started")
-        summary, files = enrich(alert)
+        summary, files = enrich(a)
     except (ValueError, KeyError, json.JSONDecodeError) as exc:
         _progress(wid, "enrich", "failed", error=str(exc))
-        return [TextContent(type="text", text=_err(f"bad alert payload: {exc}",
-                                                   "pass the alert JSON unchanged"))]
+        return {"error": f"bad alert payload: {exc}",
+                "hint": "pass the alert JSON unchanged, or watch_id plus issuer"}
     except httpx.HTTPError as exc:
         _progress(wid, "enrich", "failed", error=str(exc))
-        return [TextContent(type="text", text=_err(f"watcher unreachable: {exc}",
-                                                   "retry once"))]
+        return {"error": f"watcher unreachable: {exc}", "hint": "retry once"}
     _progress(wid, "enrich", "finished", datasets=list(files))
-    out: list = [TextContent(type="text", text=_dump(summary))]
     if ENRICH_EMBED:
-        for name, content in files.items():
-            mime = "text/csv" if name.endswith(".csv") else "application/json"
-            out.append(EmbeddedResource(type="resource", resource=TextResourceContents(
-                uri=f"bsg://enrich/{wid}/{name}", mimeType=mime, text=content)))
-    return out
+        # Kept for the local smoke test and for a client that can take
+        # embedded resources. Whether SAM turns these into artifacts is
+        # unverified, so nothing in the workflow depends on them.
+        summary["attachments"] = [
+            {"uri": f"bsg://enrich/{wid}/{name}",
+             "mimeType": "text/csv" if name.endswith(".csv") else "application/json",
+             "bytes": len(content)}
+            for name, content in files.items()
+        ]
+    return summary
 
 
 @mcp.tool()

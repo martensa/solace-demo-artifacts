@@ -3,7 +3,8 @@ kind: manifest
 name: bsg-trading-desk-entrypoint
 description: >-
   Rendered companion of the bsg-trading-desk-demo manifest: the
-  bsg-desk-events entrypoint bound to the workflow's runtime name.
+  bsg-desk-events entrypoint, carrying the broker credentials from
+  .env.
 target:
   name: solace-lab
   url: https://sam.solace.lab

@@ -1,19 +1,28 @@
 # TEMPLATE -- rendered by scripts/install.sh into mesh/.rendered/
-# (git-ignored) AFTER the bsg-alert-triage workflow exists.
+# (git-ignored) AFTER the bsg-alert-triage workflow exists, because the
+# broker credentials come from .env and must not be committed.
 #
-# Event-mesh entrypoint -> WORKFLOW target is broken on 2.225.14 and
-# still on 2.348.22 (agent-mesh-deployment/CLAUDE.md): the gateway
-# publishes to the config name and sends an empty message. Workaround
-# verified there: targetWorkflowName = RUNTIME name
-# workflow_<uuid with '_'> + inputExpression "input.payload"; the
-# workflow then receives {"text": "<payload JSON>"}. Gate 0 re-checks
-# this on 2.493.0 (if fixed: plain targetWorkflowName bsg-alert-triage).
+# Broker: solace-1 on the `default` VPN (Gate 0, decision A). MQTT 1883
+# is the default VPN's listener -- the `sam` VPN has every MQTT listener
+# disabled -- so the demo's feed lives on `default` and this entrypoint
+# has to read it there. SMF and web transport carry the VPN name in the
+# handshake, so port 8008 serves both VPNs and only broker_vpn differs
+# from SAM's own connection.
 #
-# Broker connection mirrors the SAM deployment (solace-1, VPN sam),
-# same as the other demos. qos 1 + on_completion: an alert is acked
-# only after the run finished -> exactly one run per alert, redelivery
-# on crash. Runs are attributed to power_user (decided 2026-11-04) so
-# they show up in that user's Activities and chargeback.
+# Workflow target on 2.493.0: an entrypoint resolves a workflow's
+# friendly name to its generated `workflow_<id>` card, so
+# targetWorkflowName is just the config name. install.sh still renders
+# the name, so ENTRYPOINT_WORKFLOW_TARGET=runtime puts the 2.348.22
+# workaround (workflow_<uuid with '_'>) back if a run shows the old bug.
+# A workflow target ignores promptTemplate and takes inputExpression:
+# "input.payload:" delivers the payload, and because the workflow
+# declares an input_schema the alert arrives as addressable fields
+# (workflow.input.watch_id and so on), not as {"text": "<json>"}.
+#
+# qos 1 plus on_completion: an alert is acked only once the run has
+# finished, so there is exactly one run per alert and a crash redelivers
+# it. Runs are attributed to power_user (decided 2026-11-04) so they
+# appear in that user's Activities and chargeback.
 kind: entrypoint
 name: bsg-desk-events
 description: >-
@@ -25,7 +34,7 @@ spec:
   deploy: true
   values:
     broker_url: "ws://host.docker.internal:8008"
-    broker_vpn: sam
+    broker_vpn: "__BROKER_VPN__"
     broker_username: "__BROKER_USERNAME__"
     broker_password: "__BROKER_PASSWORD__"
     tls_skip_verify: "false"
@@ -35,10 +44,8 @@ spec:
           - topic: "bsg/alerts/>"
             qos: 1
         messageFormat: json
-        targetWorkflowName: __WORKFLOW_RUNTIME__
-        inputExpression: "input.payload"
-        # Required by the schema; ignored for workflow targets.
-        promptTemplate: "{payload}"
+        targetWorkflowName: __WORKFLOW_TARGET__
+        inputExpression: "input.payload:"
         defaultUserIdentity: power_user@solace.lab
         acknowledgmentPolicy:
           mode: on_completion
@@ -47,11 +54,12 @@ spec:
           enabled: true
           topic: "bsg/desk/results"
           topicType: static
-          responseType: full
+          responseType: structured
         errorOutput:
           enabled: true
           topic: "bsg/desk/errors"
           topicType: static
+          responseType: error
       - name: bsg_desk_requests
         subscriptions:
           - topic: "bsg/desk/requests/>"
@@ -74,3 +82,4 @@ spec:
           enabled: true
           topic: "bsg/desk/errors"
           topicType: static
+          responseType: error
