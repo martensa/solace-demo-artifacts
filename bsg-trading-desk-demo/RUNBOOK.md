@@ -1,9 +1,7 @@
 # Runbook: BSG Trading Desk Assistant
 
-Cheat sheet for the show. The deterministic part (watch, alert,
-enrichment, desk note) is measured in the cluster against `solace-1`;
-the SAM part is still a target until the mesh has been applied and
-run once.
+Cheat sheet for the show. Every number below was measured on the lab
+cluster on 2026-11-04, driving the four steps through the UI itself.
 
 ## Before the audience arrives
 
@@ -37,15 +35,20 @@ make demo-reset             # starting state
    Desk-Note publizieren (Tool). The two tool nodes report
    themselves; the agent rows in between are inferred, because SAM's
    status events live on a VPN the UI cannot read (see the README's
-   decision on the VPN). Target: note with chart under 60 s after the
-   alert.
+   decision on the VPN), so their timing on screen is the whole run,
+   not their own. Measured: note with chart **18.0 s** after the
+   alert, against a 60 s budget. The real split is analyst 8.7 s and
+   context 5.3 s in parallel, then the communicator 11.1 s --
+   the Grafana dashboard shows it.
 4. **Mensch entscheidet** (2:30-3:00). Click
    "Plausibilitaetspruefung fuer Alpha starten". The ticker marks
    Alpha "in Pruefung"; the action event closes the loop.
 
-Close (3:00-5:00): "Grafana" link (tokens and duration per `bsg-`
-agent, last 15 minutes) and "SAM Activities" (the workflow run with
-its nodes).
+Close (3:00-5:00): the "Grafana" link opens
+`BSG Trading Desk Demo`: duration and tokens of the last run per
+node, the branch it took, and a table of runs (about 60k tokens
+issuer specific, 92k market wide). "SAM Activities" shows the same
+run with its nodes as a Gantt.
 
 ## Reserve: second branch (about 1.5 minutes)
 
@@ -53,7 +56,9 @@ its nodes).
 2. Click "Marktweit: Volatilitaetssprung": reference jumps 2-3 %,
    all issuers widen, a high-impact news item appears.
 3. Expected: the branch shows "marktweit", the note says "keine
-   Emittentenmassnahme".
+   Emittentenmassnahme". Measured: 20.3 s from the alert, with
+   "Beta (0,91 %) und Gamma (0,89 %) zeigen vergleichbar erhoehte
+   Spannen ... DAX in letzten 60 s um 3,42 % gefallen".
 
 ## Fallbacks, in this order
 
