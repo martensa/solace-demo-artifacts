@@ -32,6 +32,13 @@
 #   whether SAM turns an MCP response's embedded resources into named
 #   artifacts is unverified, so the numbers travel as structured data and
 #   the 15-minute series stays in the demo UI's own chart.
+# - This connector's MCP tools put their structured result straight
+#   under `{{<node>.output.<field>}}`. The connector reference's
+#   `{{<node>.output.mcp_structured_content.<field>}}` form does NOT
+#   apply here -- a run with it fails the consuming node with
+#   `field "mcp_structured_content" not found in node output; that
+#   value has 9 fields`, which is the summary's own keys. Measured on
+#   2.493.0 with this connector, 2026-11-04.
 kind: workflow
 name: bsg-alert-triage
 description: >-
@@ -41,7 +48,7 @@ description: >-
   the German desk note and publishes it onto the mesh.
 spec:
   appConfig:
-    version: "1.0.0"
+    version: "1.0.1"
     description: >-
       From a quote alert to a desk note in under 60 seconds: enrich,
       analyse, classify, branch, write, publish.

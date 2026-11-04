@@ -1,14 +1,27 @@
 # MCP connector to the deterministic tools of the demo
 # (app/bsgdemo/tools_server.py, Deployment bsg-tools in bsg-demo).
-# Pattern verified on 2.348.22 with "Acme Claims Knowledge"
-# (mcp/remote, streamable-http, auth none: the platform lists the
-# tools directly at create/update, no static manifest).
 #
-# That tool listing is why the Kubernetes part has to be up first: the
-# platform stores the list it discovers while saving, and on 2.493.0 a
-# workflow tool node naming a tool outside that list is refused at save
-# and at deploy. Re-save the connector after changing a tool's name or
-# signature. Gate 0 measured the path: workflows run in the `awe` pod,
+# The `manifest:` below is NOT decoration. SAM 2.493.0 refuses a
+# workflow whose tool node names a tool the connector has no stored
+# list for, and `sam config apply` never triggers live discovery: a
+# connector created or updated that way keeps an empty list, and the
+# workflow create fails with "has no stored tool list". Discovery does
+# happen per agent registration -- bsg-desk-assistant shows
+# toolCount 6 -- but the workflow check reads the connector, not the
+# registration. With a manifest the connector skips discovery and
+# registers exactly these tools, which also makes the apply independent
+# of whether the MCP server happened to be reachable at save time.
+#
+# The `outputSchema` entries are the contract the workflow reads: a
+# connector-backed MCP tool's structured result is addressed as
+# {{<node>.output.mcp_structured_content.<field>}}, and only the
+# top-level properties declared here are verified.
+#
+# Regenerate after any change to a tool's name or signature, with the
+# MCP server reachable (make port-forward):
+#   python scripts/gen_connector_manifest.py
+#
+# Gate 0 measured the path: workflows run in the `awe` pod,
 # cross-namespace DNS resolves and sam-solace-lab has no NetworkPolicy,
 # so bsg-tools.bsg-demo.svc:8765 is reachable.
 kind: connector
@@ -25,3 +38,24 @@ spec:
     server_url: http://bsg-tools.bsg-demo.svc:8765/mcp
     connection_type: streamable-http
     auth_type: none
+    manifest:
+      - name: "enrich_alert"
+        description: "Workflow step 'Alert anreichern': fetch the last 15 minutes of quotes (alerting issuer plus the two peers as comparison), the reference prices and the news from the watcher, and return a compact summary with deterministic spread / reference statistics -- including the mean spread of every issuer over exactly the seconds the alert's condition has held, which is the number that separates an issuer specific anomaly from a market wide one. A workflow tool node passes the single fields; a caller holding the whole payload passes `alert` instead."
+        inputSchema: {"properties": {"alert": {"default": "", "description": "The whole alert payload as JSON. Give this OR the single fields below.", "title": "Alert", "type": "string"}, "watch_id": {"default": "", "description": "watch_id of the alert.", "title": "Watch Id", "type": "string"}, "issuer": {"default": "", "description": "Issuer of the alert (alpha, beta, gamma).", "title": "Issuer", "type": "string"}, "product_class": {"default": "", "description": "Product class of the alert, or * for all.", "title": "Product Class", "type": "string"}, "condition_since_ms": {"default": 0, "description": "Epoch ms at which the alert's condition started.", "title": "Condition Since Ms", "type": "integer"}, "alert_id": {"default": "", "description": "alert_id of the alert.", "title": "Alert Id", "type": "string"}, "underlying": {"default": "", "description": "Underlying of the alert, optional.", "title": "Underlying", "type": "string"}, "observed_value": {"default": 0.0, "description": "Observed metric value, optional.", "title": "Observed Value", "type": "number"}, "detail": {"default": false, "description": "Also describe the data sets and echo the alert. Leave false in a workflow: a response over 2048 bytes is stored as an artifact and its fields stop resolving.", "title": "Detail", "type": "boolean"}}, "type": "object", "title": "enrich_alertArguments"}
+        outputSchema: {"type": "object", "properties": {"watch_id": {"type": "string"}, "issuer": {"type": "string", "description": "The alerting issuer."}, "peer_issuers": {"type": "array", "description": "The two peer issuers."}, "primary_underlying": {"type": "string"}, "window_minutes": {"type": "number", "description": "History window in minutes."}, "statistics": {"type": "object", "description": "spread.<issuer> with mean_spread_pct_window, mean_spread_pct_last_60s and mean_spread_pct_since_alert; reference.<underlying> with change_pct_window and change_pct_last_60s; news_count and high_impact_news_last_5m."}, "alert": {"type": "object", "description": "Only with detail: the alert fields given."}, "affected_products": {"type": "array", "description": "Only with detail."}, "datasets": {"type": "object", "description": "Only with detail: rows, columns, content."}, "attachments": {"type": "array", "description": "Only with detail and ENRICH_EMBED."}, "error": {"type": "string", "description": "Only on failure."}, "hint": {"type": "string", "description": "Only on failure."}}}
+      - name: "list_watches"
+        description: "List the active watches (id, topic filter, condition, alerts sent)."
+        inputSchema: {"properties": {}, "type": "object", "title": "list_watchesArguments"}
+      - name: "publish_desk_note"
+        description: "Workflow step 'Desk-Note publizieren': publish the final desk note on bsg/desk/notes/{watch_id} for the trading desk UI."
+        inputSchema: {"properties": {"watch_id": {"description": "watch_id of the alert.", "title": "Watch Id", "type": "string"}, "note": {"description": "The desk note (German, max. 8 lines).", "title": "Note", "type": "string"}, "branch": {"description": "Branch taken: issuer_specific or market_wide.", "title": "Branch", "type": "string"}, "issuer": {"default": "", "description": "Issuer of the alert.", "title": "Issuer", "type": "string"}, "alert_id": {"default": "", "description": "alert_id of the alert.", "title": "Alert Id", "type": "string"}, "chart_ref": {"default": "", "description": "Artifact name or URI of the chart.", "title": "Chart Ref", "type": "string"}, "workflow_run_id": {"default": "", "description": "Workflow run / task id.", "title": "Workflow Run Id", "type": "string"}}, "required": ["watch_id", "note", "branch"], "type": "object", "title": "publish_desk_noteArguments"}
+        outputSchema: {"type": "object", "properties": {"status": {"type": "string", "description": "published"}, "topic": {"type": "string", "description": "Topic the note went to."}, "lines": {"type": "integer", "description": "Lines in the published note."}}}
+      - name: "report_progress"
+        description: "Publish a progress event for the trading desk UI."
+        inputSchema: {"properties": {"watch_id": {"description": "watch_id of the alert.", "title": "Watch Id", "type": "string"}, "node": {"description": "Workflow node id.", "title": "Node", "type": "string"}, "phase": {"description": "started, finished or failed.", "title": "Phase", "type": "string"}, "detail": {"default": "", "description": "Optional short detail.", "title": "Detail", "type": "string"}}, "required": ["watch_id", "node", "phase"], "type": "object", "title": "report_progressArguments"}
+      - name: "stop_watch"
+        description: "Stop one watch by id."
+        inputSchema: {"properties": {"watch_id": {"description": "The watch id, e.g. w-1a2b3c.", "title": "Watch Id", "type": "string"}}, "required": ["watch_id"], "type": "object", "title": "stop_watchArguments"}
+      - name: "watch_feed"
+        description: "Create a deterministic watch on the live quote feed. The watcher publishes exactly one alert on bsg/alerts/{watch_id} when the condition holds for hold_seconds. Returns watch_id, topic filter and the normalised condition -- confirm all three to the trader."
+        inputSchema: {"properties": {"issuer": {"description": "Issuer: alpha, beta or gamma (fictional).", "title": "Issuer", "type": "string"}, "product_class": {"description": "Product class: dax-turbo, nasdaq-knockout, discount-cert, or * for all.", "title": "Product Class", "type": "string"}, "metric": {"description": "spread_pct (percent), quote_age_s (seconds without a quote) or drift_vs_ref_pct (percent).", "title": "Metric", "type": "string"}, "op": {"description": "Comparison: >, >=, < or <=.", "title": "Op", "type": "string"}, "threshold": {"description": "Threshold in the unit of the metric, e.g. 0.5 for 0.5 % spread.", "title": "Threshold", "type": "number"}, "hold_seconds": {"description": "How long the condition must hold continuously before one alert fires.", "title": "Hold Seconds", "type": "number"}, "ttl_minutes": {"default": 30, "description": "Lifetime of the watch in minutes.", "title": "Ttl Minutes", "type": "number"}}, "required": ["issuer", "product_class", "metric", "op", "threshold", "hold_seconds"], "type": "object", "title": "watch_feedArguments"}

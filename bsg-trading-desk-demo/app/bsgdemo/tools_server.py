@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
@@ -200,8 +201,17 @@ def _parse_alert(alert: Any) -> dict[str, Any]:
     return a
 
 
-def enrich(alert: Any) -> tuple[dict[str, Any], dict[str, str]]:
-    """Deterministic enrichment; returns (summary, {filename: content})."""
+def enrich(alert: Any, detail: bool = True) -> tuple[dict[str, Any], dict[str, str]]:
+    """Deterministic enrichment; returns (summary, {filename: content}).
+
+    With ``detail`` the summary also describes the data sets. The
+    workflow leaves it off, because SAM saves an MCP response over
+    ``mcp_tool_response_save_threshold_bytes`` (2048 by default) as an
+    artifact and replaces the node's structured output with a digest --
+    at which point `{{enrich.output.statistics}}` no longer resolves and
+    the consuming node fails with "field not found in node output".
+    Keeping the workflow's response small is what keeps the numbers
+    addressable."""
     a = _parse_alert(alert)
     issuer, pclass = a["issuer"], a.get("product_class") or "*"
     und = a.get("underlying") or catalog.CLASS_UNDERLYING.get(pclass, "dax")
@@ -224,14 +234,25 @@ def enrich(alert: Any) -> tuple[dict[str, Any], dict[str, str]]:
         f"bsg_reference_{wid}.csv": ref_csv,
         f"bsg_news_{wid}.json": _dump(news),
     }
-    summary = {
-        "alert": {k: a.get(k) for k in ("alert_id", "watch_id", "issuer", "isin", "product_class",
-                                        "underlying", "metric", "op", "threshold",
-                                        "observed_value", "held_seconds", "triggered_at")},
-        "affected_products": a.get("affected_products", []),
+    # high_impact_news carries whole items and can grow without bound;
+    # the decision rule only needs the count, which stats already has.
+    stats.pop("high_impact_news", None)
+    stats.pop("as_of", None)
+    summary: dict[str, Any] = {
+        "watch_id": wid,
+        "issuer": issuer,
         "peer_issuers": catalog.peers(issuer),
+        "primary_underlying": und,
         "window_minutes": ENRICH_MINUTES,
-        "datasets": {
+        "statistics": stats,
+    }
+    if detail:
+        summary["alert"] = {
+            k: a.get(k) for k in ("alert_id", "watch_id", "issuer", "isin", "product_class",
+                                  "underlying", "metric", "op", "threshold",
+                                  "observed_value", "held_seconds", "triggered_at")}
+        summary["affected_products"] = a.get("affected_products", [])
+        summary["datasets"] = {
             f"bsg_quotes_{wid}.csv": {
                 "rows": max(quotes_csv.count("\n") - 1, 0),
                 "columns": quotes_csv.split("\n", 1)[0].split(","),
@@ -242,10 +263,7 @@ def enrich(alert: Any) -> tuple[dict[str, Any], dict[str, str]]:
                 "columns": ref_csv.split("\n", 1)[0].split(","),
                 "content": "reference index levels (all underlyings)"},
             f"bsg_news_{wid}.json": {"items": len(news), "content": "news items, newest last"},
-        },
-        "statistics": stats,
-        "primary_underlying": und,
-    }
+        }
     return summary, files
 
 
@@ -262,6 +280,10 @@ def enrich_alert(
     alert_id: Annotated[str, Field(description="alert_id of the alert.")] = "",
     underlying: Annotated[str, Field(description="Underlying of the alert, optional.")] = "",
     observed_value: Annotated[float, Field(description="Observed metric value, optional.")] = 0.0,
+    detail: Annotated[bool, Field(description="Also describe the data sets and echo the "
+                                              "alert. Leave false in a workflow: a response "
+                                              "over 2048 bytes is stored as an artifact and "
+                                              "its fields stop resolving.")] = False,
 ) -> dict:
     """Workflow step 'Alert anreichern': fetch the last 15 minutes of
     quotes (alerting issuer plus the two peers as comparison), the
@@ -283,7 +305,7 @@ def enrich_alert(
         a = _parse_alert(payload)
         wid = a["watch_id"]
         _progress(wid, "enrich", "started")
-        summary, files = enrich(a)
+        summary, files = enrich(a, detail=detail)
     except (ValueError, KeyError, json.JSONDecodeError) as exc:
         _progress(wid, "enrich", "failed", error=str(exc))
         return {"error": f"bad alert payload: {exc}",
@@ -292,7 +314,7 @@ def enrich_alert(
         _progress(wid, "enrich", "failed", error=str(exc))
         return {"error": f"watcher unreachable: {exc}", "hint": "retry once"}
     _progress(wid, "enrich", "finished", datasets=list(files))
-    if ENRICH_EMBED:
+    if ENRICH_EMBED and detail:
         # Kept for the local smoke test and for a client that can take
         # embedded resources. Whether SAM turns these into artifacts is
         # unverified, so nothing in the workflow depends on them.
@@ -314,7 +336,7 @@ def publish_desk_note(
     alert_id: Annotated[str, Field(description="alert_id of the alert.")] = "",
     chart_ref: Annotated[str, Field(description="Artifact name or URI of the chart.")] = "",
     workflow_run_id: Annotated[str, Field(description="Workflow run / task id.")] = "",
-) -> str:
+) -> dict:
     """Workflow step 'Desk-Note publizieren': publish the final desk note
     on bsg/desk/notes/{watch_id} for the trading desk UI."""
     lines = [ln for ln in note.strip().splitlines() if ln.strip()]
@@ -325,8 +347,10 @@ def publish_desk_note(
            "workflow_run_id": workflow_run_id, "ts": _iso()}
     bus.publish(topics.DESK_NOTE.format(watch_id=watch_id), msg, qos=1)
     _progress(watch_id, "publish", "finished", branch=branch)
-    return _dump({"status": "published", "topic": topics.DESK_NOTE.format(watch_id=watch_id),
-                  "lines": len(lines)})
+    # A dict, so the MCP response carries structuredContent and a
+    # workflow can address the fields.
+    return {"status": "published", "topic": topics.DESK_NOTE.format(watch_id=watch_id),
+            "lines": len(lines)}
 
 
 @mcp.tool()
@@ -365,5 +389,32 @@ def main() -> None:
         mcp.run(transport="streamable-http")
 
 
+def dump_tools() -> None:
+    """Print the tools/list result as JSON, without starting a server.
+
+    Lets scripts/gen_connector_manifest.py regenerate the connector's
+    tool manifest from inside the cluster, with no port-forward:
+
+        kubectl -n bsg-demo exec deploy/bsg-tools -- \
+            python -m bsgdemo.tools_server --dump-tools > tools.json
+    """
+    import asyncio
+
+    async def _list() -> list[dict[str, Any]]:
+        tools = await mcp.list_tools()
+        out = []
+        for t in tools:
+            d = t.model_dump(exclude_none=True) if hasattr(t, "model_dump") else dict(t)
+            out.append({"name": d.get("name"),
+                        "description": d.get("description") or "",
+                        "inputSchema": d.get("inputSchema") or {"type": "object"}})
+        return out
+
+    print(json.dumps(asyncio.run(_list()), indent=1))
+
+
 if __name__ == "__main__":
-    main()
+    if "--dump-tools" in sys.argv:
+        dump_tools()
+    else:
+        main()

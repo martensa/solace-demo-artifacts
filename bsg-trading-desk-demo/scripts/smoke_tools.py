@@ -133,7 +133,7 @@ async def run(a: argparse.Namespace) -> int:
                 "product_class": alert["product_class"],
                 "condition_since_ms": alert["condition_since_ms"],
                 "alert_id": alert["alert_id"], "underlying": alert["underlying"],
-                "observed_value": alert["observed_value"]})
+                "observed_value": alert["observed_value"], "detail": True})
             summary = json.loads(text_of(res))
             # Assert on the breach itself and on the alert window, which
             # covers exactly the anomaly. The 60 s mean dilutes a 10 s
