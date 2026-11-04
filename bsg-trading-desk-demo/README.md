@@ -25,13 +25,34 @@ Work in progress. Built so far, without access to the lab cluster:
   `bsg-desk.solace.lab` over TLS from the lab CA, and the `awe` pod
   reaches the MCP server at `bsg-tools.bsg-demo.svc:8765` (checked
   with a real `initialize` call).
-- `mesh/` -- rewritten for the 2.493.0 schema Gate 0 established
-  (tool nodes, a switch node, `output_schema_override`, an
-  `input_schema` that makes the alert arrive as fields). NOT applied
-  yet: `sam auth login` is a browser flow and the cached token has
-  expired.
-- Not started: the Grafana dashboard (the `tasks` columns are known,
-  see Gate 0 item 6) and the end-to-end acceptance of the SAM half.
+- `mesh/` -- APPLIED and RUN. Connector, four agents, the
+  `bsg-alert-triage` workflow and the `bsg-desk-events` entrypoint are
+  on the platform, and both branches of the switch were verified on
+  the cluster (numbers under "Measured").
+- `observability/` -- APPLIED. The Grafana dashboard
+  `sam-bsg-trading-desk` reads the `tasks` table through the
+  `sam-platform-db` datasource.
+
+## Measured on the cluster (2026-11-04)
+
+One full run, from the UI's step 1 to the desk note on the mesh:
+
+- Desk request to watch: the assistant answers in 7.4 s and the watch
+  carries the right filter and condition.
+- Scenario to alert: 10.4 s, exactly one alert per watch.
+- Alert to desk note: **14.2 s** issuer specific, **20.3 s** market
+  wide -- against a 60 s budget and a 90 s workflow timeout.
+- Inside a run: `enrich` 0.3-1.4 s (a tool node, no model),
+  `bsg-quote-analyst` 8.7 s, `bsg-market-context` 5.3 s (those two in
+  parallel), `bsg-desk-communicator` 11.1 s, `publish` well under a
+  second. About 60k tokens issuer specific, 92k market wide.
+- Issuer specific: "Spread 0,80% vs. 15-Min-Mittel 0,25% (Faktor 3,1).
+  Beta und Gamma halten mit 0,18% bzw. 0,23% deutlich unter Schwelle
+  0,50%" -> Plausibilitaetspruefung empfohlen.
+- Market wide: "Beta (0,91 %) und Gamma (0,89 %) zeigen vergleichbar
+  erhoehte Spannen ... DAX in letzten 60 s um 3,42 % gefallen,
+  High-Impact-News aktiv" -> Marktlage beobachten, keine
+  Emittentenmassnahme.
 
 ## Architecture
 
@@ -274,9 +295,42 @@ back to the text form.
 
 ### 7. Needs the owner
 
-`sam auth login` is a browser OIDC flow against `auth.solace.lab` and
-needs the owner's password, so `make mesh-up` cannot run unattended.
-`bsg-trading-desk-demo/.env` does not exist yet either.
+`sam auth login` is a browser OIDC flow against `auth.solace.lab`, so
+`make mesh-up` cannot run unattended. The CLI caches the token per
+`target.name`, which is `solace-lab` here: a login that lands under a
+different cache key (`sam auth login sam.solace.lab`) does not help,
+and the token lasts an hour.
+
+## What the first runs added to Gate 0
+
+Three things only a run on the cluster could settle, each of which had
+cost a deploy cycle:
+
+1. **`sam config apply` never triggers MCP tool discovery.** A
+   connector it creates keeps an empty tool list, and the workflow
+   create is refused with "connector ... has no stored tool list".
+   Discovery does happen per agent registration -- the connector
+   record shows `toolCount: 6` under `agentRegistrations` -- but the
+   workflow check reads the connector itself. The fix is an explicit
+   `manifest:` on the connector, which also pins the tools' schemas.
+   The field is a `textarea` in the schema but the runtime wants a
+   list: as a `|` block it fails with "'manifest' must be a list of
+   tool entries, got string".
+2. **An MCP response over 2048 bytes is stored as an artifact** and
+   the node's output becomes a digest, at which point no field of the
+   response resolves. `enrich_alert` returned 2741 bytes and the
+   analyst node failed with "field ... not found in node output; that
+   value has 9 fields". The tool now returns a lean summary (1241
+   bytes) and hides the data set descriptions behind a `detail` flag
+   that only the smoke test sets.
+3. **Structured output needs a model return type.** The MCP SDK emits
+   `structured_content`, and an `outputSchema` in `tools/list`, only
+   for a tool whose return type is a Pydantic model. With a plain
+   `dict` the node output is the bare envelope -- `mcp_tool_output`,
+   `message_to_llm`, `status` -- which is the "that value has 3
+   fields" failure. With a model, the connector reference's
+   `{{<node>.output.mcp_structured_content.<field>}}` is exactly
+   right.
 
 ## Open decisions (Gate 0)
 
@@ -367,14 +421,17 @@ uses `sam config apply --prune`.
 
 ## Open points
 
-- `sam auth login solace-lab` (browser), then `make mesh-up` and the
-  end-to-end run. Everything else is in place.
 - An `/etc/hosts` entry for `bsg-desk.solace.lab` (needs sudo).
   Until then the UI is reachable through `make port-forward` on
   `http://localhost:8090`.
+- A rehearsal of the whole show through the UI, rather than through
+  the MQTT harness that drove the runs above.
 - Cancelling running workflow runs in `make demo-reset` (platform
   API endpoint unknown); today runs end within the 90 s timeout.
-- Grafana dashboard `sam-bsg-trading-desk` (tokens and duration per
-  `bsg-` agent for one run).
-- Showing the agent's chart artifact in the UI.
+- Showing the agent's chart artifact in the UI. The workflow reports
+  its name (`spread_<watch_id>.png`) and the UI shows that, but
+  rendering the PNG needs an authenticated artifact URL.
 - Screenshots of Grafana and SAM Activities for the final report.
+- The agent nodes between the two tool nodes stay inferred in the UI,
+  because SAM's A2A status events are on the `sam` VPN, which has no
+  MQTT listener (decision A).
