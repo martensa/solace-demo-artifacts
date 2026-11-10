@@ -11,9 +11,11 @@ broker connectivity (sam VPN on solace-1,
 `global.broker.embedded: false`) and on solace-lab-infrastructure
 for the surrounding cluster services.
 
-Deployed version: chart `solace-agent-mesh` 2.2.30, appVersion
-2.493.0, str 1.76.4 (app and str are versioned independently;
-upgraded 2026-11-03 from 2.1.164 / 2.348.22 / 1.64.0).
+Deployed version: chart `solace-agent-mesh` 2.3.10, appVersion
+2.542.1, str 1.80.2 (app and str are versioned independently;
+upgraded 2026-11-10 from 2.2.30 / 2.493.0 / 1.76.4 by a clean
+rebuild, see "Version upgrade" below; before that 2026-11-03 from
+2.1.164 / 2.348.22 / 1.64.0).
 
 The chart and images come from the offline SAM delivery package
 and are NOT checked in. `.env` carries the local paths:
@@ -21,9 +23,13 @@ and are NOT checked in. `.env` carries the local paths:
 `SAM_STR_IMAGE_TAR` / `SAM_POSTGRES_IMAGE_TAR` /
 `SAM_SEAWEEDFS_IMAGE_TAR` (image tarballs for `load-images.sh`;
 the deployment is fully offline, see "v2 Chart Gotchas"),
-`SAM_CLI_PATH` / `SAM_CLI_TAR` (sam CLI; neither the 2.348.22 nor
-the 2.493.0 package ships a CLI tarball -- the user installs the
-CLI separately to `~/.local/bin/sam`, currently 2.493.0).
+`SAM_CLI_PATH` / `SAM_CLI_TAR` (sam CLI; the 2.348.22 and
+2.493.0 packages ship no CLI at all, 2.542.1 ships linux
+amd64/arm64 tarballs, a windows zip and a macOS universal `.pkg`
+but NO darwin tarball -- so on this Mac `SAM_CLI_TAR` stays
+unset; the user installs the CLI separately to
+`~/.local/bin/sam`, currently 2.542.1, and `SAM_CLI_PATH` points
+there).
 
 ## Cluster Dependencies
 
@@ -94,23 +100,45 @@ then run `./scripts/upgrade-preflight.sh --new <package-dir>`
 first -- it decides whether `local-k8s-values.yaml` (sections
 3/7) or any declarative package (section 8, `sam config plan`
 with the new CLI) needs changes before anything is torn down.
+A new CLI that speaks `/api/v2` (2.542.1) cannot plan against an
+old platform that serves only `/api/v1`: section 8 then reports
+NOT VALIDATED and has to be re-run AFTER the rebuild.
 The full ordered procedure (preflight, teardown, re-pin, load
 images, install + provision, verify, purge the old images) is
-the README's "Upgrade" section. Package directory names contain
-spaces and change shape between deliveries: 2.348.22 was
+the README's "Upgrade" section. Package directory names change
+shape between deliveries: 2.348.22 was
 `SAM Enterprise Update 2.348.22` PLUS a TRAILING space, with
-`Charts/` and `Images/` subfolders; 2.493.0 is
+`Charts/` and `Images/` subfolders; 2.493.0 was
 `~/Downloads/SAM Download/` (one space, no version in the name)
 with the chart as a bare `solace-agent-mesh-2.2.30.tar.gz` next
-to the image tarballs. Glob (`~/Downloads/SAM*Download`) or quote
-a tab-completed path (`"$HOME/Downloads/SAM Download"`), never
-type the name freehand, and keep `.env` paths quoted. A glob must
-match exactly one package (preflight refuses several). `--new`
-takes the package directory (section 6 then prints the tarballs
-as `.env` lines) or the chart `.tar.gz` directly. The previous
-package stays in ~/Downloads while `.env` points into it -- a
-next delivery under the same name must not overwrite it before
-the upgrade is done.
+to the image tarballs; 2.542.1 is
+`~/HiDrive/users/alexander.martens/SAM_2.542.1_GA` (NO spaces)
+with `Charts/solace-agent-mesh-2.3.10.tar.gz`, `Images/arm64/`
+and `Images/amd64/` (each: app, str, postgres, seaweedfs,
+embedded broker), `CLI/` (see above) and the release notes html.
+For a name with spaces, glob (`~/Downloads/SAM*Download`) or
+quote a tab-completed path (`"$HOME/Downloads/SAM Download"`),
+never type the name freehand, and keep `.env` paths quoted. A
+glob must match exactly one package (preflight refuses several).
+`--new` takes the package directory (section 6 then prints the
+tarballs of the node architecture as `.env` lines) or the chart
+`.tar.gz` directly. The package `.env` points into stays in
+place until the upgrade is done -- a next delivery under the same
+name must not overwrite it.
+
+Unpack the chart to `~/.local/share/sam/charts/<chart>` (current:
+`solace-agent-mesh-2.3.10`; a stable path -- ~/Downloads gets
+cleaned, and HiDrive would upload an unpacked tree) and point
+`SAM_CHART_PATH` there. Keep the DEPLOYED chart unpacked until
+the next upgrade is done: preflight `--old` defaults to it. If it
+is gone, rebuild it from the Helm release secret BEFORE stop.sh
+(its `helm uninstall` deletes the secret); the decoded JSON
+carries the chart's metadata, values, schema, templates and files,
+but NOT its subcharts:
+
+```bash
+kubectl -n sam-solace-lab get secret sh.helm.release.v1.agent-mesh.v<N> -o jsonpath='{.data.release}' | base64 -d | base64 -d | gunzip | jq .chart
+```
 
 This deployment is pure SAM INFRASTRUCTURE (platform, RBAC,
 models, developer-mcp entrypoint, observability). It carries NO
@@ -152,10 +180,12 @@ re-provisioning order.
   (`samDeployment.gwe`, `str`, `s3Init`, `dbInit`,
   `persistence-layer.postgresql`, `persistence-layer.seaweedfs`)
   set `registry: registry.solace.lab` plus repository/tag. The
-  bundled persistence images `postgres:18.0-trixie` and
-  `chrislusf/seaweedfs:3.97-compliant` (the vendor defaults,
-  unchanged since 2.1.164) are loaded from the delivery package
-  by `load-images.sh` (`SAM_POSTGRES_IMAGE_TAR`,
+  bundled persistence images `postgres:18.0-trixie` (unchanged
+  since 2.1.164) and `chrislusf/seaweedfs:4.48-compliant` (the
+  vendor defaults; seaweedfs moved from `3.97-compliant` with
+  2.542.1, pinned in `samDeployment.s3Init` AND
+  `persistence-layer.seaweedfs`) are loaded from the delivery
+  package by `load-images.sh` (`SAM_POSTGRES_IMAGE_TAR`,
   `SAM_SEAWEEDFS_IMAGE_TAR`) like gwe/str. It refuses to run if a
   block's registry is not `registry.solace.lab` or if
   dbInit/s3Init differ from their persistence-layer counterparts
@@ -195,6 +225,37 @@ re-provisioning order.
   2.2.30) -- read it with `/^version:/`, not `$1 == "version:"`
   (start.sh printed the sam-common version, 1.1.1 then 1.1.2,
   until fixed).
+- Chart 2.3.10 (2.542.1 / str 1.80.2): values schema
+  byte-identical to 2.2.30, so our values needed only the image
+  tags (gwe, str, seaweedfs pair). Templates: only `NOTES.txt`
+  changed; the s3-init scripts now tolerate "bucket already
+  exists"; `samDeployment.gwe.preStopSleepSeconds` default
+  10 -> 0 (gwe has no preStop sleep any more).
+  persistence-layer 1.10.0 -> 1.13.0 (optional new keys, none
+  needed; seaweedfs subchart appVersion 4.48), sam-common 1.1.2
+  unchanged. Clean rebuild on 2026-11-10: pods ready in ~1 min,
+  no warnings, all 11 containers / 4 images from
+  `registry.solace.lab`, WebUI 200, `/api/v2/platform/health`
+  healthy, Prometheus 29/29 targets up; metrics
+  `sam_entrypoint_*` (`sam_gateway_tasks_in_flight` keeps its
+  name).
+- 2.542.1 release-note impact (checked 2026-11-10):
+  `sam config apply` now goes through `/api/v2` and REPLACES each
+  resource it manages completely (settings missing from the files
+  are removed; resources not listed stay untouched without
+  `--prune`) -- harmless on a clean rebuild, because every setting
+  is either in the files or applied by scripts to resources
+  outside the packages (`max_tokens` on the seeded aliases,
+  default roles, the insurance watchlist). The CLI still honours
+  `SAM_AUTH_TOKEN` (before `SAM_PLATFORM_TOKEN`); every
+  `/api/v1/platform` route the scripts call still exists. MCP
+  connectors in MANUAL OAuth mode need
+  `/api/v2/platform/connectors/mcp/oauth/callback` -- none of ours
+  is manual (desktop uses discovery, the Keycloak wildcard covers
+  it). Model upstreams after provision: workflow/expert/fast OK;
+  reasoning and coding denied by the LiteLLM proxy for this key,
+  `google gemini` fails with "prepayment credits are depleted"
+  (AI Studio account) -- external, the models step reports WARN.
 - Metrics: `environmentVariables.SAM_OBSERVABILITY_ENABLED: "true"`
   in the values switches on the env-gated `management_server`
   block that every baked config carries since 2.348.22. Do NOT
@@ -375,26 +436,39 @@ reference DB-managed roles, never the YAML `sam_admin`.
 - `scripts/upgrade-preflight.sh` -- Compares a new delivery with
   the deployed one. `--new` takes the delivery package
   directory (the chart is found up to three levels deep: in
-  `Charts/` as in 2.348.22, or bare next to the image tarballs as
-  in 2.493.0), the chart `.tgz` / `.tar.gz` directly, or an
-  unpacked dir; archives are classified by CONTENT, so the image
-  tarballs are not mistaken for charts. `--old` defaults to
-  `SAM_CHART_PATH`. Prints the new image defaults to pin, the
-  package's tarballs as ready-to-paste `.env` lines (app, str,
-  postgres, seaweedfs, CLI; the unused embedded broker image as a
-  comment -- only when `--new` is the package directory), checks
-  every key of `local-k8s-values.yaml` against the new
-  `values.schema.json` (strict schema: a renamed key fails the
-  install), diffs the two schemas, flags chart defaults that
-  changed under an override, runs `helm lint` + `helm
-  template` with the real values (section 7 prints
-  `OFFLINE GAP: <image>` for every rendered image not on
-  `registry.solace.lab`), and (section 8) plans every
-  declarative package (scripts/* and ../sam-*-demo/*) with the
-  CLI provision.sh uses (`--skip-version-check --no-build`,
-  read-only). The CLI validates the files only AFTER reaching the
-  platform with a login -- so run it BEFORE the teardown, logged
-  in, with the new CLI; "NOT VALIDATED" is not a pass.
+  `Charts/` as in 2.348.22 and 2.542.1, or bare next to the image
+  tarballs as in 2.493.0), the chart `.tgz` / `.tar.gz` directly,
+  or an unpacked dir; archives are classified by CONTENT, so the
+  image tarballs are not mistaken for charts. `--old` defaults to
+  `SAM_CHART_PATH` (gone? see the release-secret rebuild above).
+  Prints the new image defaults to pin, the package's tarballs as
+  ready-to-paste `.env` lines (app, str, postgres, seaweedfs,
+  CLI; the unused embedded broker image as a comment -- only when
+  `--new` is the package directory). Section 6 lists only the
+  image tarballs of the NODE architecture (kubectl node arch,
+  fallback `uname -m`; 2.542.1 ships `Images/arm64/` AND
+  `Images/amd64/`) and a CLI tarball only for the host OS/arch;
+  the rest is summarised as `(skipped: N tarballs for another
+  architecture or OS)`. It checks every key of
+  `local-k8s-values.yaml` against the new `values.schema.json`
+  (strict schema: a renamed key fails the install), diffs the two
+  schemas, flags chart defaults that changed under an override,
+  runs `helm lint` + `helm template` with the real values
+  (section 7 prints `OFFLINE GAP: <image>` for every rendered
+  image not on `registry.solace.lab`), and (section 8) plans
+  every declarative package (scripts/* and every ../*-demo/*
+  incl. bsg-trading-desk-demo; generated `*/.rendered/*` copies
+  excluded) with the CLI provision.sh uses
+  (`--skip-version-check --no-build`, read-only). The CLI
+  validates the files only AFTER reaching the platform with a
+  login -- so run it BEFORE the teardown, logged in, with the new
+  CLI; "NOT VALIDATED" is not a pass. A 404, `/api/v2` or
+  `token_refresh_failed` also counts as NOT VALIDATED: a new CLI
+  that plans via `/api/v2` (2.542.1) against an old platform that
+  does not serve it (2.493.0) -- then re-run section 8 AFTER the
+  rebuild (2026-11-10: every package OK after provision,
+  `scripts/desktop` NOT VALIDATED because the desktop app was not
+  running).
 - `scripts/start.sh` -- Sources `.env`, warns if the pinned
   images lost the metrics switch (`check-metrics-gate.sh`),
   installs from `SAM_CHART_PATH`, then runs `provision.sh --login`
@@ -403,7 +477,7 @@ reference DB-managed roles, never the YAML `sam_admin`.
   untouched (`helm upgrade` is a no-op) but still restarts
   CoreDNS (NodeHosts upsert) and, in a terminal, re-runs
   provision.sh (awe restarts only if `max_tokens` changed);
-  verified one-click on 2.493.0.
+  verified one-click on 2.493.0 and 2.542.1.
 - `scripts/provision.sh` -- DB-managed content after an install:
   RBAC -> models -> max_tokens -> developer-mcp (RBAC first as
   the auth smoke test; stops there on failure, later steps
@@ -419,6 +493,23 @@ reference DB-managed roles, never the YAML `sam_admin`.
   (`scripts/lib/.cache/`) and its login cache, and the Keycloak
   client/groups/users.
   `--purge-images` also runs `purge-images.sh`.
+  The broker queue cleanup (SEMP, only queues under the
+  `<ns>/q/` prefix with zero consumers) runs on `broker.vpn` AND
+  on the VPNs in `SAM_EXTRA_CLEANUP_VPNS` (space-separated,
+  default `default`, empty disables; shell environment, not
+  `.env`; a missing VPN or rejected credentials warn): an
+  event_mesh entrypoint reading another VPN (bsg-trading-desk-demo
+  uses VPN `default`) leaves
+  `<ns>/q/eventmesh/<entrypoint id>/<rule>` there (2026-11-10: 20
+  queues removed on `sam`, 2 on `default`; deleting the
+  entrypoint itself removes them too since 2.542.1 -- verified on
+  the bsg uninstall). If SEMP does not
+  answer, the warning names the likely
+  cause -- broker down, or something else holding the port, e.g.
+  a kubectl port-forward on 8080 (the bsg `make port-forward` does
+  exactly that) -- and the override
+  `SAM_SEMP_URL=http://<broker host>:8080` (used:
+  `http://192.168.205.1:8080`).
 - `scripts/lib/common.sh` -- shared helpers (.env loading, sam
   CLI resolution, SAM_AUTH_TOKEN export) sourced by the rbac,
   models and entrypoints scripts and the demo install/uninstall
@@ -496,9 +587,11 @@ reference DB-managed roles, never the YAML `sam_admin`.
   completion status -- re-verified on 2.348.22 (2026-09-21, OAuth
   and tools/call against gw/dev): the result is exactly
   `Workflow "<display name>" completed successfully.`, none of the
-  `output_mapping` fields cross MCP, while an agent tool returns
-  the agent's answer. The tool descriptions steer report requests
-  through the K8s Orchestrator tool instead.
+  `output_mapping` fields cross MCP (2.542.1 release notes claim
+  the output now reaches MCP clients -- not yet verified here),
+  while an agent tool returns the agent's answer. The tool
+  descriptions steer report requests through the K8s Orchestrator
+  tool instead.
 
 ## References
 

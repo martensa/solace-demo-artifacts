@@ -737,15 +737,49 @@ PY
 if [ -d "$NEW_INPUT" ]; then
   PKG_LIST="$WORK_DIR/pkg.txt"
   : > "$PKG_LIST"
+  # Since 2.542.1 the package ships every image twice, in
+  # Images/arm64/ and Images/amd64/, and the CLI as linux tarballs
+  # plus a macOS .pkg. Only the images for the cluster's node
+  # architecture belong in .env (the Rancher Desktop node: arm64),
+  # and a linux CLI tarball is no SAM_CLI_TAR for this Mac.
+  NODE_ARCH=$(kubectl get nodes --request-timeout=5s \
+    -o jsonpath='{.items[0].status.nodeInfo.architecture}' 2>/dev/null \
+    || true)
+  case "$(uname -m)" in arm64|aarch64) HOST_ARCH=arm64 ;; *) HOST_ARCH=amd64 ;; esac
+  ARCH_SOURCE=kubectl
+  [ -n "$NODE_ARCH" ] || { NODE_ARCH="$HOST_ARCH"; ARCH_SOURCE="uname -m"; }
+  case "$(uname -s)" in Darwin) HOST_OS=macos ;; *) HOST_OS=linux ;; esac
   find "$NEW_INPUT" -maxdepth "$SEARCH_DEPTH" -type f \
     \( -name '*.tgz' -o -name '*.tar.gz' \) 2>/dev/null | sort \
     | while IFS= read -r f; do
         if is_chart_archive "$f"; then continue; fi
+        base="$(basename "$f")"
+        # A CLI tarball counts only when it is for this host's OS and
+        # architecture (the vendor names vary: linux-arm64, macos-
+        # universal, windows-x64); image tarballs only for the node's
+        # architecture.
+        case "$base" in
+          *-cli-*)
+            case "$base" in
+              *-cli-"$HOST_OS"-"$HOST_ARCH".*|*-cli-"$HOST_OS"-universal.*) ;;
+              *-cli-darwin-"$HOST_ARCH".*|*-cli-darwin-universal.*)
+                [ "$HOST_OS" = macos ] || { printf '# CLI for another platform: %s\n' "$f" >> "$PKG_LIST"; continue; } ;;
+              *) printf '# CLI for another platform: %s\n' "$f" >> "$PKG_LIST"
+                 continue ;;
+            esac ;;
+          *-amd64.*|*-arm64.*)
+            case "$base" in
+              *-"$NODE_ARCH".*) ;;
+              *) printf '# other architecture (node is %s): %s\n' \
+                   "$NODE_ARCH" "$f" >> "$PKG_LIST"
+                 continue ;;
+            esac ;;
+        esac
         # Quoted: .env is SOURCED by start.sh, and these paths
         # routinely contain spaces (the package directory name).
         # The name-anchored patterns go first, the -app-/-str-/-cli-
         # infixes after them.
-        case "$(basename "$f")" in
+        case "$base" in
           postgres-*)
             printf 'SAM_POSTGRES_IMAGE_TAR="%s"\n' "$f" >> "$PKG_LIST" ;;
           seaweedfs-*)
@@ -767,7 +801,13 @@ if [ -d "$NEW_INPUT" ]; then
   if [ -s "$PKG_LIST" ]; then
     echo ""
     echo "== 6. Delivery package artifacts (for .env)"
-    sed 's/^/  /' "$PKG_LIST"
+    # Variables first, then the skipped files as a trailing note.
+    echo "  (tarballs for node architecture $NODE_ARCH, from $ARCH_SOURCE)"
+    { grep -v '^#' "$PKG_LIST"; grep -E '^# (embedded|unclassified)' "$PKG_LIST"; } \
+      | sed 's/^/  /' || true
+    if grep -qE '^# (other architecture|CLI for another platform)' "$PKG_LIST"; then
+      echo "  (skipped: $(grep -cE '^# (other architecture|CLI for another platform)' "$PKG_LIST") tarballs for another architecture or OS)"
+    fi
     echo ""
     echo "  SAM_CHART_PATH must be an UNPACKED chart directory"
     echo "  (start.sh checks for \$SAM_CHART_PATH/Chart.yaml). If the"
@@ -895,9 +935,11 @@ section7
 # The CLI's resource schema moves with the delivery, and `sam config
 # plan` is the only thing that checks a package against it. It does
 # so only AFTER reaching the platform (feature probes, model list)
-# and with a login -- so this runs before the teardown, against the
-# old platform, and anything that stops earlier is reported as NOT
-# VALIDATED, never as OK. --skip-version-check: at preflight time the
+# and with a login. Run it before the teardown against the old
+# platform when the new CLI still speaks its API; a CLI that moved to
+# /api/v2 (2.542.1) gets 404 from a /api/v1-only platform -- then it
+# can only validate after the rebuild. Anything that stops before
+# reading the files is reported as NOT VALIDATED, never as OK. --skip-version-check: at preflight time the
 # new CLI meets the OLD platform. --no-build: no toolset builds for a
 # read-only check. .env is loaded here in every mode, so the CLI is
 # resolved exactly as provision.sh does (SAM_CLI_PATH wins).
@@ -920,6 +962,7 @@ if resolve_sam_cli 2>/dev/null; then
   fi
   PKG_FAIL=0
   PKG_UNVALIDATED=0
+  PKG_API_MISMATCH=0
   REPO_ROOT="$(cd "$PROJECT_DIR/.." && pwd)"
   while IFS= read -r manifest; do
     dir="$(dirname "$manifest")"
@@ -929,24 +972,40 @@ if resolve_sam_cli 2>/dev/null; then
     out=$(cd "$dir" && "$SAM_CLI" config plan --no-interactive \
             --skip-version-check --no-build 2>&1 | grep -v 'level=') || true
     err=$(printf '%s\n' "$out" | grep -m1 '^sam: ' | sed 's/^sam: //' || true)
+    # The error names the file -- `<kind> "<name>" (<abs path>): ...` --
+    # and the path would eat the 70-character reason.
+    reason=$(printf '%s' "$err" | sed -E 's/ \([^)]*\.ya?ml\)//' | cut -c1-70)
     if [ -z "$err" ]; then
       verdict="OK"
     else
+      # Order matters, and the patterns are anchored to the CLI's
+      # phrasing: the message also carries key names and paths, and a
+      # bare "timeout" or "404" would turn a schema error on a key
+      # like timeoutSeconds into NOT VALIDATED.
       case "$err" in
         *"not found on platform"*)
           # Files parsed; a referenced resource comes from another
           # package (a demo's mesh/ needs its core/ first).
           verdict="OK (references another package's resources)" ;;
-        *"connection refused"*|*"no such host"*|*"dial tcp"*|*"timeout"*|*"Timeout"*|*"auth login"*|*"OAuth"*|*"401"*|*"403"*)
-          verdict="NOT VALIDATED ($(printf '%s' "$err" | cut -c1-70))"
+        *'unknown spec key '*|*'unknown key '*|*'(allowed: '*)
+          verdict="FAIL  $err"; PKG_FAIL=1 ;;
+        *"/api/v2/"*" 404"*|*"/api/v2/"*"404 Not Found"*)
+          # A NEW CLI (2.542.1+ plans and applies via /api/v2) against
+          # a platform that still serves only /api/v1: the files were
+          # never read. Validate after the rebuild.
+          verdict="NOT VALIDATED (new CLI /api/v2 vs old platform)"
+          PKG_UNVALIDATED=1; PKG_API_MISMATCH=1 ;;
+        *"connection refused"*|*"no such host"*|*"dial tcp"*|*"i/o timeout"*|*"Client.Timeout"*|*"context deadline exceeded"*|*"auth login"*|*"OAuth"*|*"oauth refresh"*|*"token_refresh_failed"*|*" 401"*|*" 403"*|*"Unauthorized"*|*"Forbidden"*)
+          verdict="NOT VALIDATED ($reason)"
           PKG_UNVALIDATED=1 ;;
         *)
           verdict="FAIL  $err"; PKG_FAIL=1 ;;
       esac
     fi
     printf '  %-42s %s\n' "$rel" "$verdict"
-  done < <(find "$PROJECT_DIR/scripts" "$REPO_ROOT"/sam-*-demo -maxdepth 3 \
-             -name manifest.yaml -not -path '*/node_modules/*' 2>/dev/null | sort)
+  done < <(find "$PROJECT_DIR/scripts" "$REPO_ROOT"/*-demo -maxdepth 3 \
+             -name manifest.yaml -not -path '*/node_modules/*' \
+             -not -path '*/.rendered/*' 2>/dev/null | sort)
   if [ "$PKG_FAIL" -eq 1 ]; then
     echo ""
     echo "  A FAIL is a file the new CLI rejects. Look up the current"
@@ -957,9 +1016,18 @@ if resolve_sam_cli 2>/dev/null; then
   if [ "$PKG_UNVALIDATED" -eq 1 ]; then
     echo ""
     echo "  NOT VALIDATED means the CLI stopped before reading the files"
-    echo "  (platform unreachable or no login) -- that is not a pass."
-    echo "  Run this section while the old platform is still up, after:"
-    echo "    $SAM_CLI auth login solace-lab --url https://sam.solace.lab"
+    echo "  -- that is not a pass."
+    if [ "$PKG_API_MISMATCH" -eq 1 ]; then
+      echo "  New CLI (/api/v2) vs old platform (/api/v1 only): the old"
+      echo "  platform cannot validate these files at all. Re-run this"
+      echo "  section AFTER the rebuild and provision.sh (README"
+      echo "  'Upgrade', step 6)."
+    else
+      echo "  Platform unreachable or no login: log in and re-run --"
+      echo "  before the teardown when the CLI and the platform speak"
+      echo "  the same API, otherwise after the rebuild:"
+      echo "    $SAM_CLI auth login solace-lab --url https://sam.solace.lab"
+    fi
     echo "  (scripts/desktop targets the SAM desktop app on"
     echo "  localhost:8800 and is only validated while that app runs.)"
   fi

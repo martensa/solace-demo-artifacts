@@ -36,13 +36,26 @@ Docker Hub. `.env` points at the local copies:
 - `SAM_SEAWEEDFS_IMAGE_TAR` -- seaweedfs image tarball (bundled
   SeaweedFS and the s3-init containers)
 - `SAM_CLI_PATH` or `SAM_CLI_TAR` -- the sam CLI (an installed
-  binary, or the CLI tarball when the package ships one;
-  2.348.22 and 2.493.0 do not)
+  binary, or the CLI tarball when the package ships one for this
+  OS; 2.348.22 and 2.493.0 ship none, 2.542.1 only linux
+  tarballs, a windows zip and a macOS `.pkg`)
 
 The package also carries the embedded broker image
 (`solace-pubsub-enterprise-...`). It is not used
 (`global.broker.embedded: false`, SAM connects to the event-mesh
 broker) and not loaded.
+
+Deployed since 2026-11-10: chart 2.3.10, app 2.542.1, str 1.80.2
+(before: 2.2.30 / 2.493.0 / 1.76.4). The 2.542.1 package is a
+directory without spaces,
+`~/HiDrive/users/alexander.martens/SAM_2.542.1_GA`, with
+`Charts/solace-agent-mesh-2.3.10.tar.gz`, `Images/arm64/` and
+`Images/amd64/` (each: app, str, postgres, seaweedfs, embedded
+broker), `CLI/` and the release notes. `.env` takes the four
+`Images/arm64/` tarballs (the Rancher Desktop node is arm64) and
+the chart unpacked to
+`~/.local/share/sam/charts/solace-agent-mesh-2.3.10` (see
+"Upgrade", step 3).
 
 ### Cluster Infrastructure (from `solace-lab-infrastructure`)
 
@@ -100,8 +113,12 @@ requires cluster-internal hostname resolution.
 
 The CLI is a single static binary. Some delivery packages ship it
 as `solace-agent-mesh-<version>-cli-<os>-<arch>.tar.gz`; others do
-not (neither 2.348.22 nor 2.493.0 does) -- then get the matching
-CLI separately. Install it for interactive use
+not (neither 2.348.22 nor 2.493.0 does), and 2.542.1 ships linux
+amd64/arm64 tarballs, a windows zip and a macOS universal `.pkg`
+in `CLI/`, but no darwin tarball, so `SAM_CLI_TAR` is no option
+on a Mac. Then install the matching CLI separately and point
+`SAM_CLI_PATH` at it (the lab runs CLI 2.542.1 at
+`~/.local/bin/sam`). Install it for interactive use
 (`sam auth login`, `sam config`, `sam api`) and for the scripts:
 
 ```bash
@@ -154,8 +171,9 @@ distribution. `global.persistence.namespaceId` (kept at
 
 Bundled persistence (PostgreSQL + SeaweedFS from the
 `persistence-layer` subchart) provides the datastores. Their
-images (`postgres:18.0-trixie`, `chrislusf/seaweedfs:3.97-compliant`,
-the chart defaults) ship in the delivery package and are mirrored
+images (`postgres:18.0-trixie`, `chrislusf/seaweedfs:4.48-compliant`,
+the chart defaults; seaweedfs moved from `3.97-compliant` with
+2.542.1) ship in the delivery package and are mirrored
 into the private registry like the SAM images, so every pod pulls
 from `registry.solace.lab`.
 
@@ -382,7 +400,8 @@ is installed: `uninstall.sh` needs the running platform, and
 `stop.sh` leaves the demo's host data stores and the insurance
 external agent (namespace `sam-solace-lab-agents`) in place. It
 uninstalls the Helm release, deletes
-the PVCs and the namespace, drops the SAM queues on the broker VPN,
+the PVCs and the namespace, drops the SAM queues on the broker VPN
+(and on `SAM_EXTRA_CLEANUP_VPNS`, see "Upgrade", step 2),
 removes the observability objects in `monitoring`, removes
 `sam.solace.lab` from CoreDNS NodeHosts, the Keycloak users,
 groups and OIDC client, and the local `sam` CLI caches.
@@ -504,33 +523,45 @@ Before starting, have the new delivery package unpacked and the
 CLI"; `SAM_CLI_PATH` in `.env` wins over the PATH, so point it at
 the new binary or remove it). The CLI goes first because
 preflight section 8 validates the declarative packages with it.
+A new CLI that plans and applies via `/api/v2` (such as 2.542.1)
+cannot validate against an old platform that serves only
+`/api/v1` (2.493.0): section 8 then reports `NOT VALIDATED` before
+the teardown and has to be re-run after the rebuild (step 6).
 
 ### 1. Review the new delivery (no cluster changes)
 
 ```bash
-./scripts/upgrade-preflight.sh --new "$HOME/Downloads/SAM Download"
+./scripts/upgrade-preflight.sh \
+  --new ~/HiDrive/users/alexander.martens/SAM_2.542.1_GA
 ```
 
 `--new` takes the delivery package directory -- the chart is found
 three levels deep at most, in a subfolder such as `Charts/`
-(2.348.22) or as a bare `solace-agent-mesh-<chart>.tar.gz` next to
-the image tarballs (2.493.0) -- or the packaged chart (`.tgz` /
-`.tar.gz`) directly, or an unpacked chart directory. Archives are
-classified by content, so the image tarballs are not mistaken for
-charts. Section 6 (the `.env` lines) appears only when `--new` is
-the package directory. `--old` defaults to `SAM_CHART_PATH` from
-`.env`, i.e. the chart currently deployed.
+(2.348.22, 2.542.1) or as a bare `solace-agent-mesh-<chart>.tar.gz`
+next to the image tarballs (2.493.0) -- or the packaged chart
+(`.tgz` / `.tar.gz`) directly, or an unpacked chart directory.
+Archives are classified by content, so the image tarballs are not
+mistaken for charts. Section 6 (the `.env` lines) appears only
+when `--new` is the package directory. `--old` defaults to
+`SAM_CHART_PATH` from `.env`, i.e. the chart currently deployed --
+keep that unpacked chart until the upgrade is done. If it is gone,
+rebuild it from the Helm release secret before step 2 (see
+"Rebuilding the deployed chart" below).
 
-Delivery package directories are routinely named with spaces, and
-the naming and layout change between deliveries: 2.348.22 came as
+The naming and layout of the delivery package change between
+deliveries: 2.348.22 came as
 `SAM Enterprise Update 2.348.22` plus an invisible trailing space,
 with `Charts/` and `Images/` subfolders; 2.493.0 came as
-`SAM Download` (one space, no version in the name) with everything
-at the top level. A name may also carry a non-breaking space that
-no terminal shows. Quote the path, or use a glob or tab completion,
+`~/Downloads/SAM Download` (one space, no version in the name)
+with everything at the top level; 2.542.1 came as
+`SAM_2.542.1_GA` on HiDrive (no spaces) with
+`Charts/solace-agent-mesh-2.3.10.tar.gz`, the images twice
+(`Images/arm64/` and `Images/amd64/`) and the CLI builds in
+`CLI/`. A name may also carry a non-breaking space that no
+terminal shows. Quote the path, or use a glob or tab completion,
 rather than typing the name; a glob must match exactly one package
-(the previous one stays in `~/Downloads` while `.env` points into
-it, so do not let a new delivery overwrite it). When the given
+(the previous one stays in place while `.env` points into it, so
+do not let a new delivery overwrite it). When the given
 path does not exist but exactly one entry beside it matches once
 whitespace and punctuation are ignored, that entry is used and the
 substitution is reported; with two candidates it refuses and lists
@@ -556,15 +587,23 @@ The report answers the questions an upgrade raises:
   `SAM_POSTGRES_IMAGE_TAR` / `SAM_SEAWEEDFS_IMAGE_TAR` /
   `SAM_CLI_TAR` assignments, shows the unused embedded broker
   image as a comment, and names any of the four images the
-  package lacks.
+  package lacks. Only the image tarballs of the cluster node's
+  architecture are listed (from `kubectl`, falling back to
+  `uname -m`), and a CLI tarball only when it matches this host's
+  OS and architecture; the rest is summed up as
+  `(skipped: N tarballs for another architecture or OS)`. For
+  2.542.1 on this Mac that means the four `Images/arm64/` tarballs
+  and no `SAM_CLI_TAR` (the package has linux CLI tarballs only).
 - Does the deployment stay offline? Section 7 lists the images
   the chart would pull and prints `OFFLINE GAP: <image>` for
   every one that is not on `registry.solace.lab` -- an image the
   new chart added, or a pin that lost its registry.
 - Do the declarative packages still parse? Section 8 runs
   `sam config plan` (read-only) over every package -- `scripts/`
-  rbac, models, entrypoints, desktop, and the demo packages next
-  to this directory -- with the CLI `provision.sh` would use
+  rbac, models, entrypoints, desktop, and the packages of every
+  `../*-demo` directory next to this one, `bsg-trading-desk-demo`
+  included (generated `.rendered/` copies are skipped) -- with
+  the CLI `provision.sh` would use
   (`SAM_CLI_PATH` from `.env`, else the PATH). The CLI schema
   moves with the delivery (2.348.22 dropped `claimKey` from
   `rbacClaimMapping` and turned `roleName` into `roleNames`), and
@@ -572,7 +611,11 @@ The report answers the questions an upgrade raises:
   has reached the platform with a login, so run the preflight
   while the old platform is still up and after
   `sam auth login solace-lab --url https://sam.solace.lab`;
-  `NOT VALIDATED` (unreachable, no login) is not a pass.
+  `NOT VALIDATED` (unreachable, no login) is not a pass. A 404,
+  an `/api/v2` error or `token_refresh_failed` is reported as
+  `NOT VALIDATED` too: that is a new CLI talking `/api/v2` to an
+  old platform, not a broken file. Then validate section 8 after
+  the rebuild (step 6).
   "references another package's resources" is fine: a demo's
   `mesh/` needs its `core/` first. `scripts/desktop` targets the
   SAM desktop app and is only validated while that app runs.
@@ -580,6 +623,48 @@ The report answers the questions an upgrade raises:
 Fix `local-k8s-values.yaml` until sections 3 and 7 are clean (no
 `OFFLINE GAP` either), and every section 8 `FAIL` before tearing
 anything down.
+
+#### Rebuilding the deployed chart (fallback for `--old`)
+
+The unpacked chart of the deployed version belongs in
+`~/.local/share/sam/charts/` until the next upgrade is done. If it
+was cleaned away, rebuild it from the Helm release secret -- while
+the release still exists, because the `helm uninstall` in step 2
+deletes that secret. The secret holds the chart's metadata,
+values, schema, templates and files, but NOT its subcharts:
+
+```bash
+NS=sam-solace-lab
+N=$(helm status agent-mesh -n "$NS" -o json | jq .version)  # deployed rev
+kubectl -n "$NS" get secret "sh.helm.release.v1.agent-mesh.v$N" \
+  -o jsonpath='{.data.release}' | base64 -d | base64 -d | gunzip \
+  | jq .chart > /tmp/sam-old-chart.json
+python3 - /tmp/sam-old-chart.json <<'PY'
+import base64, json, os, sys, yaml
+c = json.load(open(sys.argv[1]))
+m = c["metadata"]
+out = os.path.expanduser(
+    "~/.local/share/sam/charts/%s-%s" % (m["name"], m["version"]))
+os.makedirs(out)  # refuses an existing directory
+def put(name, data):
+    path = os.path.join(out, name)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(data)
+put("Chart.yaml", yaml.safe_dump(m, sort_keys=False).encode())
+put("values.yaml", yaml.safe_dump(c["values"], sort_keys=False).encode())
+if c.get("schema"):
+    put("values.schema.json", base64.b64decode(c["schema"]))
+for f in c["templates"] + (c.get("files") or []):
+    put(f["name"], base64.b64decode(f["data"]))
+print(out)
+PY
+```
+
+Pass the printed directory as `--old` (the 2.493.0 -> 2.542.1
+preflight ran against a chart rebuilt from the release secret).
+`jq .chart` keeps only the chart: the rest of the release record
+also holds the `--set` secrets.
 
 ### 2. Tear the old deployment down
 
@@ -596,19 +681,47 @@ on the broker VPN. Uninstall any demo first (see step 8 of the
 install walkthrough): nothing of the old version is left in the
 cluster then.
 
+The queue cleanup goes through SEMP on `solace-1`
+(`http://127.0.0.1:8080` by default) and covers the SAM VPN plus
+the VPNs in `SAM_EXTRA_CLEANUP_VPNS` (space-separated, default
+`default`, empty disables; read from the shell environment, not
+from `.env`), because
+an event-mesh entrypoint that reads another VPN
+(`bsg-trading-desk-demo` uses `default`) leaves its
+`<ns>/q/eventmesh/<entrypoint id>/<rule>` queues there. On every
+VPN only queues under the `<ns>/q/` prefix with zero consumers are
+deleted (2.542.1 rebuild: 20 on `sam`, 2 on `default`); a VPN
+that does not exist or rejected SEMP credentials get their own
+warning. Since 2.542.1 deleting an event-mesh entrypoint also
+removes its queues, so this is the safety net for a platform DB
+dropped with entrypoints still in it. If SEMP does not answer at
+all, the warning names the likely causes: the broker
+is down, or something else holds the port -- typically a
+`kubectl port-forward` on 8080, which the bsg demo's
+`make port-forward` starts. Stop it, or point the script at the
+broker host directly:
+
+```bash
+SAM_SEMP_URL=http://192.168.205.1:8080 ./scripts/stop.sh
+```
+
 ### 3. Repoint and re-pin
 
 - `.env`: `SAM_CHART_PATH`, `SAM_APP_IMAGE_TAR`,
   `SAM_STR_IMAGE_TAR`, `SAM_POSTGRES_IMAGE_TAR`,
   `SAM_SEAWEEDFS_IMAGE_TAR` (and `SAM_CLI_TAR` if the package
-  ships a CLI) to the new package -- preflight section 6 prints the
+  ships a CLI tarball for this host; 2.542.1 has none for macOS)
+  to the new package -- preflight section 6 prints the
   tarball paths as ready-to-paste, already quoted assignments.
   `.env` is sourced, so a path containing a space MUST stay
   quoted or the variable ends up empty. Remove a `SAM_CLI_TAR`
   that still names the OLD tarball. `SAM_CHART_PATH` must be an
   UNPACKED chart directory (`start.sh` checks for `Chart.yaml` in
-  it), so unpack the packaged chart once, ideally to a path
-  without spaces (command below).
+  it), so unpack the packaged chart once, to
+  `~/.local/share/sam/charts/` (command below): a stable path
+  without spaces, not in `~/Downloads` (which gets cleaned) and
+  not in the HiDrive package (which would upload the unpacked
+  tree).
 - `local-k8s-values.yaml`: `samDeployment.gwe.image.tag` and
   `samDeployment.str.image.tag` to the versions from preflight
   section 2, plus any values change preflight asked for. If the
@@ -619,17 +732,22 @@ cluster then.
   `scripts/purge-images.sh` read their tags from this file, so
   there is nothing else to keep in sync.
 
-The 2.493.0 package keeps the chart as a bare `.tar.gz` at its top
-level (2.348.22 had it in `Charts/`). The package path contains a
-space, so it stays quoted:
+The 2.542.1 package keeps the chart in `Charts/` (as 2.348.22
+did; 2.493.0 had it as a bare `.tar.gz` at its top level). Keep
+`PKG` quoted -- other deliveries came with spaces in the name:
 
 ```bash
-V=2.2.30   # chart version, preflight section 1
-PKG="$HOME/Downloads/SAM Download"
-mkdir -p ~/Downloads/solace-agent-mesh-$V
-tar -xzf "$PKG/solace-agent-mesh-$V.tar.gz" \
-  -C ~/Downloads/solace-agent-mesh-$V --strip-components=1
+V=2.3.10   # chart version, preflight section 1
+PKG="$HOME/HiDrive/users/alexander.martens/SAM_2.542.1_GA"
+mkdir -p ~/.local/share/sam/charts/solace-agent-mesh-$V
+tar -xzf "$PKG/Charts/solace-agent-mesh-$V.tar.gz" \
+  -C ~/.local/share/sam/charts/solace-agent-mesh-$V \
+  --strip-components=1
 ```
+
+For 2.542.1 the only values change was the image tags: gwe
+`2.542.1`, str `1.80.2` and the seaweedfs pair `4.48-compliant`
+(the values schema of chart 2.3.10 is byte-identical to 2.2.30).
 
 The Keycloak client was deleted in step 2; re-create it (the
 script writes the new secret into `.env`) and the demo users:
@@ -671,7 +789,15 @@ demo installs are yours to run afterwards.
 
 Verify first: all pods `Running`, the WebUI on
 `https://sam.solace.lab`, `provision.sh` all `OK`, the three SAM
-targets `up` in Prometheus. The old gwe/str images stay in
+targets `up` in Prometheus. If section 8 of the preflight was
+`NOT VALIDATED` because the new CLI speaks `/api/v2`, re-run
+`./scripts/upgrade-preflight.sh --new <package>` now, logged in
+against the new platform: section 8 must show every package `OK`
+(`scripts/desktop` only validates while the SAM desktop app runs).
+On 2026-11-10 (2.542.1) all packages were `OK` after provision,
+models `WARN` only for external upstreams (`reasoning`/`coding`
+denied by the LiteLLM proxy for this key, `google gemini` out of
+AI Studio prepayment credits). The old gwe/str images stay in
 `registry.solace.lab` (and possibly the local Docker daemon),
 outside the deleted namespace -- they are the way back until the
 new version is proven. Then:
@@ -789,7 +915,7 @@ defined in `local-k8s-values.yaml`. Key sections:
   the chart's default `NO_PROXY`)
 - **persistence-layer** -- the postgresql and seaweedfs images
   from `registry.solace.lab` (`postgres:18.0-trixie`,
-  `chrislusf/seaweedfs:3.97-compliant`, the chart defaults loaded
+  `chrislusf/seaweedfs:4.48-compliant`, the chart defaults loaded
   from the delivery package), `pullPolicy: IfNotPresent`; each
   must name the same repository:tag as its `dbInit` / `s3Init`
   counterpart

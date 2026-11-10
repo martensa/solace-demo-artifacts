@@ -24,8 +24,10 @@ while [ $# -gt 0 ]; do
 Usage: ./stop.sh [--purge-images]
 
 Full teardown of the Solace Agent Mesh deployment: Helm release,
-namespace, the SAM queues on the broker VPN (<namespaceId>/q/*,
-unless still consumed), the observability artifacts in the
+namespace, the SAM queues on the broker VPN and on the VPNs in
+SAM_EXTRA_CLEANUP_VPNS (<namespaceId>/q/*, unless still consumed;
+space-separated, default "default", empty disables; read from the
+environment, not .env), the observability artifacts in the
 monitoring namespace, local caches, the CoreDNS NodeHosts entry
 and the Keycloak client/users.
 
@@ -148,26 +150,42 @@ fi
 # reported. SEMP defaults are the event-mesh-deployment lab broker
 # (solace-1, admin/admin); override via SAM_SEMP_URL /
 # SAM_SEMP_USER / SAM_SEMP_PASSWORD.
-cleanup_broker_queues() {
+#
+# Besides broker.vpn, the VPNs in SAM_EXTRA_CLEANUP_VPNS (default
+# "default") are cleaned the same way: an event_mesh entrypoint
+# that reads another VPN (bsg-trading-desk-demo uses VPN default)
+# leaves <ns>/q/eventmesh/<entrypoint id>/<rule> there, and with the
+# platform DB gone nothing consumes it again. Only queues under the
+# <ns>/q/ prefix with zero consumers are deleted, on every VPN.
+cleanup_broker_queues() { # cleanup_broker_queues <vpn> <namespaceId>
+  local vpn="$1" ns="$2"
   local semp="${SAM_SEMP_URL:-http://127.0.0.1:8080}"
   local auth="${SAM_SEMP_USER:-admin}:${SAM_SEMP_PASSWORD:-admin}"
-  local vpn ns
-  read -r vpn ns < <(python3 -c "
-import yaml
-v = yaml.safe_load(open('$SCRIPT_DIR/../local-k8s-values.yaml'))
-print(v['broker']['vpn'], v['global']['persistence']['namespaceId'])
-" 2>/dev/null) || true
-  if [ -z "${vpn:-}" ] || [ -z "${ns:-}" ]; then
-    echo "WARNING: could not read broker.vpn / namespaceId from the"
-    echo "  values file -- broker queues not cleaned up."
-    return 0
-  fi
+  # A missing VPN answers 200 with an empty list on the queue
+  # collection, so check the VPN itself first (400 = no such VPN).
+  local code
+  code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' -u "$auth" \
+    "$semp/SEMP/v2/monitor/msgVpns/$vpn?select=msgVpnName" 2>/dev/null || true)
+  case "$code" in
+    200) ;;
+    400|404)
+      echo "WARNING: VPN '$vpn' not found on $semp -- skipped (check"
+      echo "  broker.vpn / SAM_EXTRA_CLEANUP_VPNS, space-separated)."
+      return 0 ;;
+    401|403)
+      echo "WARNING: SEMP at $semp rejected the credentials (HTTP $code)"
+      echo "  -- SAM queues on VPN '$vpn' not cleaned up (set"
+      echo "  SAM_SEMP_USER / SAM_SEMP_PASSWORD)."
+      return 0 ;;
+  esac
   local list
   if ! list=$(curl -sf -m 10 -u "$auth" \
       "$semp/SEMP/v2/monitor/msgVpns/$vpn/queues?count=1000&select=queueName" \
       2>/dev/null); then
-    echo "WARNING: SEMP at $semp not reachable -- SAM queues on VPN"
-    echo "  '$vpn' not cleaned up (re-run stop.sh once the broker is up)."
+    echo "WARNING: SEMP at $semp did not answer (HTTP ${code:-000}) -- SAM"
+    echo "  queues on VPN '$vpn' not cleaned up. Broker down, or something else holds"
+    echo "  the port (e.g. a kubectl port-forward on 8080): re-run with"
+    echo "  SAM_SEMP_URL=http://<broker host>:8080 ./scripts/stop.sh"
     return 0
   fi
   local q enc consumers removed=0 kept=0
@@ -194,7 +212,19 @@ print(v['broker']['vpn'], v['global']['persistence']['namespaceId'])
   echo "Broker queues under $ns/q/ on VPN '$vpn': $removed removed, $kept kept."
 }
 echo "Removing the SAM queues from the broker ..."
-cleanup_broker_queues
+read -r SAM_VPN SAM_NS < <(python3 -c "
+import yaml
+v = yaml.safe_load(open('$SCRIPT_DIR/../local-k8s-values.yaml'))
+print(v['broker']['vpn'], v['global']['persistence']['namespaceId'])
+" 2>/dev/null) || true
+if [ -z "${SAM_VPN:-}" ] || [ -z "${SAM_NS:-}" ]; then
+  echo "WARNING: could not read broker.vpn / namespaceId from the"
+  echo "  values file -- broker queues not cleaned up."
+else
+  for cleanup_vpn in "$SAM_VPN" ${SAM_EXTRA_CLEANUP_VPNS-default}; do
+    cleanup_broker_queues "$cleanup_vpn" "$SAM_NS"
+  done
+fi
 
 # --- Observability artifacts outside the namespace ----------------
 # start.sh applies manifests/observability/ recursively; two of those

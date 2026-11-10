@@ -1,5 +1,5 @@
 # Helm values for Solace Agent Mesh v2 (chart solace-agent-mesh
-# 2.2.30, appVersion 2.493.0, str 1.76.4) on the local solace-lab cluster
+# 2.3.10, appVersion 2.542.1, str 1.80.2) on the local solace-lab cluster
 # (Rancher Desktop / k3s).
 #
 # v2 architecture: three Go components replace the v1 core pod --
@@ -164,7 +164,7 @@ samDeployment:
     image:
       registry: "registry.solace.lab"
       repository: "solace-agent-mesh"
-      tag: "2.493.0"
+      tag: "2.542.1"
       pullPolicy: IfNotPresent
   # str has its own image (Go+Python tool venvs). Never blank its
   # repository -- it would silently inherit the gwe image and break
@@ -173,7 +173,7 @@ samDeployment:
     image:
       registry: "registry.solace.lab"
       repository: "solace-agent-mesh-str"
-      tag: "1.76.4"
+      tag: "1.80.2"
       pullPolicy: IfNotPresent
   # Init containers of the bundled persistence (gwe/awe/str
   # s3-init, gwe/awe db-init). Loaded from the delivery package
@@ -185,7 +185,7 @@ samDeployment:
     image:
       registry: "registry.solace.lab"
       repository: "chrislusf/seaweedfs"
-      tag: "3.97-compliant"
+      tag: "4.48-compliant"
       pullPolicy: IfNotPresent
   dbInit:
     image:
@@ -232,5 +232,5 @@ persistence-layer:
     image:
       registry: "registry.solace.lab"
       repository: "chrislusf/seaweedfs"
-      tag: "3.97-compliant"
+      tag: "4.48-compliant"
       pullPolicy: IfNotPresent
