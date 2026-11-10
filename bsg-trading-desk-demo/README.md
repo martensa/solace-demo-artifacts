@@ -10,6 +10,11 @@ script: [RUNBOOK.md](RUNBOOK.md).
 
 ## Status
 
+Currently NOT installed in the lab: removed with
+`./scripts/uninstall.sh` on 2026-11-10, after the re-check on SAM
+2.542.1 below. `make demo-up` brings it back (k8s part, then the
+mesh), `make demo-reset` sets the starting state.
+
 Work in progress. Built so far, without access to the lab cluster:
 
 - `app/` -- feed publisher, deterministic watcher, MCP tools server
@@ -19,23 +24,25 @@ Work in progress. Built so far, without access to the lab cluster:
   them running in the cluster. A watch from the tool call, exactly
   one alert 10.3 s after the scenario start, enrichment with three
   data sets, desk note, issuer status, reset.
-- `k8s/` -- APPLIED. Namespace `bsg-demo` runs `feed-publisher`,
-  `feed-watcher`, `bsg-tools` and `demo-ui`; the quotes of all three
-  issuers flow through `solace-1`, the Ingress serves
-  `bsg-desk.solace.lab` over TLS from the lab CA, and the `awe` pod
-  reaches the MCP server at `bsg-tools.bsg-demo.svc:8765` (checked
-  with a real `initialize` call).
-- `mesh/` -- APPLIED and RUN. Connector, four agents, the
-  `bsg-alert-triage` workflow and the `bsg-desk-events` entrypoint are
-  on the platform, and both branches of the switch were verified on
-  the cluster (numbers under "Measured").
-- `observability/` -- APPLIED. The Grafana dashboard
-  `sam-bsg-trading-desk` reads the `tasks` table through the
-  `sam-platform-db` datasource.
+- `k8s/` -- applied until 2026-11-10. Namespace `bsg-demo` ran `feed-publisher`,
+  `feed-watcher`, `bsg-tools` and `demo-ui`; the quotes of all three issuers
+  flow through `solace-1`, the Ingress serves `bsg-desk.solace.lab` over TLS
+  from the lab CA, and the `awe` pod reaches the MCP server at
+  `bsg-tools.bsg-demo.svc:8765` (checked with a real `initialize` call). It
+  survived the SAM 2.542.1 rebuild of 2026-11-10 untouched.
+- `mesh/` -- applied and run until 2026-11-10. Connector, four agents, the
+  `bsg-alert-triage` workflow and the `bsg-desk-events` entrypoint were on the
+  platform, and both branches of the switch were verified on the cluster
+  (numbers under "Measured"). After the 2.542.1 rebuild `./scripts/install.sh
+  mesh` re-created all of them and the dashboard.
+- `observability/` -- applied until 2026-11-10. The Grafana dashboard
+  `sam-bsg-trading-desk` reads the `tasks` table through the `sam-platform-db`
+  datasource.
 
 ## Measured on the cluster (2026-11-04)
 
-One full run, from the UI's step 1 to the desk note on the mesh:
+One full run on SAM 2.493.0, from the UI's step 1 to the desk note
+on the mesh:
 
 - Desk request to watch: the assistant answers in 7.4 s and the watch
   carries the right filter and condition.
@@ -53,6 +60,11 @@ One full run, from the UI's step 1 to the desk note on the mesh:
   erhoehte Spannen ... DAX in letzten 60 s um 3,42 % gefallen,
   High-Impact-News aktiv" -> Marktlage beobachten, keine
   Emittentenmassnahme.
+
+Re-checked on SAM 2.542.1 on 2026-11-10, API-driven through the
+endpoints behind the UI buttons: reply 6.8 s, alert 10.4 s, note
+23.1 s after the alert issuer specific; reply 7.4 s, alert 10.5 s,
+note 18.9 s market wide; both notes correct.
 
 ## Architecture
 
@@ -105,7 +117,9 @@ Topic layout (prefix `bsg/`):
 
 ## Environment (measured in Gate 0 on 2026-11-04)
 
-- SAM v2 Enterprise, Go edition, 2.493.0 (chart 2.2.30), release
+- SAM v2 Enterprise, Go edition, 2.493.0 (chart 2.2.30) at Gate 0;
+  since 2026-11-10 the lab runs 2.542.1 (chart 2.3.10, str 1.80.2),
+  where `ENTRYPOINT_WORKFLOW_TARGET=name` still works. Release
   `agent-mesh` in `sam-solace-lab`. Resources are applied
   declaratively with `sam config apply` (no `sam run` in v2).
 - Broker `solace-1` runs in Docker Compose on the host

@@ -1042,8 +1042,8 @@ model aliases, the Registered agents value.
 
 ### Platform and build (2.348.22)
 
-Verified on SAM 2.348.22 (str 1.64.0, chart 2.1.164); the lab runs 2.493.0
-since 2026-11-03 (packages validate, no live run there yet). Most of this list
+Verified on SAM 2.348.22 (str 1.64.0, chart 2.1.164); the lab runs 2.542.1
+since 2026-11-10 (packages validate, no live run there yet). Most of this list
 was found on 2.225.14; every platform-behaviour item says whether it was
 re-verified on 2.348.22.
 

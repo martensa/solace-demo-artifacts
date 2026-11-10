@@ -24,7 +24,7 @@ READ-ALOUD quotes from the real reports, Builder green-path
 prompt, failure signatures with stage responses).
 
 Platform: verified on SAM Enterprise 2.348.22 (str 1.64.0, chart
-2.1.164); the lab runs 2.493.0 since 2026-11-03 (packages validate,
+2.1.164); the lab runs 2.542.1 since 2026-11-10 (packages validate,
 no live run there yet). Re-verified on 2.348.22
 (2026-09-21): clean install/uninstall cycles, the
 released-order -> clerk event path (5.1 s), one eol-failed ->

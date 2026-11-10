@@ -1,7 +1,11 @@
 # Runbook: BSG Trading Desk Assistant
 
 Cheat sheet for the show. Every number below was measured on the lab
-cluster on 2026-11-04, driving the four steps through the UI itself.
+cluster on 2026-11-04 (SAM 2.493.0), driving the four steps through
+the UI itself. The lab runs SAM 2.542.1 since 2026-11-10; an
+API-driven re-check there (same endpoints as the UI buttons) gave
+reply 6.8 s, alert 10.4 s, note 23.1 s after the alert issuer
+specific and 7.4 s / 10.5 s / 18.9 s market wide.
 
 ## Before the audience arrives
 

@@ -8,9 +8,9 @@ known limits and Q&A prep.
 
 Verified on SAM Enterprise 2.348.22 (str 1.64.0, chart
 2.1.164): install, uninstall, the shop paths and the eval gate
-were re-verified on 2026-09-21. The local lab runs 2.493.0 (str
-1.76.4, chart 2.2.30) since 2026-11-03; there the declarative
-packages validate with CLI 2.493.0, a live run is still open.
+were re-verified on 2026-09-21. The local lab runs 2.542.1 (str
+1.80.2, chart 2.3.10) since 2026-11-10; there the declarative
+packages validate with CLI 2.542.1, a live run is still open.
 Observations from the first rehearsals on 2.225.14 that were not
 re-tested carry a version label in the talk track.
 
