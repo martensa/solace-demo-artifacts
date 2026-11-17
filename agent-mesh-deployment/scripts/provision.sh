@@ -13,9 +13,11 @@ set -uo pipefail
 #                  expert, fast, google gemini) + upstream probe
 #   3. max_tokens  on the seeded general/planning/report_gen
 #                  (one awe restart, only if something changed)
-#   4. Entrypoint  developer-mcp
+#   4. Pricing     token rates on fast, workflow and planning
+#                  (token governance treats unpriced as free)
+#   5. Entrypoint  developer-mcp
 #
-# All four steps are idempotent, so a re-run is safe and cheap.
+# All five steps are idempotent, so a re-run is safe and cheap.
 # Demos are NOT part of this -- install them afterwards with their
 # own install.sh.
 #
@@ -89,10 +91,11 @@ run_step() { # <label> <fatal:0|1> <command...>
 }
 
 # RBAC first: it is also the auth smoke test, so a bad login stops
-# here instead of failing four times.
+# here instead of failing five times.
 run_step "RBAC"       1 "$SCRIPT_DIR/rbac/apply-rbac.sh"
 run_step "Models"     0 "$SCRIPT_DIR/models/apply-models.sh"
 run_step "max_tokens" 0 "$SCRIPT_DIR/models/set-max-tokens.sh"
+run_step "Pricing"    0 "$SCRIPT_DIR/models/set-pricing.sh"
 run_step "Entrypoint" 0 "$SCRIPT_DIR/entrypoints/apply-entrypoints.sh"
 
 echo ""

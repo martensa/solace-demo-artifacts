@@ -79,7 +79,8 @@ docker login registry.solace.lab    # once
                                     # provision.sh; never pipe it
                                     # (| tee drops the TTY)
 ./scripts/provision.sh --login      # standalone / non-TTY: RBAC,
-                                    # models, max_tokens, developer-mcp
+                                    # models, max_tokens, pricing,
+                                    # developer-mcp
 ./scripts/stop.sh                   # full teardown
 ./scripts/stop.sh --purge-images    # ... plus the SAM images
 ```
@@ -87,7 +88,9 @@ docker login registry.solace.lab    # once
 `provision.sh` runs, in order: `rbac/apply-rbac.sh`,
 `models/apply-models.sh` (six extra aliases incl. `google gemini`),
 `models/set-max-tokens.sh` (general/planning/report_gen, one awe
-restart only if something changed) and
+restart only if something changed), `models/set-pricing.sh`
+(token rates on fast/workflow/planning; token governance treats
+an unpriced model as free, so budgets never trip without it) and
 `entrypoints/apply-entrypoints.sh`. All idempotent. It needs a
 `sam auth login` as `sam_admin`, which can only happen once the
 platform is up -- a Claude session cannot do that browser login
@@ -351,9 +354,11 @@ re-provisioning order.
   takes ~84 s to return that 400. STR then drops the param and
   remembers it per policy key, so the FIRST test plan after every
   str start takes ~87 s, later ones ~4 s. If that first wait
-  matters, set `STR_TOOL_MODEL_ALIAS: planning` (Haiku, accepts
+  matters, set `STR_TOOL_MODEL_ALIAS: fast` (Haiku, accepts
   temperature) via `environmentVariables` -- not done, test plans
-  stay on the general tier. Ephemeral test agents
+  stay on the general tier. (`planning` is Sonnet 5 since
+  2026-11-12, chart seed and DB alias; Claude 5 rejects
+  temperature, so it is no longer the Haiku option.) Ephemeral test agents
   (`isEphemeral`, `expiresAt` +3 days, swept by gwe) delete
   cleanly via DELETE /api/v1/platform/agents/{id}; since 2.348.22
   an agent DELETE also removes its broker queue.
@@ -479,9 +484,9 @@ reference DB-managed roles, never the YAML `sam_admin`.
   provision.sh (awe restarts only if `max_tokens` changed);
   verified one-click on 2.493.0 and 2.542.1.
 - `scripts/provision.sh` -- DB-managed content after an install:
-  RBAC -> models -> max_tokens -> developer-mcp (RBAC first as
-  the auth smoke test; stops there on failure, later steps
-  continue and report WARN/FAIL)
+  RBAC -> models -> max_tokens -> pricing -> developer-mcp (RBAC
+  first as the auth smoke test; stops there on failure, later
+  steps continue and report WARN/FAIL)
 - `scripts/setup-keycloak-client.sh` -- creates the OIDC client
   and writes its secret into `.env` itself (re-run against an
   existing client re-syncs `.env`)
@@ -536,7 +541,12 @@ reference DB-managed roles, never the YAML `sam_admin`.
   `modelParams.max_tokens` via `sam api` (SAM_AUTH_TOKEN from the
   CLI login cache) on general/planning/report_gen (or one
   `--model-alias`), skips aliases already at the value, and
-  restarts awe once only if something changed. Plus the
+  restarts awe once only if something changed. `set-pricing.sh`
+  (provision.sh step "Pricing", `--dry-run`) PATCHes per-1M-token
+  rates on fast (Haiku 4.5), workflow and planning (Sonnet 5) via
+  `sam api` and skips aliases already at the rates; token
+  governance counts an unpriced model as free, so a budget never
+  trips without it. Plus the
   declarative package for six additional aliases (`workflow` =
   Sonnet 5 for the incident merge, `reasoning` = DeepSeek V3.2,
   `coding` = Qwen3 Coder, `expert` = Opus 5, `fast` = Haiku 4.5,

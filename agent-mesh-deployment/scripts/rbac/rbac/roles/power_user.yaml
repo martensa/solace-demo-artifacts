@@ -3,11 +3,18 @@
 # v2 additions: workflow:*:invoke (workflows are authorized
 # separately from agents in v2 and the v1 tool:* breadth implied
 # full runtime access).
+# 2.542.1 (2026-11-11): notify:_:send lets a run under this role use
+# the built-in notify_user tool (notification service, on by
+# default); without it the tool is refused. users: grants the role
+# directly to the demo identity as well, because an event-triggered
+# run carries only an identity string (defaultUserIdentity) and no
+# OIDC token, so the Keycloak-group claim mapping cannot apply to it.
 kind: rbacRole
 name: power_user
 description: >-
   Advanced user: chat with agents and run workflows, read the agent
-  builder, manage connectors, read deployments and the tool catalog.
+  builder, manage connectors, read deployments and the tool catalog,
+  send notifications.
 spec:
   scopes:
     - "agent:*:invoke"
@@ -16,3 +23,6 @@ spec:
     - "connector:*:*"
     - "deployment:_:read"
     - "tool:_:read"
+    - "notify:_:send"
+  users:
+    - power_user@solace.lab

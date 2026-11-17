@@ -78,12 +78,15 @@ broker:
 # post-install tuning (scripts/models/set-max-tokens.sh) survives
 # restarts and upgrades.
 llmService:
-  # Haiku (seeds the DB 'planning' alias). This does NOT pick the
-  # model of the Builder test engine's tools: since str 1.64.0
-  # that is STR_TOOL_MODEL_ALIAS (default "general"), and the
-  # engine works on 2.348.22 (the 2.225.14 30 s kill is fixed; see
-  # CLAUDE.md "v2 Chart Gotchas").
-  planningModel: "openai/claude-haiku-4-5-20251001"
+  # Sonnet 5 (seeds the DB 'planning' alias; insert-only, so on a
+  # running lab the alias is changed by PATCH, done 2026-11-12 for
+  # the EuroCIS price agent's final recommendation; Haiku before).
+  # Claude 5 family: no temperature/top_p in modelParams (HTTP 400).
+  # This does NOT pick the model of the Builder test engine's tools:
+  # since str 1.64.0 that is STR_TOOL_MODEL_ALIAS (default
+  # "general"), and the engine works on 2.348.22 (the 2.225.14 30 s
+  # kill is fixed; see CLAUDE.md "v2 Chart Gotchas").
+  planningModel: "openai/claude-sonnet-5"
   generalModel: "openai/claude-opus-4-8"
   reportModel: "openai/claude-opus-4-8"
   imageModel: "openai/imagen-3"
@@ -208,6 +211,28 @@ environmentVariables:
   # (SAM_OTLP_METRICS / SAM_OTLP_ENDPOINT), left off: Prometheus
   # scrapes, nothing is pushed.
   SAM_OBSERVABILITY_ENABLED: "true"
+  # Workflow human-in-the-loop pause/resume (feature catalog flag
+  # workflow_hil_pause_resume, release phase controlled_availability,
+  # default off). With it on, a workflow `type: tool` node whose tool
+  # is gated (`hil.require_approval`) pauses, the approval request
+  # goes to the run identity's SAM inbox via the notify service, and
+  # the run resumes on the answer; off, such a node fails instead.
+  # Lab-wide; enabled 2026-11-11 for the gated-tool-node spikes.
+  # The chart has no checksum annotation on its env ConfigMap, so
+  # after `helm upgrade` restart gwe, awe and str to pick it up.
+  SAM_FEATURE_WORKFLOW_HIL_PAUSE_RESUME: "true"
+  # Companion flag workflow_tool_approval_enforcement (default true):
+  # only with BOTH on does a gated tool node pause; with enforcement
+  # off it dispatches the tool WITHOUT asking (audit approvalReason
+  # "enforcement_disabled"). The binary turns it off by itself after
+  # an upgrade from a release older than 2.368 while old replicas
+  # remain, so pin it on explicitly: fail closed.
+  SAM_FEATURE_WORKFLOW_TOOL_APPROVAL_ENFORCEMENT: "true"
+  # Not set: SAM_FEATURE_DURABLE_TASK_RESUME (experimental). Tried
+  # 2026-11-11 for an agent node waiting on a tool approval inside a
+  # workflow: the workflow run still fails on an awe restart and the
+  # agent task comes back with a NEW approval prompt for the dead run,
+  # so the flag buys nothing there and was reverted.
 
 # sam-doctor pre-install/pre-upgrade hook: keep the checks (broker,
 # LLM, OIDC reachability) but warn-only, so start.sh stays push-button
@@ -234,3 +259,15 @@ persistence-layer:
       repository: "chrislusf/seaweedfs"
       tag: "4.48-compliant"
       pullPolicy: IfNotPresent
+    # Subchart default 500m / 512Mi saturated on 2026-11-16 (CPU 501m,
+    # memory 511Mi, liveness kills every few minutes, every workflow
+    # artifact save failed with "list S3 objects ... context deadline
+    # exceeded"). Applied live with kubectl patch; kept here so the next
+    # helm upgrade does not revert it.
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi

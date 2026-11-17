@@ -58,7 +58,8 @@ docker login registry.solace.lab     # once
 ./scripts/start.sh                   # helm install + (in a terminal)
                                      # browser login + provision.sh
 ./scripts/provision.sh --login       # if start.sh ran without a TTY:
-                                     # RBAC, models, max_tokens, MCP
+                                     # RBAC, models, max_tokens,
+                                     # pricing, MCP
 (cd ../sam-retail-ops-demo && ./install.sh)  # demo (core+overlay)
 ./scripts/stop.sh                    # full teardown incl. Keycloak
 ```

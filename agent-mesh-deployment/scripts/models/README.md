@@ -10,6 +10,15 @@ no CSRF handling.
 - `set-max-tokens.sh` -- set the max output tokens on the
   chart-seeded model configurations (`general`, `planning`,
   `report_gen` by default, or one `--model-alias`).
+- `set-pricing.sh` -- set token rates (USD per million tokens:
+  input, output, cache read, cache write) on the `fast` (Claude
+  Haiku 4.5), `workflow` and `planning` (Claude Sonnet 5)
+  aliases via `sam api`; an alias already at its rates is left
+  alone. Token governance counts an unpriced model as free, so a
+  budget never trips without it. The declarative `kind: model`
+  has no pricing field, so it runs after `apply-models.sh` as the
+  `../provision.sh` step "Pricing"; `--dry-run` shows the current
+  and the intended rates without a change.
 - `manifest.yaml` + `models/*.yaml` -- declarative definitions of
   the six additional model aliases (`workflow`, `reasoning`,
   `coding`, `expert`, `fast`, `google gemini`).

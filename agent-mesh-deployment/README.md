@@ -297,11 +297,13 @@ It runs, in this order (each script also works standalone):
    plus a live probe of every upstream
 3. `scripts/models/set-max-tokens.sh` -- `max_tokens` on the
    seeded aliases
-4. `scripts/entrypoints/apply-entrypoints.sh` -- the
+4. `scripts/models/set-pricing.sh` -- token rates (pricing) on
+   the `fast`, `workflow` and `planning` aliases
+5. `scripts/entrypoints/apply-entrypoints.sh` -- the
    `developer-mcp` MCP entrypoint
 
 RBAC runs first because it doubles as the login smoke test: a bad
-login stops there instead of failing four times.
+login stops there instead of failing five times.
 
 #### RBAC (roles + group mappings)
 
@@ -319,6 +321,13 @@ agents once if anything changed. Without it the chart-seeded empty
 `modelParams` reintroduce the tool-call truncation failure
 documented in [`scripts/models/README.md`](scripts/models/README.md).
 `--model-alias <alias>` tunes a single alias.
+
+`set-pricing.sh` sets per-million-token rates on the `fast`,
+`workflow` and `planning` aliases and leaves an alias that already
+has them alone. Token governance counts an unpriced model as free,
+so without it the cost views show no spend and a budget never
+trips. `--dry-run` shows the current and the intended rates
+without a change.
 
 `apply-models.sh` applies six extra aliases from the declarative
 package in `scripts/models/` -- `workflow`, `reasoning`, `coding`,
@@ -410,7 +419,7 @@ groups and OIDC client, and the local `sam` CLI caches.
 
 `stop.sh` destroys the platform database, and with it ALL
 DB-managed content: RBAC roles, claim mappings and default roles,
-the model aliases and `max_tokens` tuning, the developer-mcp
+the model aliases, `max_tokens` and pricing, the developer-mcp
 entrypoint and any installed demo (core + overlay). The Keycloak
 client is deleted too, and with it the `sam` CLI login cache. To
 rebuild:
@@ -420,9 +429,9 @@ rebuild:
 2. `./scripts/setup-keycloak-users.sh`
 3. `./scripts/start.sh` -- in a terminal it ends with the browser
    login (as `sam_admin`) and `provision.sh`, which re-creates
-   RBAC, models, `max_tokens` and developer-mcp. Run without a
-   terminal (CI, an agent), it prints the one follow-up command:
-   `./scripts/provision.sh --login`. `docker login` +
+   RBAC, models, `max_tokens`, pricing and developer-mcp. Run
+   without a terminal (CI, an agent), it prints the one follow-up
+   command: `./scripts/provision.sh --login`. `docker login` +
    `load-images.sh` are only needed if the private registry
    itself was rebuilt -- images persist outside the namespace.
 4. Reinstall the demo, e.g.
@@ -782,8 +791,8 @@ switch and warns otherwise.
 
 Run it in a terminal: after the pods are ready it opens the
 browser for the `sam` CLI login (log in as `sam_admin`) and runs
-`provision.sh` -- RBAC, models, `max_tokens`, developer-mcp. The
-demo installs are yours to run afterwards.
+`provision.sh` -- RBAC, models, `max_tokens`, pricing,
+developer-mcp. The demo installs are yours to run afterwards.
 
 ### 6. Verify, then drop the old images
 
@@ -994,7 +1003,8 @@ agent-mesh-deployment/
     rbac/                         Declarative RBAC (sam config)
     entrypoints/                  Platform developer-mcp MCP
                                   entrypoint (declarative, v2)
-    models/                       Model aliases + max_tokens
+    models/                       Model aliases, max_tokens,
+                                  pricing
     observability/                Metrics gate check, Grafana
                                   platform-DB grant
     desktop/                      Connect the SAM desktop app to

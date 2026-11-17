@@ -51,7 +51,12 @@ Scope mapping from the v1 roles:
   - `data_engineer` -- agent and workflow invoke plus connector
     read/create.
   - `power_user` -- invoke, workflows, agent-builder read, full
-    connector management, deployment read.
+    connector management, deployment read, and `notify:_:send`
+    for the built-in `notify_user` tool (2.542.1; without it the
+    tool is refused). The role also lists `power_user@solace.lab`
+    under `spec.users`, a direct grant: an event-triggered run
+    carries only an identity string (`defaultUserIdentity`) and no
+    OIDC token, so the group claim mapping cannot apply to it.
 - `rbac/claim-mappings/` -- one `rbacClaimMapping` per Keycloak
   group (`user`, `viewer`, `data_engineer`, `power_user`,
   `sam_manager`). `sam_manager` maps to the platform's BUILT-IN
