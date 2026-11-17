@@ -21,7 +21,7 @@ Artifacts produced (sketches, nothing applied anywhere):
   its strict schema (`helm template`, rc=0, 17 objects, all images from
   ACR, workload-identity label on gwe/awe/str) [V: `IMPL/aks/rendered-aks.yaml`;
   not versioned, regenerate with `helm template`,
-  `AKS-MIGRATION-PLAN.md:709`]
+  `AKS-MIGRATION-PLAN.md:1106`]
 - `IMPL/aks/ingress-nginx-values-aks.yaml`, `ingress-grpc-example.yaml`,
   `clusterissuer-letsencrypt-dns.yaml`, `pubsubplus-values-aks.yaml`
   (YAML-parsed OK), `az-foundation.sketch.sh` (`bash -n` OK, never run)
