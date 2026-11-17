@@ -1,0 +1,36 @@
+# SKETCH -- one PubSub+ Standard broker in-cluster (solacecharts/pubsubplus),
+# replaces solace-1 from event-mesh-deployment (VPNs default + sam only;
+# no solace-2, DMR, EMA). VPNs/clients/queues afterwards with the
+# existing Terraform modules (event-mesh-deployment/terraform/modules)
+# through `kubectl port-forward svc/solace-pubsubplus 8080`.
+solace:
+  redundancy: false
+  size: prod1k               # or solace.systemScaling.* to mirror the lab
+  usernameAdminPassword: ""  # --set from .env.aks, never "admin"
+image:
+  repository: ACR.azurecr.io/solace/solace-pubsub-standard
+  tag: "10.25.0.208"         # pin what the lab runs (lab uses :latest)
+storage:
+  persistent: true
+  useStorageClass: managed-csi-premium
+  size: 64Gi
+service:
+  type: ClusterIP            # chart default is LoadBalancer = PUBLIC on AKS
+---
+# Separate internal LB for booth devices (ESP32 MQTT on VPN default)
+# reached only through the WireGuard tunnel. SEMP never exposed.
+apiVersion: v1
+kind: Service
+metadata:
+  name: solace-booth
+  namespace: solace
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    service.beta.kubernetes.io/azure-load-balancer-ipv4: "10.20.0.251"
+    service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout: "30"
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/instance: solace     # check labels of the chart release
+  ports:
+    - {name: mqtt, port: 1883, targetPort: 1883}

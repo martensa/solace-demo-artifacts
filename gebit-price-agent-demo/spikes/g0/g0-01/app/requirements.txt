@@ -1,0 +1,2 @@
+# Same MCP SDK release as the BSG demo (verified against SAM 2.493.0/2.542.1).
+mcp[cli]==2.2.0

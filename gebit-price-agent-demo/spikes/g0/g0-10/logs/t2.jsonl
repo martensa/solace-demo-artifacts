@@ -1,0 +1,361 @@
+{"t": 1794390227.022, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-1-4a00", "qos": 1, "expiry": null}
+{"t": 1794390227.024, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-1-c5c3", "qos": 1, "expiry": null}
+{"t": 1794390227.025, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-1-1272", "qos": 1, "expiry": null}
+{"t": 1794390227.087, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-1-1272", "age": 0.063, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:46.955880+00:00", "seq": "t2-own-qos1-1-1272", "ts": 1794390227.023874}}
+{"t": 1794390227.087, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-1-c5c3", "age": 0.065, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:46.955669+00:00", "seq": "t2-q0-qos1-1-c5c3", "ts": 1794390227.022414}}
+{"t": 1794390227.09, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-1-4a00", "age": 0.07, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:46.955867+00:00", "seq": "t2-q1-qos1-1-4a00", "ts": 1794390227.019785}}
+{"t": 1794390228.033, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-2-6984", "qos": 1, "expiry": null}
+{"t": 1794390228.037, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-2-30fd", "qos": 1, "expiry": null}
+{"t": 1794390228.041, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-2-4c55", "qos": 1, "expiry": null}
+{"t": 1794390228.086, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-2-6984", "age": 0.056, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:47.978796+00:00", "seq": "t2-q1-qos1-2-6984", "ts": 1794390228.0302248}}
+{"t": 1794390228.086, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-2-30fd", "age": 0.053, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:47.979493+00:00", "seq": "t2-q0-qos1-2-30fd", "ts": 1794390228.0332391}}
+{"t": 1794390228.086, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-2-4c55", "age": 0.049, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:47.979382+00:00", "seq": "t2-own-qos1-2-4c55", "ts": 1794390228.037589}}
+{"t": 1794390229.046, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-3-99db", "qos": 1, "expiry": null}
+{"t": 1794390229.048, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-3-fb89", "qos": 1, "expiry": null}
+{"t": 1794390229.049, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-3-3642", "qos": 1, "expiry": null}
+{"t": 1794390229.079, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-3-99db", "age": 0.035, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:48.975868+00:00", "seq": "t2-q1-qos1-3-99db", "ts": 1794390229.044043}}
+{"t": 1794390229.079, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-3-fb89", "age": 0.033, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:48.976635+00:00", "seq": "t2-q0-qos1-3-fb89", "ts": 1794390229.04622}}
+{"t": 1794390229.08, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-3-3642", "age": 0.032, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:48.976784+00:00", "seq": "t2-own-qos1-3-3642", "ts": 1794390229.0477319}}
+{"t": 1794390230.053, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-4-db52", "qos": 1, "expiry": null}
+{"t": 1794390230.055, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-4-5924", "qos": 1, "expiry": null}
+{"t": 1794390230.059, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-4-8f81", "qos": 1, "expiry": null}
+{"t": 1794390230.087, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-4-db52", "age": 0.038, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:49.984990+00:00", "seq": "t2-q1-qos1-4-db52", "ts": 1794390230.049508}}
+{"t": 1794390230.088, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-4-5924", "age": 0.036, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:49.986774+00:00", "seq": "t2-q0-qos1-4-5924", "ts": 1794390230.0526779}}
+{"t": 1794390230.089, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-4-8f81", "age": 0.034, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:49.987479+00:00", "seq": "t2-own-qos1-4-8f81", "ts": 1794390230.055573}}
+{"t": 1794390231.064, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-5-9cde", "qos": 1, "expiry": null}
+{"t": 1794390231.068, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-5-0b9b", "qos": 1, "expiry": null}
+{"t": 1794390231.074, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-5-5fd6", "qos": 1, "expiry": null}
+{"t": 1794390231.114, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-5-9cde", "age": 0.053, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:51.009057+00:00", "seq": "t2-q1-qos1-5-9cde", "ts": 1794390231.060601}}
+{"t": 1794390231.115, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-5-0b9b", "age": 0.051, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:51.011145+00:00", "seq": "t2-q0-qos1-5-0b9b", "ts": 1794390231.0639842}}
+{"t": 1794390231.116, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-5-5fd6", "age": 0.049, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:51.012947+00:00", "seq": "t2-own-qos1-5-5fd6", "ts": 1794390231.0678148}}
+{"t": 1794390232.077, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-6-d778", "qos": 1, "expiry": null}
+{"t": 1794390232.079, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-6-8f97", "qos": 1, "expiry": null}
+{"t": 1794390232.08, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-6-5b57", "qos": 1, "expiry": null}
+{"t": 1794390232.115, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-6-8f97", "age": 0.038, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:52.011829+00:00", "seq": "t2-q0-qos1-6-8f97", "ts": 1794390232.0769532}}
+{"t": 1794390232.115, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-6-5b57", "age": 0.037, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:52.011752+00:00", "seq": "t2-own-qos1-6-5b57", "ts": 1794390232.078746}}
+{"t": 1794390232.115, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-6-d778", "age": 0.041, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:52.012939+00:00", "seq": "t2-q1-qos1-6-d778", "ts": 1794390232.0744162}}
+{"t": 1794390233.083, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-7-0695", "qos": 1, "expiry": null}
+{"t": 1794390233.085, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-7-e561", "qos": 1, "expiry": null}
+{"t": 1794390233.087, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-7-4a6f", "qos": 1, "expiry": null}
+{"t": 1794390233.121, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-7-e561", "age": 0.037, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:53.015526+00:00", "seq": "t2-q0-qos1-7-e561", "ts": 1794390233.083402}}
+{"t": 1794390233.123, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-7-4a6f", "age": 0.037, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:53.016124+00:00", "seq": "t2-own-qos1-7-4a6f", "ts": 1794390233.085397}}
+{"t": 1794390233.123, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-7-0695", "age": 0.042, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:53.014396+00:00", "seq": "t2-q1-qos1-7-0695", "ts": 1794390233.0805929}}
+{"t": 1794390234.09, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-8-6793", "qos": 1, "expiry": null}
+{"t": 1794390234.093, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-8-6af2", "qos": 1, "expiry": null}
+{"t": 1794390234.095, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-8-8c07", "qos": 1, "expiry": null}
+{"t": 1794390234.118, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-8-6793", "age": 0.03, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:54.017584+00:00", "seq": "t2-q1-qos1-8-6793", "ts": 1794390234.0873852}}
+{"t": 1794390234.118, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-8-8c07", "age": 0.025, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:54.017316+00:00", "seq": "t2-own-qos1-8-8c07", "ts": 1794390234.0932648}}
+{"t": 1794390234.119, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-8-6af2", "age": 0.029, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:54.018076+00:00", "seq": "t2-q0-qos1-8-6af2", "ts": 1794390234.0902}}
+{"t": 1794390235.098, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-9-a222", "qos": 1, "expiry": null}
+{"t": 1794390235.102, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-9-4ccb", "qos": 1, "expiry": null}
+{"t": 1794390235.105, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-9-d9d3", "qos": 1, "expiry": null}
+{"t": 1794390235.14, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-9-4ccb", "age": 0.041, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:55.035600+00:00", "seq": "t2-q0-qos1-9-4ccb", "ts": 1794390235.098529}}
+{"t": 1794390235.14, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-9-a222", "age": 0.044, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:55.035600+00:00", "seq": "t2-q1-qos1-9-a222", "ts": 1794390235.0955808}}
+{"t": 1794390235.142, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-9-d9d3", "age": 0.04, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:55.035024+00:00", "seq": "t2-own-qos1-9-d9d3", "ts": 1794390235.1018639}}
+{"t": 1794390236.108, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-10-bd36", "qos": 1, "expiry": null}
+{"t": 1794390236.111, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-10-a17c", "qos": 1, "expiry": null}
+{"t": 1794390236.113, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-10-8ed8", "qos": 1, "expiry": null}
+{"t": 1794390236.148, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-10-bd36", "age": 0.043, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:56.044984+00:00", "seq": "t2-q1-qos1-10-bd36", "ts": 1794390236.105599}}
+{"t": 1794390236.148, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-10-8ed8", "age": 0.038, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:56.044119+00:00", "seq": "t2-own-qos1-10-8ed8", "ts": 1794390236.110635}}
+{"t": 1794390236.153, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-10-a17c", "age": 0.044, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:56.045103+00:00", "seq": "t2-q0-qos1-10-a17c", "ts": 1794390236.108567}}
+{"t": 1794390237.119, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-11-fb20", "qos": 1, "expiry": null}
+{"t": 1794390237.121, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-11-21f6", "qos": 1, "expiry": null}
+{"t": 1794390237.122, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-11-b3b9", "qos": 1, "expiry": null}
+{"t": 1794390237.159, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-11-fb20", "age": 0.042, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:57.050340+00:00", "seq": "t2-q1-qos1-11-fb20", "ts": 1794390237.116823}}
+{"t": 1794390237.163, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-11-21f6", "age": 0.044, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:57.055376+00:00", "seq": "t2-q0-qos1-11-21f6", "ts": 1794390237.1189718}}
+{"t": 1794390237.164, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-11-b3b9", "age": 0.043, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:57.056182+00:00", "seq": "t2-own-qos1-11-b3b9", "ts": 1794390237.1206248}}
+{"t": 1794390238.127, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-12-95b5", "qos": 1, "expiry": null}
+{"t": 1794390238.129, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-12-3eff", "qos": 1, "expiry": null}
+{"t": 1794390238.131, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-12-1b39", "qos": 1, "expiry": null}
+{"t": 1794390238.168, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-12-1b39", "age": 0.039, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:58.057738+00:00", "seq": "t2-own-qos1-12-1b39", "ts": 1794390238.1290162}}
+{"t": 1794390238.168, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-12-3eff", "age": 0.041, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:58.058414+00:00", "seq": "t2-q0-qos1-12-3eff", "ts": 1794390238.1271198}}
+{"t": 1794390238.168, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-12-95b5", "age": 0.043, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:58.058142+00:00", "seq": "t2-q1-qos1-12-95b5", "ts": 1794390238.124796}}
+{"t": 1794390239.134, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-13-8537", "qos": 1, "expiry": null}
+{"t": 1794390239.136, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-13-fd57", "qos": 1, "expiry": null}
+{"t": 1794390239.138, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-13-8054", "qos": 1, "expiry": null}
+{"t": 1794390239.166, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-13-8537", "age": 0.034, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:59.063939+00:00", "seq": "t2-q1-qos1-13-8537", "ts": 1794390239.131511}}
+{"t": 1794390239.166, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-13-fd57", "age": 0.032, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:43:59.063240+00:00", "seq": "t2-q0-qos1-13-fd57", "ts": 1794390239.133933}}
+{"t": 1794390239.166, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-13-8054", "age": 0.03, "body": {"mode": "own/qos1", "now": "2026-11-11T09:43:59.063954+00:00", "seq": "t2-own-qos1-13-8054", "ts": 1794390239.1362472}}
+{"t": 1794390240.142, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-14-bb3c", "qos": 1, "expiry": null}
+{"t": 1794390240.144, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-14-4340", "qos": 1, "expiry": null}
+{"t": 1794390240.146, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-14-d34d", "qos": 1, "expiry": null}
+{"t": 1794390240.18, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-14-4340", "age": 0.038, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:00.074348+00:00", "seq": "t2-q0-qos1-14-4340", "ts": 1794390240.142038}}
+{"t": 1794390240.182, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-14-bb3c", "age": 0.043, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:00.074088+00:00", "seq": "t2-q1-qos1-14-bb3c", "ts": 1794390240.138819}}
+{"t": 1794390240.183, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-14-d34d", "age": 0.039, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:00.078220+00:00", "seq": "t2-own-qos1-14-d34d", "ts": 1794390240.1439779}}
+{"t": 1794390241.149, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-15-1fcd", "qos": 1, "expiry": null}
+{"t": 1794390241.154, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-15-b064", "qos": 1, "expiry": null}
+{"t": 1794390241.16, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-15-4730", "qos": 1, "expiry": null}
+{"t": 1794390241.211, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-15-4730", "age": 0.057, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:01.098414+00:00", "seq": "t2-own-qos1-15-4730", "ts": 1794390241.153916}}
+{"t": 1794390241.214, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-15-b064", "age": 0.065, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:01.099060+00:00", "seq": "t2-q0-qos1-15-b064", "ts": 1794390241.14872}}
+{"t": 1794390241.214, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-15-1fcd", "age": 0.068, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:01.100712+00:00", "seq": "t2-q1-qos1-15-1fcd", "ts": 1794390241.146071}}
+{"t": 1794390242.171, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-16-f5c6", "qos": 1, "expiry": null}
+{"t": 1794390242.175, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-16-01af", "qos": 1, "expiry": null}
+{"t": 1794390242.178, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-16-c525", "qos": 1, "expiry": null}
+{"t": 1794390242.217, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-16-f5c6", "age": 0.054, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:02.111660+00:00", "seq": "t2-q1-qos1-16-f5c6", "ts": 1794390242.162775}}
+{"t": 1794390242.217, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-16-c525", "age": 0.043, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:02.112290+00:00", "seq": "t2-own-qos1-16-c525", "ts": 1794390242.1748009}}
+{"t": 1794390242.218, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-16-01af", "age": 0.046, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:02.113689+00:00", "seq": "t2-q0-qos1-16-01af", "ts": 1794390242.1712918}}
+{"t": 1794390243.182, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-17-0b7f", "qos": 1, "expiry": null}
+{"t": 1794390243.185, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-17-392c", "qos": 1, "expiry": null}
+{"t": 1794390243.187, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-17-0609", "qos": 1, "expiry": null}
+{"t": 1794390243.222, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-17-392c", "age": 0.04, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:03.116920+00:00", "seq": "t2-q0-qos1-17-392c", "ts": 1794390243.182443}}
+{"t": 1794390243.222, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-17-0b7f", "age": 0.042, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:03.116267+00:00", "seq": "t2-q1-qos1-17-0b7f", "ts": 1794390243.179859}}
+{"t": 1794390243.224, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-17-0609", "age": 0.039, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:03.117238+00:00", "seq": "t2-own-qos1-17-0609", "ts": 1794390243.184798}}
+{"t": 1794390244.191, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-18-0055", "qos": 1, "expiry": null}
+{"t": 1794390244.194, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-18-747a", "qos": 1, "expiry": null}
+{"t": 1794390244.197, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-18-6a66", "qos": 1, "expiry": null}
+{"t": 1794390244.246, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-18-0055", "age": 0.058, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:04.135448+00:00", "seq": "t2-q1-qos1-18-0055", "ts": 1794390244.1883361}}
+{"t": 1794390244.247, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-18-6a66", "age": 0.053, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:04.135366+00:00", "seq": "t2-own-qos1-18-6a66", "ts": 1794390244.193805}}
+{"t": 1794390244.247, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-18-747a", "age": 0.056, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:04.134980+00:00", "seq": "t2-q0-qos1-18-747a", "ts": 1794390244.191542}}
+{"t": 1794390245.202, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-19-c4ab", "qos": 1, "expiry": null}
+{"t": 1794390245.203, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-19-e012", "qos": 1, "expiry": null}
+{"t": 1794390245.206, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-19-72f3", "qos": 1, "expiry": null}
+{"t": 1794390245.232, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-19-e012", "age": 0.03, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:05.131921+00:00", "seq": "t2-q0-qos1-19-e012", "ts": 1794390245.201665}}
+{"t": 1794390245.232, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-19-c4ab", "age": 0.033, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:05.131799+00:00", "seq": "t2-q1-qos1-19-c4ab", "ts": 1794390245.199355}}
+{"t": 1794390245.233, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-19-72f3", "age": 0.03, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:05.131950+00:00", "seq": "t2-own-qos1-19-72f3", "ts": 1794390245.2033868}}
+{"t": 1794390246.214, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-20-46d7", "qos": 1, "expiry": null}
+{"t": 1794390246.217, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-20-c18f", "qos": 1, "expiry": null}
+{"t": 1794390246.223, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-20-4647", "qos": 1, "expiry": null}
+{"t": 1794390246.261, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-20-c18f", "age": 0.046, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:06.157693+00:00", "seq": "t2-q0-qos1-20-c18f", "ts": 1794390246.214263}}
+{"t": 1794390246.262, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-20-4647", "age": 0.044, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:06.157253+00:00", "seq": "t2-own-qos1-20-4647", "ts": 1794390246.217352}}
+{"t": 1794390246.262, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-20-46d7", "age": 0.052, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:06.158128+00:00", "seq": "t2-q1-qos1-20-46d7", "ts": 1794390246.2108731}}
+{"t": 1794390247.229, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-21-9403", "qos": 1, "expiry": null}
+{"t": 1794390247.231, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-21-988d", "qos": 1, "expiry": null}
+{"t": 1794390247.234, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-21-50cd", "qos": 1, "expiry": null}
+{"t": 1794390247.264, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-21-50cd", "age": 0.033, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:07.160602+00:00", "seq": "t2-own-qos1-21-50cd", "ts": 1794390247.2314858}}
+{"t": 1794390247.265, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-21-9403", "age": 0.038, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:07.160932+00:00", "seq": "t2-q1-qos1-21-9403", "ts": 1794390247.226453}}
+{"t": 1794390247.267, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-21-988d", "age": 0.038, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:07.161982+00:00", "seq": "t2-q0-qos1-21-988d", "ts": 1794390247.229515}}
+{"t": 1794390248.242, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-22-731a", "qos": 1, "expiry": null}
+{"t": 1794390248.246, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-22-7c7b", "qos": 1, "expiry": null}
+{"t": 1794390248.251, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-22-da6a", "qos": 1, "expiry": null}
+{"t": 1794390248.302, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-22-da6a", "age": 0.056, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:08.188020+00:00", "seq": "t2-own-qos1-22-da6a", "ts": 1794390248.2465138}}
+{"t": 1794390248.304, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-22-731a", "age": 0.069, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:08.185783+00:00", "seq": "t2-q1-qos1-22-731a", "ts": 1794390248.2346659}}
+{"t": 1794390248.305, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-22-7c7b", "age": 0.062, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:08.188094+00:00", "seq": "t2-q0-qos1-22-7c7b", "ts": 1794390248.242848}}
+{"t": 1794390249.258, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-23-a566", "qos": 1, "expiry": null}
+{"t": 1794390249.259, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-23-a997", "qos": 1, "expiry": null}
+{"t": 1794390249.261, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-23-1453", "qos": 1, "expiry": null}
+{"t": 1794390249.292, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-23-a997", "age": 0.034, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:09.188103+00:00", "seq": "t2-q0-qos1-23-a997", "ts": 1794390249.257885}}
+{"t": 1794390249.293, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-23-1453", "age": 0.033, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:09.188987+00:00", "seq": "t2-own-qos1-23-1453", "ts": 1794390249.259512}}
+{"t": 1794390249.293, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-23-a566", "age": 0.038, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:09.188988+00:00", "seq": "t2-q1-qos1-23-a566", "ts": 1794390249.254911}}
+{"t": 1794390250.264, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-24-f390", "qos": 1, "expiry": null}
+{"t": 1794390250.265, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-24-f075", "qos": 1, "expiry": null}
+{"t": 1794390250.267, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-24-9778", "qos": 1, "expiry": null}
+{"t": 1794390250.294, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-24-f075", "age": 0.031, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:10.194997+00:00", "seq": "t2-q0-qos1-24-f075", "ts": 1794390250.2635908}}
+{"t": 1794390250.295, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-24-f390", "age": 0.034, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:10.194615+00:00", "seq": "t2-q1-qos1-24-f390", "ts": 1794390250.2611399}}
+{"t": 1794390250.298, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-24-9778", "age": 0.032, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:10.196255+00:00", "seq": "t2-own-qos1-24-9778", "ts": 1794390250.265514}}
+{"t": 1794390251.274, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-25-33fa", "qos": 1, "expiry": null}
+{"t": 1794390251.276, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-25-c2a0", "qos": 1, "expiry": null}
+{"t": 1794390251.278, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-25-7b36", "qos": 1, "expiry": null}
+{"t": 1794390251.305, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-25-33fa", "age": 0.033, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:11.202838+00:00", "seq": "t2-q1-qos1-25-33fa", "ts": 1794390251.271337}}
+{"t": 1794390251.305, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-25-c2a0", "age": 0.03, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:11.203576+00:00", "seq": "t2-q0-qos1-25-c2a0", "ts": 1794390251.2744849}}
+{"t": 1794390251.306, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-25-7b36", "age": 0.029, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:11.203595+00:00", "seq": "t2-own-qos1-25-7b36", "ts": 1794390251.276184}}
+{"t": 1794390252.282, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-26-f4f6", "qos": 1, "expiry": null}
+{"t": 1794390252.284, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-26-7f4f", "qos": 1, "expiry": null}
+{"t": 1794390252.286, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-26-f8dc", "qos": 1, "expiry": null}
+{"t": 1794390252.315, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-26-f4f6", "age": 0.035, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:12.214636+00:00", "seq": "t2-q1-qos1-26-f4f6", "ts": 1794390252.279962}}
+{"t": 1794390252.315, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-26-f8dc", "age": 0.031, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:12.215099+00:00", "seq": "t2-own-qos1-26-f8dc", "ts": 1794390252.283802}}
+{"t": 1794390252.316, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-26-7f4f", "age": 0.034, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:12.215144+00:00", "seq": "t2-q0-qos1-26-7f4f", "ts": 1794390252.282083}}
+{"t": 1794390253.293, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-27-01cd", "qos": 1, "expiry": null}
+{"t": 1794390253.298, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-27-de40", "qos": 1, "expiry": null}
+{"t": 1794390253.302, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-27-a35a", "qos": 1, "expiry": null}
+{"t": 1794390253.347, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-27-de40", "age": 0.054, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:13.237634+00:00", "seq": "t2-q0-qos1-27-de40", "ts": 1794390253.293144}}
+{"t": 1794390253.347, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-27-01cd", "age": 0.057, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:13.239643+00:00", "seq": "t2-q1-qos1-27-01cd", "ts": 1794390253.2898738}}
+{"t": 1794390253.347, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-27-a35a", "age": 0.048, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:13.237729+00:00", "seq": "t2-own-qos1-27-a35a", "ts": 1794390253.298559}}
+{"t": 1794390254.305, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-28-8271", "qos": 1, "expiry": null}
+{"t": 1794390254.307, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-28-49b5", "qos": 1, "expiry": null}
+{"t": 1794390254.308, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-28-c496", "qos": 1, "expiry": null}
+{"t": 1794390254.331, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-28-49b5", "age": 0.026, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:14.231283+00:00", "seq": "t2-q0-qos1-28-49b5", "ts": 1794390254.305425}}
+{"t": 1794390254.331, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-28-8271", "age": 0.028, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:14.231631+00:00", "seq": "t2-q1-qos1-28-8271", "ts": 1794390254.302795}}
+{"t": 1794390254.331, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-28-c496", "age": 0.024, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:14.232500+00:00", "seq": "t2-own-qos1-28-c496", "ts": 1794390254.306869}}
+{"t": 1794390255.313, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-29-fbd6", "qos": 1, "expiry": null}
+{"t": 1794390255.315, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-29-c55c", "qos": 1, "expiry": null}
+{"t": 1794390255.317, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-29-0192", "qos": 1, "expiry": null}
+{"t": 1794390255.351, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-29-c55c", "age": 0.038, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:15.241751+00:00", "seq": "t2-q0-qos1-29-c55c", "ts": 1794390255.31292}}
+{"t": 1794390255.353, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-29-0192", "age": 0.038, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:15.243325+00:00", "seq": "t2-own-qos1-29-0192", "ts": 1794390255.315375}}
+{"t": 1794390255.355, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-29-fbd6", "age": 0.046, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:15.243335+00:00", "seq": "t2-q1-qos1-29-fbd6", "ts": 1794390255.3095942}}
+{"t": 1794390256.324, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-30-e639", "qos": 1, "expiry": null}
+{"t": 1794390256.325, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-30-a9ff", "qos": 1, "expiry": null}
+{"t": 1794390256.327, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-30-3ae6", "qos": 1, "expiry": null}
+{"t": 1794390256.354, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-30-e639", "age": 0.032, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:16.252250+00:00", "seq": "t2-q1-qos1-30-e639", "ts": 1794390256.3220181}}
+{"t": 1794390256.354, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-30-a9ff", "age": 0.031, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:16.252161+00:00", "seq": "t2-q0-qos1-30-a9ff", "ts": 1794390256.3237739}}
+{"t": 1794390256.354, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-30-3ae6", "age": 0.029, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:16.252218+00:00", "seq": "t2-own-qos1-30-3ae6", "ts": 1794390256.325442}}
+{"t": 1794390257.331, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-31-3fc7", "qos": 1, "expiry": null}
+{"t": 1794390257.333, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-31-4435", "qos": 1, "expiry": null}
+{"t": 1794390257.334, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-31-85ba", "qos": 1, "expiry": null}
+{"t": 1794390257.364, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-31-3fc7", "age": 0.034, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:17.262985+00:00", "seq": "t2-q1-qos1-31-3fc7", "ts": 1794390257.329762}}
+{"t": 1794390257.364, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-31-85ba", "age": 0.032, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:17.263680+00:00", "seq": "t2-own-qos1-31-85ba", "ts": 1794390257.3327749}}
+{"t": 1794390257.365, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-31-4435", "age": 0.033, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:17.263680+00:00", "seq": "t2-q0-qos1-31-4435", "ts": 1794390257.331418}}
+{"t": 1794390258.337, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-32-470f", "qos": 1, "expiry": null}
+{"t": 1794390258.34, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-32-df06", "qos": 1, "expiry": null}
+{"t": 1794390258.342, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-32-cb20", "qos": 1, "expiry": null}
+{"t": 1794390258.376, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-32-470f", "age": 0.042, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:18.274519+00:00", "seq": "t2-q1-qos1-32-470f", "ts": 1794390258.334369}}
+{"t": 1794390258.377, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-32-cb20", "age": 0.037, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:18.273898+00:00", "seq": "t2-own-qos1-32-cb20", "ts": 1794390258.3397021}}
+{"t": 1794390258.377, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-32-df06", "age": 0.039, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:18.273100+00:00", "seq": "t2-q0-qos1-32-df06", "ts": 1794390258.337533}}
+{"t": 1794390259.344, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-33-d5d8", "qos": 1, "expiry": null}
+{"t": 1794390259.346, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-33-8876", "qos": 1, "expiry": null}
+{"t": 1794390259.347, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-33-1289", "qos": 1, "expiry": null}
+{"t": 1794390259.378, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-33-1289", "age": 0.033, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:19.275909+00:00", "seq": "t2-own-qos1-33-1289", "ts": 1794390259.34564}}
+{"t": 1794390259.383, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-33-8876", "age": 0.038, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:19.275911+00:00", "seq": "t2-q0-qos1-33-8876", "ts": 1794390259.3442712}}
+{"t": 1794390259.383, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-33-d5d8", "age": 0.041, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:19.275393+00:00", "seq": "t2-q1-qos1-33-d5d8", "ts": 1794390259.34269}}
+{"t": 1794390260.356, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-34-36a1", "qos": 1, "expiry": null}
+{"t": 1794390260.36, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-34-c7dd", "qos": 1, "expiry": null}
+{"t": 1794390260.369, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-34-b642", "qos": 1, "expiry": null}
+{"t": 1794390260.488, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-34-c7dd", "age": 0.131, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:20.371987+00:00", "seq": "t2-q0-qos1-34-c7dd", "ts": 1794390260.3562582}}
+{"t": 1794390260.489, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-34-36a1", "age": 0.138, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:20.368917+00:00", "seq": "t2-q1-qos1-34-36a1", "ts": 1794390260.350992}}
+{"t": 1794390260.506, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-34-b642", "age": 0.146, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:20.395662+00:00", "seq": "t2-own-qos1-34-b642", "ts": 1794390260.36048}}
+{"t": 1794390261.372, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-35-fee5", "qos": 1, "expiry": null}
+{"t": 1794390261.374, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-35-29cf", "qos": 1, "expiry": null}
+{"t": 1794390261.376, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-35-20ed", "qos": 1, "expiry": null}
+{"t": 1794390261.416, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-35-fee5", "age": 0.047, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:21.303260+00:00", "seq": "t2-q1-qos1-35-fee5", "ts": 1794390261.368819}}
+{"t": 1794390261.417, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-35-20ed", "age": 0.043, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:21.303697+00:00", "seq": "t2-own-qos1-35-20ed", "ts": 1794390261.3737578}}
+{"t": 1794390261.418, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-35-29cf", "age": 0.046, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:21.304629+00:00", "seq": "t2-q0-qos1-35-29cf", "ts": 1794390261.371587}}
+{"t": 1794390262.388, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-36-e444", "qos": 1, "expiry": null}
+{"t": 1794390262.392, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-36-d939", "qos": 1, "expiry": null}
+{"t": 1794390262.394, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-36-ff4c", "qos": 1, "expiry": null}
+{"t": 1794390262.44, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-36-ff4c", "age": 0.048, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:22.332795+00:00", "seq": "t2-own-qos1-36-ff4c", "ts": 1794390262.391778}}
+{"t": 1794390262.44, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-36-d939", "age": 0.052, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:22.332782+00:00", "seq": "t2-q0-qos1-36-d939", "ts": 1794390262.3883169}}
+{"t": 1794390262.442, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-36-e444", "age": 0.061, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:22.334577+00:00", "seq": "t2-q1-qos1-36-e444", "ts": 1794390262.380994}}
+{"t": 1794390263.397, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-37-e63a", "qos": 1, "expiry": null}
+{"t": 1794390263.4, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-37-df23", "qos": 1, "expiry": null}
+{"t": 1794390263.405, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-37-9d5f", "qos": 1, "expiry": null}
+{"t": 1794390263.452, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-37-e63a", "age": 0.057, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:23.335461+00:00", "seq": "t2-q1-qos1-37-e63a", "ts": 1794390263.394345}}
+{"t": 1794390263.453, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-37-df23", "age": 0.055, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:23.336474+00:00", "seq": "t2-q0-qos1-37-df23", "ts": 1794390263.397543}}
+{"t": 1794390263.459, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-37-9d5f", "age": 0.059, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:23.338237+00:00", "seq": "t2-own-qos1-37-9d5f", "ts": 1794390263.400379}}
+{"t": 1794390264.407, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-38-b56c", "qos": 1, "expiry": null}
+{"t": 1794390264.41, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-38-10a7", "qos": 1, "expiry": null}
+{"t": 1794390264.413, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-38-395f", "qos": 1, "expiry": null}
+{"t": 1794390264.438, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-38-395f", "age": 0.028, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:24.336234+00:00", "seq": "t2-own-qos1-38-395f", "ts": 1794390264.410008}}
+{"t": 1794390264.438, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-38-10a7", "age": 0.03, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:24.336505+00:00", "seq": "t2-q0-qos1-38-10a7", "ts": 1794390264.407556}}
+{"t": 1794390264.439, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-38-b56c", "age": 0.034, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:24.336736+00:00", "seq": "t2-q1-qos1-38-b56c", "ts": 1794390264.404955}}
+{"t": 1794390265.419, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-39-544f", "qos": 1, "expiry": null}
+{"t": 1794390265.421, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-39-b2b1", "qos": 1, "expiry": null}
+{"t": 1794390265.423, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-39-c7a1", "qos": 1, "expiry": null}
+{"t": 1794390265.455, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-39-b2b1", "age": 0.036, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:25.351832+00:00", "seq": "t2-q0-qos1-39-b2b1", "ts": 1794390265.418936}}
+{"t": 1794390265.456, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-39-544f", "age": 0.04, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:25.351573+00:00", "seq": "t2-q1-qos1-39-544f", "ts": 1794390265.4163468}}
+{"t": 1794390265.457, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-39-c7a1", "age": 0.036, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:25.352190+00:00", "seq": "t2-own-qos1-39-c7a1", "ts": 1794390265.421141}}
+{"t": 1794390266.427, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-40-e263", "qos": 1, "expiry": null}
+{"t": 1794390266.429, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-40-0709", "qos": 1, "expiry": null}
+{"t": 1794390266.431, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-40-881e", "qos": 1, "expiry": null}
+{"t": 1794390266.46, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-40-0709", "age": 0.033, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:26.358443+00:00", "seq": "t2-q0-qos1-40-0709", "ts": 1794390266.427377}}
+{"t": 1794390266.46, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-40-e263", "age": 0.036, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:26.357554+00:00", "seq": "t2-q1-qos1-40-e263", "ts": 1794390266.424744}}
+{"t": 1794390266.46, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-40-881e", "age": 0.031, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:26.358316+00:00", "seq": "t2-own-qos1-40-881e", "ts": 1794390266.429276}}
+{"t": 1794390267.438, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-41-4395", "qos": 1, "expiry": null}
+{"t": 1794390267.44, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-41-e66e", "qos": 1, "expiry": null}
+{"t": 1794390267.441, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-41-e519", "qos": 1, "expiry": null}
+{"t": 1794390267.469, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-41-e66e", "age": 0.031, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:27.365067+00:00", "seq": "t2-q0-qos1-41-e66e", "ts": 1794390267.437852}}
+{"t": 1794390267.469, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-41-4395", "age": 0.034, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:27.365187+00:00", "seq": "t2-q1-qos1-41-4395", "ts": 1794390267.435282}}
+{"t": 1794390267.469, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-41-e519", "age": 0.029, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:27.365117+00:00", "seq": "t2-own-qos1-41-e519", "ts": 1794390267.439856}}
+{"t": 1794390268.445, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-42-6118", "qos": 1, "expiry": null}
+{"t": 1794390268.446, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-42-4f07", "qos": 1, "expiry": null}
+{"t": 1794390268.448, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-42-7296", "qos": 1, "expiry": null}
+{"t": 1794390268.48, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-42-4f07", "age": 0.035, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:28.376924+00:00", "seq": "t2-q0-qos1-42-4f07", "ts": 1794390268.444885}}
+{"t": 1794390268.48, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-42-6118", "age": 0.038, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:28.377614+00:00", "seq": "t2-q1-qos1-42-6118", "ts": 1794390268.442364}}
+{"t": 1794390268.481, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-42-7296", "age": 0.035, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:28.377258+00:00", "seq": "t2-own-qos1-42-7296", "ts": 1794390268.446502}}
+{"t": 1794390269.456, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-43-1f13", "qos": 1, "expiry": null}
+{"t": 1794390269.457, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-43-33eb", "qos": 1, "expiry": null}
+{"t": 1794390269.458, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-43-24b5", "qos": 1, "expiry": null}
+{"t": 1794390269.483, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-43-24b5", "age": 0.026, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:29.382794+00:00", "seq": "t2-own-qos1-43-24b5", "ts": 1794390269.4570482}}
+{"t": 1794390269.483, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-43-33eb", "age": 0.028, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:29.382830+00:00", "seq": "t2-q0-qos1-43-33eb", "ts": 1794390269.4556742}}
+{"t": 1794390269.484, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-43-1f13", "age": 0.031, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:29.382516+00:00", "seq": "t2-q1-qos1-43-1f13", "ts": 1794390269.452765}}
+{"t": 1794390270.461, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-44-3ce9", "qos": 1, "expiry": null}
+{"t": 1794390270.462, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-44-dcc4", "qos": 1, "expiry": null}
+{"t": 1794390270.464, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-44-9413", "qos": 1, "expiry": null}
+{"t": 1794390270.505, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-44-3ce9", "age": 0.046, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:30.399158+00:00", "seq": "t2-q1-qos1-44-3ce9", "ts": 1794390270.458743}}
+{"t": 1794390270.505, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-44-9413", "age": 0.043, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:30.405571+00:00", "seq": "t2-own-qos1-44-9413", "ts": 1794390270.462485}}
+{"t": 1794390270.507, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-44-dcc4", "age": 0.046, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:30.405549+00:00", "seq": "t2-q0-qos1-44-dcc4", "ts": 1794390270.460727}}
+{"t": 1794390271.468, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-45-9c10", "qos": 1, "expiry": null}
+{"t": 1794390271.471, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-45-29e6", "qos": 1, "expiry": null}
+{"t": 1794390271.473, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-45-f50a", "qos": 1, "expiry": null}
+{"t": 1794390271.5, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-45-29e6", "age": 0.032, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:31.398908+00:00", "seq": "t2-q0-qos1-45-29e6", "ts": 1794390271.46813}}
+{"t": 1794390271.501, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-45-9c10", "age": 0.035, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:31.399503+00:00", "seq": "t2-q1-qos1-45-9c10", "ts": 1794390271.4656289}}
+{"t": 1794390271.502, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-45-f50a", "age": 0.031, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:31.399519+00:00", "seq": "t2-own-qos1-45-f50a", "ts": 1794390271.470832}}
+{"t": 1794390272.476, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-46-837e", "qos": 1, "expiry": null}
+{"t": 1794390272.478, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-46-fd0d", "qos": 1, "expiry": null}
+{"t": 1794390272.479, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-46-1707", "qos": 1, "expiry": null}
+{"t": 1794390272.505, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-46-837e", "age": 0.032, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:32.403231+00:00", "seq": "t2-q1-qos1-46-837e", "ts": 1794390272.4735591}}
+{"t": 1794390272.506, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-46-fd0d", "age": 0.03, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:32.403918+00:00", "seq": "t2-q0-qos1-46-fd0d", "ts": 1794390272.476099}}
+{"t": 1794390272.508, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-46-1707", "age": 0.031, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:32.404419+00:00", "seq": "t2-own-qos1-46-1707", "ts": 1794390272.4779332}}
+{"t": 1794390273.481, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-47-94d4", "qos": 1, "expiry": null}
+{"t": 1794390273.484, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-47-2d96", "qos": 1, "expiry": null}
+{"t": 1794390273.486, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-47-0798", "qos": 1, "expiry": null}
+{"t": 1794390273.511, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-47-94d4", "age": 0.032, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:33.409814+00:00", "seq": "t2-q1-qos1-47-94d4", "ts": 1794390273.47923}}
+{"t": 1794390273.512, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-47-2d96", "age": 0.03, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:33.410147+00:00", "seq": "t2-q0-qos1-47-2d96", "ts": 1794390273.481408}}
+{"t": 1794390273.512, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-47-0798", "age": 0.028, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:33.410152+00:00", "seq": "t2-own-qos1-47-0798", "ts": 1794390273.48433}}
+{"t": 1794390274.492, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-48-1d49", "qos": 1, "expiry": null}
+{"t": 1794390274.494, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-48-af96", "qos": 1, "expiry": null}
+{"t": 1794390274.496, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-48-0e5c", "qos": 1, "expiry": null}
+{"t": 1794390274.527, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-48-1d49", "age": 0.037, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:34.422501+00:00", "seq": "t2-q1-qos1-48-1d49", "ts": 1794390274.490041}}
+{"t": 1794390274.528, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-48-0e5c", "age": 0.033, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:34.421695+00:00", "seq": "t2-own-qos1-48-0e5c", "ts": 1794390274.494098}}
+{"t": 1794390274.528, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-48-af96", "age": 0.036, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:34.422951+00:00", "seq": "t2-q0-qos1-48-af96", "ts": 1794390274.492307}}
+{"t": 1794390275.498, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-49-d9a8", "qos": 1, "expiry": null}
+{"t": 1794390275.499, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-49-4008", "qos": 1, "expiry": null}
+{"t": 1794390275.501, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-49-9d5e", "qos": 1, "expiry": null}
+{"t": 1794390275.534, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-49-9d5e", "age": 0.034, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:35.429693+00:00", "seq": "t2-own-qos1-49-9d5e", "ts": 1794390275.499291}}
+{"t": 1794390275.534, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-49-4008", "age": 0.036, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:35.429553+00:00", "seq": "t2-q0-qos1-49-4008", "ts": 1794390275.497934}}
+{"t": 1794390275.534, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-49-d9a8", "age": 0.038, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:35.429586+00:00", "seq": "t2-q1-qos1-49-d9a8", "ts": 1794390275.495774}}
+{"t": 1794390276.504, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-50-1c99", "qos": 1, "expiry": null}
+{"t": 1794390276.507, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-50-61da", "qos": 1, "expiry": null}
+{"t": 1794390276.509, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-50-4db7", "qos": 1, "expiry": null}
+{"t": 1794390276.535, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-50-1c99", "age": 0.033, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:36.434375+00:00", "seq": "t2-q1-qos1-50-1c99", "ts": 1794390276.5018291}}
+{"t": 1794390276.535, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-50-4db7", "age": 0.028, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:36.434880+00:00", "seq": "t2-own-qos1-50-4db7", "ts": 1794390276.507355}}
+{"t": 1794390276.537, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-50-61da", "age": 0.032, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:36.434777+00:00", "seq": "t2-q0-qos1-50-61da", "ts": 1794390276.504482}}
+{"t": 1794390277.513, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-51-b347", "qos": 1, "expiry": null}
+{"t": 1794390277.517, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-51-aa17", "qos": 1, "expiry": null}
+{"t": 1794390277.521, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-51-81b1", "qos": 1, "expiry": null}
+{"t": 1794390277.551, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-51-b347", "age": 0.041, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:37.450194+00:00", "seq": "t2-q1-qos1-51-b347", "ts": 1794390277.5097952}}
+{"t": 1794390277.552, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-51-81b1", "age": 0.035, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:37.449919+00:00", "seq": "t2-own-qos1-51-81b1", "ts": 1794390277.5175838}}
+{"t": 1794390277.554, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-51-aa17", "age": 0.04, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:37.451248+00:00", "seq": "t2-q0-qos1-51-aa17", "ts": 1794390277.513279}}
+{"t": 1794390278.524, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-52-9562", "qos": 1, "expiry": null}
+{"t": 1794390278.527, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-52-ddb8", "qos": 1, "expiry": null}
+{"t": 1794390278.529, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-52-b91e", "qos": 1, "expiry": null}
+{"t": 1794390278.556, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-52-ddb8", "age": 0.031, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:38.453734+00:00", "seq": "t2-q0-qos1-52-ddb8", "ts": 1794390278.524252}}
+{"t": 1794390278.556, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-52-9562", "age": 0.034, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:38.454215+00:00", "seq": "t2-q1-qos1-52-9562", "ts": 1794390278.521505}}
+{"t": 1794390278.556, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-52-b91e", "age": 0.029, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:38.454263+00:00", "seq": "t2-own-qos1-52-b91e", "ts": 1794390278.5267892}}
+{"t": 1794390279.537, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-53-c2b0", "qos": 1, "expiry": null}
+{"t": 1794390279.539, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-53-2e62", "qos": 1, "expiry": null}
+{"t": 1794390279.541, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-53-7a24", "qos": 1, "expiry": null}
+{"t": 1794390279.583, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-53-2e62", "age": 0.046, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:39.467011+00:00", "seq": "t2-q0-qos1-53-2e62", "ts": 1794390279.536968}}
+{"t": 1794390279.583, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-53-7a24", "age": 0.044, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:39.466078+00:00", "seq": "t2-own-qos1-53-7a24", "ts": 1794390279.538968}}
+{"t": 1794390279.586, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-53-c2b0", "age": 0.052, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:39.466670+00:00", "seq": "t2-q1-qos1-53-c2b0", "ts": 1794390279.533876}}
+{"t": 1794390280.545, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-54-e898", "qos": 1, "expiry": null}
+{"t": 1794390280.547, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-54-40f2", "qos": 1, "expiry": null}
+{"t": 1794390280.55, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-54-cdf9", "qos": 1, "expiry": null}
+{"t": 1794390280.592, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-54-e898", "age": 0.049, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:40.488807+00:00", "seq": "t2-q1-qos1-54-e898", "ts": 1794390280.543092}}
+{"t": 1794390280.594, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-54-cdf9", "age": 0.047, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:40.489763+00:00", "seq": "t2-own-qos1-54-cdf9", "ts": 1794390280.5474792}}
+{"t": 1794390280.597, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-54-40f2", "age": 0.051, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:40.490348+00:00", "seq": "t2-q0-qos1-54-40f2", "ts": 1794390280.545373}}
+{"t": 1794390281.553, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-55-b2b5", "qos": 1, "expiry": null}
+{"t": 1794390281.555, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-55-9ac1", "qos": 1, "expiry": null}
+{"t": 1794390281.557, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-55-bd40", "qos": 1, "expiry": null}
+{"t": 1794390281.586, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-55-b2b5", "age": 0.035, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:41.483969+00:00", "seq": "t2-q1-qos1-55-b2b5", "ts": 1794390281.550601}}
+{"t": 1794390281.586, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-55-9ac1", "age": 0.033, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:41.484277+00:00", "seq": "t2-q0-qos1-55-9ac1", "ts": 1794390281.553029}}
+{"t": 1794390281.587, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-55-bd40", "age": 0.031, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:41.484306+00:00", "seq": "t2-own-qos1-55-bd40", "ts": 1794390281.555369}}
+{"t": 1794390282.566, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-56-3eff", "qos": 1, "expiry": null}
+{"t": 1794390282.569, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-56-a436", "qos": 1, "expiry": null}
+{"t": 1794390282.575, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-56-bca5", "qos": 1, "expiry": null}
+{"t": 1794390282.628, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-56-bca5", "age": 0.058, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:42.519355+00:00", "seq": "t2-own-qos1-56-bca5", "ts": 1794390282.5696561}}
+{"t": 1794390282.629, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-56-3eff", "age": 0.068, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:42.519618+00:00", "seq": "t2-q1-qos1-56-3eff", "ts": 1794390282.5606132}}
+{"t": 1794390282.634, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-56-a436", "age": 0.068, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:42.521769+00:00", "seq": "t2-q0-qos1-56-a436", "ts": 1794390282.566119}}
+{"t": 1794390283.579, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-57-9b90", "qos": 1, "expiry": null}
+{"t": 1794390283.58, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-57-c5cf", "qos": 1, "expiry": null}
+{"t": 1794390283.581, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-57-cec4", "qos": 1, "expiry": null}
+{"t": 1794390283.608, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-57-cec4", "age": 0.028, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:43.507008+00:00", "seq": "t2-own-qos1-57-cec4", "ts": 1794390283.579921}}
+{"t": 1794390283.608, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-57-9b90", "age": 0.031, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:43.507020+00:00", "seq": "t2-q1-qos1-57-9b90", "ts": 1794390283.577384}}
+{"t": 1794390283.608, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-57-c5cf", "age": 0.03, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:43.507003+00:00", "seq": "t2-q0-qos1-57-c5cf", "ts": 1794390283.578756}}
+{"t": 1794390284.585, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-58-dddf", "qos": 1, "expiry": null}
+{"t": 1794390284.588, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-58-22b3", "qos": 1, "expiry": null}
+{"t": 1794390284.595, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-58-e593", "qos": 1, "expiry": null}
+{"t": 1794390284.626, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-58-22b3", "age": 0.042, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:44.515050+00:00", "seq": "t2-q0-qos1-58-22b3", "ts": 1794390284.584842}}
+{"t": 1794390284.628, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-58-e593", "age": 0.04, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:44.516891+00:00", "seq": "t2-own-qos1-58-e593", "ts": 1794390284.58798}}
+{"t": 1794390284.628, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-58-dddf", "age": 0.045, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:44.516860+00:00", "seq": "t2-q1-qos1-58-dddf", "ts": 1794390284.582238}}
+{"t": 1794390285.602, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-59-c440", "qos": 1, "expiry": null}
+{"t": 1794390285.604, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-59-29c5", "qos": 1, "expiry": null}
+{"t": 1794390285.605, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-59-7031", "qos": 1, "expiry": null}
+{"t": 1794390285.639, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-59-29c5", "age": 0.037, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:45.535384+00:00", "seq": "t2-q0-qos1-59-29c5", "ts": 1794390285.601669}}
+{"t": 1794390285.639, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-59-7031", "age": 0.035, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:45.535507+00:00", "seq": "t2-own-qos1-59-7031", "ts": 1794390285.603979}}
+{"t": 1794390285.642, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-59-c440", "age": 0.043, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:45.535471+00:00", "seq": "t2-q1-qos1-59-c440", "ts": 1794390285.598917}}
+{"t": 1794390286.612, "kind": "sent", "topic": "gpos/spike/p10/q1/t2", "seq": "t2-q1-qos1-60-b4d7", "qos": 1, "expiry": null}
+{"t": 1794390286.614, "kind": "sent", "topic": "gpos/spike/p10/q0/t2", "seq": "t2-q0-qos1-60-7661", "qos": 1, "expiry": null}
+{"t": 1794390286.616, "kind": "sent", "topic": "gpos/spike/p10/own/t2", "seq": "t2-own-qos1-60-e85f", "qos": 1, "expiry": null}
+{"t": 1794390286.655, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t2-own-qos1-60-e85f", "age": 0.041, "body": {"mode": "own/qos1", "now": "2026-11-11T09:44:46.546766+00:00", "seq": "t2-own-qos1-60-e85f", "ts": 1794390286.614155}}
+{"t": 1794390286.655, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t2-q1-qos1-60-b4d7", "age": 0.045, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:44:46.546446+00:00", "seq": "t2-q1-qos1-60-b4d7", "ts": 1794390286.610021}}
+{"t": 1794390286.655, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q0", "seq": "t2-q0-qos1-60-7661", "age": 0.043, "body": {"mode": "q0/qos1", "now": "2026-11-11T09:44:46.546627+00:00", "seq": "t2-q0-qos1-60-7661", "ts": 1794390286.6124318}}
+{"t": 1794390332.753, "kind": "summary", "per_mode": {"q1/qos1": {"sent": 60, "ok": 60, "dup": 0, "missing": []}, "q0/qos1": {"sent": 60, "ok": 60, "dup": 0, "missing": []}, "own/qos1": {"sent": 60, "ok": 60, "dup": 0, "missing": []}}}

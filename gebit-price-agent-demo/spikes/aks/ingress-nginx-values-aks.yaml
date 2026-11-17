@@ -1,0 +1,29 @@
+# SKETCH -- ingress-nginx (self-installed, pinned like the lab: chart
+# 4.15.1 / controller 1.15.1) on AKS, INTERNAL load balancer only.
+# helm upgrade --install ingress-nginx ingress-nginx \
+#   --repo https://kubernetes.github.io/ingress-nginx --version 4.15.1 \
+#   -n ingress-nginx --create-namespace -f ingress-nginx-values-aks.yaml
+controller:
+  replicaCount: 2
+  ingressClassResource:
+    name: nginx            # same class name as the lab -> manifests unchanged
+    default: true
+  config:
+    allow-snippet-annotations: "false"
+    use-http2: "true"      # gRPC needs HTTP/2 on the TLS listener (default)
+    proxy-body-size: "20m" # default 1m; SAM sets 100m per Ingress
+  service:
+    type: LoadBalancer
+    externalTrafficPolicy: Cluster
+    annotations:
+      service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+      service.beta.kubernetes.io/azure-load-balancer-ipv4: "10.20.0.250"
+      service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: /healthz
+      # Azure LB drops idle TCP flows after 4 min by default; SAM MCP
+      # tools/call may hold a request open up to 900 s.
+      service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout: "30"
+  metrics:
+    enabled: true
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+  priorityClassName: demo-critical

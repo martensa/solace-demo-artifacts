@@ -1,0 +1,363 @@
+# G0-05 spike entrypoint (own resource, own topics gpos/spike/p05/...).
+# Broker credentials are dollar-brace placeholders resolved by `sam config
+# apply` from the process environment (run.sh exports them from
+# bsg-trading-desk-demo/.env); nothing secret is stored in this file.
+# Same transport as G0-02/G0-03: web transport 8008 on VPN default, so
+# test events can be published over MQTT 1883.
+#
+# Rules: s1a..s1f = describe_image variants (S1), all with camelCase
+# artifactProcessing (S3); s3sc = snake_case keys; s3plan = the plan's
+# expression form (input.payload:photo.name); s3biv/s3bla = agent
+# targets (S3b); s5 = load_photo path without artifactProcessing.
+kind: entrypoint
+name: gpos-spike-ep-p05
+description: >-
+  Gate 0 spike G0-05 entrypoint of the EuroCIS price agent: photo events
+  on gpos/spike/p05/> start the photo transport spikes.
+spec:
+  type: event_mesh
+  deploy: true
+  values:
+    broker_url: "ws://host.docker.internal:8008"
+    broker_vpn: "default"
+    broker_username: "${P05_BROKER_USER}"
+    broker_password: "${P05_BROKER_PASS}"
+    tls_skip_verify: "false"
+    event_rules:
+      - name: s1a
+        subscriptions:
+          - topic: "gpos/spike/p05/s1/a/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s1a
+        inputExpression: "input.payload:meta"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extractExpression: "input.payload:photo"
+          artifactDefinition:
+            filename: "list_item:name"
+            content: "list_item:data"
+            mimeType: "list_item:mime"
+            contentEncoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s1a"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s1a"
+          topicType: static
+          responseType: error
+      - name: s1b
+        subscriptions:
+          - topic: "gpos/spike/p05/s1/b/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s1b
+        inputExpression: "input.payload:meta"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extractExpression: "input.payload:photo"
+          artifactDefinition:
+            filename: "list_item:name"
+            content: "list_item:data"
+            mimeType: "list_item:mime"
+            contentEncoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s1b"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s1b"
+          topicType: static
+          responseType: error
+      - name: s1c
+        subscriptions:
+          - topic: "gpos/spike/p05/s1/c/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s1c
+        inputExpression: "input.payload:meta"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extractExpression: "input.payload:photo"
+          artifactDefinition:
+            filename: "list_item:name"
+            content: "list_item:data"
+            mimeType: "list_item:mime"
+            contentEncoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s1c"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s1c"
+          topicType: static
+          responseType: error
+      - name: s1d
+        subscriptions:
+          - topic: "gpos/spike/p05/s1/d/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s1d
+        inputExpression: "input.payload:meta"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extractExpression: "input.payload:photo"
+          artifactDefinition:
+            filename: "list_item:name"
+            content: "list_item:data"
+            mimeType: "list_item:mime"
+            contentEncoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s1d"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s1d"
+          topicType: static
+          responseType: error
+      - name: s1e
+        subscriptions:
+          - topic: "gpos/spike/p05/s1/e/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s1e
+        inputExpression: "input.payload:meta"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extractExpression: "input.payload:photo"
+          artifactDefinition:
+            filename: "list_item:name"
+            content: "list_item:data"
+            mimeType: "list_item:mime"
+            contentEncoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s1e"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s1e"
+          topicType: static
+          responseType: error
+      - name: s1f
+        subscriptions:
+          - topic: "gpos/spike/p05/s1/f/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s1f
+        inputExpression: "input.payload:meta"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extractExpression: "input.payload:photo"
+          artifactDefinition:
+            filename: "list_item:name"
+            content: "list_item:data"
+            mimeType: "list_item:mime"
+            contentEncoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s1f"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s1f"
+          topicType: static
+          responseType: error
+      - name: s3sc
+        subscriptions:
+          - topic: "gpos/spike/p05/s3/sc/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s1a
+        inputExpression: "input.payload:meta"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extract_artifacts_expression: "input.payload:photo"
+          artifact_definition:
+            filename: "list_item:name"
+            content: "list_item:data"
+            mime_type: "list_item:mime"
+            content_encoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s3sc"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s3sc"
+          topicType: static
+          responseType: error
+      - name: s3plan
+        subscriptions:
+          - topic: "gpos/spike/p05/s3/plan/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s1a
+        inputExpression: "input.payload:meta"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extractExpression: "input.payload:photo"
+          artifactDefinition:
+            filename: "input.payload:photo.name"
+            content: "input.payload:photo.data"
+            mimeType: "input.payload:photo.mime"
+            contentEncoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s3plan"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s3plan"
+          topicType: static
+          responseType: error
+      - name: s3biv
+        subscriptions:
+          - topic: "gpos/spike/p05/s3b/iv/>"
+            qos: 1
+        messageFormat: json
+        targetAgent: gpos-spike-p05-scout
+        promptTemplate: "Competitor price tag photo {payload.meta.photo_name} (scan {payload.meta.scan_id}) is attached. Read it."
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extractExpression: "input.payload:photo"
+          artifactDefinition:
+            filename: "list_item:name"
+            content: "list_item:data"
+            mimeType: "list_item:mime"
+            contentEncoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s3biv"
+          topicType: static
+          responseType: text
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s3biv"
+          topicType: static
+          responseType: error
+      - name: s3bla
+        subscriptions:
+          - topic: "gpos/spike/p05/s3b/la/>"
+            qos: 1
+        messageFormat: json
+        targetAgent: gpos-spike-p05-scout-la
+        promptTemplate: "Read the competitor price tag photo in artifact {payload.meta.photo_name} (scan {payload.meta.scan_id})."
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extractExpression: "input.payload:photo"
+          artifactDefinition:
+            filename: "list_item:name"
+            content: "list_item:data"
+            mimeType: "list_item:mime"
+            contentEncoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s3bla"
+          topicType: static
+          responseType: text
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s3bla"
+          topicType: static
+          responseType: error
+      - name: s5
+        subscriptions:
+          - topic: "gpos/spike/p05/s5/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s5
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s5"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s5"
+          topicType: static
+          responseType: error
+      - name: s5b
+        subscriptions:
+          - topic: "gpos/spike/p05/s5b/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s5b
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s5b"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s5b"
+          topicType: static
+          responseType: error
+      - name: s3a
+        subscriptions:
+          - topic: "gpos/spike/p05/s3a/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p05-s3a
+        inputExpression: "input.payload:meta"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        artifactProcessing:
+          extractExpression: "input.payload:photo"
+          artifactDefinition:
+            filename: "list_item:name"
+            content: "list_item:data"
+            mimeType: "list_item:mime"
+            contentEncoding: base64
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/ok/s3a"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p05/out/err/s3a"
+          topicType: static
+          responseType: error

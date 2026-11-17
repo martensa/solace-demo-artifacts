@@ -1,0 +1,21 @@
+# data/scenarios.yaml -- scenario buttons of /kasse (UC1 1.3). op: new = CreatePurchase-
+# Transaction, card = AssignLoyaltyMembership, scan = AddArticle (EAN), pay = cash with
+# the next full 5 EUR amount.
+- {id: S1, label: "Ladenhüter", steps: [{op: new}, {op: scan, value: "2099100000018"},
+   {op: scan, value: "2099100000049"}, {op: scan, value: "2099100000100"}, {op: pay}]}
+- {id: S2, label: "Saisonende", steps: [{op: new}, {op: scan, value: "2099100000087"},
+   {op: scan, value: "2099100000131"}, {op: pay}]}
+- {id: S3, label: "Kundenverhalten", steps: [{op: new}, {op: card, value: "CLUB-1001"},
+   {op: scan, value: "2099100000124"}, {op: scan, value: "2099100000179"}, {op: pay}]}
+- {id: S4, label: "Alles im Plan", steps: [{op: new}, {op: scan, value: "2099100000049"},
+   {op: scan, value: "2099100000162"}, {op: scan, value: "2099100000216"}, {op: pay}]}
+- {id: S5, label: "Leitplanke", steps: [{op: new}, {op: scan, value: "2099100000094"},
+   {op: scan, value: "2099100000285"}, {op: pay}]}
+- {id: S6, label: "Ohne Einwilligung", steps: [{op: new}, {op: card, value: "CLUB-1003"},
+   {op: scan, value: "2099100000124"}, {op: pay}]}
+- {id: S7, label: "Zwei Kandidaten", steps: [{op: new}, {op: scan, value: "2099100000018"},
+   {op: scan, value: "2099100000087"}, {op: pay}]}
+- {id: S8, label: "Agent rät ab", steps: [{op: new}, {op: scan, value: "2099100000025"},
+   {op: scan, value: "2099100000100"}, {op: pay}]}
+- {id: S1b, label: "Ente nach Freigabe", steps: [{op: new},
+   {op: scan, value: "2099100000018"}, {op: pay}]}

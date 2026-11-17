@@ -1,0 +1,11 @@
+rendered: <repo>/gebit-price-agent-demo/spikes/g0/g0-01/.rendered
+using auto-detected manifest: manifest.yaml
+deploying entrypoint/gpos-spike-ep-p01 (deploy)...
+entrypoints/
+  + gpos-spike-ep-p01    create + deploy
+6 entrypoints: 1 create, 0 update, 5 delete, 0 unchanged
+
+Applied entrypoints:
+  + gpos-spike-ep-p01    created
+Deployments:
+  * gpos-spike-ep-p01    deploy (deploy) completed

@@ -1,0 +1,6 @@
+{"seq": "t10-1-62f7d4", "event_to_result_s": 9.74, "result_topic": "gpos/spike/out/ok", "result": {"seq": "t10-1-62f7d4", "status": "applied", "time": "2026-11-11T08:58:59.682115+00:00"}, "results": 1}
+{"seq": "t10-2-6a83f2", "event_to_result_s": 6.54, "result_topic": "gpos/spike/out/ok", "result": {"seq": "t10-2-6a83f2", "status": "applied", "time": "2026-11-11T08:58:59.750110+00:00"}, "results": 1}
+{"seq": "t10-3-b795b9", "event_to_result_s": 3.66, "result_topic": "gpos/spike/out/ok", "result": {"seq": "t10-3-b795b9", "status": "applied", "time": "2026-11-11T08:58:59.144248+00:00"}, "results": 1}
+{"seq": "t10-4-254db6", "event_to_result_s": 9.14, "result_topic": "gpos/spike/out/ok", "result": {"seq": "t10-4-254db6", "status": "applied", "time": "2026-11-11T08:59:04.504254+00:00"}, "results": 1}
+{"seq": "t10-5-58a1ef", "event_to_result_s": 3.73, "result_topic": "gpos/spike/out/ok", "result": {"seq": "t10-5-58a1ef", "status": "applied", "time": "2026-11-11T08:58:59.234762+00:00"}, "results": 1}
+{"summary": true, "runs": 5, "approvals_answered": 6, "duplicate_requests": 1, "ok": 5, "err": 0}

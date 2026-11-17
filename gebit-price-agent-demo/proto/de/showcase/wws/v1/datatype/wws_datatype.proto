@@ -1,0 +1,208 @@
+// proto/de/showcase/wws/v1/datatype/wws_datatype.proto
+// Merchandise management (Warenwirtschaft) of the showcase store. Fictional data.
+syntax = "proto3";
+
+package de.showcase.wws.v1.datatype;
+
+option java_multiple_files = true;
+option java_package = "de.showcase.wws.v1.datatype.protobuf";
+option java_outer_classname = "WwsDatatypeProto";
+
+// Decimal as in GEBIT: value = int_val * 10^-scale (int64 is a JSON string).
+message BDecimal {
+  int32 scale = 1;
+  int64 int_val = 2;
+}
+
+message Money {
+  // Mandatory: ISO 4217, always EUR.
+  string currency = 1;
+  BDecimal amount = 2;
+}
+
+message Timestamp {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+
+// Timestamp plus offset to UTC in minutes (Europe/Berlin: 60 or 120).
+message OffsetTimestamp {
+  int64 seconds = 1;
+  int32 nanos = 2;
+  int32 offset = 3;
+}
+
+message Metadata {
+  // Offset per aggregate (article_number + store_id), starting at 1.
+  int64 offset = 1;
+  Timestamp creation_timestamp = 2;
+  string trace_id = 3;
+}
+
+message AuthorizationInformation {
+  // e.g. "gpos-engine" (originator) or "role:marktleitung" (approver).
+  string identity_id = 1;
+  string details = 2;
+}
+
+message ErrorMessage {
+  string error_code = 1;
+  string error_message = 2;
+  repeated ErrorDetails error_details = 3;
+  string trace_id = 4;
+}
+
+message ErrorDetails {
+  string key = 1;
+  string value = 2;
+}
+
+enum PriceSource {
+  PRICE_SOURCE_UNSPECIFIED = 0;
+  PRICE_SOURCE_REGULAR = 1;
+  PRICE_SOURCE_CENTRAL_ACTION = 2;
+  PRICE_SOURCE_BOOTH_ACTION = 3;
+}
+
+enum PriceActionKind {
+  PRICE_ACTION_KIND_UNSPECIFIED = 0;
+  // Seeded central promotion of the head office.
+  PRICE_ACTION_KIND_CENTRAL = 1;
+  // Approved by the store manager at the booth (UC1).
+  PRICE_ACTION_KIND_BOOTH = 2;
+}
+
+enum ReasonCode {
+  REASON_CODE_UNSPECIFIED = 0;
+  REASON_CODE_SLOW_SELLER = 1;
+  REASON_CODE_SEASON_END = 2;
+  REASON_CODE_CUSTOMER_BEHAVIOUR = 3;
+  REASON_CODE_CENTRAL_PROMOTION = 4;
+}
+
+message PriceChange {
+  // ISO date of the regular price change, e.g. "2027-01-11".
+  string date = 1;
+  Money old_price = 2;
+  Money new_price = 3;
+}
+
+message EffectivePrice {
+  string article_number = 1;
+  string store_id = 2;
+  // What the POS charges at the requested time.
+  Money price = 3;
+  Money regular_price = 4;
+  PriceSource source = 5;
+  // Empty for PRICE_SOURCE_REGULAR.
+  string action_id = 6;
+  optional OffsetTimestamp valid_to = 7;
+  // Lowest price of the last 30 days (PAngV). Booth actions never count: a demo
+  // simplification for repeatability, stated on the monitor (10.4).
+  Money ref30 = 8;
+  // Shown reduction against ref30, rounded down; 0 for REGULAR.
+  int32 pct_shown = 9;
+}
+
+message Article {
+  // "100001"
+  string article_number = 1;
+  // "ID100001" = GEBIT AddArticle.article_id
+  string article_id = 2;
+  // EAN-13 with in-store prefix 20, fictitious.
+  string gtin = 3;
+  string name = 4;
+  // Category tag, e.g. "kaffee_tee"; label e.g. "Kaffee & Tee".
+  string category = 5;
+  string category_label = 6;
+  // "1 kg", "200 g", "1 Stück"
+  string pack_label = 7;
+  BDecimal net_quantity = 8;
+  // "g", "ml" or "Stück"
+  string base_unit = 9;
+  BDecimal vat_percent = 10;
+  Money cost_net = 11;
+  // Fixed book price: never reduced.
+  bool price_bound = 12;
+  // Empty = no seasonal article.
+  string season_code = 13;
+  // ISO date
+  string listed_since = 14;
+  // Effective price for the store of the request (business time).
+  EffectivePrice price = 15;
+  int32 stock_on_hand = 16;
+  // Net margin at the effective price, percent.
+  BDecimal margin_percent = 17;
+  optional PriceChange last_price_change = 18;
+}
+
+message ArticleList {
+  repeated Article articles = 1;
+}
+
+message NextDelivery {
+  string expected_on = 1;
+  int32 quantity = 2;
+}
+
+message SalesPerformance {
+  string article_number = 1;
+  string store_id = 2;
+  // Business date the figures refer to (yesterday is the last full day).
+  string as_of = 3;
+  int32 sold_7d = 4;
+  BDecimal plan_7d = 5;
+  // sold_7d / plan_7d
+  BDecimal sell_through_7d = 6;
+  // 8 values, oldest week first; the last value equals sold_7d.
+  repeated int32 weekly_units = 7;
+  BDecimal avg_week_28d = 8;
+  int32 stock_on_hand = 9;
+  // stock_on_hand / avg_week_28d
+  BDecimal weeks_of_supply = 10;
+  // "rising" if avg(last 2 weeks) >= 1.15 * avg(2 weeks before), "falling" if
+  // <= 0.85 *, else "stable".
+  string trend = 11;
+  int32 listed_days = 12;
+  optional NextDelivery next_delivery = 13;
+}
+
+message SeasonInfo {
+  string article_number = 1;
+  // Empty: no seasonal article (status "none").
+  string season_code = 2;
+  string season_label = 3;
+  string start_date = 4;
+  string end_date = 5;
+  // Negative: the season is over.
+  int32 days_to_end = 6;
+  // "none", "before", "running" or "ended"
+  string status = 7;
+  BDecimal avg_day_14d = 8;
+  int32 projected_units_to_end = 9;
+  int32 stock_on_hand = 10;
+  int32 leftover_units = 11;
+  // leftover_units / stock_on_hand
+  BDecimal leftover_share = 12;
+}
+
+message PriceHistoryEntry {
+  Money price = 1;
+  OffsetTimestamp valid_from = 2;
+  optional OffsetTimestamp valid_to = 3;
+  // "REGULAR" or "PROMO"
+  string kind = 4;
+}
+
+message PriceHistory {
+  string article_number = 1;
+  string store_id = 2;
+  repeated PriceHistoryEntry entries = 3;
+  Money ref30 = 4;
+}
+
+message PriceActionId {
+  string action_id = 1;
+  // false: an earlier call with the same proposal_id created it (idempotent).
+  bool created = 2;
+}

@@ -1,0 +1,455 @@
+{
+ "tally": {
+  "A-visitor-first": 239.5,
+  "B-gebit-contract-first": 219,
+  "C-agentic-depth": 209
+ },
+ "judgments": [
+  {
+   "lens": "booth",
+   "scores": [
+    {
+     "design": "A-visitor-first",
+     "total": 86.5,
+     "criteria": {
+      "comprehension_10s_5m": 9,
+      "wow_hero_moment": 8,
+      "timing_no_wait_over_5s": 8.5,
+      "throughput_and_reset": 9,
+      "robustness_fair": 8.5,
+      "ai_proposes_human_decides": 9,
+      "attract_loop": 8.5
+     },
+     "strengths": [
+      "One hero sequence. The visitor scans the duck, a card with the numbers appears in under 1.5 s, the AI text follows 6-9 s after the scan, the visitor taps Freigeben, label and mirror flip, and the re-scan rings up 6,93 on the same receipt while the first duck keeps 8,67. Then the receipt closes, the voucher QR appears and the visitor keeps the duck. Nothing competes with this sequence.",
+      "The cleanest 5 m layer: a 5-word headline 'KI schlaegt vor. Sie geben frei.', a strip of 4 numbered stations, at most 3 zones, the type scale taken from UX 4.6, and a KI/Regel/Mensch/Kasse colour plus label on every element.",
+      "'Ohne Freigabe kein neuer Preis' is literally true. Every shelf price needs a tap in both scenarios (critic C11). Vouchers are catalogue rules, not AI. Proposals expire after 120 s and are never auto-approved. Rejecting is a visible path.",
+      "The 'try to break it' moment works on the hero article. With cost net 4,40, -30 % falls to 13.6 % margin, the check turns red and Freigeben is disabled. That is UX 5.1 item 5, and the engine table in 3.1 recomputes correctly.",
+      "There is no LLM on the payment path: the voucher is a deterministic catalogue pick, so Closed -> QR takes under 2 s, and the 0.45 s Started->Closed gap (critic C6) needs no staged pause.",
+      "The express version (60-75 s) keeps the full arc, including the final receipt, the voucher and the giveaway. Reset is zero-touch with a per-visit preset, honest about 30 days (critic C13). Realistic throughput is 20-25 per hour.",
+      "Smallest failure surface: 3 pods, 1 agent, 2 workflows. Engine watchdogs (4 s / 12 s / 3 s) give an automatic Direktmodus. L3 is a hot spare with a live broker. A travel router with a static IP from G2 prevents the stale-IP wedge. The preflight includes a dry fire with segment times.",
+      "A strong physical attract hook: the counter sign 'Diese Ente verkauft sich schlecht. Scannen Sie sie ... und nehmen Sie sie mit.', the duck giveaway, a labelled replay of the last approval, background-till dots that never reach SAM.",
+      "Floor-cent pricing (6,93 = -20.07 %) makes the big '-20 %' both true and readable at 5 m. It also gives staff a ready answer for compliance questions (C-330/23).",
+      "The counter '13 Ereignisse -> 13 SAM-Laeufe -> 1 KI-Aufruf' turns the owner's per-event idea into a 5-word Solace message."
+     ],
+     "fatal_or_major_flaws": [
+      "MAJOR: the visible AI contribution is thin. The agent only confirms slot A, which the engine already recommended, and writes 2 sentences. In L1 the booth looks identical. A pricing expert can conclude that the AI is decoration. The synthesis needs a visible, honest reason why the AI choice or text adds value, or at least a one-line 'KI hat ... gewaehlt, weil ...'.",
+      "MAJOR (owner fit): the owner's 'shopper's buying behaviour / live promotion in the basket' element is cut from v1. Only the rule voucher 'passt zu Ihrer Ente' remains, which will disappoint the owner and leaves the customer display passive.",
+      "No promo topper. A 4.2 in label is readable at 1-2 m at most (UX 4.4), so watchers in the aisle see the hero flip only on the monitor mirror.",
+      "Freigeben stays disabled until the AI text arrives, for up to 12 s. In the express version (duck only) the visitor stands idle for about 8 s. A second item scan or a host action should mask it.",
+      "The visitor approves a discount on their own basket. That role conflation (shopper vs Marktleitung) invites the remark 'of course I approve my own discount' unless the switch is staged explicitly. The same applies to B and C.",
+      "The existing lab Mac becomes the booth host. That is a single point of failure until the hot spare is drilled. Acceptable, but the L3 switch must be rehearsed."
+     ]
+    },
+    {
+     "design": "B-gebit-contract-first",
+     "total": 68,
+     "criteria": {
+      "comprehension_10s_5m": 6.5,
+      "wow_hero_moment": 7.5,
+      "timing_no_wait_over_5s": 6.5,
+      "throughput_and_reset": 6.5,
+      "robustness_fair": 6.5,
+      "ai_proposes_human_decides": 7,
+      "attract_loop": 7
+     },
+     "strengths": [
+      "The same strong core hero, plus a wired 7.5 in e-paper topper on an ESP32-POE ('AKTION -19 % - statt 8,67 EUR') that carries the flip to the aisle. It is the only workable topper of the three.",
+      "'Eine Freigabe, eine Wahrheit: Etikett 14:32:06,2 - Kasse 14:32:06,4' turns the shelf/till mismatch risk (MKT 4.2) into a selling point.",
+      "The background store traffic is drawn as dots that flow into Event Mesh but not into the KI-Agent: a picture of 'SAM only listens to the booth till'.",
+      "Good for GEBIT people in the deep-dive corner: Event Portal shows GEBIT's contract, plus a runtime audit 'Simulator = GEBIT-Labor: 0 Abweichungen'. If the GEBIT link fails, it falls back automatically to the simulator between visitors, with an honest badge (L0-G/L0-S).",
+      "The voucher 'VCH-ENTE-STAND' (duck free at the booth the next fair day) plus redemption via ApplyAnonymousCoupon closes the 'next visit' loop physically.",
+      "Reset in under 5 s through a real CancelPurchaseTransaction and a price-port revert. S6 'zweite Abschrift' is an operator-only compliance beat."
+     ],
+     "fatal_or_major_flaws": [
+      "MAJOR (comprehension): the guided visit is heavy. It has a persona card, Kundenkarte, a tied offer accepted by the host, two Ente prices, a Guacamole scan, a staged voucher and 3 LLM calls. The monitor stacks a metro line, a triage lane, KPI tiles, a proposal card, the ESL mirror, a receipt column and a ticker in effectively 4+ zones, which fails the 10 s / 5 m test.",
+      "MAJOR (timing): a 6-8 s host pause is scripted between Summe and Bezahlen only to hide the voucher LLM. That is dead air the visitor feels, and on a slow call it falls back to the template anyway.",
+      "MAJOR (message): in the default visit the tied offer and the voucher go out without any click (band N, written by the LLM), and 'Autonomie-Stufe 3' is a host toggle. That blurs 'AI proposes, human decides' for a casual watcher.",
+      "MAJOR (robustness/effort): about 9 deployments (gRPC POS simulator, store-sim, masterdata-sim, pos-gateway, 4 port workers, ledger, contract-check, bridge), full-chain background tills at about 12 msg/s and byte-identical Java-printer goldens. That is effort spent on fidelity the visitor never sees, with a larger failure surface and about 97 PD in 11 working weeks.",
+      "The express version ends with 'Bon abbrechen' (no voucher), an anticlimax. With Ente cost 3,10, -30 % (5,99) still passes the margin floor, so the hero loses the 'try to break it' red check.",
+      "The hero shows '-19 %' at 6,99, which reads oddly at 5 m."
+     ]
+    },
+    {
+     "design": "C-agentic-depth",
+     "total": 68,
+     "criteria": {
+      "comprehension_10s_5m": 6,
+      "wow_hero_moment": 8,
+      "timing_no_wait_over_5s": 7,
+      "throughput_and_reset": 6.5,
+      "robustness_fair": 6,
+      "ai_proposes_human_decides": 7.5,
+      "attract_loop": 6.5
+     },
+     "strengths": [
+      "The best headline: 'KI schlaegt vor. Regeln pruefen. Sie entscheiden.' It makes the rules layer explicit in 6 words.",
+      "The 'KI-Beleg' audit card uses a receipt metaphor retail people know: trigger, facts, proposal, checks with rule ids, approver, execution times, trace. A strong governance take-away for the tablet, the wrap step and the phone page.",
+      "The Stufe 0 'Verboten' beat: the price-bound cookbook is scanned, the agent node is skipped, 0 tokens, rule F-02 is named. A 10-second proof that rules outrank AI.",
+      "Better masking: the chips scan covers the hero LLM, and a payment-method choice on the customer display covers the voucher LLM, which beats B's dead pause.",
+      "On reset the ESL reads 'Simulation neu gestartet', which defuses the 'price goes back up every 3 minutes' (Flatterpreise) optics on the shelf.",
+      "A UEBERLISTEN red-team control card (prompt injection blocked by the deterministic validator) is an engaging beat for techies. The eval 'Pruefstand 36/36' tile, a demo-owned TTL queue for the till rule and a retained MQTT ESL topic are solid robustness details."
+     ],
+     "fatal_or_major_flaws": [
+      "MAJOR (comprehension): governance depth leaks into the 5 m layer. The concept 'Stufe 0/1/2' needs explaining. The zone 'Unter der Haube' shows node chips and costs in US-Cent. The attract counter line runs to about 20 words ('1.432 Kassenereignisse -> ... -> O 1,1 US-Cent'). The title 'Der glaeserne Preisagent' also needs explaining.",
+      "MAJOR (message): Stufe 2 auto-actions inside the hero visit (combination offer, voucher) with 'Stopp' countdowns on the tablet the visitor is holding contradict 'Sie entscheiden' for passers-by. They also add a second, unrequested decision UI.",
+      "MAJOR (robustness/effort): the largest surface. 3 workflow agents plus a chat agent, 20 tools, 2 connectors, HMAC tokens, Keycloak run identities, OTel/Tempo span reconstruction (Tempo OOM seen before), nightly evals, a four-eyes queue, policy profiles and a kill switch, about 100 PD. The automatic consistency rollback could undo an approved price in front of the visitor.",
+      "The apply path has 5 sequential tool nodes plus a 2 s consistency wait, and ingest has an 800 ms barrier, so the hero flip has more latency and variance than A's single apply node.",
+      "The guided visit is overstuffed for 180 s: Ente, chips, offer, approval, Guacamole, re-scan, voiding the first Ente, cookbook, payment choice, voucher. The void removes the 'two prices on one receipt' proof. The express version skips payment and voucher.",
+      "The topper is a Wi-Fi-only Seeed reTerminal, which needs an approved access point. In practice there will be no topper, and the hero still shows '-19 %'."
+     ]
+    }
+   ],
+   "winner": "A-visitor-first",
+   "best_ideas_to_graft": [
+    "A: the counter sign 'Diese Ente verkauft sich schlecht. Scannen Sie sie ... und nehmen Sie sie mit.' plus the duck as giveaway. This is the 5 m hook and the take-away.",
+    "A: floor-cent pricing so the hero says an exact '-20 %' (8,67 -> 6,93, -20.07 %). The staff answer 'why 6,93 and not 6,99?' becomes a compliance talking point (C-330/23).",
+    "A: cost data chosen so that -30 % on the hero trips the margin floor in red and disables Freigeben. Keep 'try to break it' on the hero article.",
+    "A: the counter '13 Ereignisse -> 13 SAM-Laeufe -> 1 KI-Aufruf' and the strip of 4 numbered stations (Scan -> KI-Vorschlag -> Freigabe -> Neuer Preis).",
+    "A: a catalogue voucher picked by rule on Closed, with no LLM on the payment path. QR in under 2 s, nothing to hide behind the 0.45 s burst.",
+    "A: engine watchdogs (4 s draft / 12 s text / 3 s apply / 3 s voucher) with an automatic labelled Direktmodus. A stale guard (events older than 20 s never propose). A travel router with a static IP from G2. A hot spare with a live broker in direct mode.",
+    "A: an express version of 60-75 s that keeps the final receipt, the voucher and the giveaway. Zero-touch reset on the next Created. An idle basket of 90 s is auto-cancelled ('nichts verkauft, kein Gutschein').",
+    "B: a wired 7.5 in e-paper topper on an ESP32-POE ('AKTION -20 % - statt 8,67 EUR') for aisle visibility, next to the 4.2 in shelf label and the monitor mirror.",
+    "B/C: the 'Eine Freigabe, eine Wahrheit: Etikett hh:mm:ss,s - Kasse hh:mm:ss,s' consistency line on the monitor.",
+    "B: background-till dots that flow into Event Mesh but visibly not into the KI-Agent, as the gating picture.",
+    "B: a voucher redeemable at the booth (VCH-ENTE-STAND, duck next fair day, or C/UX: espresso at the GEBIT bar). Redemption fires ApplyAnonymousCoupon and the monitor says 'Gutschein eingeloest - Kunde kam wieder'.",
+    "B: in the deep-dive corner for GEBIT people, Event Portal with GEBIT's contract and 'Simulator = GEBIT-Labor: 0 Abweichungen'. An automatic L0-G -> L0-S fallback between visitors with an honest badge.",
+    "B: S6 'zweite Abschrift' as an operator-only compliance beat (new reference 6,99).",
+    "C: the headline 'KI schlaegt vor. Regeln pruefen. Sie entscheiden.' (or A's 4-station strip with a 'Regeln' tick inside station 2).",
+    "C: the 'KI-Beleg' audit card (trigger, facts, checks with rule ids, approver role, execution times), compact on the tablet after approval and on the phone page.",
+    "C: the Stufe 0 cookbook beat (price-bound, agent node skipped, 0 tokens, 'Regel F-02') as an optional 10-second Q&A beat.",
+    "C: if any LLM stays on the payment path, a payment-method choice on the customer display as the natural 5-8 s gap instead of a scripted host pause.",
+    "C: the ESL reads 'Simulation neu gestartet' on reset, so the shelf never shows an unexplained price increase.",
+    "C: a UEBERLISTEN red-team control card for the deep-dive (injection blocked by the validator). A demo-owned TTL / max-redelivery queue for the till rule. A retained MQTT ESL topic so a rebooted ESP32 shows the right price immediately."
+   ],
+   "corrections": [
+    "A section 9.4 (line 1242): 'Latin-1 font (umlauts, euro)' is wrong. ISO-8859-1 has no euro sign (U+20AC exists only in ISO-8859-15 at 0xA4 or in CP1252 at 0x80). The ESP32 firmware needs a Unicode-capable font (for example U8g2) or an 8859-15 mapping, otherwise the label cannot render the euro sign.",
+    "B S2 (lines 264-268) vs B 8.4: 'MHD -30 % -> 0,99 EUR' is really -33.6 % against 1,49 (computed). That exceeds B's own 30 % step plus the 2-point rounding tolerance, so by B's policy it falls into four-eyes, contradicting 'approval (single click) by default'. Use floor pricing (1,04 = -30.2 %, as A does) or widen the band.",
+    "B S2: the label 'MHD 16.02.' contradicts the preset 'Mi 14:00'. 16.02.2027 is a Tuesday and Wednesday is 17.02.2027 (python date check; B's own header says the fair runs Tue-Thu).",
+    "C S5 (line 250): the same 0,99 is -33.6 %, not '-30 %'. C's bands go by nominal ladder step, so the policy holds, but no screen or label may display '-30 %'.",
+    "C 6.4 / 11.1: 'tool-only, about 2.5-3.5 s' is optimistic. The happy path is 5 sequential tool nodes (verify, recheck, commit, confirm, audit) at a measured 0.12-1.4 s each (critic fact 2), plus a confirm wait of up to 6 s. The ESL publish only happens at node 3, so tap -> flip can exceed the 2.5 s target. G0 must measure it.",
+    "C 10.2 vs 10.3: the promo topper Seeed reTerminal E1001 is Wi-Fi only (UX 6.1). That contradicts C's own 'everything wired' rule and Messe Duesseldorf's ban on own access points without approval (UX 1.1). Use a Waveshare 7.5 in panel on an ESP32-POE as in B.",
+    "tradeshow-ux.md 0 item 11 and 7.6 recommend 2-minute 'Messe-Zeitraffer' promotions repeated for every visitor. Critic C13 shows that a successive promotion resets the section 11 PAngV reference price. All three designs correctly use per-visit presets instead, and the synthesis must not bring the 2-minute promotion back.",
+    "tradeshow-ux.md 5.1 item 3 says individual reductions 'fall under section 9 instead'. Critic C3 shows that section 9 Abs. 1 Nr. 1 and section 11 Abs. 4 Nr. 1 exempt different duties. None of the designs repeats the error, so keep it out of the talk track.",
+    "tradeshow-ux.md 9 cost model (USD 0.025 per call, 20k uncached in + 1k out) is superseded by critic C8 (USD 0.0049 warm to 0.0192 cold per call). All designs use the critic figures.",
+    "C attract loop and monitor (lines 138, 1518, 1710): costs shown in 'US-Cent' at a German retail fair whose prices are all in EUR. This is a units mismatch for the 5 m audience. Show it in EUR, or as 'unter 2 Cent', and only on the ticker or in the deep-dive corner."
+   ],
+   "must_haves_for_synthesis": [
+    "Take A as the base: one hero sequence (scan duck -> card with numbers under 1.5 s -> AI text by 9 s at p90 -> tap -> ESL plus mirror flip under 6 s -> re-scan rings up the new price while the earlier line keeps the old one -> Summe/Bar -> 'Verkauf final' -> voucher QR under 2 s).",
+    "No visitor wait longer than about 5 s without visible progress. The deterministic card comes first, with an elapsed 'KI formuliert ... s' timer and a visitor action that masks the LLM (a second item scan). After 12 s Freigeben switches to the template text, labelled.",
+    "At most 1 LLM call in the hero path and at most 1 in flight per till. No LLM on the payment path unless it is drafted at the hero moment and has a template fallback. Never script a dead host pause for it.",
+    "'Ohne Freigabe kein neuer Regalpreis' must be literally true in the default visit. No auto-executed customer-facing AI action in the default visit. If a live basket offer is kept for the owner, label it a pre-approved catalogue tied offer ('aus freigegebenem Aktionskatalog'), never 'selbstständig'.",
+    "A 'try to break it' guardrail moment on the hero article: the next deeper step turns the margin check red and disables Freigeben. Rejecting is visible. Expiry means no change.",
+    "Answer the owner's 'buying behaviour / live promotion' wish in the lightest form, for example A's affinity voucher made visible on the customer display ('passt zu Ihrer Ente') or one tied offer as an optional variant. Never as a second approval in the hero visit.",
+    "An express version of 75 s or less that keeps the full arc, final receipt and voucher included (no cancel ending). Show mode at :00 and :30. Realistic planning number 20-25 hands-on visitors per hour.",
+    "A per-visit preset reset in under 10 s, zero-touch on the next Created, with the 'Simulierte Filiale - Mi 14:00' chip always visible. The ESL shows 'Neue Runde / Simulation' on reset, so the shelf never shows an unexplained price increase.",
+    "Aisle visibility of the hero: a wired 7.5 in topper (ESP32-POE) plus the 4.2 in shelf label plus an ESL mirror tile that is always on the monitor.",
+    "The monitor has at most 3 zones and a headline of at most 7 words (C's 'KI schlaegt vor. Regeln pruefen. Sie entscheiden.' or A's). Passer-by text at least 80 px, prices 220-260 px, KI/Regel/Mensch/Kasse colour plus label. Technical detail (tokens, cost, node chips, Stufen) only on the 32 px ticker or in the deep-dive corner.",
+    "The counter 'N Ereignisse -> N SAM-Laeufe -> 1 KI-Aufruf' as the visible proof of the owner's per-event idea. The background tills never reach SAM, and the picture shows it.",
+    "Attract loop: a physical humorous counter sign, the duck giveaway, a labelled replay of the last real approval, day counters of 10 words or fewer, ambient background-till motion, no sound.",
+    "Explicit role staging: 'Sie sind jetzt Marktleitung', the tablet on the staff side of the counter, the approver recorded as a role pseudonym. A staff approver in show mode.",
+    "Take-away: a static phone page (payload in the fragment, no personal data) with 'So ist Ihr Gutschein entstanden' and the real numbers of the visit (optionally C's KI-Beleg), plus a benefit redeemable at the booth (espresso at the GEBIT bar or duck next day) whose redemption appears on the monitor.",
+    "Degradation ladder with automatic switching and honest badges: L1 template text (LLM slow, 429, budget breaker, internet down), L2 Direktmodus through engine watchdogs, L3 hot spare (drilled to 3 min or less), L4 film. A stale-event guard or TTL queue so a backlog never produces late proposals.",
+    "Fair hardening: everything wired with 5G failover, a static booth LAN and travel router from the first rehearsal, a dedicated booth host that never sleeps, UPS, a preflight with a timed dry fire READY within 15 min of a cold start, spares for scanner, tablet and ESP32, a dedicated LiteLLM fair key with alarms.",
+    "Keep the minimal footprint: 3 services, 1 writer agent, 2 workflows. GEBIT-fidelity extras (B) and governance extras (C) go only into the deep-dive corner and only if they cannot break the hero path.",
+    "A 10-second test with non-team people at G2 (4 of 5 can say what happened) and a readability check at 5 m as gate criteria."
+   ]
+  },
+  {
+   "lens": "engineering",
+   "scores": [
+    {
+     "design": "A-visitor-first",
+     "total": 82,
+     "criteria": {
+      "sam_claim_correctness": 8,
+      "known_bug_avoidance": 9,
+      "latency_cost_realism": 9,
+      "gebit_contract_fidelity": 7,
+      "swap_ability": 7.5,
+      "effort_realism": 7.5,
+      "operational_simplicity": 9
+     },
+     "strengths": [
+      "Smallest SAM surface that still meets the owner's literal idea: 1 entrypoint with 2 rules, 2 workflows, 1 fast agent, 1 MCP connector with a generated manifest, 3 pods from one image. Every YAML field used matches `sam config schema show` (agent/tool/switch nodes, output_schema_override, coalesce, workflow.run_id) and the verified BSG 2.493.0 patterns",
+      "The raw path is right per the docs: no input_schema plus inputExpression 'input.payload:' delivers the JSON re-serialized as workflow.input.text (event-mesh cli.md:97, workflow-design.md:476). The decision workflow declares every BFF key and no `text`, so input arrives as fields (BSG pattern)",
+      "Exactly 1 LLM call per visit, behind a switch. The voucher is a deterministic catalogue rule issued in a tool-only run on Closed, which avoids the verified 0.45 s PaymentProcessStarted->Closed trap entirely. Cost is USD 13-29 and fits even inside the 50 USD cap",
+      "The apply-decision workflow is a single tool node (<1.5 s), and nothing joins across switches. fail_fast true plus engine watchdogs (4 s / 12 s / 3 s) with labelled L1/L2 badges, and a late SAM result is ignored as a duplicate",
+      "The numbers are engineered for a visible guardrail: -30% drops to 13.6% margin against a 20% floor (arithmetic re-checked: 6.06/1.19=5.09 net vs 4.40 cost). The floor-rounded 6,93 is an honest -20% against ref30. The per-visit preset resolves critic C13",
+      "Known-bug hygiene: forbids the runtime artifact tools by name, ASCII agent text, waits for 'persistent receiver started', on_receive for raw events, daily sam auth login, Loki export, travel router against the k3s stale-IP wedge, installer guard against other overlays"
+     ],
+     "fatal_or_major_flaws": [
+      "Thin coverage of the owner's ideas: no buying-behaviour or basket offer and no loyalty, and the only AI act is 'pick slot A/B + 2 sentences'. That is defensible for the visitor, but the synthesis should add one cheap secondary beat",
+      "Dual ingestion: the engine also holds a direct, non-guaranteed subscription to the raw topics, and assess_event re-ingests idempotently. That works, but SAM becomes optional on the critical path because the engine can do everything, which weakens the 'SAM orchestrates' claim unless the counters are honest",
+      "POS commands go over our own HTTP adapter with GEBIT method names, not gRPC. The swap to GEBIT's PurchaseTransactionService is real new work (bridge mode) that the 6 PD GEBIT package may underestimate",
+      "The 'same duck, two prices on one receipt' hero proof depends on unverified GEBIT semantics (do open positions keep their price, does a repeated AddArticle merge positions). The design asks the question, but the choreography has no plan B such as voiding the first line (C) or using supplied_price_information (B)"
+     ]
+    },
+    {
+     "design": "B-gebit-contract-first",
+     "total": 74,
+     "criteria": {
+      "sam_claim_correctness": 8,
+      "known_bug_avoidance": 8,
+      "latency_cost_realism": 7.5,
+      "gebit_contract_fidelity": 9.5,
+      "swap_ability": 9.5,
+      "effort_realism": 5,
+      "operational_simplicity": 4.5
+     },
+     "strengths": [
+      "Best swap story: a real gRPC PurchaseTransactionService simulator (stubs via protoc --descriptor_set_in), price/promo/voucher/ESL ports with impl=sim|gebit, kustomize overlays solace-lab/gebit-lab, and descriptors mounted rather than baked into the image. Swapping changes who publishes the raw topics and who answers gRPC",
+      "Concrete fallback chain for the next-scan moment: P1 article master, then P2 GEBIT promotion, then P3 `supplied_price_information` on AddArticle. Verified: basket_command.proto:41-43, field 6 'to overrule the other price information from masterdata'. This is the only design whose live moment survives a late GEBIT price contract",
+      "Correct GEBIT-native mechanics: the tied offer is redeemed through ApplyAnonymousCoupon by a human tap (critic 2.10 option 1), the voucher has the CheckoutCoupon shape, and there is a v0 ArticlePriceChangeRequested proposal handed to GEBIT as AsyncAPI. All RPC and event names used exist in the protos (re-checked against the service and event .proto files)",
+      "Solid concurrency design: a per-tx Postgres advisory lock in ingest, event_inbox ON CONFLICT on (tx_id, offset), terminal events authoritative, proposal_hash binding of decisions with a hash_mismatch verdict",
+      "The input_schema {text required} path is correct: an object with undeclared fields falls back to {text: <json>} (workflow-design.md:476-478). The G0 SHA-256 identity test of the raw text is a good check",
+      "A contract-check service (strict in sim, lenient in the GEBIT lab) gives a continuous, measurable swap proof"
+     ],
+     "fatal_or_major_flaws": [
+      "Over-engineered for 11 working weeks: about 9 deployments (pos-sim, store-sim, masterdata-sim, pos-gateway, bridge, tools, 4-worker ports, ledger, contract-check, ui), plus Event Portal/EMA, a durable ledger queue on VPN sam and 7 background tills with full event chains. The team estimate puts 97 PD against 99 PD available, with G2 on 18 Dec promising S1-S6, all screens, ESL, L1-L3, Grafana, ledger and Event Portal in two weeks",
+      "The byte-identical golden test against GEBIT's pretty-printed samples needs a Java-JsonFormat-compatible printer whose style is only inferred [A]. No consumer needs byte identity, yet it is scheduled as G0 test 7, which wastes Gate-0 time",
+      "3 LLM calls per guided visit (markdown, offer, voucher). The voucher writer relies on the host talking 6-8 s between Summe and Bezahlen. The guided path also adds a persona card and a coupon tap, so it has more steps and more failure points",
+      "Persona recognition rests on LoyaltyMembershipAssigned.capturingInformation.inputValue, which the table presents as fact. The event carries no membership id, capturing_information is optional on AssignLoyaltyMembership (loyalty_command.proto:90-91), and the critic lists it as an open question (Q10)",
+      "The approver identity marktleitung.messe@solace.lab via userIdentityExpression is unproven under enforced RBAC. If that identity lacks the invoke scope, the entrypoint publishes nothing on either output (event-mesh.md Outputs). power_user is the only verified identity",
+      "T1 topology in gebit-lab mode puts gRPC for every scan over the fair uplink, so an uplink loss stops the till, not only the LLM. Mitigated by the L0-S fallback, but only between visitors"
+     ]
+    },
+    {
+     "design": "C-agentic-depth",
+     "total": 60,
+     "criteria": {
+      "sam_claim_correctness": 6.5,
+      "known_bug_avoidance": 6,
+      "latency_cost_realism": 6.5,
+      "gebit_contract_fidelity": 7.5,
+      "swap_ability": 7,
+      "effort_realism": 4.5,
+      "operational_simplicity": 4
+     },
+     "strengths": [
+      "Strongest governance story: Stufe 0/1/2 autonomy bands computed after the LLM, policy as code, a deterministic validator, and the KI-Beleg audit card. The Stufe 0 beat (price-bound cookbook: agent node skipped, 0 tokens) is cheap and makes SAM's skipped-node rendering visible (monitoring-activity.md:63-69)",
+      "An HMAC decision token whose key lives only in the BFF and core, so neither an agent nor a stray publisher can forge an approval. It is a better approval integrity mechanism than A's idempotency-only design",
+      "A natural pause before Closed: the visitor picks a payment method on the customer display after Summe. That is a better answer to the 0.45 s voucher problem than B's 'host talks 6-8 s'",
+      "Valid SAM Evaluations YAML (llm_judge with model, promptTemplate and choiceScores; experiment with datasetId, targetAgent, evaluatorIds and primaryEvaluatorId; seeded Closed QA/Security exist). It correctly notes that workflows cannot be experiment targets",
+      "Honest cost (USD 70-95, above the 50 USD cap, so a 150 USD key is requested) and an extensive Gate-0 list that flags its own risky constructs (switch convergence, identities, existingQueueName, chat HIL)",
+      "The choreography voids the first Ente line ('zurueck ins Regal'), which sidesteps the unverified 'two prices for one article in one basket' GEBIT semantics"
+     ],
+     "fatal_or_major_flaws": [
+      "The apply-decision graph is likely broken: `record` is a target of two switches (gate and commit_gate). The Activities doc says a node is skipped 'because a decision chose another branch' (monitoring-activity.md:67-69), so when gate selects recheck, record is probably pruned before commit_gate can choose it. REJECT/EXPIRED/POLICY_CHANGED would then never be recorded. `audit` also joins 3 branches",
+      "fail_fast: false on both workflows means a failed agent node silently skips finalize and the run 'finishes as a success' (step-semantics.md:52-62). errorOutput never fires, so the watchdog is the only failure signal",
+      "Too much on the critical path: an 800 ms read-your-writes barrier in every ingest, plus 5 sequential tool nodes on the commit path, including confirm_consistency blocking up to 6 s with a POS rollback. Against measured 0.12-1.4 s per tool node, the '3 s tap -> run finished' target is unrealistic, and a rollback after a visible ESL flip confuses visitors",
+      "The largest scope of the three: 3 workflow-facing agents plus a chat agent, 2 connectors, 4 eval experiments nightly, Tempo span reconstruction from internal A2A status payloads, a hash-chained audit, four-eyes, kill switch, profiles, S1-S6+G15 and a 43-inch /glasbox. That is 100 PD, a 25 PD G1, an unrealistic G2 on 18 Dec, 14 Gate-0 tests in 8 working days and a 15-step preflight, with the Tempo/Loki stack on the booth Mac (tempo OOM seen before)",
+      "Factually wrong talking point: 'the agents in the workflow have no tools and no connectors at all'. The runtime attaches the artifact/data tools regardless of `toolsets: []` (memory project_sam_v2_workflow_events.md; critic 5.2 Q10), and C's own system prompt forbids them by name",
+      "New Keycloak identities (gpos-kasse-01, gpos-marktleitung) as defaultUserIdentity are unproven, and a second durable consumer queue on VPN sam adds spool-over-quota exposure"
+     ]
+    }
+   ],
+   "winner": "A-visitor-first",
+   "best_ideas_to_graft": [
+    "A: one LLM call per visit, behind the switch, plus a deterministic catalogue voucher issued in a tool-only run on PurchaseTransactionClosed (no LLM inside the 0.45 s payment burst)",
+    "A: a deterministic draft card with numbers and checks in under 1.5 s, the AI text after 6-9 s, and engine watchdogs (4 s draft / 12 s text / 3 s apply/voucher) with visible badges ('Text aus Vorlage', 'Direktmodus'); a late SAM result is treated as a duplicate",
+    "A: preset numbers engineered so the visitor's '-30 %' visibly trips the margin floor, and the floor-rounded price point (6,93 = honest -20 % against ref30)",
+    "A: a lean footprint (3 pods, 1 entrypoint/2 rules, 2 workflows, 1 agent, 1 connector) and a single-node tool-only apply-decision workflow",
+    "A: the counter 'N Ereignisse -> N SAM-Laeufe -> 1 KI-Aufruf', fed by tool nodes publishing samrun events (label POS events and the decision separately)",
+    "A: a travel router from G2 so the booth Mac keeps one IP from lab to fair (k3s stale-IP wedge)",
+    "B: the next-scan fallback chain P1 article master -> P2 GEBIT promotion -> P3 AddArticle.supplied_price_information (verified in basket_command.proto:41-43) -> stay simulated",
+    "B: the price port with a GEBIT-styled v0 ArticlePriceChangeRequested contract sent to GEBIT as AsyncAPI, so the missing contract becomes our proposal",
+    "B: a lenient contract-check service validating every raw event against GEBIT's descriptors in both environments, as the measurable swap proof (without byte-identical printing)",
+    "B: kustomize overlays solace-lab/gebit-lab, multi-arch images, descriptors mounted and never baked into the image",
+    "B: a per-tx Postgres advisory lock plus event_inbox (tx_id, offset) ON CONFLICT, terminal events authoritative, proposal_hash bound to each decision",
+    "B: the tied offer redeemed via the native ApplyAnonymousCoupon by a human tap at the till (critic 2.10 option 1), as the optional secondary beat",
+    "C: an HMAC decision token (key only in BFF and engine) bound to proposal_hash, verified in the tool-only apply workflow",
+    "C: the payment-method choice on the customer display as the natural pause between StartPaymentProcess and CreateCashPayment",
+    "C: the Stufe-0 beat (price-bound cookbook, agent node skipped, 0 tokens, rule id shown) as a cheap 'the AI does not decide everything' moment visible in SAM Activities",
+    "C: voiding the first hero line in the choreography, to avoid depending on GEBIT's unverified mixed-price-per-article semantics",
+    "C: one SAM Evaluations experiment on the writer agent with the exact node instruction, as a pre-fair regression gate (no nightly multi-suite programme)"
+   ],
+   "corrections": [
+    "Tooling (critic and all designs): the local `sam` CLI (SAM_CLI_PATH=/Users/.../.local/bin/sam) reports `sam version 2.542.1`, not 2.493.0. Every '[V schema show]' claim reflects a newer CLI than the lab server (image solace-agent-mesh:2.493.0); re-check against the server with `sam config plan` before building on it",
+    "All three: `acknowledgmentPolicy: on_receive` as a plain string is accepted ('string shorthand expands to {mode: <string>}', `sam config schema show entrypoint --type event_mesh`, CLI 2.542.1). on_receive is also the default (event-mesh.md 'Acknowledgment Policy'), so it can be omitted. Use the object form to be safe on 2.493.0",
+    "C 6.1: 'the agents in the workflow have no tools and no connectors at all' is false. The runtime attaches create_sqlite_db, merge_structured_data, artifact_search_and_replace_regex etc. regardless of `toolsets: []` (memory project_sam_v2_workflow_events.md 'Ban the data/artifact tools'; critic 5.2 Q10). C's own prompt forbids them",
+    "C 6.4: the `record` node as a target of two switches (gate, commit_gate) will probably be pruned when gate picks recheck. A node is skipped 'because a decision chose another branch' (samdocs using-agent-mesh__monitoring-activity.md:67-69). Restructure with one record node per switch and converge in audit via coalesce",
+    "C 6.3/6.4: fail_fast: false skips a failed agent's direct dependent unconditionally, and the run 'finishes as a success' (samskills step-semantics.md:52-62, workflow.md:97-99). errorOutput never signals agent failures",
+    "C 6.8: experiment `models: [fast, workflow]` has the wrong shape. Each entry is a map keyed by modelConfigId, max 3 (samskills experiment.md:71)",
+    "C 6.9: PromQL labels gen_ai_token_type='cache_read'/'cache_write' are cited as [V retail dashboard], but the repo dashboards only use 'input' and 'output' (grep over *.json/*.py/*.yaml). Unverified",
+    "C 11.1: 'tap -> decision run finished 3 s' is unrealistic with verify -> recheck -> commit -> confirm (waits up to 6 s) -> audit, at 0.12-1.4 s per tool node (sam-capabilities.md:647). Expect 4-8 s",
+    "C 6.2: `existingQueueName` makes the entrypoint CLI-only, and the UI blocks View/Edit (event-mesh.md:110). Acceptable, but say so in the runbook",
+    "B 5.1: 'LoyaltyMembershipAssigned (capturingInformation.inputValue = card value)' is unverified. The event has no membership id field (loyalty_event.proto:109-138), and capturing_information is optional on AssignLoyaltyMembership (loyalty_command.proto:90-91). Open GEBIT question (critic 5.1 Q10)",
+    "B 4.9/G0: 'byte-identical' output depends on a Java JsonFormat pretty-print style that is only inferred from the files [A]. Not needed by any consumer, so it should not be a Gate-0 criterion",
+    "B and C: approver/run identities other than power_user@solace.lab are unproven. If the resolved identity lacks the invoke scope, the entrypoint 'publishes nothing on either output' (samdocs building__entrypoints__event-mesh.md, Outputs section). Keep power_user as default until G0 proves otherwise",
+    "A 0.4/5.2: '12 of the 13 runs ... take well under 1.5 s' is optimistic. Each run is two sequential MCP tool nodes (assess + note_event/voucher/discard), 0.25-2.8 s at the measured 0.12-1.4 s per node. The '13 Ereignisse' counter also mixes 12 POS events with 1 tablet decision",
+    "Input handling, no correction needed: A (no input_schema) and B/C (input_schema with only `text`) both get the raw JSON as workflow.input.text per event-mesh cli.md:97 and workflow-design.md:476-478. The BSG comment confirms that declaring `text` intentionally triggers the wrapped form",
+    "All event and command names used by the three designs exist in the 2.50.0 protos (re-checked: e.g. PurchaseTransactionInChargingFinancialTransaction, CashPaymentPositionCreated, PaymentProcessAborted, AbortPaymentProcess, GetPurchaseTransaction, ApplyAnonymousCoupon). No naming errors found"
+   ],
+   "must_haves_for_synthesis": [
+    "Use A's lean core as the baseline: pos (sim | bridge), engine + MCP tools, ui/BFF; 1 event_mesh entrypoint with 2 rules (booth-till raw events -> pos-event workflow; decisions -> apply-decision workflow); 1 fast-tier writer agent; 1 MCP connector with a generated `manifest:` list; tools return Pydantic models under 2048 B",
+    "Raw GEBIT proto3 JSON of the booth till only reaches SAM unchanged (no input_schema, or one with only `text`), with a deterministic ingest tool node first and background tills never subscribed. G0 must prove a 5 KB tool input, 450 runs/h and 6-7 parallel runs per payment burst, with a digest-topic fallback",
+    "At most 1-2 LLM calls per visit behind a switch. The voucher is deterministic in a tool-only run on Closed (LLM text optional, precomputed earlier or behind C's payment-method pause), never issued on Cancelled",
+    "Approval = tablet -> BFF -> decision event (HMAC token + proposal_hash, from C/B) -> tool-only apply workflow with 1-2 tool nodes. Run identity power_user@solace.lab unless G0 proves new identities. No SAM notifications and no native HIL on the booth path",
+    "Workflow graphs without fragile joins: fail_fast true, no node targeted by two switches, every switch with a no-op default, coalesce on every cross-branch reference, and output fields declared in output_schema_override and named in the instruction",
+    "State outside SAM keyed by (purchaseTransactionId, metadata.offset): positionId -> article map, idempotent tools, advisory lock or reorder buffer, terminal events authoritative, monitor sorted by creationTimestamp",
+    "A deterministic draft card in under 1.5 s and template text at the latest at 12 s via an engine watchdog, plus the labelled L0-L3 ladder (L2 direct mode without SAM, L3 hot spare)",
+    "A price port with a sim implementation, a v0 contract proposal to GEBIT, and B's fallback chain (article master -> GEBIT promotion -> AddArticle.supplied_price_information -> stay simulated). GEBIT answers on transport and price change are needed by early December",
+    "A choreography that does not depend on unverified GEBIT basket semantics: void the first hero line (C) or show the new price on a fresh basket",
+    "Compliance mechanics: per-visit preset reset of price history (critic C13), floor-rounded percentage against ref30 in the same visual block, MHD exception only with a visible reason, the tied offer framed as a conditional offer, 'DEMO - kein Kassenbeleg', no personal data",
+    "ESL via dual-publish to VPN default MQTT 1883 (VPN sam has no MQTT), with an always-on mirror tile and a < 10 s acceptance test for any vendor ESL",
+    "Gate 0 by 20 Nov also re-checks every schema claim against the 2.493.0 server (the local CLI is 2.542.1), runs the umlaut round trip and a status-topic sniff, and settles the LiteLLM budget period/spend plus a dedicated fair key (100-150 USD with alarms)",
+    "Known-bug hygiene: forbid the runtime artifact tools by name (never claim agents have no tools), ASCII agent text unless G0 proves UTF-8, wait for 'persistent receiver started', on_receive for raw events, preflight for spool/receiver/token, redeploy the entrypoint after a > 5 min broker outage, never restart gwe+awe together",
+    "Swap proof: a lenient contract-check against the descriptors in both labs, kustomize overlays solace-lab/gebit-lab, multi-arch images, descriptors mounted rather than baked",
+    "Effort cap at about 85 PD with an explicit cut list. G1 (4 Dec) = S1 end to end on the sim; G2 = booth-complete S1 + voucher + one secondary beat (Stufe-0 cookbook or tied offer via ApplyAnonymousCoupon). Defer Event Portal/AsyncAPI audit, Tempo span reconstruction, multi-suite evals, personas and four-eyes"
+   ]
+  },
+  {
+   "lens": "domain",
+   "scores": [
+    {
+     "design": "A-visitor-first",
+     "total": 71,
+     "criteria": {
+      "retail_credibility": 6.5,
+      "legal_soundness": 8.5,
+      "gebit_value": 6.5,
+      "solace_value": 6.5,
+      "differentiation": 6,
+      "honesty": 8.5
+     },
+     "strengths": [
+      "Cleanest legal posture. Every shelf price change needs a click in both scenarios, so 'Ohne Freigabe kein neuer Preis' is literally true (critic C11). No personas, no receipt printer, voucher only on Closed and never on Cancelled. The percentage is floored against ref30 and the 30-day line sits in the same block. The MHD label shows its reason and no 30-day line, and the Grundpreis is recomputed (1 kg = 2,08 EUR at 1,04 for 500 g, arithmetic correct). The per-visit preset reset is labelled 'Simulierte Filiale'.",
+      "The guardrail visibly bites on the hero. With cost 4,40, trying -30 % breaks the 20 % margin floor (13.6 %) on the tablet, so the visitor can test the rules themselves. GP arithmetic re-checked: 94.6 / 126.6 / 13.6 % margin are correct.",
+      "Most honest labelling: KI / Regel / Mensch / Kasse colours, a fan-out with greyed 'in Projekten' consumers, watchdog badges ('Text aus Vorlage', 'Direktmodus'), '13 Ereignisse -> 13 SAM-Laeufe -> 1 KI-Aufruf'.",
+      "One AI call per visit. Lowest LLM cost and latency, a sharp 10-second story, a physical duck giveaway and an express mode.",
+      "Finality is made visible: dashed lines until PurchaseTransactionClosed, and 'Bon abgebrochen - kein Gutschein'.",
+      "Honest ESL caveat ('one Vusion integration averages ~20 min')."
+     ],
+     "fatal_or_major_flaws": [
+      "Under-delivers on the 'Aktion / Kaufverhalten / Loyalty' half of the use case. Tied basket offers and loyalty are cut, and every visitor with a duck gets the same voucher. A promotion expert sees only one shelf markdown.",
+      "The hero 'same duck, two prices on one receipt' depends on unconfirmed freezePrice / open-basket semantics (critic gap 3.2, GEBIT Q2). It also stages the customer overpaying for the first identical item, which a retail expert reads as a complaint scenario.",
+      "Internal inconsistency. The impact (+38 units, +32 EUR) is computed over a 24-selling-hour horizon 'bis Samstag', but the proposal says 'gueltig heute bis 20:00 / fuer den Rest des Tages'.",
+      "A time-boxed 'AKTION' is executed as an article-master price change. In GEBIT semantics, a time-boxed Aktion belongs in the promotion service (positionDiscounts) and a markdown is a new regular price (gebit-purchase-api 5.1/5.2).",
+      "6,93 is a retail-atypical price point (correct legally, odd commercially).",
+      "Food-waste framing, but the hero is a non-food duck. MHD runs only on request, and the shelf-wide MHD price would also reduce fresh packs.",
+      "GEBIT value is thin: no Event Portal or contract artefacts, no GEBIT-native coupon path for offers, no approvals[] mirror. 'ohne neues Integrationsprojekt' over-claims while the article-master contract does not exist (critic 2.9)."
+     ]
+    },
+    {
+     "design": "B-gebit-contract-first",
+     "total": 77,
+     "criteria": {
+      "retail_credibility": 7.5,
+      "legal_soundness": 7,
+      "gebit_value": 9.5,
+      "solace_value": 8.5,
+      "differentiation": 8,
+      "honesty": 6
+     },
+     "strengths": [
+      "Best partner value for GEBIT. The simulator is built from the descriptors as a gRPC PurchaseTransactionService, with byte-identical golden tests and a contract-check service showing 'Vertrag 100 % gueltig'. Ports for price, promotion/coupon, voucher (CheckoutCoupon) and ESL each have a sim and a GEBIT implementation. A GEBIT-style v0 ArticlePriceChangeRequested goes to GEBIT as an AsyncAPI handover. There is a gebit-lab kustomize overlay and a T2 GEBIT-hosted path.",
+      "Event Portal application domains (one GEBIT-owned, one ours) plus the EMA runtime audit 'Design = Laufzeit'. This is the full Solace platform story (Event Mesh + Event Portal + Agent Mesh), rare at a retail fair.",
+      "Retail realism. Price points .49/.99 with nominal-step bands and rounding tolerance. Tied offer with lift/confidence and a cannibalisation guard (Salsa 0.42 excluded). A Buchpreisbindung cookbook as the 'KI wird gar nicht gefragt' guardrail. Valentins-Pralinen as a seasonal backup (the fair starts 2 days after 14 Feb). Four-eyes band and kill switch.",
+      "Live offers redeemed through GEBIT-native ApplyAnonymousCoupon as a human act at the till. No AI command goes into a till-owned transaction (critic 2.10).",
+      "Booth-redeemable vouchers ('Espresso an der GEBIT-Bar', 'GEBIT Ente gratis am naechsten Messetag') create a real return loop without monetary value (REG 5.2 item 4). Arithmetic checks out: total 19,54, Sie sparen 1,68, GP +49.9."
+     ],
+     "fatal_or_major_flaws": [
+      "Honesty breaches in booth copy. Host sentence 2 says 'rechnet mit echten Abverkaufsdaten' (the data is simulated). The subtitle says 'live auf GEBIT-Kassenereignissen' although L0-S simulator is the default until G3. 'No new integration project ... results come back through your own APIs (article master...)' although no price-change contract exists (critic 2.9).",
+      "False on-screen privacy claim. In the default guided visit the voucher '2 EUR auf Obst und Gemuese' is chosen because Familie Becker 'usually buys fruit' (S4), yet the monitor says 'Grundlage: nur dieser Bon, kein Profil'.",
+      "The 60 s 'Rueckgaengig' after a shelf approval re-raises a price that is already displayed on the ESL. That contradicts its own forbidden price_increase, A15 and REG's 'no increases during opening hours'.",
+      "Tied-offer wording 'Guacamole heute -30 % · 2,09 EUR statt 2,99 EUR' reads like an announced reduction (Art. 6a risk). There is no Grundpreis for the 200 g pack on the offer banner.",
+      "No guardrail bites on the hero (47 % margin). Three AI moments plus a persona per visit is high cognitive load. Persona 'Jonas, Student' with price_sensitivity 0.9 is a socio-economic proxy that REG 3.4 forbids.",
+      "Shared with A/C: impact computed to Saturday versus validity 'heute bis Ladenschluss'. 'AKTION' executed as a master-data change. MHD 'MHD -30 % -> 0,99 EUR' is actually -33.6 % and is applied shelf-wide.",
+      "Build risk: 97 PD, about 10 services, a Java-compatible JSON printer and 7 background tills with full event chains. Much of it is invisible to visitors."
+     ]
+    },
+    {
+     "design": "C-agentic-depth",
+     "total": 81,
+     "criteria": {
+      "retail_credibility": 8,
+      "legal_soundness": 8,
+      "gebit_value": 7.5,
+      "solace_value": 9,
+      "differentiation": 8.5,
+      "honesty": 7.5
+     },
+     "strengths": [
+      "Autonomy levels in one basket match how retail category and store managers actually govern pricing. Stufe 0 is forbidden (BuchPrG cookbook, 0 tokens), Stufe 1 is shelf markdown with approval, Stufe 2 is an in-catalogue Kombi-Angebot and voucher with oversight. Policy as configuration also doubles as a customer rollout ladder.",
+      "Strongest legal craftsmanship. Tied-offer wording 'Kombi-Angebot: Guacamole 2,09 EUR beim Kauf von Tortilla Chips · Einzelpreis 2,99 EUR' (no 'statt' or '-30 %'). A correct S6 'Referenzpreis-Falle' (promo ended 10 days ago -> '-14 % gegenueber 6,99', and a 6,99 proposal gets 'keine Rabattwerbung', A03). The 'ladder says 20 %, label says -19 %' floor moment. Anti-splitting cumulative bands. Four-eyes at 40-50 %. Correct § 20 Abs. 3 GWB spoilage exception. Approver as role pseudonym (BetrVG). The chat agent discloses that it is an AI (Art. 50(1)). PII scan and E01-E05.",
+      "The host voids the first Ente line ('zurueck ins Regal'). This avoids the unconfirmed freezePrice dependency and the 'paid more for the same item' optics. Total 10,87 is correct.",
+      "The KI-Beleg uses a GEBIT-native mirror (header.approver -> Receipt.approvals[], extensionProperties showcase.proposalId), so the final receipt shows which AI proposal it used. Strong for GEBIT and for auditors.",
+      "Strongest Solace story: SAM Activities per event, specialised tool-less agents (least privilege), SAM Evaluations and red team before the fair, cost per decision, OTel trace with Solace broker spans, ESL/POS consistency check with rollback.",
+      "Clearest differentiation against agentic pricing vendors that show no approval or governance (MKT 4.5/5.1)."
+     ],
+     "fatal_or_major_flaws": [
+      "Over-claims. 'Die GEBIT-Kasse spricht schon Event Mesh' is not verified: the Purchase Service transport is unknown (critic gap 3.1), and MKT 2.3 only verifies that GEBIT uses Solace for integration. The DFA tile asserts the content of a proposal not yet published. '0 Regelverstoesse' and 'lueckenlos belegt' are marketing claims.",
+      "Stufe-2 'Stopp' within 120 s can withdraw a Kombi-Angebot that is already shown on the customer display, so the shopper is then charged full price. It must honour offers already shown in an open basket.",
+      "The persona-card path contradicts the voucher claim 'Grundlage: nur dieser Warenkorb. Kein Profil gespeichert' (VCH-CAT-OBST-2 from 'usually Obst'). Persona 'Jonas, Student' with price_sensitivity 0.9 is a socio-economic proxy.",
+      "Shared with A/B: impact 'bis Samstag' versus validity 'heute bis 20:00'. 'AKTION' executed as an article-master change instead of a GEBIT promotion. The MHD price is applied shelf-wide, not batch-specific. 'MHD-30 -> 0,99' is -33.6 %. No Grundpreis on the Kombi-Angebot.",
+      "Comprehension and build risk: a dense monitor ('Unter der Haube'), 3 AI calls per visit, 20 MCP tools, 3 agents, evals and SAM span reconstruction (about 100 PD). Cost shown in 'US-Cent' is alien to a German retail audience."
+     ]
+    }
+   ],
+   "winner": "C-agentic-depth",
+   "best_ideas_to_graft": [
+    "C: Autonomy levels Stufe 0/1/2 in one basket, also used as the post-fair customer rollout ladder (shadow -> approval -> bounded autonomy), with policy versioned and audited.",
+    "C: Kombi-Angebot wording with 'Einzelpreis' instead of 'statt' or '-30 %'. Framed as a tied conditional offer outside Art. 6a (critic C4).",
+    "C: S6 'Referenzpreis-Falle' as the compliance deep dive (promo ended 10 days ago -> '-14 % gegenueber 6,99'). Plus the 'Leiter 20 %, Etikett -19 %' floor moment (REG 1.5).",
+    "C: Void the first Ente line at the till instead of showing two prices for the same article. This removes the freezePrice dependency.",
+    "C: KI-Beleg with GEBIT-native mirror (header.approver -> Receipt.approvals[], extensionProperties showcase.proposalId on the position). Approver stored as a role pseudonym.",
+    "C: confirm_consistency ('Etikett 14:32:07,3 · Kasse 14:32:07,1 · Abweichung 0 ms') with rollback. Anti-splitting cumulative discount bands. Four-eyes for 40-50 %.",
+    "C: SAM Evaluations, red team ('Agent ueberlisten') and cost per decision shown at the deep-dive station only, not on the hero monitor.",
+    "B: Contract-first ports (price, promotion/coupon, voucher/CheckoutCoupon, ESL), with a GEBIT-style v0 ArticlePriceChangeRequested exported as AsyncAPI and handed to GEBIT as the proposed contract.",
+    "B: Event Portal domains (GEBIT-owned Purchase API v2 plus ours) and the EMA runtime audit as the deep-dive proof. Contract-check counter 'Vertrag 100 % gueltig'.",
+    "B: Live offers redeemed via GEBIT-native ApplyAnonymousCoupon at the till as a human act.",
+    "B (also C): Buchpreisbindung cookbook as the Stufe-0 guardrail; the AI node is skipped and costs 0 tokens.",
+    "B: Booth-redeemable vouchers ('GEBIT Ente gratis am naechsten Messetag', 'Espresso an der GEBIT-Bar') with an HMAC QR, redeemed via ApplyAnonymousCoupon. This gives a real return loop with no monetary value (REG 5.2).",
+    "B: Valentins-Pralinen as the seasonal markdown backup (fair starts 2 days after 14 Feb), as a regular markdown with the 30-day line (critic C5).",
+    "B/C: .49/.99 price points with bands on the nominal ladder step plus rounding tolerance.",
+    "A: One hero proposal per guided visit and the 10-second story. Choose the hero's cost so that -30 % visibly breaks the margin floor and the visitor can test a rule.",
+    "A: No personas in the default flow; persona cards only as an optional, clearly fictional extra.",
+    "A: Honesty labels KI / Regel / Mensch / Kasse, a greyed 'in Projekten' fan-out, degraded-mode badges and the 'Simulierte Filiale - Mi 14:00 - Zeitraffer 20x' chip.",
+    "A: No receipt printer. Grundpreis on the MHD label. An ESL latency caveat in the talk track (real vendor integrations seconds to ~20 min; the binding promise is the next scan).",
+    "New: Make MHD markdowns batch-specific, as in real grocery practice. Use a discount sticker / captured_promotion (GEBIT 'discount sticker' path, gebit-purchase-api 5.1) or a separate MHD shelf, instead of a shelf-wide master-data price that also reduces fresh packs.",
+    "New: Model a time-boxed 'Aktion' as a GEBIT promotion (positionDiscounts; the receipt shows regular price and discount) and a clearance markdown as a master-data regular price. Ask GEBIT which one the booth should show."
+   ],
+   "corrections": [
+    "All three designs: the impact is computed over a horizon 'bis Samstag' (24 selling hours, PRC 3.2: +32 / +49.9 / +50 EUR GP), but the proposal validity is 'heute bis 20:00 / Ladenschluss / fuer den Rest des Tages'. Either make the validity 'bis Samstag' (more realistic for a slow-mover markdown) or compute the impact for the remaining hours of today (A 3.1 + 9.2, B S1 + 9.3, C S1 + 9.2).",
+    "All three designs: a time-boxed 'AKTION' is executed as an article-master price change. Per gebit-purchase-api 5.1/5.2, a time-boxed Aktion belongs in GEBIT's promotion service (applied as positionDiscounts, receipt shows regular price minus discount). A markdown is a new regular price in master data. Whether an open basket is repriced depends on which path is used (critic gap 3.2).",
+    "All three designs: a shelf-wide MHD price change would also reduce packs with a later best-before date. Real practice uses pack-level 'Reduziert' stickers or batch/expiry codes (MKT 4.4: Albert Heijn customers needed a paper sticker). GEBIT offers a discount-sticker path via captured_promotion / ApplyArticlePositionPromotion (gebit-purchase-api 5.1).",
+    "B S2 and C S5: 'MHD -30 % -> 0,99 EUR' from 1,49 is -33.6 %. Either use 1,04 (A's correct -30 %) or do not show a percentage on the MHD label.",
+    "B S6: if the first 6,99 promotion is still running, a deeper uninterrupted step may keep 8,67 as reference (§ 11 Abs. 2 PAngV, Notice 4.3, REG 1.1/1.2). If it ended, a renewed 6,99 cannot be advertised as a reduction at all (A03). The text 'Rabattangabe gegenueber 8,67 nicht mehr zulaessig' must state which case applies. C's S6 (promo ended 10 days ago) is correct.",
+    "B: the 60 s 'Rueckgaengig' after shelf approval raises a price already shown on the ESL. This conflicts with B's own forbidden price_increase, A15 and REG 2.1 ('no increases during opening hours'; never change the price of an article in an open transaction).",
+    "C: a Stufe-2 'Stopp' must not withdraw a Kombi-Angebot already shown on the customer display for the open basket, or the shopper is charged more than announced (§ 5 UWG risk; REG 1.4 shelf/checkout consistency).",
+    "B (default flow) and C (persona path): 'Grundlage: nur dieser Bon. Kein Profil gespeichert' is false when the voucher is chosen from a persona's 'usually buys' categories (B S4 'Familie Becker usually buys fruit'; C VCH-CAT-OBST-2).",
+    "B/C: personas 'Jonas, Student' with price_sensitivity 0.9 are a socio-economic proxy. REG 3.4 forbids income or socio-economic proxies, and AI Act Art. 5(1)(b) names a 'specific social or economic situation'. Remove the attribute or the label.",
+    "B/C: a Kombi-Angebot that states a new total price for a weight-based pack (Guacamole 200 g) needs the Grundpreis (§ 4/§ 5 PAngV, REG 1.1 and 1.5). A shows it for the yoghurt only.",
+    "B host script: 'rechnet mit echten Abverkaufsdaten' is false; all sales data is a seeded simulated store (B 7.5). The subtitle 'live auf GEBIT-Kassenereignissen' is false while the L0-S simulator is the default (B 12.1).",
+    "C 1.3: 'Die GEBIT-Kasse spricht schon Event Mesh' is unverified. The transport of PurchaseDomainEvents is unknown (critic section 3 gap 1); MKT 2.3 verifies only that GEBIT uses Solace Event Mesh for retail system integration (and dm reports GEBIT POS data exchange via Solace).",
+    "A 1.3 and B 1.3: 'ohne neues Integrationsprojekt' / 'results come back through your own APIs (article master ...)' over-claims. The descriptor sets contain no pricing or article-master API, and the price-change contract must come from GEBIT (critic 2.9).",
+    "C 8.6 item 10: the DFA proposal is only expected on 11.11.2026, and its content is known only from a leak (REG 2.3). Do not put claimed DFA content on a booth tile before the text is verified.",
+    "All three: at a B2B trade fair the PAngV is probably not triggered (REG 0.1, § 1 Abs. 1). The wording should say 'so wie in einer deutschen Filiale', not imply a legal duty at the booth.",
+    "A: 6,93 is legally sound (floored -20 % against ref30) but retail-atypical. B/C's 6,99 with a floored '-19 %' is both realistic and a better teachable compliance moment (REG 1.5).",
+    "C 9.1/11.2: cost in 'US-Cent' on a German retail monitor should be shown in EUR (LiteLLM bills USD; convert)."
+   ],
+   "must_haves_for_synthesis": [
+    "Default profile: every shelf/ESL price change needs a human click. Any MHD auto rule is an explicit, audited profile switch, and the headline changes with it (critic C11).",
+    "Announced reductions show the 30-day lowest price in the same visual block on the ESL, tablet and customer display, legibly (BGH I ZR 183/24). The percentage is floored against ref30 (C-330/23). No UVP comparisons. No reduction wording if new price >= ref30 (A03).",
+    "Per-visit preset reset of the simulated price history, labelled 'Simulierte Filiale', plus one deliberate S6 reference-price moment that is legally correct (C's version).",
+    "MHD scenario: the reason is visible on the label ('Reduziert wegen kurzer Haltbarkeit (MHD dd.mm.)', OLG Nuernberg 3 U 2376/24), there is no 30-day line, the Grundpreis is recomputed, and execution is batch-specific (sticker / captured_promotion or a separate MHD shelf). Offer it as a first-class alternate hero for grocery visitors, because the framing is food waste.",
+    "Align with GEBIT semantics: time-boxed Aktion = promotion service (positionDiscounts); clearance markdown = master-data regular price. Validity must match the impact horizon. Ask GEBIT whether open baskets are repriced.",
+    "Avoid the 'same item, two prices' optics: void the first line (C) or rely on it only after GEBIT confirms freezePrice semantics.",
+    "Live basket offers are tied conditional offers with the wording 'Kombi-Angebot ... beim Kauf von ... · Einzelpreis', with Grundpreis, redeemed by a human act via ApplyAnonymousCoupon. Offers already shown in an open basket are honoured.",
+    "Vouchers: issued only on PurchaseTransactionClosed and never on Cancelled; catalogue-only; 'Demo-Gutschein ohne Geldwert'; redeemable only for a booth giveaway. The on-screen basis claim must be literally true.",
+    "Privacy: no personal data, no badge scans in the demo flow, persona cards optional, fictional and free of socio-economic proxies, plus a booth privacy notice ('Demo mit fiktiven Personas - keine personenbezogenen Daten'). Lead capture stays outside the system.",
+    "Fiscal: TSE simulator only, 'DEMO - kein Kassenbeleg i.S.d. § 146a AO', no fiscal QR, on-screen receipt preferred, no real money (REG 5.2).",
+    "Hard guardrails: no price increases during opening hours, no personalised shelf price, no below-cost prices except the § 20 Abs. 3 GWB spoilage exception, forbidden categories incl. price-bound books (BuchPrG beat), max changes per article per day, cooldown, expiry = no change.",
+    "AI governance messaging: label every AI text 'KI-Vorschlag', disclose AI in any chat (Art. 50(1)), present the approval as voluntary best practice (not a high-risk system), store approvers as role pseudonyms and run no per-approver analytics (BetrVG § 87).",
+    "Honesty: no 'echte Daten', no 'live auf GEBIT' unless L0-G is actually running, no 'Kasse spricht schon Event Mesh'. Qualify 'ohne neues Integrationsprojekt' (article-master contract pending). Show a visible simulator/GEBIT-lab badge, state the ESL latency caveat, and make no SAM notification claims.",
+    "GEBIT value: a descriptor-based simulator with GEBIT event names and finality; ports with the v0 price-change contract handed over as AsyncAPI; a GEBIT-native approval mirror (header.approver -> approvals[]); Event Portal catalog in the deep dive; a tenant-isolation statement for a multi-retailer platform (REG 6, hub-and-spoke risk); a post-fair path (shadow mode -> approval -> bounded autonomy, Attendant App as approver UI).",
+    "Solace value: a counter of per-event SAM runs vs AI calls, SAM Activities, fan-out of Closed to several consumers, and governance/evals/cost/trace at the deep-dive station only.",
+    "Visitor simplicity: one hero proposal per guided visit, at least one guardrail the visitor can trigger on the hero, and an express mode with the hero only.",
+    "Make hero numbers plausible to retail experts. A plan of 120 rubber ducks per store-day is implausible; scale to about 30/day with 5 of 15 sold, which keeps Poisson p of about 0.003 and planned_so_far >= 10.",
+    "Talk-track evidence: UBA food-waste figures, MKT 5.3 differentiation pillars, and shared GEBIT+Solace customers (dm, Schwarz/Kaufland, EDEKA) only with GEBIT's approval of names and logos (critic Q16).",
+    "Re-check the DFA text after 11.11.2026 and get legal sign-off on all on-screen PAngV, voucher and AI wording before the freeze."
+   ]
+  }
+ ]
+}

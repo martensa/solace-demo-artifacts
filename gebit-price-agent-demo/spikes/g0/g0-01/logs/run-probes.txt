@@ -1,0 +1,11 @@
+seq     event                          B verdict         dur_s sha_eq topic
+probe-01 SizeProbe 1100 short         169 probe            0.08 True   gpos/spike/p01/out/ok
+probe-02 SizeProbe 1100 sdk           165 probe            0.05 True   gpos/spike/p01/out/ok
+probe-03 SizeProbe 1100 compact       173 probe            0.06 True   gpos/spike/p01/out/ok
+probe-04 SizeProbe 800 compact        171 probe            0.09 True   gpos/spike/p01/out/ok
+probe-05 SizeProbe 950 compact        171 probe            0.15 True   gpos/spike/p01/out/ok
+probe-06 SizeProbe 1900 short         169 probe            0.07 True   gpos/spike/p01/out/ok
+probe-07 SizeProbe 2000 short         169 probe            0.05 True   gpos/spike/p01/out/ok
+probe-08 SizeProbe 2100 short         169 probe            0.06 True   gpos/spike/p01/out/ok
+probe-09 SizeProbe 1500 sdk           165 probe            0.07 True   gpos/spike/p01/out/ok
+JSON-equal 9/9

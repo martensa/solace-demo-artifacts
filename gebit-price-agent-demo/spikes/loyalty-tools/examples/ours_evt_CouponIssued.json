@@ -1,0 +1,42 @@
+{
+ "@type": "type.googleapis.com/de.showcase.loyalty.v1.event.CouponIssued",
+ "header": {
+  "eventTimestamp": {
+   "seconds": "1802871131",
+   "nanos": 140000000
+  }
+ },
+ "metadata": {
+  "offset": "7",
+  "creationTimestamp": {
+   "seconds": "1802871131",
+   "nanos": 118000000
+  },
+  "traceId": "v-0217-0042"
+ },
+ "couponId": "CPN-0217-0042",
+ "membershipId": "M-0001",
+ "offerId": "OFF-CANTUCCINI-30",
+ "kind": "OFFER_KIND_PERSONAL_COUPON",
+ "channel": "ISSUE_CHANNEL_AGENT",
+ "validTo": {
+  "seconds": "1803495600",
+  "offset": 60
+ },
+ "discountType": "DISCOUNT_TYPE_RELATIVE",
+ "discountValue": {
+  "scale": 2,
+  "intVal": "3000"
+ },
+ "targetArticleNumber": "article008",
+ "purchaseTransactionId": "5b1f0c2e-8d4a-4f6b-9a1e-2c7d3e4f5a60",
+ "proposalId": "prp-0217-0043",
+ "extensionProperties": [
+  {
+   "key": "showcase.samRunId",
+   "typedValue": {
+    "stringValue": "wfr-3f9a"
+   }
+  }
+ ]
+}

@@ -1,0 +1,132 @@
+# G0-01: the plan's gpos-pos-event (3.3) reduced to the seams under test.
+# The raw GEBIT event arrives as workflow.input.text (rule p01_pos,
+# inputExpression "input.payload:", NO input_schema = plan variant);
+# assess_event classifies it, a switch with a default branch picks the
+# tool. Output mapping reads EVERY structured field of the max cases
+# (TR2 with two slots, card with four offers), so a field that does not
+# resolve fails or shows up literally in the run result. 0 LLM.
+kind: workflow
+name: gpos-spike-p01-pos
+description: >-
+  Gate 0 spike G0-01: raw GEBIT event -> assess_event -> switch with
+  default -> prepare_proposal | get_offers | size_probe | note_event.
+spec:
+  appConfig:
+    version: "0.1.0"
+    workflow_timeout: "25s"
+    default_node_timeout: "6s"
+    fail_fast: true
+    skills:
+      - id: gpos_spike_p01_pos
+        name: G0-01 POS event
+        description: Classify one raw GEBIT event with the MCP stub (Gate 0).
+    nodes:
+      - id: assess
+        type: tool
+        connector: gpos-spike-p01-tools
+        tool: assess_event
+        timeout: "5s"
+        input:
+          raw: "{{workflow.input.text}}"
+          run_id: "{{workflow.run_id}}"
+      - id: route
+        type: switch
+        depends_on: [assess]
+        cases:
+          - condition: "'{{assess.output.mcp_structured_content.verdict}}' == 'price_trigger'"
+            node: prepare
+          - condition: "'{{assess.output.mcp_structured_content.verdict}}' == 'member'"
+            node: offers
+          - condition: "'{{assess.output.mcp_structured_content.verdict}}' == 'probe'"
+            node: probe
+        default: done
+      - id: prepare
+        type: tool
+        connector: gpos-spike-p01-tools
+        tool: prepare_proposal
+        depends_on: [route]
+        input:
+          trigger_id: "{{assess.output.mcp_structured_content.trigger_id}}"
+          run_id: "{{workflow.run_id}}"
+      - id: offers
+        type: tool
+        connector: gpos-spike-p01-tools
+        tool: get_offers
+        depends_on: [route]
+        input:
+          tx_id: "{{assess.output.mcp_structured_content.tx_id}}"
+          member_ref: "{{assess.output.mcp_structured_content.member_ref}}"
+          run_id: "{{workflow.run_id}}"
+      - id: probe
+        type: tool
+        connector: gpos-spike-p01-tools
+        tool: size_probe
+        depends_on: [route]
+        input:
+          struct_bytes: "{{assess.output.mcp_structured_content.probe_bytes}}"
+          text_mode: "{{assess.output.mcp_structured_content.kind}}"
+          run_id: "{{workflow.run_id}}"
+      - id: done
+        type: tool
+        connector: gpos-spike-p01-tools
+        tool: note_event
+        depends_on: [route]
+        input:
+          event_key: "{{assess.output.mcp_structured_content.event_key}}"
+          verdict: "{{assess.output.mcp_structured_content.verdict}}"
+          run_id: "{{workflow.run_id}}"
+    output_mapping:
+      run_id: "{{workflow.run_id}}"
+      verdict: "{{assess.output.mcp_structured_content.verdict}}"
+      event_key: "{{assess.output.mcp_structured_content.event_key}}"
+      event_type: "{{assess.output.mcp_structured_content.event_type}}"
+      tx_id: "{{assess.output.mcp_structured_content.tx_id}}"
+      trigger_id: "{{assess.output.mcp_structured_content.trigger_id}}"
+      member_ref: "{{assess.output.mcp_structured_content.member_ref}}"
+      kind: "{{assess.output.mcp_structured_content.kind}}"
+      article: "{{assess.output.mcp_structured_content.article}}"
+      raw_bytes: "{{assess.output.mcp_structured_content.raw_bytes}}"
+      raw_sha256: "{{assess.output.mcp_structured_content.raw_sha256}}"
+      raw_non_ascii: "{{assess.output.mcp_structured_content.raw_non_ascii}}"
+      at_type_ok: "{{assess.output.mcp_structured_content.at_type_ok}}"
+      probe_bytes: "{{assess.output.mcp_structured_content.probe_bytes}}"
+      p_candidate:
+        coalesce: ["{{prepare.output.mcp_structured_content.candidate}}", "n/a"]
+      p_proposal_id:
+        coalesce: ["{{prepare.output.mcp_structured_content.proposal_id}}", "n/a"]
+      p_trigger_id:
+        coalesce: ["{{prepare.output.mcp_structured_content.trigger_id}}", "n/a"]
+      p_kind:
+        coalesce: ["{{prepare.output.mcp_structured_content.kind}}", "n/a"]
+      p_article:
+        coalesce: ["{{prepare.output.mcp_structured_content.article}}", "n/a"]
+      p_recommended:
+        coalesce: ["{{prepare.output.mcp_structured_content.recommended}}", "n/a"]
+      p_reason:
+        coalesce: ["{{prepare.output.mcp_structured_content.reason}}", "n/a"]
+      p_slots:
+        coalesce: ["{{prepare.output.mcp_structured_content.slots}}", "n/a"]
+      p_writer_input:
+        coalesce: ["{{prepare.output.mcp_structured_content.writer_input}}", "n/a"]
+      o_member_ref:
+        coalesce: ["{{offers.output.mcp_structured_content.member_ref}}", "n/a"]
+      o_personalised:
+        coalesce: ["{{offers.output.mcp_structured_content.personalised}}", "n/a"]
+      o_recommended:
+        coalesce: ["{{offers.output.mcp_structured_content.recommended}}", "n/a"]
+      o_salutation:
+        coalesce: ["{{offers.output.mcp_structured_content.salutation}}", "n/a"]
+      o_slots:
+        coalesce: ["{{offers.output.mcp_structured_content.slots}}", "n/a"]
+      o_agent_input:
+        coalesce: ["{{offers.output.mcp_structured_content.agent_input}}", "n/a"]
+      probe_status:
+        coalesce: ["{{probe.output.mcp_structured_content.status}}", "n/a"]
+      probe_struct_bytes:
+        coalesce: ["{{probe.output.mcp_structured_content.struct_bytes}}", "n/a"]
+      n_status:
+        coalesce: ["{{done.output.mcp_structured_content.status}}", "n/a"]
+      n_event_key:
+        coalesce: ["{{done.output.mcp_structured_content.event_key}}", "n/a"]
+      n_verdict:
+        coalesce: ["{{done.output.mcp_structured_content.verdict}}", "n/a"]

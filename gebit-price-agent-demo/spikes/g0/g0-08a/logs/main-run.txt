@@ -1,0 +1,53 @@
+start 11:00:26 rate 450.0/h burst 7 interval 56.0s bursts 32 total 224 seq_base 912250000
+11:00:26 burst 1/32 sent 7 replies 0 err 0
+11:01:22 burst 2/32 sent 14 replies 7 err 0
+11:02:18 burst 3/32 sent 21 replies 14 err 0
+11:03:14 burst 4/32 sent 28 replies 21 err 0
+11:04:10 burst 5/32 sent 35 replies 28 err 0
+11:05:06 burst 6/32 sent 42 replies 35 err 0
+11:06:02 burst 7/32 sent 49 replies 42 err 0
+11:06:58 burst 8/32 sent 56 replies 49 err 0
+11:07:54 burst 9/32 sent 63 replies 56 err 0
+11:08:50 burst 10/32 sent 70 replies 63 err 0
+11:09:46 burst 11/32 sent 77 replies 70 err 0
+11:10:42 burst 12/32 sent 84 replies 77 err 0
+11:11:38 burst 13/32 sent 91 replies 84 err 0
+11:12:34 burst 14/32 sent 98 replies 91 err 0
+11:13:30 burst 15/32 sent 105 replies 98 err 0
+11:14:26 burst 16/32 sent 112 replies 105 err 0
+11:15:22 burst 17/32 sent 119 replies 112 err 0
+11:16:18 burst 18/32 sent 126 replies 119 err 0
+11:17:14 burst 19/32 sent 133 replies 126 err 0
+11:18:10 burst 20/32 sent 140 replies 133 err 0
+11:19:06 burst 21/32 sent 147 replies 140 err 0
+11:20:02 burst 22/32 sent 154 replies 147 err 0
+11:20:58 burst 23/32 sent 161 replies 154 err 0
+11:21:54 burst 24/32 sent 168 replies 161 err 0
+11:22:50 burst 25/32 sent 175 replies 168 err 0
+11:23:46 burst 26/32 sent 182 replies 175 err 0
+11:24:42 burst 27/32 sent 189 replies 182 err 0
+11:25:38 burst 28/32 sent 196 replies 189 err 0
+11:26:34 burst 29/32 sent 203 replies 196 err 0
+11:27:30 burst 30/32 sent 210 replies 203 err 0
+11:28:26 burst 31/32 sent 217 replies 210 err 0
+11:29:22 burst 32/32 sent 224 replies 217 err 0
+{
+ "sent": 224,
+ "ok": 224,
+ "err": 0,
+ "missing": 0,
+ "unmatched": 0,
+ "sha_mismatch": 0,
+ "literal": 0,
+ "p50": 0.18262696266174316,
+ "p95": 0.31598520278930664,
+ "p99": 0.42092299461364746,
+ "max": 0.4222538471221924,
+ "min": 0.08923506736755371,
+ "mean": 0.18566412585122244,
+ "wall_s": 1738.1245801448822,
+ "err_seqs": [],
+ "missing_seqs": [],
+ "burst_max_p50": 0.18887460231781006
+}
+load_gen exit 0

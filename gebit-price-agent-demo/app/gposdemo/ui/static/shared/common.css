@@ -1,0 +1,116 @@
+/* gpos-ui shared tokens and components (/kasse, /monitor). No external fonts or CDN:
+   the booth runs offline. One colour scheme (UC1-BUILD-SPEC 10.4):
+   chips red/green/grey, sources turquoise (rule), violet (AI), orange (human),
+   blue (till). */
+:root {
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --ink: #17202c;
+  --muted: #5d6878;
+  --line: #d9dee6;
+  --red: #c9302c;
+  --red-bg: #fdecea;
+  --green: #1f8a4c;
+  --green-bg: #e6f5ec;
+  --grey: #6b7584;
+  --grey-bg: #eceff3;
+  --turquoise: #0e9aa7;
+  --violet: #6d3fd1;
+  --orange: #e07b12;
+  --blue: #2563c9;
+  --focus: #2563c9;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(23, 32, 44, 0.08), 0 4px 14px rgba(23, 32, 44, 0.06);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { margin: 0; font-weight: 650; }
+button { font: inherit; color: inherit; }
+code, .mono { font-family: var(--mono); font-size: 0.92em; }
+.muted { color: var(--muted); }
+.hidden { display: none !important; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* buttons: large touch targets (>= 48 px) */
+.btn {
+  min-height: 48px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+.btn:hover { border-color: var(--blue); }
+.btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btn.danger { color: var(--red); border-color: #efb7b5; }
+.btn.selected { outline: 3px solid var(--blue); outline-offset: -3px; }
+
+/* scan-analysis chips */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.86em;
+  font-weight: 600;
+  line-height: 1.3;
+  max-width: 100%;
+}
+.chip.red { background: var(--red-bg); color: var(--red); }
+.chip.green { background: var(--green-bg); color: var(--green); }
+.chip.grey { background: var(--grey-bg); color: var(--grey); }
+.chip svg { width: 0.95em; height: 0.95em; flex: none; }
+
+/* source colours: stations, run list, agent timeline only */
+.src-rule { --src: var(--turquoise); }
+.src-ai { --src: var(--violet); }
+.src-human { --src: var(--orange); }
+.src-till { --src: var(--blue); }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.8em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.badge.action { background: var(--orange); color: #fff; }
+.badge.outline { border: 1px solid var(--line); color: var(--muted); font-weight: 600; }
+
+.strike { text-decoration: line-through; color: var(--muted); }
+.icon { width: 1em; height: 1em; vertical-align: -0.12em; }
+
+.conn {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-weight: 600;
+  z-index: 50;
+}

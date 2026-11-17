@@ -1,0 +1,25 @@
+// proto/de/showcase/wws/v1/service/wws_service.proto
+syntax = "proto3";
+
+package de.showcase.wws.v1.service;
+
+import "de/showcase/wws/v1/command/wws_command.proto";
+import "de/showcase/wws/v1/datatype/wws_datatype.proto";
+import "de/showcase/wws/v1/query/wws_query.proto";
+import "google/protobuf/empty.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.wws.v1.service.protobuf";
+option java_outer_classname = "WwsServiceProto";
+
+service MerchandiseService {
+  rpc ListArticles (query.ListArticles) returns (datatype.ArticleList) {}
+  rpc GetArticle (query.GetArticle) returns (datatype.Article) {}
+  rpc GetEffectivePrice (query.GetEffectivePrice) returns (datatype.EffectivePrice) {}
+  rpc GetSalesPerformance (query.GetSalesPerformance) returns (datatype.SalesPerformance) {}
+  rpc GetSeasonInfo (query.GetSeasonInfo) returns (datatype.SeasonInfo) {}
+  rpc GetPriceHistory (query.GetPriceHistory) returns (datatype.PriceHistory) {}
+  rpc RequestPriceChange (command.RequestPriceChange) returns (datatype.PriceActionId) {}
+  rpc EndPriceChange (command.EndPriceChange) returns (google.protobuf.Empty) {}
+  rpc ResetDemoState (command.ResetDemoState) returns (google.protobuf.Empty) {}
+}

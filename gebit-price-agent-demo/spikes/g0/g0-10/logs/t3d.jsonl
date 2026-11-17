@@ -1,0 +1,2 @@
+{"t": 1794390601.92, "kind": "sent", "topic": "gpos/spike/p10/own/t3d", "seq": "t3d-own-qos1-1-2120", "qos": 1, "expiry": 5}
+{"t": 1794390602.921, "kind": "summary", "per_mode": {"own/qos1": {"sent": 1, "ok": 0, "dup": 0, "missing": ["t3d-own-qos1-1-2120"]}}}

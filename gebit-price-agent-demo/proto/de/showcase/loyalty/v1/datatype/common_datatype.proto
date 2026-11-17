@@ -1,0 +1,164 @@
+//
+// common_datatype.proto
+//
+// Showcase Loyalty Service (simulation) for the EuroCIS 2027 demo.
+// Our own package. The messages below are wire- and JSON-compatible with the
+// equally named GEBIT purchase-api 2.50.0 datatypes (same names, same field
+// numbers), so the POS simulator can copy values 1:1 and the JSON on the
+// broker looks exactly like GEBIT's (BDecimal as {"scale":2,"intVal":"867"}).
+// No GEBIT file is imported.
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.datatype;
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.datatype.protobuf";
+option java_outer_classname = "CommonDatatypeProto";
+
+// Event metadata (same shape as GEBIT datatype.Metadata).
+message Metadata {
+
+  // Mandatory: The event offset per aggregate (here: per membership or per coupon), sequentializes events.
+  int64 offset = 1;
+
+  // Mandatory: The event creation timestamp.
+  Timestamp creation_timestamp = 2;
+
+  // Optional: The trace ID copied from the causing command or query header.
+  string trace_id = 3;
+}
+
+// Big decimal: value = int_val / 10^scale (same as GEBIT datatype.BDecimal).
+message BDecimal {
+
+  // Mandatory: The scale.
+  int32 scale = 1;
+
+  // Mandatory: The unscaled value.
+  int64 int_val = 2;
+}
+
+// Monetary value (same as GEBIT datatype.Money).
+message Money {
+
+  // Mandatory: ISO 4217 currency code, e.g. EUR.
+  string currency = 1;
+
+  // Mandatory: The amount.
+  BDecimal amount = 2;
+}
+
+// Copy of google.protobuf.Timestamp (same as GEBIT datatype.Timestamp).
+message Timestamp {
+
+  // Mandatory: Seconds of UTC time since Unix epoch.
+  int64 seconds = 1;
+
+  // Mandatory: Non-negative fractions of a second at nanosecond resolution.
+  int32 nanos = 2;
+}
+
+// Timestamp with offset in minutes (same as GEBIT datatype.OffsetTimestamp).
+message OffsetTimestamp {
+
+  // Mandatory: Seconds of UTC time since Unix epoch.
+  int64 seconds = 1;
+
+  // Mandatory: Non-negative fractions of a second at nanosecond resolution.
+  int32 nanos = 2;
+
+  // Mandatory: Offset to UTC in minutes, e.g. 60 for CET.
+  int32 offset = 3;
+}
+
+// Typed key/value pair (same as GEBIT datatype.Property).
+message Property {
+
+  // Mandatory: The key. Our keys use the namespace "showcase.", e.g. showcase.proposalId.
+  string key = 1;
+
+  // Mandatory: The value.
+  TypedValue typed_value = 2;
+}
+
+// Subset of GEBIT datatype.TypedValue with the same field numbers.
+message TypedValue {
+
+  // Field numbers 5 to 10 are the GEBIT date and time variants, not used here.
+  reserved 5 to 10;
+
+  oneof type {
+
+    // A simple string value.
+    string string_value = 1;
+
+    // A simple integer value.
+    sint64 integer_value = 2;
+
+    // A decimal value.
+    BDecimal decimal_value = 3;
+
+    // A boolean value.
+    bool bool_value = 4;
+
+    // A money value.
+    Money money_value = 11;
+
+    // A JSON object or array encoded as a string.
+    string json_value = 12;
+  }
+}
+
+// How a value was captured at the till (same as GEBIT datatype.CapturingInformation).
+message CapturingInformation {
+
+  // Optional: e.g. SCAN, MANUAL.
+  string input_method = 1;
+
+  // Optional: e.g. QR, CODE128, EAN13.
+  string input_type = 2;
+
+  // Optional: The captured value.
+  string input_value = 3;
+
+  // Optional: The capture time.
+  OffsetTimestamp input_time = 4;
+}
+
+// Rich gRPC error detail (same shape as GEBIT datatype.ErrorMessage).
+message ErrorMessage {
+
+  // Mandatory: Application error code, e.g. LOY-011.
+  string error_code = 1;
+
+  // Mandatory: Clear text message (developer and log view).
+  string error_message = 2;
+
+  // Optional: Qualified details.
+  repeated ErrorDetails error_details = 3;
+
+  // Optional: The trace ID of the failed request.
+  string trace_id = 4;
+}
+
+// Error detail key/value (same as GEBIT datatype.ErrorDetails).
+message ErrorDetails {
+
+  // Mandatory: The key.
+  string key = 1;
+
+  // Mandatory: The value.
+  string value = 2;
+}
+
+// Id and display name of a loyalty entity such as a program, an account or a currency
+// (same as GEBIT receipt LoyaltyEntityDescriptor).
+message LoyaltyEntityDescriptor {
+
+  // Mandatory: The id.
+  string id = 1;
+
+  // Mandatory: The display name.
+  string name = 2;
+}

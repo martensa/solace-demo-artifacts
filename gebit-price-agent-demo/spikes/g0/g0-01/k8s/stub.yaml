@@ -1,0 +1,61 @@
+# G0-01 MCP stub (gpos-spike-p01). SAM reaches it cluster-internally:
+#   http://gpos-spike-p01-stub.gpos-g0.svc:8765/mcp  (connector gpos-spike-p01-tools)
+# TEXT_MODE short + SHAPE plan: plan 3.9 shapes, text content one line
+# (measured: sdk/compact text pushes the max cases over 1800 B).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpos-spike-p01-stub
+  namespace: gpos-g0
+  labels: {app: gpos-spike-p01-stub, gpos/spike: g0-01}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: gpos-spike-p01-stub}
+  template:
+    metadata:
+      labels: {app: gpos-spike-p01-stub, gpos/spike: g0-01}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: stub
+          image: gpos-spike-p01-stub:spike
+          imagePullPolicy: Never
+          env:
+            - {name: MCP_PORT, value: "8765"}
+            - {name: MCP_PATH, value: /mcp}
+            - {name: TEXT_MODE, value: short}
+            - {name: SHAPE, value: plan}
+          ports:
+            - {name: mcp, containerPort: 8765}
+          readinessProbe:
+            httpGet: {path: /health, port: mcp}
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 20Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpos-spike-p01-stub
+  namespace: gpos-g0
+  labels: {app: gpos-spike-p01-stub, gpos/spike: g0-01}
+spec:
+  selector: {app: gpos-spike-p01-stub}
+  ports:
+    - {name: mcp, port: 8765, targetPort: mcp}

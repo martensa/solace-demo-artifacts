@@ -1,0 +1,25 @@
+# Fallback F2 of the EuroCIS price agent UC1 (spec 9.9) -- NOT applied by default.
+# Only when the connector gate (A-1) and F1 (A-20) both failed on probe till 98:
+#   scripts/install.sh mesh --fallback-f2      (needs GATE_GUARD=f2 in .env)
+# which applies mesh/manifest.yaml first and this manifest right after it, as
+# sam_admin, NEVER --prune. This manifest replaces the workflow
+# gpos-price-approval with the F2 variant; applying mesh/manifest.yaml alone
+# puts the B1 variant back. Mandatory acceptance for F2 in addition to
+# `make gate-verify`: scripts/e2e.py --mode deny --runs 5 (5/5 without price).
+kind: manifest
+name: gpos-uc1-fallback-f2
+description: >-
+  EuroCIS price agent UC1, fallback F2: approver agent with the gated builtin time
+  tool, ungated connector gpos-price-apply and the F2 approval workflow.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  connectors:
+    - gpos-price-apply
+  agents:
+    - gpos-price-approver-f2
+  workflows:
+    - gpos-price-approval

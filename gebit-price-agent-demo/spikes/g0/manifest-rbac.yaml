@@ -1,0 +1,18 @@
+# Gate 0 (O2, 2026-11-11): SAM side of the approver persona.
+# Applied with:  sam config apply -m manifest-rbac.yaml   (as sam_admin)
+# NEVER --prune: the platform holds other packages' RBAC too.
+kind: manifest
+name: gpos-g0-rbac
+description: >-
+  Role gpos_marktleitung for the EuroCIS price-agent spikes, its
+  Keycloak group claim mapping and a direct grant for event runs.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  rbacRoles:
+    - gpos_marktleitung
+  rbacClaimMappings:
+    - keycloak-group-marktleitung

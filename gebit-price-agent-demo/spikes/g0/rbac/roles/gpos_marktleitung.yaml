@@ -1,0 +1,18 @@
+# Approver persona: runs and answers the price-approval workflows.
+# notify:_:send for notify_user in runs under this identity.
+# users: direct grant, because an event-triggered run (entrypoint
+# rule defaultUserIdentity) carries no OIDC token for the claim
+# mapping to match (plan O2, G0-02 P2 checks it).
+kind: rbacRole
+name: gpos_marktleitung
+description: >-
+  Marktleitung (EuroCIS price agent): runs workflows and agents,
+  answers approval requests in the SAM inbox, sends notifications.
+spec:
+  scopes:
+    - "workflow:*:invoke"
+    - "agent:*:invoke"
+    - "notify:_:send"
+  users:
+    - type: email
+      value: marktleitung@solace.lab

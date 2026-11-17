@@ -1,0 +1,41 @@
+# TEMPLATE -- rendered by spikes/g0/g0-01/render.sh into
+# spikes/g0/g0-01/.rendered/ (broker credentials from
+# bsg-trading-desk-demo/.env, never in a file under version control).
+# One rule per workflow: p01_pos -> gpos-spike-p01-pos. Plan 3.2 R1:
+# inputExpression "input.payload:" delivers the raw GEBIT JSON as
+# workflow.input.text. successOutput only for the spike (timing).
+kind: entrypoint
+name: gpos-spike-ep-p01
+description: >-
+  Gate 0 spike G0-01 entrypoint: raw GEBIT events on gpos/spike/p01/pos/>
+  start gpos-spike-p01-pos.
+spec:
+  type: event_mesh
+  deploy: true
+  values:
+    broker_url: "ws://host.docker.internal:8008"
+    broker_vpn: "default"
+    broker_username: "__BROKER_USERNAME__"
+    broker_password: "__BROKER_PASSWORD__"
+    tls_skip_verify: "false"
+    event_rules:
+      - name: p01_pos
+        subscriptions:
+          - topic: "gpos/spike/p01/pos/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p01-pos
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p01/out/ok"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p01/out/err"
+          topicType: static
+          responseType: error

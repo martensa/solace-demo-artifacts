@@ -1,0 +1,26 @@
+# G0-05 S3b: agent target of an event rule with artifactProcessing.
+kind: agent
+name: gpos-spike-p05-scout
+description: >-
+  Gate 0 spike G0-05 S3b: reads a competitor price tag photo
+  (inline vision) and answers with JSON.
+spec:
+  type: standard
+  modelProvider:
+    - fast
+  toolsets: []
+  additionalConfigurations:
+    supportsStreaming: false
+    enableInlineVision: true
+  skills:
+    - id: gpos_spike_p05_scout
+      name: Price tag reader
+      description: Reads a competitor price tag photo (Gate 0 spike).
+  inputModes: [text, image]
+  outputModes: [text]
+  systemPrompt: |
+    You read photos of competitor price tags for a German trade fair
+    demo. The photo is attached to the request. Answer only with one JSON
+    object: {"readable": bool, "product_text": str, "pack_size": str,
+    "price_eur": number or null, "unit_price": str, "valid_text": str,
+    "confidence": number}. Never guess a price. Call no tool.

@@ -1,0 +1,112 @@
+{
+ "@type": "type.googleapis.com/de.showcase.loyalty.v1.datatype.EligibleOffers",
+ "recommendedSlot": "A",
+ "personalised": true,
+ "candidates": [
+  {
+   "slot": "A",
+   "offer": {
+    "offerId": "OFF-CANTUCCINI-30",
+    "kind": "OFFER_KIND_PERSONAL_COUPON",
+    "targetArticleNumber": "article008",
+    "conditionArticleNumber": "article007",
+    "discountType": "DISCOUNT_TYPE_RELATIVE",
+    "discountValue": {
+     "scale": 2,
+     "intVal": "3000"
+    },
+    "maxDiscount": {
+     "currency": "EUR",
+     "amount": {
+      "scale": 2,
+      "intVal": "100"
+     }
+    },
+    "validDays": 7,
+    "inCatalogue": true,
+    "approval": "APPROVAL_MODE_NONE",
+    "promotionId": "promo-cantuccini-30",
+    "textKey": "coupon.cantuccini30",
+    "matchTags": [
+     "gebaeck",
+     "kaffee"
+    ]
+   },
+   "score": {
+    "scale": 3,
+    "intVal": "121"
+   },
+   "priceBefore": {
+    "currency": "EUR",
+    "amount": {
+     "scale": 2,
+     "intVal": "229"
+    }
+   },
+   "priceAfter": {
+    "currency": "EUR",
+    "amount": {
+     "scale": 2,
+     "intVal": "160"
+    }
+   },
+   "pctShown": 30,
+   "whyFacts": [
+    "Espresso im Korb",
+    "Affinitaet Espresso -> Cantuccini Lift 2,9",
+    "Tag gebaeck"
+   ]
+  },
+  {
+   "slot": "B",
+   "offer": {
+    "offerId": "OFF-KAFFEEPADS-30",
+    "kind": "OFFER_KIND_PERSONAL_COUPON",
+    "targetArticleNumber": "article030",
+    "discountType": "DISCOUNT_TYPE_RELATIVE",
+    "discountValue": {
+     "scale": 2,
+     "intVal": "3000"
+    },
+    "maxDiscount": {
+     "currency": "EUR",
+     "amount": {
+      "scale": 2,
+      "intVal": "200"
+     }
+    },
+    "validDays": 7,
+    "inCatalogue": true,
+    "approval": "APPROVAL_MODE_NONE",
+    "promotionId": "promo-kaffeepads-30",
+    "textKey": "coupon.kaffeepads30",
+    "matchTags": [
+     "kaffee"
+    ]
+   },
+   "score": {
+    "scale": 3,
+    "intVal": "104"
+   },
+   "priceBefore": {
+    "currency": "EUR",
+    "amount": {
+     "scale": 2,
+     "intVal": "499"
+    }
+   },
+   "priceAfter": {
+    "currency": "EUR",
+    "amount": {
+     "scale": 2,
+     "intVal": "349"
+    }
+   },
+   "pctShown": 30,
+   "whyFacts": [
+    "Tag kaffee",
+    "Ueberbestand nach Lieferavis: 36 ueber Zielbestand"
+   ]
+  }
+ ]
+}

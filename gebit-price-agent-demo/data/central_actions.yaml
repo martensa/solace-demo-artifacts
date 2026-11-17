@@ -1,0 +1,4 @@
+# data/central_actions.yaml -- head office promotions (kind CENTRAL), both stores
+- {article: "100009", price: 2.99, from: "2027-02-08T08:00", to: "2027-02-21T20:00",
+   ref30: 3.49, reason_code: REASON_CODE_CENTRAL_PROMOTION,
+   label: "Zentralaktion Winterende"}

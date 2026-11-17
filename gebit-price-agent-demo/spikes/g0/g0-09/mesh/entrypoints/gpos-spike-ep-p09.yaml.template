@@ -1,0 +1,100 @@
+# TEMPLATE -- rendered by spikes/g0/g0-09/render.sh into
+# spikes/g0/g0-09/.rendered/ (chmod 600, broker credentials from
+# bsg-trading-desk-demo/.env, never in a file under version control).
+# Same transport as gpos-spike-events (web transport 8008, VPN default),
+# own topics gpos/spike/p09/... and own output topics.
+kind: entrypoint
+name: gpos-spike-ep-p09
+description: >-
+  Gate 0 spike G0-09 entrypoint of the EuroCIS price agent: test events
+  on gpos/spike/p09/> start the G0-09 spike workflows.
+spec:
+  type: event_mesh
+  deploy: true
+  values:
+    broker_url: "ws://host.docker.internal:8008"
+    broker_vpn: "default"
+    broker_username: "__BROKER_USERNAME__"
+    broker_password: "__BROKER_PASSWORD__"
+    tls_skip_verify: "false"
+    event_rules:
+      - name: write
+        subscriptions:
+          - topic: "gpos/spike/p09/write/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p09-write
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p09/out/ok"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p09/out/err"
+          topicType: static
+          responseType: error
+      - name: b1
+        subscriptions:
+          - topic: "gpos/spike/p09/b1/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p09-b1
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p09/out/ok"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p09/out/err"
+          topicType: static
+          responseType: error
+      - name: b1h
+        subscriptions:
+          - topic: "gpos/spike/p09/b1h/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p09-b1h
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p09/out/ok"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p09/out/err"
+          topicType: static
+          responseType: error
+      - name: writen
+        subscriptions:
+          - topic: "gpos/spike/p09/writen/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p09-write-n
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/p09/out/ok"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/p09/out/err"
+          topicType: static
+          responseType: error

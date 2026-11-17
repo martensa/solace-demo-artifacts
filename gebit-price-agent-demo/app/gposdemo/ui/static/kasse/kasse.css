@@ -1,0 +1,149 @@
+/* /kasse: till simulator, tablet/laptop 1280 x 800, large touch targets (10.3). */
+body { min-height: 100vh; display: flex; flex-direction: column; }
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.head h1 { font-size: 1.35rem; }
+.head-bon { color: var(--muted); }
+.head #btn-reset { margin-left: auto; }
+.status {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  background: var(--grey-bg);
+  color: var(--grey);
+}
+.status.open { background: #e5edfb; color: var(--blue); }
+.status.payment { background: #fdf0e1; color: var(--orange); }
+.status.closed { background: var(--green-bg); color: var(--green); }
+.switch { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; }
+.switch input { width: 24px; height: 24px; }
+
+.kasse {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+  gap: 16px;
+  padding: 16px 20px;
+  min-height: 0;
+}
+.left { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.scan { display: flex; gap: 10px; }
+.ean {
+  flex: 1;
+  min-height: 56px;
+  font-size: 1.4rem;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  font-family: var(--mono);
+}
+.ean:focus { outline: none; border-color: var(--blue); }
+.msg { min-height: 1.4em; font-weight: 600; }
+.msg.error { color: var(--red); }
+.msg.ok { color: var(--green); }
+
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.tab {
+  min-height: 48px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  font-weight: 600;
+}
+.tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+  align-content: start;
+  overflow-y: auto;
+  max-height: 46vh;
+  padding: 2px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 118px;
+  padding: 12px;
+  text-align: left;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.tile:active { transform: scale(0.98); }
+.tile .name { font-weight: 650; }
+.tile .pack { color: var(--muted); font-size: 0.9em; }
+.tile .price { margin-top: auto; font-size: 1.2rem; font-weight: 700; }
+.tile .ean-small { color: var(--muted); font-size: 0.75em; font-family: var(--mono); }
+.tile.action { border-color: var(--orange); }
+
+.bar h3 { font-size: 0.95rem; color: var(--muted); margin-bottom: 6px; }
+.bar-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.bon { display: flex; flex-direction: column; padding: 16px; min-height: 0; }
+.bon h2 { font-size: 1.2rem; margin-bottom: 8px; }
+.bon-card { color: var(--muted); min-height: 1.4em; margin-bottom: 8px; }
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+.line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  min-height: 48px;
+}
+.line.selected { background: #e5edfb; }
+.line.voided .line-name, .line.voided .line-price {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.line-name { font-weight: 600; }
+.line-price { font-weight: 700; text-align: right; }
+.line-meta { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sum {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 12px 6px;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.total { font-size: 1.6rem; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.actions .btn { min-height: 56px; }
+
+.dialog { border: none; border-radius: var(--radius); padding: 0; max-width: 560px; width: 92vw; }
+.dialog::backdrop { background: rgba(23, 32, 44, 0.45); }
+.dialog-body { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+.scopes { display: flex; flex-direction: column; gap: 8px; }
+.nowrap { white-space: nowrap; }
+.scopes label { display: flex; gap: 10px; align-items: center; min-height: 44px; }
+.dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+@media (max-width: 900px) {
+  .kasse { grid-template-columns: 1fr; }
+  .grid { max-height: none; }
+}

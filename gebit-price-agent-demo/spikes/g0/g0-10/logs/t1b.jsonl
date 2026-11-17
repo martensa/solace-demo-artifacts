@@ -1,0 +1,13 @@
+{"t": 1794390199.866, "kind": "sent", "topic": "gpos/spike/p10/q1/t1b", "seq": "t1b-q1-qos1-1-9cec", "qos": 1, "expiry": null}
+{"t": 1794390199.867, "kind": "sent", "topic": "gpos/spike/p10/q1/t1b", "seq": "t1b-q1-qos0-1-2159", "qos": 0, "expiry": null}
+{"t": 1794390199.903, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t1b-q1-qos1-1-9cec", "age": 0.04, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:19.798816+00:00", "seq": "t1b-q1-qos1-1-9cec", "ts": 1794390199.862463}}
+{"t": 1794390199.903, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t1b-q1-qos0-1-2159", "age": 0.037, "body": {"mode": "q1/qos0", "now": "2026-11-11T09:43:19.799241+00:00", "seq": "t1b-q1-qos0-1-2159", "ts": 1794390199.8665779}}
+{"t": 1794390200.173, "kind": "sent", "topic": "gpos/spike/p10/q1/t1b", "seq": "t1b-q1-qos1-2-a885", "qos": 1, "expiry": null}
+{"t": 1794390200.174, "kind": "sent", "topic": "gpos/spike/p10/q1/t1b", "seq": "t1b-q1-qos0-2-d12e", "qos": 0, "expiry": null}
+{"t": 1794390200.222, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t1b-q1-qos0-2-d12e", "age": 0.049, "body": {"mode": "q1/qos0", "now": "2026-11-11T09:43:20.113113+00:00", "seq": "t1b-q1-qos0-2-d12e", "ts": 1794390200.1732092}}
+{"t": 1794390200.223, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t1b-q1-qos1-2-a885", "age": 0.054, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:20.112835+00:00", "seq": "t1b-q1-qos1-2-a885", "ts": 1794390200.16939}}
+{"t": 1794390200.482, "kind": "sent", "topic": "gpos/spike/p10/q1/t1b", "seq": "t1b-q1-qos1-3-73da", "qos": 1, "expiry": null}
+{"t": 1794390200.482, "kind": "sent", "topic": "gpos/spike/p10/q1/t1b", "seq": "t1b-q1-qos0-3-18c4", "qos": 0, "expiry": null}
+{"t": 1794390200.536, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t1b-q1-qos0-3-18c4", "age": 0.054, "body": {"mode": "q1/qos0", "now": "2026-11-11T09:43:20.416236+00:00", "seq": "t1b-q1-qos0-3-18c4", "ts": 1794390200.481811}}
+{"t": 1794390200.539, "kind": "recv", "topic": "gpos/spike/p10/out/ok/q1", "seq": "t1b-q1-qos1-3-73da", "age": 0.06, "body": {"mode": "q1/qos1", "now": "2026-11-11T09:43:20.416333+00:00", "seq": "t1b-q1-qos1-3-73da", "ts": 1794390200.478734}}
+{"t": 1794390213.567, "kind": "summary", "per_mode": {"q1/qos1": {"sent": 3, "ok": 3, "dup": 0, "missing": []}, "q1/qos0": {"sent": 3, "ok": 3, "dup": 0, "missing": []}}}

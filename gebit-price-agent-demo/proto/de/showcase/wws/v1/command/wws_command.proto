@@ -1,0 +1,49 @@
+// proto/de/showcase/wws/v1/command/wws_command.proto
+syntax = "proto3";
+
+package de.showcase.wws.v1.command;
+
+import "de/showcase/wws/v1/datatype/wws_datatype.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.wws.v1.command.protobuf";
+option java_outer_classname = "WwsCommandProto";
+
+message Header {
+  string trace_id = 1;
+  datatype.AuthorizationInformation originator = 2;
+  datatype.AuthorizationInformation approver = 3;
+}
+
+// Start a booth price action. Idempotent per proposal_id: a repeated call returns
+// the existing action_id with created=false and publishes nothing.
+message RequestPriceChange {
+  // Mandatory: originator "gpos-engine", approver "role:marktleitung".
+  Header header = 1;
+  string article_number = 2;
+  string store_id = 3;
+  // Mandatory: must equal the current regular price (WWS-020 otherwise).
+  datatype.Money expected_regular_price = 4;
+  // Mandatory: below the regular price (WWS-010 otherwise).
+  datatype.Money new_price = 5;
+  int32 pct_shown = 6;
+  datatype.Money ref30 = 7;
+  datatype.OffsetTimestamp valid_from = 8;
+  datatype.OffsetTimestamp valid_to = 9;
+  string proposal_id = 10;
+  datatype.ReasonCode reason_code = 11;
+}
+
+message EndPriceChange {
+  Header header = 1;
+  string action_id = 2;
+  string reason = 3;
+}
+
+// Demo only: end all booth actions of a store (full=false) or additionally
+// restore the seeded central actions (full=true).
+message ResetDemoState {
+  Header header = 1;
+  string store_id = 2;
+  bool full = 3;
+}

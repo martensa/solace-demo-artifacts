@@ -1,0 +1,76 @@
+# SKETCH -- GEBIT-style gRPC services behind ingress-nginx (aks overlay).
+# One Ingress per gRPC host: backend-protocol is per Ingress object and
+# must not leak onto the HTTP routes of the BFF.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpos-pos
+  namespace: gpos-demo
+spec:
+  selector: {app: gpos-pos}
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+      appProtocol: kubernetes.io/h2c   # plaintext HTTP/2 inside the cluster
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-pos-grpc
+  namespace: gpos-demo
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Only if the endpoint is ever exposed beyond the tunnel (GEBIT lab):
+    # nginx.ingress.kubernetes.io/auth-tls-secret: gpos-demo/grpc-client-ca
+    # nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [pos-grpc.DEMO_DOMAIN]
+      secretName: pos-grpc-tls
+  rules:
+    - host: pos-grpc.DEMO_DOMAIN
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-pos
+                port: {name: grpc}
+---
+# BFF / monitor / kasse / tablet: SSE + uploads (multi-modal).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-ui
+  namespace: gpos-demo
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [gpos.DEMO_DOMAIN]
+      secretName: gpos-tls
+  rules:
+    - host: gpos.DEMO_DOMAIN
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port: {name: http}

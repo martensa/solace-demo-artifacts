@@ -1,0 +1,23 @@
+# Kyverno probe (kubectl apply --dry-run=server only): gRPC ingress
+# WITHOUT spec.tls. Expected: denied by ingress-require-tls.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-g0-probe-no-tls
+  namespace: gpos-g0
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: gpos-grpc.solace.lab
+      http:
+        paths:
+          - path: /probe
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-g0-grpc
+                port:
+                  name: grpc

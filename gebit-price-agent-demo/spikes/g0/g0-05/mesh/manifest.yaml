@@ -1,0 +1,27 @@
+# G0-05 spike package (prefix gpos-spike-p05). Applied with run.sh:
+#   sam config apply   (NEVER --prune)
+kind: manifest
+name: gpos-g0-p05
+description: >-
+  Gate 0 spike G0-05 of the EuroCIS price agent: photo transport into
+  workflows (describe_image, artifactProcessing, agent target, MCP image).
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  connectors:
+    - gpos-spike-p05-photo
+  agents:
+    - gpos-spike-p05-scout
+    - gpos-spike-p05-scout-la
+  # s1a-s1d and s5 retired 2026-11-11 (they carried the LiteLLM key in
+  # tool_config); files kept in ../mesh-retired/, never re-apply them.
+  workflows:
+    - gpos-spike-p05-s1e
+    - gpos-spike-p05-s1f
+    - gpos-spike-p05-s5b
+    - gpos-spike-p05-s3a
+  entrypoints:
+    - gpos-spike-ep-p05

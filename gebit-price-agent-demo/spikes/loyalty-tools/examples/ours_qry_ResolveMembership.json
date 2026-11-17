@@ -1,0 +1,12 @@
+{
+ "@type": "type.googleapis.com/de.showcase.loyalty.v1.query.ResolveMembership",
+ "traceId": "v-0217-0042.card",
+ "membershipIdentificationValue": "CLUB-0001",
+ "purchaseTransactionId": "5b1f0c2e-8d4a-4f6b-9a1e-2c7d3e4f5a60",
+ "location": "Root.DE.999.101.01",
+ "capturingInformation": {
+  "inputMethod": "SCAN",
+  "inputType": "CODE128",
+  "inputValue": "CLUB-0001"
+ }
+}

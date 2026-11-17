@@ -1,0 +1,2 @@
+{"t": 1794391045.617, "kind": "sent", "topic": "gpos/spike/p05/s5b/s5b-1-competitor_tag", "scan_id": "s5b-1-competitor_tag", "img": "", "img_bytes": 0, "payload_bytes": 35}
+{"t": 1794391049.959, "kind": "recv", "topic": "gpos/spike/p05/out/ok/s5b", "scan_id": "s5b-1-competitor_tag", "dt": 4.35, "body": {"reading": {"confidence": 0.98, "pack_size": "1 l", "price_eur": 1.19, "product_text": "Bio Vollmilch 3,8% 1 l", "readable": true, "unit_price": "1 l = 1,19 €", "valid_text": "FRISCHMARKT"}, "scan_id": "s5b-1-competitor_tag", "variant": "s5b"}}

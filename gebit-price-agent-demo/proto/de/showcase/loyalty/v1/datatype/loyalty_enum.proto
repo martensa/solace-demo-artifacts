@@ -1,0 +1,92 @@
+//
+// loyalty_enum.proto
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.datatype;
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.datatype.protobuf";
+option java_outer_classname = "LoyaltyEnumProto";
+
+// State of a membership as seen by the loyalty system.
+enum MembershipStatus {
+  MEMBERSHIP_STATUS_UNSPECIFIED = 0;
+  MEMBERSHIP_STATUS_ACTIVE = 1;
+  MEMBERSHIP_STATUS_BLOCKED = 2;
+  // The identification value matches no card. The POS still assigns the membership with verified = false.
+  MEMBERSHIP_STATUS_UNKNOWN = 3;
+}
+
+// Explicit form of address chosen by the member (a preference, never inferred).
+enum Salutation {
+  SALUTATION_UNSPECIFIED = 0;
+  SALUTATION_FORMAL = 1;     // "Sie"
+  SALUTATION_INFORMAL = 2;   // "du"
+}
+
+// What an offer is, legally and technically.
+enum OfferKind {
+  OFFER_KIND_UNSPECIFIED = 0;
+  // Individual reduction for one member (PAngV section 11 (4) no. 1), redeemed via AssignLoyaltyCoupon.
+  OFFER_KIND_PERSONAL_COUPON = 1;
+  // Tied conditional offer shown to everybody with the condition article in the basket,
+  // redeemed via ApplyAnonymousCoupon.
+  OFFER_KIND_TIED_OFFER = 2;
+  // Coupon for the next visit, printed as CheckoutCoupon on the receipt.
+  OFFER_KIND_CHECKOUT_COUPON = 3;
+  // Out-of-catalogue coupon. Needs a human approver (command header approver).
+  OFFER_KIND_SPECIAL_COUPON = 4;
+}
+
+// Same values as GEBIT datatype.DiscountType.
+enum DiscountType {
+  DISCOUNT_TYPE_UNSPECIFIED = 0;
+  DISCOUNT_TYPE_ABSOLUTE = 1;
+  DISCOUNT_TYPE_RELATIVE = 2;
+  DISCOUNT_TYPE_NEW_PRICE = 3;
+}
+
+// Lifecycle of a coupon.
+enum CouponStatus {
+  COUPON_STATUS_UNSPECIFIED = 0;
+  COUPON_STATUS_ISSUED = 1;
+  COUPON_STATUS_REDEEMED = 2;
+  COUPON_STATUS_VOIDED = 3;
+  COUPON_STATUS_EXPIRED = 4;
+}
+
+// Who caused a coupon to be issued.
+enum IssueChannel {
+  ISSUE_CHANNEL_UNSPECIFIED = 0;
+  ISSUE_CHANNEL_RULE = 1;             // catalogue rule, no human, no LLM choice
+  ISSUE_CHANNEL_AGENT = 2;            // catalogue offer chosen by an agent among validated slots
+  ISSUE_CHANNEL_HUMAN_APPROVED = 3;   // special coupon after human approval
+  ISSUE_CHANNEL_CHECKOUT = 4;         // checkout coupon reported with a closed purchase
+}
+
+// Whether issuing needs a human approver.
+enum ApprovalMode {
+  APPROVAL_MODE_UNSPECIFIED = 0;
+  APPROVAL_MODE_NONE = 1;
+  APPROVAL_MODE_HUMAN = 2;
+}
+
+// Purchase transaction type (subset of GEBIT PurchaseTransactionType).
+enum TransactionType {
+  TRANSACTION_TYPE_UNSPECIFIED = 0;
+  TRANSACTION_TYPE_SALE = 1;
+  TRANSACTION_TYPE_VOID = 2;
+}
+
+// Outcome of a coupon lookup at the till.
+enum CouponResolutionResult {
+  COUPON_RESOLUTION_RESULT_UNSPECIFIED = 0;
+  COUPON_RESOLUTION_RESULT_VALID = 1;
+  COUPON_RESOLUTION_RESULT_UNKNOWN = 2;
+  COUPON_RESOLUTION_RESULT_EXPIRED = 3;
+  COUPON_RESOLUTION_RESULT_ALREADY_REDEEMED = 4;
+  COUPON_RESOLUTION_RESULT_WRONG_MEMBER = 5;
+  // Valid, but the basket does not meet the condition yet (e.g. no target article, active promotion).
+  COUPON_RESOLUTION_RESULT_NOT_APPLICABLE = 6;
+}

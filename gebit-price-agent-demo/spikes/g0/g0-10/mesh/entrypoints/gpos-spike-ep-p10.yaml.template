@@ -1,0 +1,55 @@
+# TEMPLATE -- rendered by spikes/g0/g0-10/render.sh into
+# spikes/g0/g0-10/.rendered/ (broker credentials from
+# bsg-trading-desk-demo/.env, never in a file under version control).
+# Web transport 8008 on VPN default; test events over MQTT 1883.
+#
+# p10_q1  : SAM-provisioned queue, subscription qos 1
+# p10_q0  : subscription qos 0 (direct? -> demotion test)
+# p10_own : existingQueueName gpos-spike-p10-q (queue created via SEMP
+#           by spikes/g0/g0-10/queue.sh, respect-ttl, max-ttl 20 s)
+kind: entrypoint
+name: gpos-spike-ep-p10
+description: >-
+  Gate 0 spike G0-10 of the EuroCIS price agent: broker options (qos,
+  demotion, existingQueueName, TTL)__DESC_SUFFIX__.
+spec:
+  type: event_mesh
+  deploy: __DEPLOY__
+  values:
+    broker_url: "ws://host.docker.internal:8008"
+    broker_vpn: "default"
+    broker_username: "__BROKER_USERNAME__"
+    broker_password: "__BROKER_PASSWORD__"
+    tls_skip_verify: "false"
+    event_rules:
+      - name: p10_q1
+        subscriptions:
+          - topic: "gpos/spike/p10/q1/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p10-echo
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy: {mode: on_receive}
+        successOutput: {enabled: true, topic: "gpos/spike/p10/out/ok/q1", topicType: static, responseType: structured}
+        errorOutput: {enabled: true, topic: "gpos/spike/p10/out/err/q1", topicType: static, responseType: error}
+      - name: p10_q0
+        subscriptions:
+          - topic: "gpos/spike/p10/q0/>"
+            qos: 0
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p10-echo
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy: {mode: on_receive}
+        successOutput: {enabled: true, topic: "gpos/spike/p10/out/ok/q0", topicType: static, responseType: structured}
+        errorOutput: {enabled: true, topic: "gpos/spike/p10/out/err/q0", topicType: static, responseType: error}
+      - name: p10_own
+        existingQueueName: "gpos-spike-p10-q"
+        messageFormat: json
+        targetWorkflowName: gpos-spike-p10-echo
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy: {mode: on_receive}
+        successOutput: {enabled: true, topic: "gpos/spike/p10/out/ok/own", topicType: static, responseType: structured}
+        errorOutput: {enabled: true, topic: "gpos/spike/p10/out/err/own", topicType: static, responseType: error}

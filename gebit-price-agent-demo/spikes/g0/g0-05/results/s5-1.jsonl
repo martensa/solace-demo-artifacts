@@ -1,0 +1,2 @@
+{"t": 1794390964.657, "kind": "sent", "topic": "gpos/spike/p05/s5/s5-1-competitor_tag", "scan_id": "s5-1-competitor_tag", "img": "", "img_bytes": 0, "payload_bytes": 34}
+{"t": 1794390964.828, "kind": "recv", "topic": "gpos/spike/p05/out/err/s5", "scan_id": "s5-1-competitor_tag", "dt": 0.17, "body": {"code": -32603, "message": "Workflow \"gpos-spike-p05-s5\" failed: node \"read\" failed: tool \"describe_image\" error: No multimodal LLM configured for image description"}}

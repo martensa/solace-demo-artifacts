@@ -1,0 +1,48 @@
+# G0-09 Part A: one agent node (gpos-spike-p09-writer) fed a writer_input
+# like prepare_proposal will deliver it (plan 3.4/3.9, <= 600 B). Node
+# timeout 30s instead of 11s so slow runs are measured, not cut off.
+kind: workflow
+name: gpos-spike-p09-write
+description: >-
+  Gate 0 spike G0-09: event -> pricing writer agent -> structured text
+  with umlauts, for latency and UTF-8 checks.
+spec:
+  appConfig:
+    version: "0.1.0"
+    workflow_timeout: "60s"
+    default_node_timeout: "30s"
+    fail_fast: true
+    skills:
+      - id: gpos_spike_p09_write
+        name: Writer latency spike
+        description: Writer agent latency and umlaut spike (Gate 0).
+    input_schema:
+      type: object
+      required: [seq]
+      properties:
+        seq: {type: string}
+        writer_input: {type: object}
+    nodes:
+      - id: write
+        type: agent
+        agent_name: gpos-spike-p09-writer
+        timeout: "30s"
+        instruction: >-
+          Follow your system prompt. Return exactly these keys: slot,
+          headline, rationale, why_line.
+        input:
+          proposal: "{{workflow.input.writer_input}}"
+        output_schema_override:
+          type: object
+          required: [slot, headline, rationale, why_line]
+          properties:
+            slot: {type: string, enum: [A, B, none]}
+            headline: {type: string}
+            rationale: {type: string}
+            why_line: {type: string}
+    output_mapping:
+      seq: "{{workflow.input.seq}}"
+      slot: "{{write.output.slot}}"
+      headline: "{{write.output.headline}}"
+      rationale: "{{write.output.rationale}}"
+      why_line: "{{write.output.why_line}}"

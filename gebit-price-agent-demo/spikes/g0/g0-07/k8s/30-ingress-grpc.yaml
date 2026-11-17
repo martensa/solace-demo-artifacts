@@ -1,0 +1,32 @@
+# gRPC ingress: TLS terminates at NGINX, h2c (grpc_pass) to the Service.
+# Kyverno ingress-require-tls: spec.tls with hosts + secretName and
+# ssl-redirect "true" are mandatory. proxy-body-size lifts the 1m default
+# (test.sh removes it once to show the 413).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-g0-grpc
+  namespace: gpos-g0
+  labels:
+    gpos/spike: g0-07
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gpos-grpc.solace.lab
+      secretName: gpos-g0-grpc-tls
+  rules:
+    - host: gpos-grpc.solace.lab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-g0-grpc
+                port:
+                  name: grpc

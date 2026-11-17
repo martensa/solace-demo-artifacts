@@ -1,0 +1,5 @@
+{"t": 1794390560.02, "kind": "sent", "topic": "gpos/spike/p10/q1/t3b", "seq": "t3b-q1-qos1-1-4b9c", "qos": 1, "expiry": 5}
+{"t": 1794390560.021, "kind": "sent", "topic": "gpos/spike/p10/own/t3b", "seq": "t3b-own-qos1-1-b5bc", "qos": 1, "expiry": 5}
+{"t": 1794390560.228, "kind": "sent", "topic": "gpos/spike/p10/q1/t3b", "seq": "t3b-q1-qos1-2-5282", "qos": 1, "expiry": 5}
+{"t": 1794390560.231, "kind": "sent", "topic": "gpos/spike/p10/own/t3b", "seq": "t3b-own-qos1-2-ce1c", "qos": 1, "expiry": 5}
+{"t": 1794390562.233, "kind": "summary", "per_mode": {"q1/qos1": {"sent": 2, "ok": 0, "dup": 0, "missing": ["t3b-q1-qos1-1-4b9c", "t3b-q1-qos1-2-5282"]}, "own/qos1": {"sent": 2, "ok": 0, "dup": 0, "missing": ["t3b-own-qos1-1-b5bc", "t3b-own-qos1-2-ce1c"]}}}

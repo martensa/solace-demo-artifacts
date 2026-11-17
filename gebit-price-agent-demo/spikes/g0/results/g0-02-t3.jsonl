@@ -1,0 +1,2 @@
+{"seq": "t3-1-bc2e1c", "inbox_seen_s": 1.99, "answered_to_result_s": 2.5, "result_topic": "gpos/spike/out/ok", "result": {"seq": "t3-1-bc2e1c", "status": "denied", "time": ""}, "results": 1}
+{"summary": true, "runs": 1, "items": 1, "results": 1, "ok": 1, "err": 0}

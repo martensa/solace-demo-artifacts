@@ -1,0 +1,2 @@
+{"t": 1794391242.117, "kind": "sent", "topic": "gpos/spike/p05/s3a/s3a-1-e87540", "scan_id": "s3a-1-e87540", "img": "competitor_tag_150k.jpg", "img_bytes": 151878, "payload_bytes": 202693}
+{"t": 1794391272.109, "kind": "recv", "topic": "gpos/spike/p05/out/err/s3a", "scan_id": "s3a-1-e87540", "dt": 30.0, "body": {"code": -32603, "message": "Workflow \"gpos-spike-p05-s3a\" failed: node \"scan\" failed: Agent reported error: Image file cp-s3a-1-e87540.jpg not found in session"}}

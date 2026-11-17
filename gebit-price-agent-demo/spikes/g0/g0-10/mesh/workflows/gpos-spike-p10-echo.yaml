@@ -1,0 +1,38 @@
+# G0-10: echo workflow without a model. One builtin tool node gives the
+# server time, so the age of an event at processing time can be read
+# from the run output (now - ts). Every payload field is declared.
+kind: workflow
+name: gpos-spike-p10-echo
+description: >-
+  Gate 0 spike G0-10: echo workflow for broker option tests (qos,
+  demotion, existingQueueName, TTL), no model.
+spec:
+  appConfig:
+    version: "0.1.0"
+    workflow_timeout: "30s"
+    default_node_timeout: "10s"
+    fail_fast: true
+    skills:
+      - id: gpos_spike_p10_echo
+        name: P10 echo
+        description: Echo spike for broker options (Gate 0, G0-10).
+    input_schema:
+      type: object
+      properties:
+        seq: {type: [string, "null"]}
+        ts: {type: [number, "null"]}
+        mode: {type: [string, "null"]}
+        note: {type: [string, "null"]}
+    tools:
+      - tool_type: builtin
+        tool_name: get_current_time
+    nodes:
+      - id: now
+        type: tool
+        tool_name: get_current_time
+        timeout: "5s"
+    output_mapping:
+      seq: "{{workflow.input.seq}}"
+      ts: "{{workflow.input.ts}}"
+      mode: "{{workflow.input.mode}}"
+      now: "{{now.output.current_time}}"

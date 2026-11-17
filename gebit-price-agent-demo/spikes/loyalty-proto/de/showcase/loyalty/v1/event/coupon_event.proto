@@ -1,0 +1,129 @@
+//
+// coupon_event.proto
+//
+// Topic: showcase/loyalty/v1/coupon/{EventName}/{country}/{company}/{store}/{membershipId|anonymous}
+// The coupon identification value (the redeemable code) is never part of an event.
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.event;
+
+import "de/showcase/loyalty/v1/datatype/common_datatype.proto";
+import "de/showcase/loyalty/v1/datatype/loyalty_enum.proto";
+import "de/showcase/loyalty/v1/event/common_event.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.event.protobuf";
+option java_outer_classname = "CouponEventProto";
+
+// A coupon was issued.
+message CouponIssued {
+
+  // Mandatory: The header.
+  Header header = 1;
+
+  // Mandatory: The metadata.
+  datatype.Metadata metadata = 2;
+
+  // Mandatory: The coupon id.
+  string coupon_id = 3;
+
+  // Optional: The membership; empty for anonymous coupons.
+  optional string membership_id = 4;
+
+  // Mandatory: The offer.
+  string offer_id = 5;
+
+  // Mandatory: The offer kind.
+  datatype.OfferKind kind = 6;
+
+  // Mandatory: Who caused the issue.
+  datatype.IssueChannel channel = 7;
+
+  // Mandatory: Valid to.
+  datatype.OffsetTimestamp valid_to = 8;
+
+  // Mandatory: Discount type.
+  datatype.DiscountType discount_type = 9;
+
+  // Mandatory: Discount value.
+  datatype.BDecimal discount_value = 10;
+
+  // Optional: Target article.
+  optional string target_article_number = 11;
+
+  // Optional: Purchase transaction it was issued in.
+  optional string purchase_transaction_id = 12;
+
+  // Optional: Our proposal id.
+  optional string proposal_id = 13;
+
+  // Optional: Role pseudonym of the approver (special coupons only).
+  optional string approver_ref = 14;
+
+  // List of extension properties. It can be empty.
+  repeated datatype.Property extension_properties = 15;
+}
+
+// A coupon was redeemed on a closed receipt.
+message CouponRedeemed {
+
+  // Mandatory: The header.
+  Header header = 1;
+
+  // Mandatory: The metadata.
+  datatype.Metadata metadata = 2;
+
+  // Mandatory: The coupon id.
+  string coupon_id = 3;
+
+  // Optional: The membership; empty for anonymous coupons.
+  optional string membership_id = 4;
+
+  // Mandatory: The closed purchase transaction.
+  string purchase_transaction_id = 5;
+
+  // Mandatory: The GEBIT coupon position id on the receipt.
+  string coupon_position_id = 6;
+
+  // Mandatory: The discount granted.
+  datatype.Money discount_granted = 7;
+
+  // List of extension properties. It can be empty.
+  repeated datatype.Property extension_properties = 8;
+}
+
+// A coupon was withdrawn.
+message CouponVoided {
+
+  // Mandatory: The header.
+  Header header = 1;
+
+  // Mandatory: The metadata.
+  datatype.Metadata metadata = 2;
+
+  // Mandatory: The coupon id.
+  string coupon_id = 3;
+
+  // Optional: The membership.
+  optional string membership_id = 4;
+
+  // Mandatory: Reason code.
+  string reason_code = 5;
+}
+
+// A coupon reached valid_to unused.
+message CouponExpired {
+
+  // Mandatory: The header.
+  Header header = 1;
+
+  // Mandatory: The metadata.
+  datatype.Metadata metadata = 2;
+
+  // Mandatory: The coupon id.
+  string coupon_id = 3;
+
+  // Optional: The membership.
+  optional string membership_id = 4;
+}

@@ -1,0 +1,6 @@
+label          tool              case            wire result struct  text agent <=1800
+deployed       assess_event      TR2              531    497    394    27     0 yes
+deployed       assess_event      card             501    467    371    20     0 yes
+deployed       prepare_proposal  TR2 2 slots     1239   1205   1108    21   437 yes
+deployed       get_offers        card 4 offers   1725   1691   1596    19   449 yes
+deployed       note_event        default          216    182     89    17     0 yes

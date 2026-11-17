@@ -1,0 +1,114 @@
+//
+// loyalty_query.proto
+//
+// Read-only requests (GEBIT style: trace_id first, no command header).
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.query;
+
+import "de/showcase/loyalty/v1/datatype/common_datatype.proto";
+import "de/showcase/loyalty/v1/datatype/loyalty_datatype.proto";
+import "de/showcase/loyalty/v1/datatype/loyalty_enum.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.query.protobuf";
+option java_outer_classname = "LoyaltyQueryProto";
+
+// Called by the POS while it processes AssignLoyaltyMembership.
+message ResolveMembership {
+
+  // Optional: The trace id.
+  string trace_id = 1;
+
+  // Mandatory: The scanned or typed card value.
+  string membership_identification_value = 2;
+
+  // Mandatory: The purchase transaction id.
+  string purchase_transaction_id = 3;
+
+  // Mandatory: The GEBIT location of the till.
+  string location = 4;
+
+  // Optional: The membership position id, if the POS already assigned one.
+  optional string membership_position_id = 5;
+
+  // Optional: The capturing information.
+  datatype.CapturingInformation capturing_information = 6;
+}
+
+// Called by the POS while it processes AssignLoyaltyCoupon or ApplyAnonymousCoupon.
+message ResolveCoupon {
+
+  // Optional: The trace id.
+  string trace_id = 1;
+
+  // Mandatory: The scanned value (loyalty coupon id, or prefix:promotion_code).
+  string coupon_identification_value = 2;
+
+  // Optional: The membership assigned to the transaction.
+  optional string membership_id = 3;
+
+  // Mandatory: The purchase transaction id.
+  string purchase_transaction_id = 4;
+
+  // Current basket, to check the coupon condition.
+  repeated datatype.BasketLine basket = 5;
+}
+
+// Agent-facing profile (through the engine's MCP facade).
+message GetMemberProfile {
+
+  // Optional: The trace id.
+  string trace_id = 1;
+
+  // Mandatory: The membership.
+  string membership_id = 2;
+}
+
+// Ranked, guardrail-checked offers for a member (or anonymous) and the current basket.
+message ListEligibleOffers {
+
+  // Optional: The trace id.
+  string trace_id = 1;
+
+  // Optional: The membership; empty means anonymous (catalogue tied offers only).
+  optional string membership_id = 2;
+
+  // Mandatory: The purchase transaction id.
+  string purchase_transaction_id = 3;
+
+  // Current basket.
+  repeated datatype.BasketLine basket = 4;
+
+  // Optional: Maximum candidates, default and maximum 3.
+  int32 max_candidates = 5;
+
+  // Optional: Restrict to one offer kind.
+  datatype.OfferKind kind = 6;
+}
+
+// Wallet of a member.
+message ListMemberCoupons {
+
+  // Optional: The trace id.
+  string trace_id = 1;
+
+  // Mandatory: The membership.
+  string membership_id = 2;
+
+  // Optional: Also return redeemed, voided and expired coupons.
+  bool include_inactive = 3;
+}
+
+// Called by the POS while closing: points and checkout coupons for the receipt.
+// Pure function of the purchase; coupon ids are derived deterministically from
+// purchase_transaction_id and offer_id, so a retry returns the same ids.
+message CalculatePurchaseResult {
+
+  // Optional: The trace id.
+  string trace_id = 1;
+
+  // Mandatory: The purchase being closed.
+  datatype.PurchaseSummary purchase = 2;
+}

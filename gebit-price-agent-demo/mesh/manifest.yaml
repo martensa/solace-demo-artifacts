@@ -1,0 +1,30 @@
+# EuroCIS price agent UC1 -- connectors, agents, workflows.
+# Applied with: cd mesh && sam config apply   (as sam_admin; NEVER --prune)
+# The entrypoints are rendered separately (scripts/render_mesh.py -> mesh/.rendered/).
+# mesh/fallback/ (connector gpos-price-apply, F2) is applied only with fallback F2.
+kind: manifest
+name: gpos-uc1
+description: >-
+  EuroCIS price agent UC1: MCP connectors to engine, gate, WWS, loyalty and POS,
+  the evidence (fast), planner (planning) and approver (fast) agents and the three
+  event-driven workflows.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  connectors:
+    - gpos-booth-tools
+    - gpos-price-gate
+    - gpos-wws-api
+    - gpos-loyalty-api
+    - gpos-pos-api
+  agents:
+    - gpos-pricing-agent
+    - gpos-price-planner
+    - gpos-price-approver
+  workflows:
+    - gpos-pos-event
+    - gpos-basket-review
+    - gpos-price-approval

@@ -1,0 +1,74 @@
+== run main: seq_base 912250000, sent 224, bursts 32 x 7 every 56.0 s
+first send 1794391226.7, last send 1794392962.7, span 1736.0 s, rate 450/h
+record kinds: {'connect': 1, 'start': 1, 'sent': 224, 'recv': 224, 'disconnect': 1, 'summary': 224, 'result': 1}
+
+== client: event -> successOutput (s)
+all       n=224 min 0.089 p50 0.183 p95 0.316 p99 0.421 max 0.422 mean 0.186
+member    n=33 min 0.113 p50 0.187 p95 0.317 p99 0.421 max 0.421 mean 0.197
+none      n=157 min 0.089 p50 0.182 p95 0.316 p99 0.422 max 0.422 mean 0.185
+price_trigger n=34 min 0.091 p50 0.184 p95 0.266 p99 0.319 max 0.319 mean 0.178
+by position in burst:
+  idx 0 n=32 min 0.099 p50 0.185 p95 0.322 p99 0.417 max 0.417 mean 0.185
+  idx 1 n=32 min 0.106 p50 0.183 p95 0.319 p99 0.410 max 0.410 mean 0.188
+  idx 2 n=32 min 0.106 p50 0.183 p95 0.317 p99 0.421 max 0.421 mean 0.188
+  idx 3 n=32 min 0.091 p50 0.183 p95 0.287 p99 0.415 max 0.415 mean 0.187
+  idx 4 n=32 min 0.101 p50 0.181 p95 0.316 p99 0.410 max 0.410 mean 0.185
+  idx 5 n=32 min 0.099 p50 0.183 p95 0.316 p99 0.422 max 0.422 mean 0.184
+  idx 6 n=32 min 0.089 p50 0.181 p95 0.314 p99 0.422 max 0.422 mean 0.183
+burst max (last of 7 done): n=32 min 0.107 p50 0.188 p95 0.322 p99 0.422 max 0.422 mean 0.202
+1st half: n=112 min 0.099 p50 0.181 p95 0.314 p99 0.319 max 0.322 mean 0.192
+2nd half: n=112 min 0.089 p50 0.184 p95 0.410 p99 0.422 max 0.422 mean 0.179
+
+== failures: err 0, missing 0, unmatched 0, dup 0, sha mismatch 0, '{{' literal 0, puback missing 0, disconnects 1
+verdicts: {'price_trigger': 34, 'none': 157, 'member': 33}
+
+== SAM tasks API (workflow gpos-spike-p01-pos, this run): 224 tasks, 224 distinct seq of 224 sent
+status: {'completed': 224}
+entrypoint ok: {True: 224} channel: {'event_mesh': 224} user: {'marktleitung@solace.lab': 224}
+tokens total: 0
+seq with >1 task: 0
+SAM start->end n=224 min 0.063 p50 0.152 p95 0.250 p99 0.402 max 0.415 mean 0.154
+seq not seen in tasks API: 0 []
+send -> SAM startTime (s) n=224 min -0.089 p50 -0.065 p95 0.035 p99 0.046 max 0.054 mean -0.044
+
+== lab samples: 33
+clock    | awe rs cpu mem | gwe rs cpu mem | str rs cpu mem | sam spoolB msgs qmsgs | wfq gwq | default spoolB msgs | tasks
+11:00:15 | awe 0 19m 583Mi | gwe 0 28m 321Mi | str 0 29m 381Mi | sam 29020 2 10 | 0 0 | def 5917921 1823 | page 100 mine 0 new 0
+11:01:15 | awe 0 251m 532Mi | gwe 0 28m 321Mi | str 0 35m 382Mi | sam 29020 2 10 | 0 0 | def 6552892 1833 | page 100 mine 7 new 7
+11:02:15 | awe 0 17m 530Mi | gwe 0 24m 312Mi | str 0 23m 384Mi | sam 31925 3 9 | 0 0 | def 6790763 1846 | page 100 mine 14 new 7
+11:03:15 | awe 0 11m 531Mi | gwe 0 20m 313Mi | str 0 26m 385Mi | sam 29020 2 8 | 0 0 | def 6840415 1860 | page 100 mine 28 new 14
+11:04:15 | awe 0 10m 513Mi | gwe 0 19m 321Mi | str 0 21m 382Mi | sam 29020 2 10 | 0 0 | def 6866154 1867 | page 100 mine 35 new 7
+11:05:15 | awe 0 11m 513Mi | gwe 0 20m 322Mi | str 0 25m 379Mi | sam 29020 2 10 | 0 0 | def 7295836 1876 | page 100 mine 42 new 7
+11:06:15 | awe 0 11m 466Mi | gwe 0 32m 323Mi | str 0 24m 387Mi | sam 29020 2 10 | 0 0 | def 7322722 1883 | page 100 mine 49 new 7
+11:07:15 | awe 0 23m 467Mi | gwe 0 34m 320Mi | str 0 26m 389Mi | sam 29020 2 10 | 0 0 | def 7347641 1890 | page 100 mine 56 new 7
+11:08:15 | awe 0 20m 468Mi | gwe 0 30m 320Mi | str 0 24m 389Mi | sam 29020 2 10 | 0 0 | def 7373856 1897 | page 100 mine 63 new 7
+11:09:15 | awe 0 22m 469Mi | gwe 0 25m 320Mi | str 0 28m 388Mi | sam 29020 2 10 | 0 0 | def 7400718 1904 | page 100 mine 70 new 7
+11:10:15 | awe 0 10m 469Mi | gwe 0 21m 318Mi | str 0 24m 388Mi | sam 29020 2 10 | 0 0 | def 7424143 1911 | page 100 mine 77 new 7
+11:11:15 | awe 0 11m 470Mi | gwe 0 31m 318Mi | str 0 25m 389Mi | sam 29020 2 10 | 0 0 | def 7449235 1918 | page 100 mine 84 new 7
+11:12:15 | awe 0 12m 470Mi | gwe 0 24m 319Mi | str 0 23m 389Mi | sam 29020 2 10 | 0 0 | def 7476108 1925 | page 100 mine 85 new 7
+11:13:15 | awe 0 14m 470Mi | gwe 0 30m 320Mi | str 0 29m 393Mi | sam 29020 2 0 | 0 0 | def 7500939 1932 | page 100 mine 89 new 7
+11:14:15 | awe 0 13m 470Mi | gwe 0 24m 313Mi | str 0 24m 391Mi | sam 29020 2 10 | 0 0 | def 7525748 1939 | page 100 mine 91 new 7
+11:15:15 | awe 0 12m 470Mi | gwe 0 19m 313Mi | str 0 31m 402Mi | sam 29020 2 10 | 0 0 | def 7552177 1946 | page 100 mine 98 new 7
+11:16:15 | awe 0 12m 470Mi | gwe 0 20m 318Mi | str 0 26m 403Mi | sam 29020 2 0 | 0 0 | def 7576337 1953 | page 100 mine 98 new 7
+11:17:15 | awe 0 12m 470Mi | gwe 0 22m 318Mi | str 0 27m 403Mi | sam 29020 2 8 | 0 0 | def 7628678 1967 | page 100 mine 98 new 14
+11:18:15 | awe 0 14m 470Mi | gwe 0 22m 319Mi | str 0 27m 401Mi | sam 29020 2 10 | 0 0 | def 7652856 1974 | page 100 mine 100 new 7
+11:19:15 | awe 0 11m 471Mi | gwe 0 19m 320Mi | str 0 25m 404Mi | sam 29020 2 10 | 0 0 | def 7679736 1981 | page 100 mine 100 new 7
+11:20:15 | awe 0 19m 472Mi | gwe 0 32m 320Mi | str 0 43m 402Mi | sam 29020 2 10 | 0 0 | def 7705473 1988 | page 100 mine 100 new 7
+11:21:15 | awe 0 19m 472Mi | gwe 0 28m 320Mi | str 0 24m 401Mi | sam 0 0 0 | 0 0 | def 7728246 1995 | page 100 mine 100 new 7
+11:22:15 | awe 0 18m 472Mi | gwe 0 25m 320Mi | str 0 21m 398Mi | sam 29020 2 10 | 0 0 | def 7755125 2002 | page 100 mine 100 new 7
+11:23:15 | awe 0 17m 473Mi | gwe 0 28m 320Mi | str 0 20m 398Mi | sam 29020 2 10 | 0 0 | def 7780864 2009 | page 100 mine 100 new 7
+11:24:15 | awe 0 11m 473Mi | gwe 0 17m 320Mi | str 0 25m 399Mi | sam 29020 2 10 | 0 0 | def 7805128 2016 | page 100 mine 100 new 7
+11:25:15 | awe 0 9m 473Mi | gwe 0 15m 320Mi | str 0 22m 397Mi | sam 29020 2 10 | 0 0 | def 7832014 2023 | page 100 mine 100 new 7
+11:26:15 | awe 0 9m 473Mi | gwe 0 19m 320Mi | str 0 20m 402Mi | sam 29020 2 10 | 0 0 | def 7856933 2030 | page 100 mine 100 new 7
+11:27:15 | awe 0 10m 474Mi | gwe 0 23m 320Mi | str 0 24m 397Mi | sam 29020 2 10 | 0 0 | def 7883148 2037 | page 100 mine 100 new 7
+11:28:15 | awe 0 10m 474Mi | gwe 0 21m 320Mi | str 0 23m 403Mi | sam 29020 2 10 | 0 0 | def 7910010 2044 | page 100 mine 100 new 7
+11:29:15 | awe 0 9m 474Mi | gwe 0 18m 320Mi | str 0 19m 398Mi | sam 29020 2 10 | 0 0 | def 7933435 2051 | page 100 mine 100 new 7
+11:30:15 | awe 0 8m 474Mi | gwe 0 18m 320Mi | str 0 20m 399Mi | sam 29020 2 10 | 0 0 | def 7958527 2058 | page 100 mine 100 new 7
+11:31:15 | awe 0 10m 474Mi | gwe 0 20m 320Mi | str 0 18m 398Mi | sam 29020 2 10 | 0 0 | def 7958527 2058 | page 100 mine 100 new 0
+11:32:15 | awe 0 12m 474Mi | gwe 0 23m 320Mi | str 0 21m 399Mi | sam 29020 2 0 | 0 0 | def 7958527 2058 | page 100 mine 100 new 0
+awe: restarts 0..0, pods 1, startedAt ['2026-11-11T09:09:48Z'], cpu 8..251m (median 12), mem 466..583Mi
+gwe: restarts 0..0, pods 1, startedAt ['2026-11-11T09:09:17Z'], cpu 15..34m (median 23), mem 312..323Mi
+str: restarts 0..0, pods 1, startedAt ['2026-11-11T09:09:45Z'], cpu 18..43m (median 24), mem 379..404Mi
+VPN sam spool bytes 0..31925 (first 29020, last 29020), msgs 0..3, queue msgs 0..10, max spool 10000 MB -> peak 0.0003 %
+VPN default spool bytes 5917921..7958527 (first 5917921, last 7958527)
+SAM queues ever non-empty (max msgs): {'#P2P/QTMP/v:solace-1/sam-solace-lab/q/a2a/MarkitdownAgent': 2, '#P2P/QTMP/v:solace-1/sam-solace-lab/q/a2a/MermaidAgent': 2, '#P2P/QTMP/v:solace-1/sam-solace-lab/q/a2a/WebResearchAgent': 2, '#P2P/QTMP/v:solace-1/sam-solace-lab/q/a2a/WebScraperAgent': 2, 'sam-solace-lab/q/gdk/task_log/agent-mesh-solace-agent-mesh-gateway': 2, 'sam-solace-lab/q/a2a/agent_01a1c9fe_7ab8_7ec8_899b_8a6701366f52': 1}

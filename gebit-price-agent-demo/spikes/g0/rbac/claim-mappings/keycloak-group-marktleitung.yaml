@@ -1,0 +1,8 @@
+# Keycloak group "marktleitung" -> role gpos_marktleitung (WebUI and
+# API logins carry the group in the "groups" claim).
+kind: rbacClaimMapping
+name: keycloak-group-marktleitung
+spec:
+  oidcProvider: azure
+  claimValue: marktleitung
+  roleNames: [gpos_marktleitung]

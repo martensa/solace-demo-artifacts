@@ -1,0 +1,194 @@
+[
+ {
+  "lens": "sam-feasibility",
+  "findings": [
+   {
+    "severity": "blocker",
+    "quote": "`HIL_NO_APPROVAL_ROUTE`; er läuft nie ungefragt [V: RH 1.4].",
+    "problem": "The whole native approval (E4, 3.5, 3.7) rests on a gate on the platform connector `gpos-price-gate`, used by a workflow tool node through `connector:`. The plan marks this [V]. But the 2.542.1 docs shipped with the CLI say twice that a connector gate is NOT enforced on a connector-bound workflow tool node, and that the node runs the tool without asking. Other docs and the feature catalog say the node fails or pauses. RH covers only the workflow `tools:` entry and rates the event path 'medium'. Worst case: `apply_price` sets the price with no human and no error, so the core message is false. The engine has no fail-closed guard. If Phase B fails, the plan falls back to Fläche D even though the documented gate on the workflow's own `tools:` entry (Phase A) could still work.",
+    "evidence": "review-sam/skills2542/sam-declarative-config/references/connector.md:144-146 \"Workflow `type: tool` nodes that bind the connector run the tool without asking, so route a tool that needs approval through an agent node.\" design/agent-design.md:316-321: a connector gate on a workflow-bound tool \"is parsed and validated but not enforced: a `type: tool` node dispatches the tool without asking\". The same text is in the CLI binary (impl/hitl/sam-cli.strings:72526, 94700). The opposite view is in workflow.md:399-404 (fails) and STR:115366-115369 (pauses with both flags). RH 7 #4 rates the native pause for event runs 'medium'.",
+    "fix": "3.7 ersetzen: „Ob ein Connector-Gate an einem Workflow-Tool-Knoten greift,\nist offen; die 2.542.1-Doku sagt teils ‚läuft ohne Rückfrage‘ [G0-02 B].“\nG0-02 Phase B besteht nur, wenn die Engine `apply_price` zeitlich erst nach\nder Inbox-Antwort empfängt (Zeitstempel im Engine-Log). Variante B2 spiken:\nGate am Workflow-`tools:`-Eintrag (`tool_type: mcp`, `/gate/mcp`, `hil`).\nFail-closed in `apply_price`: nur anwenden, wenn `approval/pending` mindestens\n3 s zurückliegt; sonst Status `blocked`, Alarm auf `/op`, kein Preis.\nPreflight: Kanarienlauf muss in der Inbox pausieren, sonst NOT READY."
+   },
+   {
+    "severity": "major",
+    "quote": "Fläche D (signiertes Ereignis) als Messe-Standard; nativer HITL nur im Chat-Moment",
+    "problem": "If G0-02 fails, the only SAM-native HITL left is the chat moment K5. K5 is a 'Kann' item outside the plan. The mandatory owner requirement 3 (HITL) would then rest on no Muss work package. 6.2 also says 'Nie gestrichen: TR1 mit Freigabe in SAM', which fallback D contradicts. K5 itself (an agent with a gated tool in the WebUI chat) has no Gate-0 test: T1 starts a workflow from chat, not an agent.",
+    "evidence": "Plan 6: \"Kann (außerhalb des Plans): ... K5 Chat-HITL-Moment in der Tiefenecke (0,5 PT)\". R1: \"Fläche D, nativer HITL nur im Chat-Moment\". 6.2: \"Nie gestrichen: TR1 mit Freigabe in SAM\". RH 1.1 row A: agent tool approval works only in the WebUI chat. RH 5.4 T1: \"run the spike workflow from a WebUI chat\".",
+    "fix": "AP09 ergänzen: Bei G0-02 NO-GO wird K5 Pflicht (0,5 PT aus dem Puffer):\nAgent im WebUI-Chat ruft gegatetes `apply_price` über `gpos-price-gate`.\nG0-02 um T15 ergänzen: dieser Agent-Chat-Pfad, Karte im Chat und in der\nInbox, Freigabe 5/5. 6.2 umformulieren: „Nie gestrichen: TR1 mit Freigabe\n(nativ in SAM, sonst Rückfall D plus Chat-HITL-Moment)“."
+   },
+   {
+    "severity": "major",
+    "quote": "Alle Rückgaben sind Pydantic-Modelle unter 2048 Byte (sonst",
+    "problem": "The size budget sits close to the threshold, and the plan never says what is measured. The MCP spec asks a tool with structuredContent to also return the serialized JSON as a TextContent. The result SAM sees is therefore about twice the model. Above the threshold SAM saves an artifact, and NO `mcp_structured_content` field resolves. TR1 (`writer_input` up to 1.2 KB) and TR5 (`agent_input` built from EligibleOffers up to 1,591 B) would fail at run time. Both are 'nie gestrichen'. G0-01 tests only an MCP stub. A connector-bound MCP tool cannot raise the threshold.",
+    "evidence": "Plan 3.9: \"writer_input (<= 1,2 KB)\". RL 6: \"largest `EligibleOffers` 1,591 B compact (< 2048)\". Memory sam-mcp-tools-in-workflows: over 2048 B \"NO field of the response resolves\"; BSG had to cut 2741 -> 1241 B; `tool_config` \"is NOT available on a connector-backed MCP tool\". RM 4.3: threshold 2048 B. AP07 acceptance: \"jede Antwort < 2048 B\" (basis undefined).",
+    "fix": "AP07 und G0-01: Größe am vollständigen MCP-`CallToolResult` messen\n(Text-Content plus `structuredContent`), Grenze 1800 B. `writer_input`\nauf ≤ 600 B und `agent_input` auf Angebots-IDs plus Kurztexte kürzen.\nG0-01 mit den Maximalfällen statt Stub: TR2 mit zwei Slots, Karte mit vier\nAngeboten; Lauf muss alle Felder auflösen."
+   },
+   {
+    "severity": "major",
+    "quote": "A2 Agent-Ziel `gpos-price-scout`, sonst A4 Preset",
+    "problem": "Fallback A2 uses the same unproven `artifactProcessing` transport, this time on an agent target. It also needs inline vision on artifacts attached by an event, which RM marks [S]. G0-05 tests inline vision only on a chat upload (S2). If S3 fails, A2 most likely fails too. A4 publishes a stored result, so no image is read at all. TR3 ('nie gestrichen') and owner requirement 3 (multimodal) would then be unmet. A path that does not depend on `artifactProcessing` is missing: S5 (MCP ImageContent) was dropped, and A3 (WebUI upload) appears only in 5.1.",
+    "evidence": "RM 1.2: \"`enable_inline_vision` ... [V docs, S whether it also applies to artifacts attached by `artifactProcessing`]\". RM 5 S2: \"Agent (`fast`) in WebUI chat: upload PNG\". RM 2.1 A3: \"the Marktleitung tablet uses the SAM WebUI chat ... same agent\". Plan 3.6: A4 \"publiziert das gespeicherte Ergebnis des Requisits\". 6.2: \"Nie gestrichen: ... TR3 (Multimodal)\".",
+    "fix": "G0-05 um S3b ergänzen: Event-Regel mit Agent-Ziel `gpos-price-scout` und\n`artifactProcessing`, einmal mit `enableInlineVision`, einmal mit\n`load_artifact`. S5 als von `artifactProcessing` unabhängigen Weg spiken:\nMCP-Tool liefert `ImageContent` aus `media.photo`, danach `describe_image`\nauf `created_artifact`. Rückfallkette: A2 → S5 → A3 (Foto-Upload im\nSAM-Chat am Tablet) → A4; A4 auf dem Monitor als „ohne KI-Bildlesung“\nkennzeichnen."
+   },
+   {
+    "severity": "major",
+    "quote": "keine Inbox-Anfrage binnen 5 s erscheint",
+    "problem": "The L1h trigger and the reset step 'offene Anfragen abbrechen' (3.11.7) need the BFF to read and answer marktleitung's inbox, which takes a user token. In Fläche B (fallback when T6/T7 fail, and item 4 of the Streichliste) the BFF has no token. The only tokenless signal, `inboxCreated`, has an unknown payload and low confidence. In B, neither 'no request after 5 s' nor the cancellation can be detected or done. A visitor would wait until `hil.timeout` (2 min), which breaks 'ohne Hänger > 12 s'. Token model 2 ('SAM-Token aus einer morgendlichen Anmeldung') has no documented way for a BFF to get the browser's session token.",
+    "evidence": "RH 2.3: API keys are refused; a Keycloak bearer token is \"UNVERIFIED\" (RH 7 #12, low). RH 7 #22: `inboxCreated` usable \"low (topic exists, payload unknown)\". Plan 3.11.5: model 3 = Fläche B. 3.11.7: Reset \"offene Anfragen abbrechen\". 8.7: \"ohne Hänger > 12 s\".",
+    "fix": "3.11 ergänzen: Die 5-s-Regel gilt nur in Fläche A. In Fläche B erkennt die\nEngine L1h tokenfrei: über T13/T14, sonst spätestens 45 s nach\n`approval/pending` ohne `applied` → Rückfall-Knopf auf `/freigabe` und\nMonitor. G0-04 wertet T13/T14 als Kriterium für B. Reset in B: Vorschlag\n`superseded`, `apply_price` antwortet `superseded`, SAM-Anfrage läuft nach\n`hil.timeout` ab. Token-Modell 2 streichen oder Beschaffungsweg spiken."
+   },
+   {
+    "severity": "major",
+    "quote": "Lauf grün, nach Neustart unverändert; RTT p95 ≤ 40 ms Kabel",
+    "problem": "G0-11 proves only one workflow run on AKS. Several things are first exercised in G2 (18.12., one TR1 visit), although AKS becomes the main target in G3: the native HITL pause/resume on external persistence (`workflow_paused` in the orchestrator DB and the notify tables in the platform DB, both on PG Flexible), LiteLLM egress from AKS including the vision route, and gRPC through the internal ingress. RA calls external persistence a code path the lab never ran.",
+    "evidence": "RA 7 R3: \"External persistence is a code path the lab never ran (db-init vs Azure admin, TLS default `prefer` ...)\". RA 2.3: \"[A for Azure]\", \"[A: G0 check]\". RA 7 R13: \"possible IP allowlist on the proxy\". RA 4.2: \"[A: verify with a streaming call]\". RH 1.4: pause rows persisted in the session DB. Plan 7.2 G2: \"ein TR1-Besuch Ende zu Ende auf AKS\".",
+    "fix": "G0-11 erweitern (+0,5 PT): Flag an, gegateter Spike-Lauf pausiert,\nawe-Neustart, Freigabe per Inbox; ein `fast`-Agent- und ein\n`describe_image`-Aufruf über LiteLLM von AKS aus; `grpcurl list/call` über\nden internen gRPC-Ingress; TLS der SAM-DSNs zu PG Flexible geprüft.\nBestanden erst, wenn alle vier Prüfungen grün sind."
+   },
+   {
+    "severity": "minor",
+    "quote": "und Postman über Reflection v1 und v1alpha erreichbar [V: RG,",
+    "problem": "The spike never ran real grpcurl or Postman and never went through an ingress. Check 15 only emulates the reflection flow in Python. The AKS row 'gRPC am Ingress ... [V: RA 4.2]' is a YAML sketch whose timeouts are marked [A]. Both claims are labelled verified but are unproven.",
+    "evidence": "RG \"Not tested: The real `grpcurl` and Postman binaries ... gRPC through the lab NGINX ingress (TLS, `backend-protocol: GRPC`)\". RA 4.2: \"[A: verify with a streaming call]\".",
+    "fix": "2.3 und 5.2: [V] durch [G0-07] bzw. [G0-11] ersetzen. G0-07 mit echtem\ngrpcurl (v1-Reflection, TLS mit Lab-CA) und Postman „Using server\nreflection“ über den Ingress fahren; Kyverno-Regeln TLS und ssl-redirect\nam gRPC-Ingress mitprüfen."
+   },
+   {
+    "severity": "minor",
+    "quote": "Keycloak-Benutzer `marktleitung@solace.lab`, Gruppe `marktleitung`, SAM-Rolle `gpos_marktleitung`",
+    "problem": "R4 runs carry only an identity string and no OIDC token. Claim mappings grant roles from token claims. A marktleitung who never logged in, or one on a rebuilt AKS, may resolve to no role or to the default `sam_user` role, which lacks `workflow:*:invoke` and `notify:_:send`. R4 runs would then be denied. RH requires one login first (P2); the plan does not list that step. The lab RBAC uses only claim mappings.",
+    "evidence": "rbacClaimMapping.md: \"grants a set of roles to every identity whose OIDC token carries a matching claim value\". rbac-reference: \"resolved roles are the union of YAML user-roles, IdP claim mappings, and database-managed assignments\". RH 5.4 P2: \"user logs in once to the WebUI\". agent-mesh-deployment/scripts/rbac/README.md: default role `sam_user`.",
+    "fix": "O2 ergänzen: `gpos_marktleitung` zusätzlich per `spec.users:\n[marktleitung@solace.lab]` direkt zuweisen, `notify:_:send` für\n`power_user` ebenso direkt. G0-02 P2 prüft einen R4-Lauf vor der ersten\nAnmeldung von marktleitung; der AKS-Neuaufbau enthält diesen Schritt."
+   },
+   {
+    "severity": "minor",
+    "quote": "Zwei Experimente: `gpos-pricing-quality` (Agent",
+    "problem": "Experiments call the agent alone. The output contract (slot enum, headline, rationale, why_line; slot and display_text) and the instruction live only in the workflow nodes (`instruction`, `output_schema_override`). The eval therefore grades free text produced under a different instruction. Gates such as 'kein falscher Slot' are not measured on the shape the workflow uses.",
+    "evidence": "experiment.md: \"binds a dataset to a target agent\", required field `targetAgent`. Plan 3.3/3.4: schema only at node level. Plan 3.8: agents have no `outputSchema`. data-flow.md: \"its agent's `outputSchema` (in `additionalConfigurations`\".",
+    "fix": "3.8: je Agent `additionalConfigurations.outputSchema` mit denselben Feldern\nwie der Knoten setzen und die Knoten-Instruktion in den `systemPrompt`\nübernehmen. Eval-Zeilen liefern exakt `writer_input` bzw. `agent_input`;\nder Judge prüft das JSON-Feld `slot`."
+   },
+   {
+    "severity": "minor",
+    "quote": "Vision über LiteLLM 1,5–2,1 s und 6/6 korrekt [V: RM 1.4]",
+    "problem": "The 6/6 counts three models on synthetic, brand-free renders, and the latency was measured on direct API calls, not through the `describe_image` tool. Haiku 4.5 failed both negative cases. The AP10 bar (≥ 28/30 real photos under fair light) has no basis, and no Gate-0 step reads a real prop photo.",
+    "evidence": "RM 1.4: \"competitor tag read correctly 6/6 across three models\" (synthetic `MM/img/`). Negatives: blurred tag \"still a price 1.19\", blob \"confidence 0.75\". RM 4.4: latency \"In SAM [A]\".",
+    "fix": "E6 umformulieren: „Modellebene, synthetische Bilder, 6/6 über drei\nModelle, Negative 0/2“. G0-05 um 10 echte Fotos des Requisits (Licht,\nWinkel) mit Haiku 4.5 über `describe_image` ergänzen; die AP10-Schwelle\ngilt erst danach."
+   },
+   {
+    "severity": "minor",
+    "quote": "`solace-pubsubplus` (SMF)",
+    "problem": "The publisher was never tested: RG wrote to a JSONL sink. The BSG precedent uses paho-mqtt on VPN `default` with python:3.12. The Solace Python API ships native libraries, and nobody checked a wheel for Python 3.13 on arm64 and amd64 (E1). SMF from pods to VPN `sam` with ACLs for `gebit/...` and `gpos/...` is also untested. AP04 (p95 < 50 ms at the broker) depends on all of it.",
+    "evidence": "RG: \"Publishing to Solace. No broker writes were allowed, so a JSONL sink stands in\". bsg-trading-desk-demo/app/requirements.txt (paho-mqtt) and Dockerfile `FROM python:3.12-slim`. RA 3.2: \"Python 3.12-slim\".",
+    "fix": "G0-13 um 0,25 PT erweitern: `solace-pubsubplus` im Ziel-Image (py3.13,\narm64 und amd64) installieren und persistent auf VPN `sam` an\n`gebit/rp/...` und `gpos/v1/...` publizieren (Test-Queue). Scheitert der\nWheel-Test, Basis python:3.12-slim wie BSG."
+   }
+  ]
+ },
+ {
+  "lens": "delivery",
+  "findings": [
+   {
+    "severity": "blocker",
+    "quote": "AP02 -> AP03 -> AP04 -> AP06 -> AP07 -> AP08",
+    "problem": "G1 (04.12.2026, TR1 end to end with approval in SAM) cannot be reached. Developer B's serial chain is longer than the 18 working days before G1. The critical path also leaves out AP07's own dependency on AP05, and AP05 is scheduled after G1.",
+    "evidence": "11.11. (Wed) to 04.12. (Fri) is 18 weekdays (checked). Week plan 7.3 gives B the following before G1: G0-01/08/10/13 (2 PT), AP02 2, AP03 3, AP04 10, AP06 for TR1 (at least 4), AP07 3.5, and a functional AP11 Kasse/Monitor (at least 3). That is about 27.5 PT. The strict chain AP02->AP03->AP04->AP06(TR1)->AP07 alone is 22.5 PT, so the earliest finish at 100 % utilisation is about 11.12. After that, AP08 (depends on AP07) and AP09 (depends on AP08) add 9 PT for developer A. In table 6 AP07 is 'Abhängig von AP06, AP05', but 7.3 puts AP05 in KW50-51 (after G1), and 6.1 does not list AP05.",
+    "fix": "G1 auf 11.12.2026 legen und auf ein TR1-Minimum schneiden:\n- AP04a bis G1 (B): Korb, AddArticle, VoidArticlePosition, Bar, Outbox,\n  Preise aus Postgres; Hintergrundkassen, EFT, Fiskal, Fehlerdetails\n  als AP04b nach G2.\n- AP07 teilen: AP07a TR1-Tools (abhängig AP06) bis G1; AP07b\n  Loyalty- und Foto-Tools (abhängig AP05, AP10) bis G2.\n- 6.1 ergänzen: \"AP05 -> AP07b -> TR5 (G2)\".\n- AP08/AP09 (A) ab KW48 gegen den MCP-Stub aus G0-01 bauen und in\n  KW50 auf AP07a umstellen.\n- /kasse-Kacheln (1,5 PT aus AP11) an Entwickler A geben."
+   },
+   {
+    "severity": "blocker",
+    "quote": "Bis dahin liegt der Code lokal; Sicherung über ein privates Remote ist eine Owner-Entscheidung [A].",
+    "problem": "Two developers are to build about 97 PT of code that is kept out of all version control and has no shared remote. Working together, history, rollback, review and the G4 'getaggt' are impossible. The repository decision is also missing from the owner decisions O1-O7.",
+    "evidence": "Line 10 of .git/info/exclude is 'gebit-price-agent-demo/' (git check-ignore confirms it). The AP02 acceptance even requires '`git status` zeigt nichts aus dem Demo-Verzeichnis'. .git/info/exclude applies to one clone only, so developer B gets neither the code nor the exclusion. G4 requires 'Code, Daten, Policy, Plattform eingefroren und getaggt'. Table 0.5 lists O1-O7 with no repository or backup decision. The R13 test ('kein GEBIT-.pb ... im Repo-Baum') assumes a repo exists.",
+    "fix": "0.5 um O8 ergänzen (Entscheidung bis 13.11.2026): privates Git-Repo\nnur für gebit-price-agent-demo/, Zugriff für beide Entwickler und den\nOwner; der Eintrag in .git/info/exclude des öffentlichen Repos bleibt.\nAP02-Abnahme ersetzen durch: \"Demo-Code im privaten Repo versioniert;\ndas öffentliche Repo zeigt nichts davon; CI prüft, dass keine\nGEBIT-.pb, -.proto oder -Beispiele im privaten Repo liegen.\"\nG4: Git-Tag im privaten Repo = Image-Tag gpos-demo:<semver>."
+   },
+   {
+    "severity": "major",
+    "quote": "| G2 | 07.–18.12.2026 | 10 | 20 | 19,5 |",
+    "problem": "The phase table does not match the week plan. By G2 the week plan completes far more than the 53.5 PT that 7.2 allocates to G0-G2, so G2 (18.12.) cannot be met, while G3 and G4 are only partly loaded.",
+    "evidence": "7.2: G0+G1+G2 = 15+19+19.5 = 53.5 PT (56 PT gross over 28 weekdays, checked). According to 7.3 these work packages are finished by KW51: AP01 8, AP02 2, AP03 3, AP04 10, AP05 6.5, AP06 about 8.5 (only the watchdogs come later), AP07 3.5, AP08 4.5, AP09 4.5, AP10 5.5. That is 56 PT. On top come AKS RA 6.2 steps 1-8 (Foundation, Add-ons, Broker, Keycloak, SAM, Images, Demo = 9.5 PT) and the functional AP11 parts (about 3 PT). The total is about 68 PT against 56 PT gross and about 50 PT net. Per developer: A about 30 PT, B about 38 PT, each in 28 weekdays. After G2 only about 30 PT remain for 52 PT gross (holidays 8, G3 24, G4 20).",
+    "fix": "Phasentabelle 7.2 aus dem Wochenplan 7.3 neu summieren und G2 teilen:\n- G2a 18.12.2026: TR5 (Loyalty) und TR3 (Foto) im Lab; AKS\n  RA-Schritte 1–6 (Foundation bis SAM).\n- G2b 15.01.2027: TR2, TR4, TR6, TR7; Demo per install.sh TARGET=aks;\n  ein TR1-Besuch über WireGuard.\n- Die Feiertage tragen offiziell G2b-Arbeit (etwa 8 PT); G3 bleibt am\n  22.01.2027.\n- Regel: je Entwickler und Phase höchstens 90 % der Bruttotage\n  verplanen."
+   },
+   {
+    "severity": "major",
+    "quote": "Hintergrundkassen, `PriceActionService` v0, REST/WS-Fassade, GEBIT-`ErrorMessage`, Probes | AP02, AP03 | 10 |",
+    "problem": "Several work-package estimates are lower than the plan's own source reports and its own schedule arithmetic. Once corrected, Muss rises to about 106 PT, against 97 PT net capacity.",
+    "evidence": "RG ('Estimate for the full simulator subset') gives about 11.5 PT (range 9-13) and explicitly excludes 'the Kasse UI and the REST/WS facade'. AP04 adds the facade, background tills and PriceActionService v0 on top of that scope and still budgets only 10 PT. AP12 claims 'RA 6.2 Schritte 1–10' at 12 PT, but those steps add up to 12.5 PT (0.5+1.5+1.5+1+1+2+0.5+1.5+1.5+1.5). AP15 has 3.5 PT, while 7.3 schedules 3 rehearsal days for both developers, which is 6 PT of attendance alone. AP11 has 11.5 PT against 14 PT for the UI in DESIGN 13.4, even though the UI gained loyalty elements, TR1-TR7 chips and a notification ticker. Together the gaps add about 9 PT.",
+    "fix": "Tabelle 6 korrigieren: AP04 13,5 PT (RG 11,5 + Fassade 1 +\nHintergrundkassen und PriceActionService 1), AP12 12,5 PT (RA 6.2,\nSchritte 1–10), AP11 14 PT (D 13.4), AP15 6 PT (3 Probetage × 2).\nSumme Muss neu etwa 106,5 PT. Ausgleich bis 20.11.2026 beschließen:\nO9 – eine dritte Person übernimmt AP12 ab 23.11.2026; sonst\nStreichliste 6.2 je Punkt mit PT beziffern und sofort so viele Punkte\nziehen, bis Muss ≤ Nettokapazität (0.4)."
+   },
+   {
+    "severity": "major",
+    "quote": "nach etwa 10 % Abstimmung und Lab-Störungen rund 97 PT netto [A]. Der Plan ist damit voll ausgelastet.",
+    "problem": "Muss (97.5 PT) already exceeds the stated net capacity (97 PT). The only reserve is 4 PT (about 4 %). The gross figure assumes no vacation or sick days outside Christmas, and the phase table plans against gross rather than net capacity.",
+    "evidence": "11.11.2026 to 05.02.2027 is 63 weekdays (checked). Removing 25.12. and 01.01. (both Fridays) leaves 61 working days. 108 PT = 2 × 61 − 14 (holiday reduction), which means no sick or vacation days for two people over three winter months. The 7.2 row 'Feiertage … 13 (reduziert)' counts the public holidays as working days; the real figure is 11. 7.2 compares each phase with gross capacity (G0 15/16, G1 19/20, G2 19.5/20). Net capacity would be 14.4/18/18, so G0-G2 are overbooked by 3.1 PT before anything slips. DESIGN 13.4 kept about 6 % buffer (5.5/85) for a smaller scope. This plan depends on a controlled_availability flag and an Early Access notification service, which calls for a larger buffer, not a smaller one.",
+    "fix": "0.4 und 7.2 auf Netto umstellen: Kapazität = (108 PT − 4 PT\nKrankheitsreserve) × 0,9 ≈ 94 PT netto. In 7.2 die Spalte\n\"Kapazität netto\" ergänzen; je Phase gilt Muss ≤ netto. Zeile\nFeiertage: \"11 Arbeitstage (25.12. und 01.01. gesetzlich frei)\".\nPuffer auf mindestens 8 PT anheben und je Gate verteilen\n(G1 2, G2 2, G3 2, G4 2)."
+   },
+   {
+    "severity": "major",
+    "quote": "Fläche D (signiertes Ereignis) als Messe-Standard; nativer HITL nur im Chat-Moment",
+    "problem": "If G0-02 fails, owner constraint 3 (HITL) rests only on the chat-HITL moment K5, which is a Kann item explicitly outside the plan. The 'never cut' list contradicts this fallback. Fallback D is also deployed only on demand, so it is not exercised continuously.",
+    "evidence": "The R1 row and the G0-02 Rückfall column both say 'nativer HITL nur im Chat-Moment'. Section 6 lists 'K5 Chat-HITL-Moment in der Tiefenecke (0,5 PT)' under Kann 'außerhalb des Plans', and 0.4 says the same. RH 0 item 2 records that agent tool approval works in WebUI chats [VERIFIED], so this fallback is feasible but has no budget. Under fallback D the approval comes from a tablet HMAC event, which makes 6.2 'Nie gestrichen: TR1 mit Freigabe in SAM' untrue. Table 2.6 lists gpos-apply-decision as 'Muss (nur bei Bedarf deployt)', although 3.11 Nr. 8 makes hybrid (R4 + R5) the fair default.",
+    "fix": "Tabelle 6 um AP09b ergänzen (1 PT, Entwickler A, bedingtes Muss):\nAgent im SAM-WebUI-Chat als marktleitung mit gegatetem apply_price\nüber gpos-price-gate; Abnahme 10/10 Freigabekarten in Chat und Inbox,\nPreis aktiv ≤ 2,5 s. Pflicht, sobald G0-02 auf Rückfall entscheidet.\n6.2 ändern in: \"Nie gestrichen: TR1 mit Freigabe über SAM (nativ oder\nRückfall D) und ein SAM-HITL-Moment (AP09 oder AP09b)\".\n2.6: gpos-apply-decision \"Muss (immer deployt, HITL_MODE=hybrid)\";\nhitl_e2e.py prüft täglich auch Rückfall D."
+   },
+   {
+    "severity": "major",
+    "quote": "Aufbau 14.–15.02. organisiert GEBIT",
+    "problem": "Every booth-side prerequisite is handed to GEBIT without a date: the router with WireGuard, the tablet camera, the scanner, the monitors and staff for the rehearsals. The real booth network path is first used after the freeze, and the R10 fallbacks are never drilled.",
+    "evidence": "G0-11 tests WireGuard only 'vom Entwickler-Mac'. The AP12 acceptance ('ein TR1-Besuch Ende zu Ende über WireGuard; Tunnel-RTT p95 ≤ 40 ms Kabel') has no router, 5G or UDP-443 case. RA 5.3 assumes a Teltonika RUTX50 with WireGuard [A], but the plan names no router. The R10 mitigations (UDP 443, 5G) are not among the 8.7 drills. The plan dropped DESIGN 13.2 'Inventur der Standtechnik bis 13.11.' and G5 'Netz- und Failover-Test (Kabel ziehen)'. The AP11 5-m reading test, the scanner buffer, the /foto camera and the G4 'Probetage mit Standpersonal' all depend on GEBIT hardware and staff. The freeze on 05.02. comes before the first contact with the booth network on 14.02.",
+    "fix": "Neuer Abschnitt 6.5 \"Abhängigkeiten GEBIT\" mit Terminen:\n- Geräteliste (Stand-Router, Tablet mit Kamera, Handscanner,\n  Monitore) bis 20.11.2026; Leihgeräte im Lab bis 11.12.2026.\n- Standpersonal für 3 Probetage bis 18.12.2026 bestätigt.\nAP12-Abnahme ergänzen: Tunnel vom Stand-Router über UDP 51820,\nUDP 443 und 5G, je ein TR1-Besuch. 8.7 um den Drill \"UDP gesperrt,\nUmschaltung auf 5G\" ergänzen. Messe: am 14.02. Netztest (Kabel\nziehen, 5G) vor dem ersten Preflight."
+   },
+   {
+    "severity": "major",
+    "quote": "| L3 Notbetrieb | AKS, Tunnel oder Uplink aus | Lab-MacBook mit vollem Stack, Router-DNS umgestellt | „Notbetrieb“ |",
+    "problem": "The L3 switch (3 minutes or less, via router DNS) assumes the lab serves the AKS hostnames, OIDC issuer and certificates. The lab is actually configured for *.solace.lab with the Lab-CA, and no work package covers this third configuration profile.",
+    "evidence": "5.1: gpos.solace.lab, Keycloak auth.solace.lab, Lab-CA with Kyverno injection. 5.2: AKS uses *.<d> with LE certificates and 'keine Lab-CA auf iPads'. After a DNS switch, SAM's dnsName and OIDC redirect URIs, the Keycloak issuer and the BFF token client (token model 1) still use solace.lab names. Tablet login (Fläche B) and token use (Fläche A) therefore fail. The k8s overlays list only lab, aks and gebit-lab. AP14 (3.5 PT) also has to cover preflight, runbook, daily routine and exports. RA 6.2 step 9 includes the L3 switch inside 1.5 PT together with the VM and the peers. Lab Postgres state is separate from AKS PG.",
+    "fix": "AP14b \"L3-Profil\" ergänzen (2 PT, Entwickler A): Overlay\nk8s/overlays/l3 und SAM-Values l3 mit den AKS-Hostnamen (SAM dnsName,\nKeycloak-Hostname und Issuer, Redirect-URIs, BFF-Keycloak-Client),\nLE-Zertifikate per Skript aus AKS exportiert, Seed per install.sh db\nidentisch. Abnahme: L3-Drill am Stand-Router mit iPad ohne Profil,\nTR1 mit Freigabe (Fläche A oder D) ≤ 3 min; je ein Drill in G3 und G4."
+   },
+   {
+    "severity": "major",
+    "quote": "450 POS-Läufe/h plus 30 Ketten/h (Trigger → Vorschlag → Freigabe, automatisch beantwortet) über 30 min",
+    "problem": "G0-08 (0.5 PT, developer B, due 20.11.) needs the full trigger, proposal and approval chain with automatic HITL answers. That chain exists only after AP08/AP09 (KW48-49) and after developer A's G0-02 and G0-04, which are due the same day. Yet the G0-08 result (R6: chain or workflow node) is supposed to decide how AP08 is designed.",
+    "evidence": "7.1 sets G0-08 'Bis 20.11.' at 0.5 PT, and 7.3 assigns it to B in KW47, while G0-02 and G0-04 (A) end on the same day. Answering automatically needs the respond body (G0-02 T6) and the token model (G0-04 T7). load_gen.py does not exist yet. AP08 builds the real chain in KW48-49. 3.4 and R6 name 'workflow-Knoten statt Kette' as the alternative that G0-08 is meant to decide.",
+    "fix": "G0-08 teilen und vor AP08 entscheiden:\n- G0-08a (B, bis 20.11., 0,5 PT): 450 Tool-Läufe/h mit dem\n  Stub-Workflow aus G0-01, Flag an, Bursts von 7.\n- G0-08b (A, bis 25.11., 1 PT): 30 Ketten/h aus Stub-Workflows mit\n  gegatetem Stub (G0-02 Phase B) und Autoantwort per Notify-API\n  (G0-04); load_gen.py entsteht hier.\nEntscheidung \"Kette oder workflow-Knoten\" (R6) am 25.11. vor AP08."
+   },
+   {
+    "severity": "major",
+    "quote": "Rückfälle: A2 R2 zielt auf den Agent `gpos-price-scout`",
+    "problem": "Fallback A2 still brings the photo in through the same entrypoint artifactProcessing whose failure would trigger the fallback. If artifactProcessing fails, only A4 (preset, no live vision) is left, and owner constraint 3 (multimodal) is no longer met live. The independent path that G0-05 already tests (MCP ImageContent) is not used as a fallback.",
+    "evidence": "RM: from an event, an image reaches SAM 'only via artifactProcessing on the rule'. A2 keeps rule R2 and only changes the target to an agent, so it needs the same extraction. The G0-05 procedure includes 'MCP-`ImageContent`' (RM S5), but the G0-05 fallback column says only 'A2 Agent-Ziel gpos-price-scout, sonst A4 Preset'. The BFF already stores each photo in media.photo (3.12 step 2), so an MCP tool could supply it without artifactProcessing.",
+    "fix": "Rückfall A2b vor A2 einfügen: gpos-competitor-price ohne\nartifactProcessing; erster Knoten MCP-Tool load_photo(scan_id) liest\nmedia.photo und gibt ImageContent zurück (G0-05 S5); danach\ndescribe_image auf das erzeugte Artefakt oder Agent gpos-price-scout.\nG0-05-Rückfallspalte: \"A2b, sonst A2 (nur wenn S3 mit Agent-Ziel\ngrün), sonst A4 Preset\". AP10 um 0,5 PT erhöhen."
+   },
+   {
+    "severity": "major",
+    "quote": "Hinweis: Die Scratchpad-Berichte sind flüchtig; vor G0-Ende nach gebit-price-agent-demo/research/impl/ kopieren (Owner-Entscheidung).",
+    "problem": "All [V] evidence from RH, RM, RL, RA and RG, and the gRPC spike code that AP04 starts from in KW46, sit in a session-scoped /private/tmp scratchpad. Copying them is postponed to the end of G0 and left as an owner decision.",
+    "evidence": "Checked on 10.11.: /private/tmp/claude-501/.../scratchpad/impl/ holds research-{hitl,multimodal,loyalty-triggers,aks,grpc}.md plus grpc-spike/ (gebitsim/*.py, tools/*.py, out/, .venv 57 MB), loyalty-proto/, loyalty-sql/, mm/, hitl/ and aks/. 7.1 'Bereits erledigt [V]' (RG 18/18, RM 1.4, RL 6) and AP04 'Spike produktiv machen' in KW46 depend on these files. /private/tmp is not backed up and does not survive cleanup or reboot, and the known Rancher Desktop failure modes require Mac restarts.",
+    "fix": "Am 11.11.2026 vor jeder Umsetzung kopieren: impl/research-*.md nach\nresearch/impl/; Spike-Code (grpc-spike/gebitsim und tools ohne .venv\nund out/, loyalty-proto, loyalty-sql, hitl, mm, aks) nach\ngebit-price-agent-demo/spikes/. Keine GEBIT-Deskriptoren, -Protos\noder -Beispiele mitkopieren. Anhang C auf die neuen Pfade umstellen;\n\"Bereits erledigt [V]\" erst danach so führen."
+   },
+   {
+    "severity": "major",
+    "quote": "| 52–1 | 21.12.–06.01. | Testsätze TR3, Eval-Zeilen, `/freigabe`-Layout | UI-Layouts, Texte |",
+    "problem": "The G2 acceptance (18.12.) requires the TR3 test set, but the week plan creates the test sets only during the holidays after G2. The printed props the test set needs have no date and no owner.",
+    "evidence": "7.2 G2 acceptance contains '... TR3-Testsatz ...'. The AP10 acceptance requires '≥ 28/30 Requisitenfotos korrekt erkannt; 0/20 Negativfotos'. 8.5 requires 30 photos of the props 'unter Messelicht' plus 20 negatives. 3.12 step 5 calls for a 'matt laminierter Prospekt'. Section 4 lists props/ print templates, but no work package or date covers printing. G0-05 uses only synthetic images (RM make_images.py).",
+    "fix": "AP10 um \"Requisiten drucken\" ergänzen: Prospekt matt laminiert,\nKundenkarten, Steuerkarten bis 04.12.2026 (Entwickler A). Testsatz\n30 + 20 bis 16.12.2026 aufnehmen (KW51). 7.3 KW52–1 ändern in\n\"Testsatz unter Messelicht-Simulation erweitern\". G2-Abnahme\npräzisieren: \"TR3-Testsatz ≥ 28/30 korrekt, 0/20 Negative mit\nVorschlag\"."
+   },
+   {
+    "severity": "minor",
+    "quote": "Apply und Deploy grün; je Regel ein Probe-Lauf in `tasks`; 0 Token in Läufen ohne Agent",
+    "problem": "Owner constraint 'Notifications' has no measurable acceptance in any work package and no failure drill. With fail_fast: true, a notify_user node that fails after apply_price turns a successful price change into a failed run, and record_outcome then logs it as a failure.",
+    "evidence": "Only the G0-03 spike measures notify_user; the AP08 and AP09 acceptances contain no notify_user check, although 6.2 lists Notifications as 'Nie gestrichen'. In 3.5, tell (notify_user) depends_on apply, the workflow runs with fail_fast: true, and on_exit.on_failure calls record with status '{{workflow.status}}'. engine.approval.outcome would therefore be 'failed' while the price is already active. RH 6 notes the notification service is Early Access. 8.7 has no 'Notification-Service aus' drill.",
+    "fix": "AP08-Abnahme ergänzen: TR1, TR3 und TR5 je 10/10 genau eine\nNotification in der Inbox von marktleitung ≤ 3 s, Titel im\nMonitor-Ticker, höchstens drei je Besuch. record_outcome prüft vorher\nengine.price_change: Preis aktiv → outcome \"approved\" mit error_code\n\"NOTIFY_FAILED\" statt \"failed\". 8.7 um den Drill \"notify_user\nscheitert\" ergänzen (10/10 Preis aktiv, Monitor korrekt)."
+   },
+   {
+    "severity": "minor",
+    "quote": "SSE 30 min stabil mit automatischem Reconnect",
+    "problem": "The front-end acceptance covers 30 minutes, but the monitor, Kasse and tablet run unattended for about 9 hours a day on three fair days, in kiosk browsers over WireGuard. The 24-hour soak test exercises only backend load.",
+    "evidence": "This is the AP11 acceptance. In 8.6 the 24-hour AKS run uses load_gen.py with no browsers. 5.2 sets a 30-minute LB idle timeout and a 15-20 s SSE heartbeat. No test runs on the kiosk hardware, and the G4 rehearsals are short sessions.",
+    "fix": "AP11-Abnahme ergänzen: /monitor, /kasse, /kunde und /freigabe laufen\n10 h am Stück im Kiosk-Browser der Messe-Hardware über WireGuard\ngegen AKS, parallel zum 24-h-Lauf in G3: 0 manuelle Reloads,\nBrowser-Speicher stabil (±20 %), Attract-Loop läuft."
+   },
+   {
+    "severity": "minor",
+    "quote": "| L4 Aufzeichnung | alles aus | Film eines Laufs | „Aufzeichnung“ |",
+    "problem": "The last fallback stage (a recorded film) and the material the booth staff need (talk track, deck, briefing) have no work package, owner or acceptance.",
+    "evidence": "Section 9 defines L4, but no work package produces the film. DESIGN 13.4 budgeted 'Preflight, Runbook, README, Talk-Track, ein Deck' at 4.5 PT and 'Proben und Schulung' at 6 PT. AP14 now covers only preflight, runbook, L3, daily routine and exports. AP15 rehearses 'mit Standpersonal' with no briefing deliverable. Repo convention is one slides/ deck per demo.",
+    "fix": "Neues AP16 \"Messematerial\" (2,5 PT, nach G3): L4-Film je eines\nTR1- und TR3-Laufs (lokal auf dem Monitor-PC, ohne Netz abspielbar),\nTalk-Track für Express, geführt und Tiefenecke, ein Deck unter\nslides/, einseitiges Briefing für das Standpersonal. Abnahme: am\nProbetag 1 genutzt; Umschalten auf L4 über /op in ≤ 10 s."
+   }
+  ]
+ }
+]

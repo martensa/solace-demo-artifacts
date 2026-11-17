@@ -1,0 +1,28 @@
+# Kubernetes part of the gpos demo (UC1-BUILD-SPEC 12.4), namespace gpos-demo.
+# Applied by scripts/install.sh k8s (kubectl apply -k k8s) AFTER it created the
+# Secrets gpos-broker, gpos-db and gpos-gebit-descriptors from .env and
+# GEBIT_DESCRIPTOR_DIR -- no Secret with values is ever a file in this repo.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: gpos-demo
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: gpos-demo
+    includeSelectors: false
+    includeTemplates: true
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - certificate.yaml
+  - pos.yaml
+  - wws.yaml
+  - loyalty.yaml
+  - engine.yaml
+  - gate.yaml
+  - ui.yaml
+  - ingress-ui.yaml
+  - ingress-grpc.yaml
+images:
+  - name: gpos-demo
+    newName: registry.solace.lab/gpos-demo/gpos-demo
+    newTag: "0.1.3"

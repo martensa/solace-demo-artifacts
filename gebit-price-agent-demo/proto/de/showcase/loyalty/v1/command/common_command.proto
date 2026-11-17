@@ -1,0 +1,33 @@
+//
+// common_command.proto
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.command;
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.command.protobuf";
+option java_outer_classname = "CommonCommandProto";
+
+// Actor behind a command (same as GEBIT command.AuthorizationInformation).
+message AuthorizationInformation {
+
+  // Mandatory: The identity id, e.g. pos-sim, gpos-engine, or a role pseudonym such as Marktleitung/tablet-01.
+  string identity_id = 1;
+
+  // Optional: Details. Never a token.
+  string details = 2;
+}
+
+// Command header (same as GEBIT command.Header).
+message Header {
+
+  // Optional: Trace id; we use the scan, proposal or visit id. Comes back as metadata.trace_id on events.
+  string trace_id = 1;
+
+  // Mandatory: The originator.
+  AuthorizationInformation originator = 2;
+
+  // Optional: The approver. Mandatory for IssueSpecialCoupon.
+  AuthorizationInformation approver = 3;
+}

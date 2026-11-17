@@ -1,0 +1,94 @@
+//
+// membership_event.proto
+//
+// Topic: showcase/loyalty/v1/membership/{EventName}/{country}/{company}/{store}/{membershipId}
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.event;
+
+import "de/showcase/loyalty/v1/datatype/common_datatype.proto";
+import "de/showcase/loyalty/v1/datatype/loyalty_datatype.proto";
+import "de/showcase/loyalty/v1/event/common_event.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.event.protobuf";
+option java_outer_classname = "MembershipEventProto";
+
+// A card was resolved for a purchase transaction.
+message MembershipResolved {
+
+  // Mandatory: The header.
+  Header header = 1;
+
+  // Mandatory: The metadata.
+  datatype.Metadata metadata = 2;
+
+  // Mandatory: The membership id.
+  string membership_id = 3;
+
+  // Mandatory: The program id.
+  string program_id = 4;
+
+  // Mandatory: Verified by the loyalty system.
+  bool verified = 5;
+
+  // Mandatory: Anonymous (guest) membership.
+  bool anonymous = 6;
+
+  // Mandatory: The purchase transaction id.
+  string purchase_transaction_id = 7;
+
+  // Mandatory: The GEBIT location.
+  string location = 8;
+
+  // Mandatory: Persona label of the fictional card.
+  string persona_label = 9;
+
+  // Mandatory: Open coupons that came with the membership.
+  int32 open_coupons = 10;
+
+  // List of extension properties. It can be empty.
+  repeated datatype.Property extension_properties = 11;
+}
+
+// A card value matched no membership. The raw value is never published.
+message MembershipResolutionFailed {
+
+  // Mandatory: The header.
+  Header header = 1;
+
+  // Mandatory: The metadata.
+  datatype.Metadata metadata = 2;
+
+  // Mandatory: First 16 hex characters of SHA-256 of the identification value.
+  string identification_value_hash = 3;
+
+  // Mandatory: The purchase transaction id.
+  string purchase_transaction_id = 4;
+
+  // Mandatory: The GEBIT location.
+  string location = 5;
+
+  // Mandatory: Reason, e.g. UNKNOWN_CARD, BLOCKED.
+  string reason_code = 6;
+}
+
+// Consent flags changed.
+message ConsentChanged {
+
+  // Mandatory: The header.
+  Header header = 1;
+
+  // Mandatory: The metadata.
+  datatype.Metadata metadata = 2;
+
+  // Mandatory: The membership id.
+  string membership_id = 3;
+
+  // Mandatory: The new flags.
+  datatype.ConsentFlags consent = 4;
+
+  // List of extension properties. It can be empty.
+  repeated datatype.Property extension_properties = 5;
+}

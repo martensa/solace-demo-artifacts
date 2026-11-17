@@ -1,0 +1,142 @@
+//
+// loyalty_command.proto
+//
+// State-changing requests. Like GEBIT, a command returns Empty or an id; the
+// detailed outcome is published as events.
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.command;
+
+import "de/showcase/loyalty/v1/command/common_command.proto";
+import "de/showcase/loyalty/v1/datatype/common_datatype.proto";
+import "de/showcase/loyalty/v1/datatype/loyalty_datatype.proto";
+import "de/showcase/loyalty/v1/datatype/loyalty_enum.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.command.protobuf";
+option java_outer_classname = "LoyaltyCommandProto";
+
+// Issue a coupon from the pre-approved catalogue. The service enforces the
+// catalogue caps (at most 30 % and 3.00 EUR), consent, stacking and frequency rules.
+message IssueCoupon {
+
+  // Mandatory: The command header.
+  Header header = 1;
+
+  // Optional: The membership; empty issues an anonymous coupon (prefix:code).
+  string membership_id = 2;
+
+  // Mandatory: The catalogue offer.
+  string offer_id = 3;
+
+  // Mandatory: RULE, AGENT or CHECKOUT.
+  datatype.IssueChannel channel = 4;
+
+  // Optional: The open purchase transaction the coupon is issued in.
+  optional string purchase_transaction_id = 5;
+
+  // Optional: Our proposal id (audit link).
+  optional string proposal_id = 6;
+
+  // Optional: Validated customer text, at most 120 characters.
+  optional string display_text = 7;
+
+  // List of extension properties, e.g. showcase.samRunId. It can be empty.
+  repeated datatype.Property extension_properties = 8;
+}
+
+// Issue an out-of-catalogue coupon. Refused (LOY-030) without header.approver.
+// Hard limits still apply: never more than 50 %, never below net cost.
+message IssueSpecialCoupon {
+
+  // Mandatory: The command header including approver.
+  Header header = 1;
+
+  // Mandatory: The membership.
+  string membership_id = 2;
+
+  // Mandatory: The target article.
+  string target_article_number = 3;
+
+  // Mandatory: Discount type.
+  datatype.DiscountType discount_type = 4;
+
+  // Mandatory: Discount value.
+  datatype.BDecimal discount_value = 5;
+
+  // Mandatory: Validity in days.
+  int32 valid_days = 6;
+
+  // Mandatory: Reason code, e.g. CLEARANCE_OVERSTOCK.
+  string reason_code = 7;
+
+  // Mandatory: Our proposal id.
+  string proposal_id = 8;
+
+  // Optional: Validated customer text.
+  optional string display_text = 9;
+
+  // List of extension properties. It can be empty.
+  repeated datatype.Property extension_properties = 10;
+}
+
+// Withdraw an issued coupon (visit reset, kill switch, wrong issue).
+message VoidCoupon {
+
+  // Mandatory: The command header.
+  Header header = 1;
+
+  // Mandatory: The coupon id.
+  string coupon_id = 2;
+
+  // Mandatory: Reason code, e.g. VISIT_RESET.
+  string reason_code = 3;
+
+  // List of extension properties. It can be empty.
+  repeated datatype.Property extension_properties = 4;
+}
+
+// Report a closed SALE or a VOID. Books points, marks applied coupons as redeemed,
+// creates the checkout coupons that CalculatePurchaseResult returned. Idempotent
+// per purchase_transaction_id. Never sent for cancelled or suspended transactions.
+message ReportPurchase {
+
+  // Mandatory: The command header.
+  Header header = 1;
+
+  // Mandatory: The purchase.
+  datatype.PurchaseSummary purchase = 2;
+
+  // List of extension properties. It can be empty.
+  repeated datatype.Property extension_properties = 3;
+}
+
+// Change consent flags (operator card "Einwilligung aus").
+message ChangeConsent {
+
+  // Mandatory: The command header.
+  Header header = 1;
+
+  // Mandatory: The membership.
+  string membership_id = 2;
+
+  // Mandatory: The new flags.
+  datatype.ConsentFlags consent = 3;
+
+  // List of extension properties. It can be empty.
+  repeated datatype.Property extension_properties = 4;
+}
+
+// Demo only: undo everything a booth visit did (coupons voided, points reversed).
+message ResetDemoState {
+
+  // Mandatory: The command header (originator operator).
+  Header header = 1;
+
+  // Mandatory: The visit id (showcase.visitId).
+  string visit_id = 2;
+
+  // Optional: Also restore the seeded state of the whole fair day.
+  bool full_day_reset = 3;
+}

@@ -1,0 +1,2 @@
+{"t": 1794391054.079, "kind": "sent", "topic": "gpos/spike/p05/s3a/s3a-1-348a8a", "scan_id": "s3a-1-348a8a", "img": "competitor_tag_150k.jpg", "img_bytes": 151878, "payload_bytes": 202703}
+{"t": 1794391058.469, "kind": "recv", "topic": "gpos/spike/p05/out/ok/s3a", "scan_id": "s3a-1-348a8a", "dt": 4.4, "body": {"reading": {"confidence": 0.98, "pack_size": "1 l", "price_eur": 1.19, "product_text": "FRISCHMARKT Bio Vollmilch 3,8% 1 l", "readable": true, "unit_price": "1 l = 1,19 €", "valid_text": "Art.-Nr. 4000417 012345"}, "scan_id": "s3a-1-348a8a", "variant": "s3a"}}

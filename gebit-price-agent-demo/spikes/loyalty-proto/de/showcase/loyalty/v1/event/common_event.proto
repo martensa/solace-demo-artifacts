@@ -1,0 +1,19 @@
+//
+// common_event.proto
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.event;
+
+import "de/showcase/loyalty/v1/datatype/common_datatype.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.event.protobuf";
+option java_outer_classname = "CommonEventProto";
+
+// Common header of all loyalty domain events (same as GEBIT event.Header).
+message Header {
+
+  // Mandatory: When the domain event was mapped to this message.
+  datatype.Timestamp event_timestamp = 1;
+}

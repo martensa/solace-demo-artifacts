@@ -1,0 +1,561 @@
+//
+// loyalty_datatype.proto
+//
+// Membership, account, coupon, offer and purchase-result types. Where GEBIT has
+// a counterpart, field names follow it (purchase LoyaltyMembership,
+// LoyaltyAccount, LoyaltyCoupon; receipt LoyaltyPurchaseResult) so the POS
+// simulator maps them without guessing.
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.datatype;
+
+import "de/showcase/loyalty/v1/datatype/common_datatype.proto";
+import "de/showcase/loyalty/v1/datatype/loyalty_enum.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.datatype.protobuf";
+option java_outer_classname = "LoyaltyDatatypeProto";
+
+// Result of a command that creates a coupon.
+message CouponId {
+
+  // Mandatory: The coupon id, e.g. CPN-0217-0042.
+  string coupon_id = 1;
+
+  // Mandatory: The value printed as QR or barcode, used in AssignLoyaltyCoupon or
+  // (prefix:promotion_code) in ApplyAnonymousCoupon. Bearer secret: never published in events.
+  string coupon_identification_value = 2;
+}
+
+// Consent flags of a membership (data protection, guardrail C05).
+message ConsentFlags {
+
+  // Mandatory: Personalised offers and coupons allowed.
+  bool offers = 1;
+
+  // Mandatory: Purchase history may be stored and used for offers (profiling).
+  bool profiling = 2;
+
+  // Optional: Member prefers a digital receipt.
+  bool digital_receipt = 3;
+
+  // Mandatory: Version of the consent text the flags refer to.
+  string policy_version = 4;
+
+  // Mandatory: When the flags were last changed.
+  OffsetTimestamp changed_at = 5;
+}
+
+// Account of a membership (same fields as GEBIT purchase LoyaltyAccount).
+message LoyaltyAccount {
+
+  // Mandatory: The account id.
+  string account_id = 1;
+
+  // Mandatory: The account type, e.g. POINTS-ACCOUNT-ID.
+  string account_type = 2;
+
+  // Optional: Display text.
+  optional string account_description = 3;
+
+  // Mandatory: Name of the account currency, e.g. Points.
+  string account_currency_name = 4;
+
+  // Mandatory: Balance before the current purchase.
+  BDecimal account_balance = 5;
+
+  // List of extension properties. It can be empty.
+  repeated Property extension_properties = 6;
+}
+
+// A coupon in the wallet of a member, or an anonymous coupon.
+message MemberCoupon {
+
+  // Mandatory: The coupon id (becomes LoyaltyCoupon.coupon_id at the POS).
+  string coupon_id = 1;
+
+  // Optional: The identification value. Only returned to the POS, never to agents.
+  string coupon_identification_value = 2;
+
+  // Optional: Display text (becomes LoyaltyCoupon.coupon_description).
+  optional string coupon_description = 3;
+
+  // Mandatory: The offer the coupon was issued from.
+  string offer_id = 4;
+
+  // Mandatory: The status.
+  CouponStatus status = 5;
+
+  // Mandatory: Valid from.
+  OffsetTimestamp valid_from = 6;
+
+  // Mandatory: Valid to (inclusive).
+  OffsetTimestamp valid_to = 7;
+
+  // Mandatory: Discount type.
+  DiscountType discount_type = 8;
+
+  // Mandatory: Percent (RELATIVE, 30.00 = 30 %), amount (ABSOLUTE) or new price (NEW_PRICE).
+  BDecimal discount_value = 9;
+
+  // Mandatory: Cap of the granted discount per coupon.
+  Money max_discount = 10;
+
+  // Optional: Target article; empty for a basket coupon.
+  optional string target_article_number = 11;
+
+  // Mandatory: The promotion id the POS pricing writes into BaseDiscount.promotion_id.
+  string promotion_id = 12;
+
+  // List of extension properties. It can be empty.
+  repeated Property extension_properties = 13;
+}
+
+// Answer to ResolveMembership. Mirrors GEBIT purchase LoyaltyMembership so the
+// POS simulator can fill PurchaseTransaction.loyalty.loyalty_memberships[] directly.
+message MembershipResolution {
+
+  // Mandatory: The value passed in (card barcode or typed number).
+  string membership_identification_value = 1;
+
+  // Mandatory if verified: The membership id, e.g. M-0001.
+  string membership_id = 2;
+
+  // Mandatory: The loyalty program id, e.g. POINTS-ID.
+  string program_id = 3;
+
+  // Mandatory: The loyalty program display name.
+  string program_name = 4;
+
+  // Optional: Pseudonymous customer reference; not set for anonymous memberships.
+  optional string customer_id = 5;
+
+  // Whether the membership represents an anonymous shopper (guest card).
+  bool anonymous = 6;
+
+  // Whether the identification value was verified by the loyalty system.
+  bool verified = 7;
+
+  // Mandatory: The membership status.
+  MembershipStatus status = 8;
+
+  // Coupons that come with the membership (LoyaltyCoupon.from_membership = true at the POS).
+  repeated MemberCoupon coupons = 9;
+
+  // Accounts of the membership, balances before this purchase.
+  repeated LoyaltyAccount accounts = 10;
+
+  // Preferences for the POS, e.g. digitalReceipt=true (becomes membership_preferences).
+  repeated Property membership_preferences = 11;
+
+  // Optional: Plain text lines for LoyaltyMembership.receipt_content (POS maps to FormattedContent).
+  repeated string receipt_text_lines = 12;
+
+  // List of extension properties. It can be empty.
+  repeated Property extension_properties = 13;
+}
+
+// Answer to ResolveCoupon.
+message CouponResolution {
+
+  // Mandatory: The outcome.
+  CouponResolutionResult result = 1;
+
+  // Optional: The coupon, if known.
+  MemberCoupon coupon = 2;
+
+  // Optional: The membership the coupon belongs to; empty for anonymous coupons.
+  optional string membership_id = 3;
+
+  // Optional: For anonymous coupons, the split identification value for ApplyAnonymousCoupon.
+  string prefix = 4;
+
+  // Optional: For anonymous coupons, the promotion code for ApplyAnonymousCoupon.
+  string promotion_code = 5;
+}
+
+// Purchase frequency per category (only filled with profiling consent).
+message CategoryFrequency {
+
+  // Mandatory: Category tag, e.g. kaffee.
+  string category = 1;
+
+  // Mandatory: Purchases with this category in the last 8 weeks.
+  int32 purchases_8w = 2;
+
+  // Mandatory: Days since the last purchase with this category.
+  int32 days_since_last = 3;
+}
+
+// Agent-facing profile. Contains no name, age, sex, address or any other
+// personal or socio-economic attribute (guardrail C04).
+message MemberProfile {
+
+  // Mandatory: The membership id.
+  string membership_id = 1;
+
+  // Mandatory: Shopping-occasion label of the fictional persona card, e.g. Kaffeepause.
+  string persona_label = 2;
+
+  // Mandatory: Explicitly chosen form of address.
+  Salutation salutation = 3;
+
+  // Explicit preference tags from the tag allowlist.
+  repeated string preference_tags = 4;
+
+  // Mandatory: Consent flags.
+  ConsentFlags consent = 5;
+
+  // Mandatory: Points balance.
+  BDecimal points_balance = 6;
+
+  // Purchase history aggregates; empty when consent.profiling is false.
+  repeated CategoryFrequency history = 7;
+
+  // Mandatory: Number of open coupons.
+  int32 open_coupons = 8;
+
+  // Mandatory: Whether history was used (false without profiling consent).
+  bool history_used = 9;
+
+  // Behavioural segment label of the fictional persona, e.g. "Stammkundin, preisbewusst".
+  string segment_label = 10;
+}
+
+// A catalogue offer.
+message Offer {
+
+  // Mandatory: Offer id, e.g. OFF-CANTUCCINI-30.
+  string offer_id = 1;
+
+  // Mandatory: The kind.
+  OfferKind kind = 2;
+
+  // Optional: Target article; empty for a basket coupon.
+  optional string target_article_number = 3;
+
+  // Optional: Condition article (tied offer, checkout coupon rule).
+  optional string condition_article_number = 4;
+
+  // Mandatory: Discount type.
+  DiscountType discount_type = 5;
+
+  // Mandatory: Discount value (see MemberCoupon.discount_value).
+  BDecimal discount_value = 6;
+
+  // Mandatory: Discount cap per coupon.
+  Money max_discount = 7;
+
+  // Optional: Minimum basket value.
+  Money min_basket = 8;
+
+  // Mandatory: Validity in days after issue (0 = this purchase only).
+  int32 valid_days = 9;
+
+  // Mandatory: Whether the offer is part of the pre-approved catalogue.
+  bool in_catalogue = 10;
+
+  // Mandatory: Whether issuing needs a human approver.
+  ApprovalMode approval = 11;
+
+  // Optional: Prefix for anonymous coupons (ApplyAnonymousCoupon.prefix).
+  string prefix = 12;
+
+  // Optional: Promotion code for reusable anonymous coupons (ApplyAnonymousCoupon.promotion_code).
+  string promotion_code = 13;
+
+  // Mandatory: Promotion id written to BaseDiscount.promotion_id by the POS pricing.
+  string promotion_id = 14;
+
+  // Mandatory: UI text key (German texts live in the UI templates).
+  string text_key = 15;
+
+  // Preference tags the offer matches.
+  repeated string match_tags = 16;
+}
+
+// A ranked, pre-validated offer slot. The agent may choose among unblocked slots only.
+message OfferCandidate {
+
+  // Mandatory: Slot A, B or C.
+  string slot = 1;
+
+  // Mandatory: The offer.
+  Offer offer = 2;
+
+  // Mandatory: Engine score (deterministic).
+  BDecimal score = 3;
+
+  // Mandatory: Shelf price of the target article.
+  Money price_before = 4;
+
+  // Mandatory: Price after the coupon (cent-floored).
+  Money price_after = 5;
+
+  // Mandatory: Displayed percentage, floored.
+  int32 pct_shown = 6;
+
+  // Facts the agent may cite (every number in its text must come from here).
+  repeated string why_facts = 7;
+
+  // Whether a guardrail blocks the slot.
+  bool blocked = 8;
+
+  // Optional: The rule that blocks it, e.g. G03_NO_STACKING.
+  string blocked_rule = 9;
+}
+
+// Answer to ListEligibleOffers.
+message EligibleOffers {
+
+  // Up to three candidates, best first.
+  repeated OfferCandidate candidates = 1;
+
+  // Mandatory: Engine recommendation (A if any slot is unblocked).
+  string recommended_slot = 2;
+
+  // Mandatory: Whether member data was used (false for anonymous or without consent).
+  bool personalised = 3;
+}
+
+// Answer to ListMemberCoupons.
+message MemberCoupons {
+
+  // Coupons of the member.
+  repeated MemberCoupon coupons = 1;
+}
+
+// A receipt line as the loyalty system needs it.
+message BasketLine {
+
+  // Mandatory: GEBIT position id.
+  string position_id = 1;
+
+  // Mandatory: GEBIT article id, e.g. IDarticle004.
+  string article_id = 2;
+
+  // Mandatory: GEBIT article number, e.g. article004.
+  string article_number = 3;
+
+  // Mandatory: Category tag of the article, e.g. kaffee.
+  string category = 4;
+
+  // Mandatory: Item count (negative for returns).
+  int32 item_count = 5;
+
+  // Mandatory: Effective value after discounts.
+  Money effective_value = 6;
+
+  // Mandatory: Receipt flag effectual (voided lines are false and earn nothing).
+  bool effectual = 7;
+
+  // Mandatory: A shelf promotion is active on the line (no coupon stacking).
+  bool promotion_active = 8;
+}
+
+// A coupon as it appears on the closed receipt.
+message AppliedCoupon {
+
+  // Mandatory: GEBIT coupon position id.
+  string coupon_position_id = 1;
+
+  // Optional: Identification value of a loyalty coupon.
+  string coupon_identification_value = 2;
+
+  // Optional: Prefix of an anonymous coupon.
+  string prefix = 3;
+
+  // Optional: Promotion code of an anonymous coupon.
+  string promotion_code = 4;
+
+  // Mandatory: Receipt flag applied (the coupon triggered a price action).
+  bool applied = 5;
+
+  // Mandatory: Receipt flag from_membership.
+  bool from_membership = 6;
+
+  // Optional: Discount granted by this coupon.
+  Money discount_granted = 7;
+}
+
+// Closed (or voided) purchase as reported by the POS.
+message PurchaseSummary {
+
+  // Mandatory: GEBIT purchase transaction id (= receipt id).
+  string purchase_transaction_id = 1;
+
+  // Mandatory: Receipt number.
+  string receipt_number = 2;
+
+  // Mandatory: GEBIT location, e.g. Root.DE.999.101.01.
+  string location = 3;
+
+  // Mandatory: SALE or VOID.
+  TransactionType transaction_type = 4;
+
+  // Mandatory: Closing time.
+  OffsetTimestamp closed_at = 5;
+
+  // Optional: Membership of the purchase; empty for anonymous purchases.
+  optional string membership_id = 6;
+
+  // Receipt lines, including voided ones (effectual = false).
+  repeated BasketLine lines = 7;
+
+  // Mandatory: Receipt total.
+  Money total = 8;
+
+  // Coupons on the receipt (loyalty and anonymous).
+  repeated AppliedCoupon coupons = 9;
+
+  // Optional: For VOID, the purchase transaction being reversed.
+  optional string referenced_purchase_transaction_id = 10;
+
+  // List of extension properties. It can be empty.
+  repeated Property extension_properties = 11;
+}
+
+// Attributes common to all benefit applications (as GEBIT receipt BenefitApplicationAttributes).
+message BenefitApplicationAttributes {
+
+  // Mandatory: The program.
+  LoyaltyEntityDescriptor program = 1;
+
+  // Optional: The membership; empty for anonymous purchases.
+  optional string membership_id = 2;
+
+  // Optional: The benefit id, e.g. the offer id.
+  optional string benefit_id = 3;
+
+  // Optional: The promotion id.
+  optional string promotion_id = 4;
+
+  // Whether the application was reported to and confirmed by the loyalty system.
+  bool reported = 5;
+
+  // List of extension properties. It can be empty.
+  repeated Property extension_properties = 6;
+}
+
+// Share of a benefit carried by one receipt position (as GEBIT receipt).
+message BenefitApplicationPositionFraction {
+
+  // Mandatory: The position id.
+  string position_id = 1;
+
+  // Mandatory: Items of the position taking part (negative for returns).
+  sint32 item_count = 2;
+
+  // Mandatory: Amount carried by these items (negative for returns).
+  BDecimal fraction_amount = 3;
+}
+
+// Coupon printed at the end of the checkout (as GEBIT receipt CheckoutCoupon;
+// print content as plain lines plus barcode, the POS maps to FormattedContent).
+message CheckoutCoupon {
+
+  reserved 2;
+
+  // Mandatory: Common attributes.
+  BenefitApplicationAttributes application = 1;
+
+  // Mandatory: The coupon id.
+  string coupon_id = 3;
+
+  // Mandatory: Text lines to print or show.
+  repeated string print_text_lines = 4;
+
+  // Mandatory: Value to render as QR code.
+  string barcode_value = 5;
+}
+
+// Earned amount (as GEBIT receipt EarnCurrency, decimal as BDecimal).
+message EarnCurrency {
+
+  // Mandatory: Common attributes.
+  BenefitApplicationAttributes application = 1;
+
+  // Mandatory: The account (id = account type).
+  LoyaltyEntityDescriptor account = 2;
+
+  // Mandatory: The currency (points).
+  LoyaltyEntityDescriptor currency = 3;
+
+  // Mandatory: Earned amount, negative for VOID.
+  BDecimal earned_amount = 4;
+
+  // Distribution over eligible positions.
+  repeated BenefitApplicationPositionFraction position_fractions = 5;
+}
+
+// Burned amount (as GEBIT receipt BurnCurrency). Not used at the booth.
+message BurnCurrency {
+
+  // Mandatory: Common attributes.
+  BenefitApplicationAttributes application = 1;
+
+  // Mandatory: The account.
+  LoyaltyEntityDescriptor account = 2;
+
+  // Mandatory: The currency.
+  LoyaltyEntityDescriptor currency = 3;
+
+  // Mandatory: Burned amount.
+  BDecimal burned_amount = 4;
+
+  // Distribution over positions.
+  repeated BenefitApplicationPositionFraction position_fractions = 5;
+}
+
+// Loyalty result of a purchase (as GEBIT receipt LoyaltyPurchaseResult, without the
+// opaque deferred report: our ReportPurchase command replaces it).
+message PurchaseResult {
+
+  reserved 3;
+
+  // Checkout coupons for the next visit.
+  repeated CheckoutCoupon checkout_coupons = 1;
+
+  // Earned amounts (points).
+  repeated EarnCurrency earned_amounts = 2;
+
+  // Burned amounts (points).
+  repeated BurnCurrency burned_amounts = 4;
+}
+
+// Purchase behaviour of one member for one article plus the anonymous cardholder trend.
+// Member fields are empty or -1 without profiling consent (guardrail C05).
+message PurchaseBehaviour {
+
+  // Mandatory: The membership id.
+  string membership_id = 1;
+
+  // Mandatory: The article.
+  string article_number = 2;
+
+  // Mandatory: Whether purchase history may be used.
+  bool consent_profiling = 3;
+
+  // Mandatory: Persona and segment label of the fictional card.
+  string persona_label = 4;
+  string segment_label = 5;
+
+  // Purchases of the article by this member in the business-date windows
+  // [D-56, D-1] and [D-84, D-1], both edges inclusive (D = demo date). Purchases
+  // with business date D (all booth purchases) never count.
+  int32 member_purchases_8w = 6;
+  int32 member_purchases_12w = 7;
+
+  // D minus the business date of the last purchase before D; -1 = never or no consent.
+  int32 days_since_last = 8;
+
+  // Median days between purchases of the article in [D-84, D-1]; 0 = unknown.
+  int32 median_interval_days = 9;
+
+  // Cardholder purchases of the article per week, 8 values, oldest first (anonymous).
+  repeated int32 cardholder_weekly = 10;
+
+  // Drop of the last 4 weeks against the 4 weeks before, percent (negative = rise).
+  BDecimal cardholder_drop_pct = 11;
+}

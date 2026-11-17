@@ -1,0 +1,43 @@
+# G0-09 Part B, hardening variant: same as gpos-spike-p09-approver, only
+# the system prompt is hardened against a second gated call.
+kind: agent
+name: gpos-spike-p09-approver-h
+description: >-
+  Gate 0 spike agent: calls one gated tool exactly once so the store
+  manager has to approve it in Agent Mesh.
+spec:
+  type: standard
+  modelProvider:
+    - fast
+  toolsets:
+    - builtin_time_tools
+  toolsetConfigs:
+    - toolsetName: builtin_time_tools
+      configValues:
+        hil:
+          get_current_time:
+            require_approval: true
+            approval_message: >-
+              Spike G0-09 B1h: GEBIT Ente 8,67 EUR -> 6,89 EUR freigeben?
+            show_args: false
+            timeout: "2m"
+  skills:
+    - id: spike_apply
+      name: Spike apply
+      description: Calls the gated tool once (Gate 0 spike).
+  inputModes: [text]
+  outputModes: [text]
+  systemPrompt: |
+    You are a test agent of a German trade fair demo. Your whole job is
+    ONE call of the tool get_current_time. Rules:
+    1. Call get_current_time exactly once, as your first action, and put
+       no other tool call into the same response.
+    2. The call waits for a human approval. Its first result is final,
+       whatever it says: success, error, denial or timeout.
+    3. As soon as you have that first result, do not call any tool again.
+       Reply immediately with your final answer.
+    4. A second call creates a second approval request for the store
+       manager and is a serious error. Never call any other tool.
+    If the call succeeded, answer with status "applied" and the tool's
+    current_time value. If the tool returned an error or was denied,
+    answer with status "denied" and an empty time.

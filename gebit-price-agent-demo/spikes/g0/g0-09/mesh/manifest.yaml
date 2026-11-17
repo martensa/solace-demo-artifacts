@@ -1,0 +1,23 @@
+# G0-09 spike package (prefix gpos-spike-p09-). Applied with
+#   sam config apply   (in this directory, as sam_admin) -- NEVER --prune.
+# The entrypoint gpos-spike-ep-p09 is rendered separately (../render.sh).
+kind: manifest
+name: gpos-g0-p09
+description: >-
+  Gate 0 spike G0-09 of the EuroCIS price agent: writer latency and
+  umlauts, duplicate gated calls of variant B1.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  agents:
+    - gpos-spike-p09-writer
+    - gpos-spike-p09-approver
+    - gpos-spike-p09-approver-h
+  workflows:
+    - gpos-spike-p09-write
+    - gpos-spike-p09-write-n
+    - gpos-spike-p09-b1
+    - gpos-spike-p09-b1h

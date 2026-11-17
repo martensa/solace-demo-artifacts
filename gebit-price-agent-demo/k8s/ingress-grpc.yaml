@@ -1,0 +1,84 @@
+# gRPC ingresses (spec 12.4, G0-07): TLS terminates at NGINX, h2c (grpc_pass) to the
+# Service. Kyverno ingress-require-tls: spec.tls with hosts + secretName and
+# ssl-redirect "true" are mandatory; proxy-body-size lifts the 1m default.
+# Hosts gpos-grpc / gpos-wws-grpc / gpos-loyalty-grpc.solace.lab resolve to 127.0.0.1
+# via /etc/hosts (since 2026-11-12, spec 12.4). make port-forward is the emergency
+# fallback for wws and loyalty; POS gRPC only via make port-forward until the owner
+# applies Ingress gpos-grpc as one object (not install.sh k8s, spec 12.4).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-grpc
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gpos-grpc.solace.lab
+      secretName: gpos-demo-tls
+  rules:
+    - host: gpos-grpc.solace.lab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-pos
+                port:
+                  name: grpc
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-wws-grpc
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gpos-wws-grpc.solace.lab
+      secretName: gpos-demo-tls
+  rules:
+    - host: gpos-wws-grpc.solace.lab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-wws
+                port:
+                  name: grpc
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-loyalty-grpc
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gpos-loyalty-grpc.solace.lab
+      secretName: gpos-demo-tls
+  rules:
+    - host: gpos-loyalty-grpc.solace.lab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-loyalty
+                port:
+                  name: grpc

@@ -1,0 +1,83 @@
+# gebitsim gRPC server (h2c on 50051), descriptors from the Secret mount.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpos-g0-grpc
+  namespace: gpos-g0
+  labels:
+    app: gpos-g0-grpc
+    gpos/spike: g0-07
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-g0-grpc
+  template:
+    metadata:
+      labels:
+        app: gpos-g0-grpc
+        gpos/spike: g0-07
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gebitsim
+          image: gpos-g0-grpc:spike
+          imagePullPolicy: Never
+          args: ["--port", "50051"]
+          env:
+            - name: GEBIT_DESCRIPTOR_SETS
+              value: /descriptors/purchase-api-2.50.0.pb:/descriptors/receipt-api-2.13.0.pb
+          ports:
+            - name: grpc
+              containerPort: 50051
+          readinessProbe:
+            grpc:
+              port: 50051
+            periodSeconds: 5
+          livenessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: descriptors
+              mountPath: /descriptors
+              readOnly: true
+      volumes:
+        - name: descriptors
+          secret:
+            secretName: gpos-g0-gebit-descriptors
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpos-g0-grpc
+  namespace: gpos-g0
+  labels:
+    app: gpos-g0-grpc
+    gpos/spike: g0-07
+spec:
+  selector:
+    app: gpos-g0-grpc
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+      appProtocol: kubernetes.io/h2c

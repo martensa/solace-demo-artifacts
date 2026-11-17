@@ -1,0 +1,74 @@
+# data/personas.yaml -- fictional loyalty cards (UC1)
+program: {id: POINTS-ID, name: POINTS, display: "Markt-Bonus",
+          account_type: POINTS-ACCOUNT-ID, currency_id: POINTS-CURRENCY-ID,
+          currency_name: Points, base_promotion_id: promotion-base-points,
+          earn_eur_per_point: 2.00}
+# tag -> label_de; category tags take their label from 6.1
+tags: {obst_gemuese: null, molkerei_fruehstueck: null, kaffee_tee: null,
+       suesswaren_snacks: null, getraenke: null, drogerie_haushalt: null,
+       spielwaren_geschenke: null, buch: null, familie: "Familie",
+       saison: "Saisonartikel"}
+members:
+  - id: M-1001
+    card: CLUB-1001
+    persona: Kaffeepause
+    key: kaffeepause
+    segment: "Stammkundin, preisbewusst"
+    salutation: FORMAL
+    consent: {offers: true, profiling: true}
+    tags: [kaffee_tee, molkerei_fruehstueck]
+    history:
+      - {article: "100012", qty: 1, first: 2026-12-01, every_days: 14, last: 2027-01-12}
+      - {article: "100017", qty: 1, first: 2026-11-24, every_days: 7, last: 2027-02-09}
+      - {article: "100015", qty: 1, first: 2026-11-24, every_days: 14, last: 2027-02-02}
+      - {article: "100010", qty: 2, first: 2026-11-24, every_days: 7, last: 2027-02-09}
+  - id: M-1002
+    card: CLUB-1002
+    persona: Familieneinkauf
+    key: familieneinkauf
+    segment: "Familie, Wocheneinkauf"
+    salutation: INFORMAL
+    consent: {offers: true, profiling: true}
+    tags: [familie, obst_gemuese, molkerei_fruehstueck]
+    history:
+      - {article: "100004", qty: 2, first: 2026-11-21, every_days: 7, last: 2027-02-13}
+      - {article: "100005", qty: 1, first: 2026-11-21, every_days: 7, last: 2027-02-13}
+      - {article: "100010", qty: 3, first: 2026-11-21, every_days: 7, last: 2027-02-13}
+      - {article: "100016", qty: 1, first: 2026-11-21, every_days: 7, last: 2027-02-13}
+      - {article: "100022", qty: 2, first: 2026-11-21, every_days: 7, last: 2027-02-13}
+      - {article: "100018", qty: 1, first: 2026-11-21, every_days: 14, last: 2027-02-13}
+      - {article: "100001", qty: 1, first: 2027-01-23, every_days: 0, last: 2027-01-23}
+  - id: M-1003
+    card: CLUB-1003
+    persona: Feierabend
+    key: feierabend
+    segment: "Spontaneinkauf"
+    salutation: FORMAL
+    consent: {offers: true, profiling: false}
+    tags: [getraenke]
+    history:
+      - {article: "100023", qty: 4, first: 2026-11-27, every_days: 7, last: 2027-02-12}
+      - {article: "100020", qty: 1, first: 2026-11-27, every_days: 7, last: 2027-02-12}
+  - id: M-1004
+    card: CLUB-1004
+    persona: "Genuss & Saison"
+    key: genuss_saison
+    segment: "Genießer, saisonaffin"
+    salutation: INFORMAL
+    consent: {offers: true, profiling: true}
+    tags: [suesswaren_snacks, saison]
+    history:
+      - {article: "100018", qty: 2, first: 2026-11-25, every_days: 7, last: 2027-02-10}
+      - {article: "100015", qty: 1, first: 2026-11-25, every_days: 14, last: 2027-02-03}
+      - {article: "100026", qty: 1, first: 2027-01-30, every_days: 0, last: 2027-01-30}
+      - {article: "100008", qty: 1, first: 2027-02-05, every_days: 7, last: 2027-02-12}
+  - id: M-1005
+    card: CLUB-GAST
+    persona: Gastkarte
+    key: gast
+    segment: "Gast"
+    salutation: FORMAL
+    anonymous: true
+    consent: {offers: false, profiling: false}
+    tags: []
+    history: []

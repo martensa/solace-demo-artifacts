@@ -1,0 +1,41 @@
+//
+// loyalty_service.proto
+//
+// The simulated loyalty system behind the POS simulator, GEBIT style: unary gRPC,
+// commands return Empty or an id, queries return datatypes, outcomes are events.
+// Errors use the gRPC rich error model with datatype.ErrorMessage as detail.
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.service;
+
+import "de/showcase/loyalty/v1/command/loyalty_command.proto";
+import "de/showcase/loyalty/v1/datatype/loyalty_datatype.proto";
+import "de/showcase/loyalty/v1/query/loyalty_query.proto";
+import "google/protobuf/empty.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.service.protobuf";
+option java_outer_classname = "LoyaltyServiceProto";
+
+service LoyaltyService {
+
+  // POS side (what GEBIT's purchase service would ask a loyalty system).
+  rpc ResolveMembership (query.ResolveMembership) returns (datatype.MembershipResolution) {}
+  rpc ResolveCoupon (query.ResolveCoupon) returns (datatype.CouponResolution) {}
+  rpc CalculatePurchaseResult (query.CalculatePurchaseResult) returns (datatype.PurchaseResult) {}
+  rpc ReportPurchase (command.ReportPurchase) returns (google.protobuf.Empty) {}
+
+  // Engine side (behind the MCP tools the SAM agents and workflows use).
+  rpc GetMemberProfile (query.GetMemberProfile) returns (datatype.MemberProfile) {}
+  rpc ListEligibleOffers (query.ListEligibleOffers) returns (datatype.EligibleOffers) {}
+  rpc ListMemberCoupons (query.ListMemberCoupons) returns (datatype.MemberCoupons) {}
+  rpc IssueCoupon (command.IssueCoupon) returns (datatype.CouponId) {}
+  rpc IssueSpecialCoupon (command.IssueSpecialCoupon) returns (datatype.CouponId) {}
+  rpc VoidCoupon (command.VoidCoupon) returns (google.protobuf.Empty) {}
+  rpc GetPurchaseBehaviour (query.GetPurchaseBehaviour) returns (datatype.PurchaseBehaviour) {}
+
+  // Operator side.
+  rpc ChangeConsent (command.ChangeConsent) returns (google.protobuf.Empty) {}
+  rpc ResetDemoState (command.ResetDemoState) returns (google.protobuf.Empty) {}
+}

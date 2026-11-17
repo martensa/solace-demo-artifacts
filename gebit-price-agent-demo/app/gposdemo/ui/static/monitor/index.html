@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Messemonitor · Preisvorschlag mit Freigabe</title>
+  <link rel="stylesheet" href="/static/shared/common.css">
+  <link rel="stylesheet" href="/static/monitor/monitor.css">
+</head>
+<body>
+  <header class="mhead">
+    <div class="mhead-top">
+      <h1 id="claim" class="claim"></h1>
+      <div id="badges" class="badges"></div>
+    </div>
+    <ol id="stations" class="stations"></ol>
+  </header>
+
+  <main class="cols">
+    <section class="col panel" aria-labelledby="col-till-title">
+      <h2 id="col-till-title"></h2>
+      <div id="till-status" class="till-status"></div>
+      <div id="card-box" class="card-box"></div>
+      <ol id="bon-lines" class="bon-lines"></ol>
+      <div id="bon-sum" class="bon-sum"></div>
+      <h3 id="band-title" class="sub"></h3>
+      <ol id="band" class="band"></ol>
+    </section>
+
+    <section class="col panel" aria-labelledby="col-mesh-title">
+      <h2 id="col-mesh-title"></h2>
+      <h3 id="runs-title" class="sub"></h3>
+      <ol id="runs" class="runs"></ol>
+      <h3 id="review-title" class="sub"></h3>
+      <div id="review" class="review"></div>
+      <h3 id="timeline-title" class="sub"></h3>
+      <ol id="timeline" class="timeline"></ol>
+      <div id="decision" class="decision"></div>
+    </section>
+
+    <section class="col panel" aria-labelledby="col-approval-title">
+      <h2 id="col-approval-title"></h2>
+      <div id="recap" class="recap hidden"></div>
+      <div id="duplicate" class="duplicate hidden"></div>
+      <div id="proposal" class="proposal"></div>
+      <div id="status-line" class="status-line"></div>
+      <div id="stamp" class="stamp hidden"></div>
+      <div id="price-event" class="price-event hidden"></div>
+      <div id="next-scan" class="next-scan hidden"></div>
+    </section>
+  </main>
+
+  <footer class="mfoot">
+    <div class="counters">
+      <span id="counters"></span>
+      <span id="llm-hint" class="muted"></span>
+    </div>
+    <div id="clock" class="clock mono"></div>
+    <div id="hints" class="hints muted"></div>
+  </footer>
+
+  <script src="/static/shared/texts.js"></script>
+  <script src="/static/shared/common.js"></script>
+  <script src="/static/monitor/monitor.js"></script>
+</body>
+</html>

@@ -1,0 +1,341 @@
+== Version
+postgres (PostgreSQL) 18.3 (Debian 18.3-1.pgdg13+1)
+18.3 (Debian 18.3-1.pgdg13+1)
+databases=acme_insurance,contract_management,mfg_crm,mfg_oms,mfg_pdm,mfg_scm,order_management,pharma_crm,pharma_mes,pharma_oms,pharma_pdm,postgres,retail_crm,retail_oms,retail_pdm,template0,template1
+== Wegwerf-DB (angelegt von postgres)
+gpos_g0_scratch|UTF8|en_US.utf8
+== Phase 0: Original-RL-Dateien (spikes/loyalty-sql) als Admin, je zweimal
+10-loyalty-schema.sql        orig#1   rc=0 notices=0 errors=0
+10-loyalty-schema.sql        orig#2   rc=3 notices=1 errors=1
+    psql:<stdin>:19: ERROR:  relation "program" already exists
+20-loyalty-seed.sql          orig#1   rc=0 notices=0 errors=0
+20-loyalty-seed.sql          orig#2   rc=3 notices=0 errors=1
+    psql:<stdin>:6: ERROR:  duplicate key value violates unique constraint "program_pkey"
+   (Schema loyalty des Originals wieder entfernt)
+== Phase 1: DDL 00..40, zweimal
+   leer:    ddl= data= objects=0 tables=0 rows=
+00-roles.sql                 ddl#1    rc=0 notices=0 errors=0
+10-pos.sql                   ddl#1    rc=0 notices=0 errors=0
+20-engine.sql                ddl#1    rc=0 notices=0 errors=0
+30-loyalty.sql               ddl#1    rc=0 notices=1 errors=0
+40-media.sql                 ddl#1    rc=0 notices=0 errors=0
+   nach #1: ddl=c4cea996e232005c13a0e90deb66e6a7 data=887ca66f229c017db9458a887420c167 objects=1119 tables=47 rows=0
+00-roles.sql                 ddl#2    rc=0 notices=4 errors=0
+10-pos.sql                   ddl#2    rc=0 notices=14 errors=0
+20-engine.sql                ddl#2    rc=0 notices=24 errors=0
+30-loyalty.sql               ddl#2    rc=0 notices=20 errors=0
+40-media.sql                 ddl#2    rc=0 notices=3 errors=0
+   nach #2: ddl=c4cea996e232005c13a0e90deb66e6a7 data=887ca66f229c017db9458a887420c167 objects=1119 tables=47 rows=0
+   DDL-Fingerabdruck #1 = #2: idempotent
+== Phase 2: Seeds 90, 91, zweimal
+90-seed.sql                  seed#1   rc=0 notices=0 errors=0
+91-loyalty-seed.sql          seed#1   rc=0 notices=0 errors=0
+   nach #1: ddl=c4cea996e232005c13a0e90deb66e6a7 data=1b781012f07453bd3c3cff71de05bd5c objects=1119 tables=47 rows=113
+90-seed.sql                  seed#2   rc=0 notices=0 errors=0
+91-loyalty-seed.sql          seed#2   rc=0 notices=0 errors=0
+   nach #2: ddl=c4cea996e232005c13a0e90deb66e6a7 data=1b781012f07453bd3c3cff71de05bd5c objects=1119 tables=47 rows=113
+   Fingerabdruck (DDL+Daten) Seed #1 = #2: idempotent
+== Phase 3: DDL 00..40 ein drittes Mal auf befuellter DB
+00-roles.sql                 ddl#3    rc=0 notices=4 errors=0
+10-pos.sql                   ddl#3    rc=0 notices=14 errors=0
+20-engine.sql                ddl#3    rc=0 notices=24 errors=0
+30-loyalty.sql               ddl#3    rc=0 notices=20 errors=0
+40-media.sql                 ddl#3    rc=0 notices=3 errors=0
+   nach #3: ddl=c4cea996e232005c13a0e90deb66e6a7 data=1b781012f07453bd3c3cff71de05bd5c objects=1119 tables=47 rows=113
+   unveraendert (DDL und Daten)
+== Phase 4: Plausibilitaet
+== S1 Inventar je Schema
+ schema  | tables | views |     owners      
+---------+--------+-------+-----------------
+ engine  |     20 |     0 | gpos_g0_engine
+ loyalty |     16 |     1 | gpos_g0_loyalty
+ media   |      2 |     0 | gpos_g0_ui
+ pos     |      9 |     0 | gpos_g0_pos
+
+== S2 Tabellen ohne Primaerschluessel (erwartet: 0 Zeilen)
+ table_without_pk 
+------------------
+
+== S3 Seed-Zeilen (nur Tabellen mit Zeilen)
+          table          | rows 
+-------------------------+------
+ engine.affinity_rule    |    2
+ engine.inbound_delivery |    1
+ engine.price_history    |   11
+ engine.scenario         |    5
+ engine.scenario_article |    6
+ engine.season_calendar  |    1
+ engine.store_note       |    3
+ loyalty.account         |    5
+ loyalty.article_ref     |   10
+ loyalty.card            |    5
+ loyalty.consent         |    5
+ loyalty.member          |    5
+ loyalty.member_tag      |    8
+ loyalty.offer           |    6
+ loyalty.program         |    1
+ loyalty.tag_vocabulary  |    9
+ pos.article             |   12
+ pos.article_price       |   12
+ pos.price_action        |    1
+ pos.till                |    5
+
+== S4 ref30 (A01: Minimum der 30 Tage vor der Senkung) und gezeigte Prozent fuer 6,89
+ scenario_id | hero_article | ref30 | shown_pct_6_89 
+-------------+--------------+-------+----------------
+ T2          | article004   |  7.49 |              8
+ TR1         | article004   |  8.67 |             20
+
+== S5 Stufentabellen TR1, TR2, TR6 aus Seed (Formeln von calc_triggers.py)
+ tr  | step | price | shown | units | left |  gp  |  dgp  | margin |      blocked      
+-----+------+-------+-------+-------+------+------+-------+--------+-------------------
+ TR1 | none | 8.67  |       |  25.5 | 16.5 | 44.5 | +0.0  | 39.6%  | 
+ TR1 | 10   | 7.79  | -10%  |  31.6 | 10.4 | 49.5 | +4.9  | 32.8%  | 
+ TR1 | 20   | 6.89  | -20%  |  40.4 |  1.6 | 53.3 | +8.7  | 24.0%  | 
+ TR1 | 30   | 5.99  | -30%  |  42.0 |  0.0 | 26.6 | -17.9 | 12.6%  | margin<20
+ TR1 | 40   | 4.99  | -42%  |  42.0 |  0.0 | -8.7 | -53.2 | -4.9%  | margin<20,disc>30
+ TR2 | none | 4.99  |       |  42.0 | 36.0 | 66.5 | +0.0  | 47.5%  | 
+ TR2 | 10   | 4.49  | -10%  |  53.0 | 25.0 | 74.1 | +7.6  | 41.6%  | 
+ TR2 | 20   | 3.99  | -20%  |  68.7 |  9.3 | 81.0 | +14.5 | 34.3%  | 
+ TR2 | 30   | 3.49  | -30%  |  92.2 |  0.0 | 74.9 | +8.3  | 24.9%  | 
+ TR2 | 40   | 2.99  | -40%  | 112.0 |  0.0 | 38.6 | -27.9 | 12.3%  | disc>30
+ TR6 | none | 6.99  |       |  23.8 | 36.2 |  9.6 | +0.0  | 51.0%  | 
+ TR6 | 10   | 5.99  | -14%  |  32.4 | 27.6 | 24.5 | +14.9 | 42.8%  | 
+ TR6 | 20   | 5.49  | -21%  |  38.5 | 21.5 | 33.1 | +23.5 | 37.6%  | 
+ TR6 | 30   | 4.89  | -30%  |  48.5 | 11.5 | 44.5 | +34.9 | 30.0%  | 
+ TR6 | 40   | 3.99  | -42%  |  60.0 |  0.0 | 31.7 | +22.1 | 14.2%  | disc>30
+
+== S6 Slot A je Ausloeser (bester DB-Gewinn ohne Sperre)
+ tr  | slot_a | shown |  dgp  |  grundpreis  | grundpreis_regulaer 
+-----+--------+-------+-------+--------------+---------------------
+ TR1 | 6.89   | -20 % | +8.7  |              | 
+ TR2 | 3.99   | -20 % | +14.5 | 15.83 EUR/kg | 19.80 EUR/kg
+ TR6 | 4.89   | -30 % | +34.9 | 24.45 EUR/kg | 34.95 EUR/kg
+
+== S7 TR3 Espresso gegen Wettbewerb 6,99 (eps_rel aus beobachteter Rate)
+ eps_rel | price | v_h  | units |  gp   | margin |  gap  
+---------+-------+------+-------+-------+--------+-------
+   -3.82 | 7.99  | 0.90 |  37.8 | 123.5 | 43.8%  | 14.3%
+   -3.82 | 7.49  | 1.15 |  48.4 | 135.5 | 40.0%  | 7.2%
+   -3.82 | 6.99  | 1.50 |  63.0 | 147.0 | 35.7%  | 0.0%
+
+== S8 TR4/TR5 Coupons und Kopplungsangebot (loyalty.offer x pos.article)
+     offer_id      | target_article | regular | coupon_price | margin |  grundpreis  
+-------------------+----------------+---------+--------------+--------+--------------
+ OFF-CANTUCCINI-30 | article008     | 2.29    | 1.60         | 36.5%  | 8.00 EUR/kg
+ OFF-GUAC-30       | article003     | 2.99    | 2.09         | 30.9%  | 10.45 EUR/kg
+ OFF-KAFFEEPADS-30 | article030     | 4.99    | 3.49         | 24.9%  | 13.85 EUR/kg
+
+== S9 Punkte (1 Punkt je volle 2 EUR, loyalty.program)
+ total_eur | points 
+-----------+--------
+ 8.67      |      4
+ 14.88     |      7
+ 12.16     |      6
+
+== S10 POS-Artikel ohne loyalty.article_ref (purchase_line hat FK darauf)
+ article_number |             name             
+----------------+------------------------------
+ article011     | Knusper-Müsli 750 g
+ article025     | GEBIT Mehrweg-Einkaufstasche
+
+== S11 View loyalty.member_category_8w laeuft (ohne Kaeufe 0 Zeilen)
+ rows 
+------
+    0
+
+== S12 Leitplanken und Rechte (Schreibtests werden zurueckgerollt)
+NOTICE:  PASS B01 action_price >= regular_price -> check_violation
+NOTICE:  PASS G01 second open action on article019 -> unique_violation
+NOTICE:  PASS C02 auto coupon 40 % -> check_violation
+NOTICE:  PASS C04 tag outside vocabulary -> foreign_key_violation
+NOTICE:  PASS frequency rule second open coupon -> unique_violation
+NOTICE:  PASS photo > 1 MiB -> check_violation
+NOTICE:  PASS gpos_g0_engine reads pos.article (12 rows) and media.photo
+NOTICE:  PASS gpos_g0_engine update pos.article -> insufficient_privilege
+NOTICE:  PASS gpos_g0_engine select loyalty.member -> insufficient_privilege
+NOTICE:  PASS gpos_g0_pos insert engine.trigger -> insufficient_privilege
+NOTICE:  PASS gpos_g0_ui insert media.photo
+NOTICE:  PASS gpos_g0_ui select pos.article -> insufficient_privilege (photo rolled back)
+DO
+== S13 Nach den Tests unveraendert (erwartet: 0 Testzeilen)
+ pa | coupons | photos | ente 
+----+---------+--------+------
+  0 |       0 |      0 | 8.67
+
+   DB nach den Pruefungen unveraendert
+== Aufraeumen
+db_left=0
+roles_left=0
+databases=acme_insurance,contract_management,mfg_crm,mfg_oms,mfg_pdm,mfg_scm,order_management,pharma_crm,pharma_mes,pharma_oms,pharma_pdm,postgres,retail_crm,retail_oms,retail_pdm,template0,template1
+== Version
+postgres (PostgreSQL) 18.3 (Debian 18.3-1.pgdg13+1)
+18.3 (Debian 18.3-1.pgdg13+1)
+databases=acme_insurance,contract_management,mfg_crm,mfg_oms,mfg_pdm,mfg_scm,order_management,pharma_crm,pharma_mes,pharma_oms,pharma_pdm,postgres,retail_crm,retail_oms,retail_pdm,template0,template1
+== Wegwerf-DB (angelegt von gpos_g0_admin)
+gpos_g0_admin|f|t|t
+gpos_g0_scratch|UTF8|en_US.utf8
+== Phase 0: Original-RL-Dateien (spikes/loyalty-sql) als Admin, je zweimal
+10-loyalty-schema.sql        orig#1   rc=0 notices=0 errors=0
+10-loyalty-schema.sql        orig#2   rc=3 notices=1 errors=1
+    psql:<stdin>:19: ERROR:  relation "program" already exists
+20-loyalty-seed.sql          orig#1   rc=0 notices=0 errors=0
+20-loyalty-seed.sql          orig#2   rc=3 notices=0 errors=1
+    psql:<stdin>:6: ERROR:  duplicate key value violates unique constraint "program_pkey"
+   (Schema loyalty des Originals wieder entfernt)
+== Phase 1: DDL 00..40, zweimal
+   leer:    ddl= data= objects=0 tables=0 rows=
+00-roles.sql                 ddl#1    rc=0 notices=0 errors=0
+10-pos.sql                   ddl#1    rc=0 notices=0 errors=0
+20-engine.sql                ddl#1    rc=0 notices=0 errors=0
+30-loyalty.sql               ddl#1    rc=0 notices=1 errors=0
+40-media.sql                 ddl#1    rc=0 notices=0 errors=0
+   nach #1: ddl=c4cea996e232005c13a0e90deb66e6a7 data=887ca66f229c017db9458a887420c167 objects=1119 tables=47 rows=0
+00-roles.sql                 ddl#2    rc=0 notices=8 errors=0
+10-pos.sql                   ddl#2    rc=0 notices=14 errors=0
+20-engine.sql                ddl#2    rc=0 notices=24 errors=0
+30-loyalty.sql               ddl#2    rc=0 notices=20 errors=0
+40-media.sql                 ddl#2    rc=0 notices=3 errors=0
+   nach #2: ddl=c4cea996e232005c13a0e90deb66e6a7 data=887ca66f229c017db9458a887420c167 objects=1119 tables=47 rows=0
+   DDL-Fingerabdruck #1 = #2: idempotent
+== Phase 2: Seeds 90, 91, zweimal
+90-seed.sql                  seed#1   rc=0 notices=0 errors=0
+91-loyalty-seed.sql          seed#1   rc=0 notices=0 errors=0
+   nach #1: ddl=c4cea996e232005c13a0e90deb66e6a7 data=4af60007530de9ca8ac14eac092a0639 objects=1119 tables=47 rows=113
+90-seed.sql                  seed#2   rc=0 notices=0 errors=0
+91-loyalty-seed.sql          seed#2   rc=0 notices=0 errors=0
+   nach #2: ddl=c4cea996e232005c13a0e90deb66e6a7 data=4af60007530de9ca8ac14eac092a0639 objects=1119 tables=47 rows=113
+   Fingerabdruck (DDL+Daten) Seed #1 = #2: idempotent
+== Phase 3: DDL 00..40 ein drittes Mal auf befuellter DB
+00-roles.sql                 ddl#3    rc=0 notices=8 errors=0
+10-pos.sql                   ddl#3    rc=0 notices=14 errors=0
+20-engine.sql                ddl#3    rc=0 notices=24 errors=0
+30-loyalty.sql               ddl#3    rc=0 notices=20 errors=0
+40-media.sql                 ddl#3    rc=0 notices=3 errors=0
+   nach #3: ddl=c4cea996e232005c13a0e90deb66e6a7 data=4af60007530de9ca8ac14eac092a0639 objects=1119 tables=47 rows=113
+   unveraendert (DDL und Daten)
+== Phase 4: Plausibilitaet
+== S1 Inventar je Schema
+ schema  | tables | views |     owners      
+---------+--------+-------+-----------------
+ engine  |     20 |     0 | gpos_g0_engine
+ loyalty |     16 |     1 | gpos_g0_loyalty
+ media   |      2 |     0 | gpos_g0_ui
+ pos     |      9 |     0 | gpos_g0_pos
+
+== S2 Tabellen ohne Primaerschluessel (erwartet: 0 Zeilen)
+ table_without_pk 
+------------------
+
+== S3 Seed-Zeilen (nur Tabellen mit Zeilen)
+          table          | rows 
+-------------------------+------
+ engine.affinity_rule    |    2
+ engine.inbound_delivery |    1
+ engine.price_history    |   11
+ engine.scenario         |    5
+ engine.scenario_article |    6
+ engine.season_calendar  |    1
+ engine.store_note       |    3
+ loyalty.account         |    5
+ loyalty.article_ref     |   10
+ loyalty.card            |    5
+ loyalty.consent         |    5
+ loyalty.member          |    5
+ loyalty.member_tag      |    8
+ loyalty.offer           |    6
+ loyalty.program         |    1
+ loyalty.tag_vocabulary  |    9
+ pos.article             |   12
+ pos.article_price       |   12
+ pos.price_action        |    1
+ pos.till                |    5
+
+== S4 ref30 (A01: Minimum der 30 Tage vor der Senkung) und gezeigte Prozent fuer 6,89
+ scenario_id | hero_article | ref30 | shown_pct_6_89 
+-------------+--------------+-------+----------------
+ T2          | article004   |  7.49 |              8
+ TR1         | article004   |  8.67 |             20
+
+== S5 Stufentabellen TR1, TR2, TR6 aus Seed (Formeln von calc_triggers.py)
+ tr  | step | price | shown | units | left |  gp  |  dgp  | margin |      blocked      
+-----+------+-------+-------+-------+------+------+-------+--------+-------------------
+ TR1 | none | 8.67  |       |  25.5 | 16.5 | 44.5 | +0.0  | 39.6%  | 
+ TR1 | 10   | 7.79  | -10%  |  31.6 | 10.4 | 49.5 | +4.9  | 32.8%  | 
+ TR1 | 20   | 6.89  | -20%  |  40.4 |  1.6 | 53.3 | +8.7  | 24.0%  | 
+ TR1 | 30   | 5.99  | -30%  |  42.0 |  0.0 | 26.6 | -17.9 | 12.6%  | margin<20
+ TR1 | 40   | 4.99  | -42%  |  42.0 |  0.0 | -8.7 | -53.2 | -4.9%  | margin<20,disc>30
+ TR2 | none | 4.99  |       |  42.0 | 36.0 | 66.5 | +0.0  | 47.5%  | 
+ TR2 | 10   | 4.49  | -10%  |  53.0 | 25.0 | 74.1 | +7.6  | 41.6%  | 
+ TR2 | 20   | 3.99  | -20%  |  68.7 |  9.3 | 81.0 | +14.5 | 34.3%  | 
+ TR2 | 30   | 3.49  | -30%  |  92.2 |  0.0 | 74.9 | +8.3  | 24.9%  | 
+ TR2 | 40   | 2.99  | -40%  | 112.0 |  0.0 | 38.6 | -27.9 | 12.3%  | disc>30
+ TR6 | none | 6.99  |       |  23.8 | 36.2 |  9.6 | +0.0  | 51.0%  | 
+ TR6 | 10   | 5.99  | -14%  |  32.4 | 27.6 | 24.5 | +14.9 | 42.8%  | 
+ TR6 | 20   | 5.49  | -21%  |  38.5 | 21.5 | 33.1 | +23.5 | 37.6%  | 
+ TR6 | 30   | 4.89  | -30%  |  48.5 | 11.5 | 44.5 | +34.9 | 30.0%  | 
+ TR6 | 40   | 3.99  | -42%  |  60.0 |  0.0 | 31.7 | +22.1 | 14.2%  | disc>30
+
+== S6 Slot A je Ausloeser (bester DB-Gewinn ohne Sperre)
+ tr  | slot_a | shown |  dgp  |  grundpreis  | grundpreis_regulaer 
+-----+--------+-------+-------+--------------+---------------------
+ TR1 | 6.89   | -20 % | +8.7  |              | 
+ TR2 | 3.99   | -20 % | +14.5 | 15.83 EUR/kg | 19.80 EUR/kg
+ TR6 | 4.89   | -30 % | +34.9 | 24.45 EUR/kg | 34.95 EUR/kg
+
+== S7 TR3 Espresso gegen Wettbewerb 6,99 (eps_rel aus beobachteter Rate)
+ eps_rel | price | v_h  | units |  gp   | margin |  gap  
+---------+-------+------+-------+-------+--------+-------
+   -3.82 | 7.99  | 0.90 |  37.8 | 123.5 | 43.8%  | 14.3%
+   -3.82 | 7.49  | 1.15 |  48.4 | 135.5 | 40.0%  | 7.2%
+   -3.82 | 6.99  | 1.50 |  63.0 | 147.0 | 35.7%  | 0.0%
+
+== S8 TR4/TR5 Coupons und Kopplungsangebot (loyalty.offer x pos.article)
+     offer_id      | target_article | regular | coupon_price | margin |  grundpreis  
+-------------------+----------------+---------+--------------+--------+--------------
+ OFF-CANTUCCINI-30 | article008     | 2.29    | 1.60         | 36.5%  | 8.00 EUR/kg
+ OFF-GUAC-30       | article003     | 2.99    | 2.09         | 30.9%  | 10.45 EUR/kg
+ OFF-KAFFEEPADS-30 | article030     | 4.99    | 3.49         | 24.9%  | 13.85 EUR/kg
+
+== S9 Punkte (1 Punkt je volle 2 EUR, loyalty.program)
+ total_eur | points 
+-----------+--------
+ 8.67      |      4
+ 14.88     |      7
+ 12.16     |      6
+
+== S10 POS-Artikel ohne loyalty.article_ref (purchase_line hat FK darauf)
+ article_number |             name             
+----------------+------------------------------
+ article011     | Knusper-Müsli 750 g
+ article025     | GEBIT Mehrweg-Einkaufstasche
+
+== S11 View loyalty.member_category_8w laeuft (ohne Kaeufe 0 Zeilen)
+ rows 
+------
+    0
+
+== S12 Leitplanken und Rechte (Schreibtests werden zurueckgerollt)
+NOTICE:  PASS B01 action_price >= regular_price -> check_violation
+NOTICE:  PASS G01 second open action on article019 -> unique_violation
+NOTICE:  PASS C02 auto coupon 40 % -> check_violation
+NOTICE:  PASS C04 tag outside vocabulary -> foreign_key_violation
+NOTICE:  PASS frequency rule second open coupon -> unique_violation
+NOTICE:  PASS photo > 1 MiB -> check_violation
+NOTICE:  PASS gpos_g0_engine reads pos.article (12 rows) and media.photo
+NOTICE:  PASS gpos_g0_engine update pos.article -> insufficient_privilege
+NOTICE:  PASS gpos_g0_engine select loyalty.member -> insufficient_privilege
+NOTICE:  PASS gpos_g0_pos insert engine.trigger -> insufficient_privilege
+NOTICE:  PASS gpos_g0_ui insert media.photo
+NOTICE:  PASS gpos_g0_ui select pos.article -> insufficient_privilege (photo rolled back)
+DO
+== S13 Nach den Tests unveraendert (erwartet: 0 Testzeilen)
+ pa | coupons | photos | ente 
+----+---------+--------+------
+  0 |       0 |      0 | 8.67
+
+   DB nach den Pruefungen unveraendert
+== Aufraeumen
+db_left=0
+roles_left=0
+databases=acme_insurance,contract_management,mfg_crm,mfg_oms,mfg_pdm,mfg_scm,order_management,pharma_crm,pharma_mes,pharma_oms,pharma_pdm,postgres,retail_crm,retail_oms,retail_pdm,template0,template1

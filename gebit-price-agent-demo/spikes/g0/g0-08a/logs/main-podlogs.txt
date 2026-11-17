@@ -1,0 +1,5 @@
+awe lines     2301 error-ish 8 p01-related-errors 0
+{"timestamp":"2026-11-11T10:00:42.043777728Z","level":"ERROR","message":"failed to load artifact from URI","component":"sam-awe","agentName":"workflow_01a1ca0a_44c6_7258_b634_fb30382491f9","taskID":"01a1ca0d-752e-7426-a132-01564b60307a","traceID":"01a1ca0d-7535-708e-b3c8-cceeae1868ed","error":"unmar
+{"timestamp":"2026-11-11T10:01:12.005556534Z","level":"ERROR","message":"node failed","component":"sam-awe","agentName":"workflow_01a1ca0a_44c6_7258_b634_fb30382491f9","traceID":"01a1ca0d-7535-708e-b3c8-cceeae1868ed","taskID":"01a1ca0d-752e-7426-a132-01564b60307a","agentName":"workflow_01a1ca0a_44c6
+{"timestamp":"2026-11-11T10:01:41.317230381Z","level":"ERROR","message":"failed to load artifact from URI","component":"sam-awe","agentName":"workflow_01a1ca0a_44c6_7258_b634_fb30382491f9","taskID":"01a1ca0e-5cb2-710a-8b60-b0af97e94778","traceID":"01a1ca0e-5cbc-708c-bf8f-b28ececbe36a","error":"unmar
+gwe lines       32 error-ish 0 p01-related-errors 0

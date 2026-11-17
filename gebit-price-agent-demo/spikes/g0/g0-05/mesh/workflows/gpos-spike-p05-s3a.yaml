@@ -1,0 +1,52 @@
+# G0-05 s3a: photo artifact -> agent node gpos-spike-p05-scout-la
+# (fast, load_artifact), because describe_image as a tool node has no
+# multimodal LLM in a workflow on 2.542.1 (S1 FAIL).
+kind: workflow
+name: gpos-spike-p05-s3a
+description: >-
+  Gate 0 spike G0-05 S3a: the event rule attaches the photo (artifactProcessing, user: prefix); the first node is the scout agent reading it with load_artifact.
+spec:
+  appConfig:
+    version: "0.1.0"
+    workflow_timeout: "40s"
+    default_node_timeout: "30s"
+    fail_fast: true
+    skills:
+      - id: gpos_spike_p05_s3a
+        name: G0-05 s3a
+        description: photo artifact to scout agent node (Gate 0).
+    input_schema:
+      type: object
+      required: [scan_id, photo_name]
+      properties:
+        scan_id: {type: string}
+        photo_name: {type: string}
+        device: {type: [string, "null"]}
+        store: {type: [string, "null"]}
+    nodes:
+      - id: scan
+        type: agent
+        agent_name: gpos-spike-p05-scout-la
+        timeout: "30s"
+        input:
+          filename: "{{workflow.input.photo_name}}"
+          scan_id: "{{workflow.input.scan_id}}"
+        instruction: >-
+          Call load_artifact exactly once with the given filename, read the
+          price tag and return exactly these keys: readable, product_text,
+          pack_size, price_eur, unit_price, valid_text, confidence.
+        output_schema_override:
+          type: object
+          required: [readable, price_eur, confidence]
+          properties:
+            readable: {type: boolean}
+            product_text: {type: string}
+            pack_size: {type: string}
+            price_eur: {type: [number, "null"]}
+            unit_price: {type: string}
+            valid_text: {type: string}
+            confidence: {type: number}
+    output_mapping:
+      scan_id: "{{workflow.input.scan_id}}"
+      variant: "s3a"
+      reading: "{{scan.output}}"

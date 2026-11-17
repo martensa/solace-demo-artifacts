@@ -1,0 +1,22 @@
+seq     event                          B verdict         dur_s sha_eq topic
+p01-01  PositionAdded               2626 price_trigger    0.09 True   gpos/spike/p01/out/ok
+p01-02  PositionAdded               4118 none             0.07 True   gpos/spike/p01/out/ok
+p01-03  PositionAdded               5256 none             0.10 True   gpos/spike/p01/out/ok
+p01-04  PositionAdded               2615 none             0.06 True   gpos/spike/p01/out/ok
+p01-05  PositionAdded               3749 price_trigger    0.06 True   gpos/spike/p01/out/ok
+p01-06  LoyaltyMembershipAssigned   4428 member           0.06 True   gpos/spike/p01/out/ok
+p01-07  PaymentProcessStarted       4032 none             0.08 True   gpos/spike/p01/out/ok
+p01-08  PositionAdded               2625 none             0.07 True   gpos/spike/p01/out/ok
+p01-09  PositionAdded               4125 none             0.06 True   gpos/spike/p01/out/ok
+p01-10  PositionAdded               5232 none             0.06 True   gpos/spike/p01/out/ok
+p01-11  PositionAdded               2626 price_trigger    0.05 True   gpos/spike/p01/out/ok
+p01-12  LoyaltyMembershipAssigned   3305 member           0.09 True   gpos/spike/p01/out/ok
+p01-13  PositionAdded               3737 none             0.06 True   gpos/spike/p01/out/ok
+p01-14  PaymentProcessStarted       4031 none             0.07 True   gpos/spike/p01/out/ok
+p01-15  PositionAdded               2627 none             0.06 True   gpos/spike/p01/out/ok
+p01-16  LoyaltyMembershipAssigned   3305 member           0.08 True   gpos/spike/p01/out/ok
+p01-17  PositionAdded               3738 none             0.06 True   gpos/spike/p01/out/ok
+p01-18  PaymentProcessStarted       4032 none             0.07 True   gpos/spike/p01/out/ok
+p01-19  PositionAdded               2634 none             0.06 True   gpos/spike/p01/out/ok
+p01-20  PositionAdded               3755 none             0.08 True   gpos/spike/p01/out/ok
+JSON-equal 20/20

@@ -1,0 +1,29 @@
+{
+ "@type": "type.googleapis.com/de.showcase.loyalty.v1.event.PointsEarned",
+ "header": {
+  "eventTimestamp": {
+   "seconds": "1802871220",
+   "nanos": 507000000
+  }
+ },
+ "metadata": {
+  "offset": "9",
+  "creationTimestamp": {
+   "seconds": "1802871220",
+   "nanos": 491000000
+  },
+  "traceId": "v-0217-0042.close"
+ },
+ "membershipId": "M-0001",
+ "accountId": "ACC-M-0001-POINTS",
+ "amount": {
+  "scale": 0,
+  "intVal": "4"
+ },
+ "balanceAfter": {
+  "scale": 0,
+  "intVal": "1244"
+ },
+ "purchaseTransactionId": "5b1f0c2e-8d4a-4f6b-9a1e-2c7d3e4f5a60",
+ "promotionId": "promotion-base-points"
+}

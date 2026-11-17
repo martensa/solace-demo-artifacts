@@ -1,0 +1,83 @@
+# TEMPLATE -- rendered by spikes/g0/render.sh into spikes/g0/.rendered/
+# (broker credentials from bsg-trading-desk-demo/.env, never in a file
+# under version control). Same transport as the BSG demo: web transport
+# 8008 on VPN default, so test events can be published over MQTT 1883.
+#
+# Rule hil_a: events on gpos/spike/hil/a/> start gpos-spike-hil-a under
+# marktleitung@solace.lab. on_receive, because a run that waits for a
+# human outlives any ack timeout (T12 checks on_completion separately).
+kind: entrypoint
+name: gpos-spike-events
+description: >-
+  Gate 0 spike entrypoint of the EuroCIS price agent: test events on
+  gpos/spike/> start the spike workflows.
+spec:
+  type: event_mesh
+  deploy: true
+  values:
+    broker_url: "ws://host.docker.internal:8008"
+    broker_vpn: "default"
+    broker_username: "__BROKER_USERNAME__"
+    broker_password: "__BROKER_PASSWORD__"
+    tls_skip_verify: "false"
+    event_rules:
+      - name: hil_a
+        subscriptions:
+          - topic: "gpos/spike/hil/a/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-hil-a
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/out/ok"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/out/err"
+          topicType: static
+          responseType: error
+      - name: hil_b1
+        subscriptions:
+          - topic: "gpos/spike/hil/b1/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-hil-b1
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/out/ok"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/out/err"
+          topicType: static
+          responseType: error
+      - name: notify
+        subscriptions:
+          - topic: "gpos/spike/notify/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-spike-notify
+        inputExpression: "input.payload:"
+        defaultUserIdentity: marktleitung@solace.lab
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/spike/out/ok"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/spike/out/err"
+          topicType: static
+          responseType: error

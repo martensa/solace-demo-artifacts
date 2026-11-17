@@ -1,0 +1,34 @@
+rendered: <repo>/gebit-price-agent-demo/spikes/g0/g0-10/.rendered (deploy=true)
+using auto-detected manifest: manifest.yaml
+deploying entrypoint/gpos-spike-ep-p10 (update)...
+workflows/
+  - gpos-spike-hil-a     delete (needs --prune)
+  - gpos-spike-hil-b1    delete (needs --prune)
+  - gpos-spike-notify    delete (needs --prune)
+  - gpos-spike-p09-b1    delete (needs --prune)
+  - gpos-spike-p09-b1h   delete (needs --prune)
+  - gpos-spike-p09-write  delete (needs --prune)
+  = gpos-spike-p10-echo  no change
+7 workflows: 0 create, 0 update, 6 delete, 1 unchanged
+entrypoints/
+  ~ gpos-spike-ep-p10    update + deploy
+  - developer-mcp        delete (needs --prune)
+  - gpos-spike-ep-p09    delete (needs --prune)
+  - gpos-spike-events    delete (needs --prune)
+4 entrypoints: 0 create, 1 update, 3 delete, 0 unchanged
+
+Applied workflows:
+  - gpos-spike-hil-a     skipped (use --prune to delete)
+  - gpos-spike-hil-b1    skipped (use --prune to delete)
+  - gpos-spike-notify    skipped (use --prune to delete)
+  - gpos-spike-p09-b1    skipped (use --prune to delete)
+  - gpos-spike-p09-b1h   skipped (use --prune to delete)
+  - gpos-spike-p09-write  skipped (use --prune to delete)
+
+Applied entrypoints:
+  ~ gpos-spike-ep-p10    updated
+  - developer-mcp        skipped (use --prune to delete)
+  - gpos-spike-ep-p09    skipped (use --prune to delete)
+  - gpos-spike-events    skipped (use --prune to delete)
+Deployments:
+  * gpos-spike-ep-p10    deploy (update) completed

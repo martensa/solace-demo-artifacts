@@ -1,0 +1,32 @@
+# policy/pricing-policy.yaml -- single parameter set of the engine (UC1)
+version: "uc1-1"
+signals:
+  slow_seller: {max_sell_through: 0.5, min_weeks_of_supply: 6.0, min_listed_days: 28,
+                strong_sell_through: 0.3}
+  season_end: {window_days: 14, min_leftover_share: 0.4}
+  customer_behaviour: {min_member_buys_8w: 2, min_overdue_factor: 1.5,
+                       min_cardholder_drop_pct: 30.0, min_prior_weekly: 5.0}
+  on_plan: {min_sell_through: 0.8}
+  trend: {rising_factor: 1.15, falling_factor: 0.85}
+suggested_step:
+  slow_seller: {strong: 20, default: 10}
+  season_end: {ended: 30, within_7_days: 20, default: 10}
+  customer_behaviour: 10
+reason_priority: [season_end, slow_seller, customer_behaviour]
+guardrails:
+  steps_pct: [10, 20, 30]
+  min_margin_pct: 20.0
+  price_endings_cents: [99, 89, 79, 49]
+  action_days: 7
+  action_end_time: "20:00"
+  max_open_per_till: 1
+texts:
+  headline_max: 70
+  rationale_max: 240
+  facts_line_max: 120
+review:
+  max_candidates_in_agent_input: 4
+  max_blocked_in_agent_input: 4
+  max_no_action_names: 6
+  agent_input_max_bytes: 1000
+  facts_short_chars: 80

@@ -1,0 +1,76 @@
+# SKETCH -- Helm overlay for SAM 2.542.1 (chart 2.3.10) on AKS.
+# Applied AFTER agent-mesh-deployment/local-k8s-values.yaml:
+#   helm upgrade --install agent-mesh "$SAM_CHART_PATH" -n sam-solace-lab \
+#     -f agent-mesh-deployment/local-k8s-values.yaml -f sam-values-aks.yaml \
+#     --set-string ... (secrets from .env.aks)
+# Placeholders: DEMO_DOMAIN, ACR, PGHOST, STORAGE_ACCOUNT, UAMI_CLIENT_ID.
+sam:
+  dnsName: "sam.DEMO_DOMAIN"
+ingress:
+  host: "sam.DEMO_DOMAIN"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "900"
+    # new: multi-modal uploads (default client_max_body_size is 1m)
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    cert-manager.io/cluster-issuer: "letsencrypt-dns"
+  tls:
+    - secretName: sam-tls
+      hosts:
+        - "sam.DEMO_DOMAIN"
+broker:
+  # in-cluster PubSub+ (solacecharts/pubsubplus), dedicated client user
+  url: "tcp://solace-pubsubplus.solace.svc.cluster.local:55555"
+  clientUsername: "sam"
+  password: ""        # --set-string broker.password=... from .env.aks
+  vpn: "sam"
+global:
+  imageRegistry: ""
+  imagePullSecrets: []   # ACR attached to AKS (kubelet identity AcrPull)
+  persistence:
+    enabled: false       # external: Azure PG Flexible + Azure Blob
+    namespaceId: "sam-solace-lab"
+dataStores:
+  database:
+    host: "PGHOST.postgres.database.azure.com"
+    port: "5432"
+    adminUsername: "pgadmin"
+    adminPassword: ""         # --set-string from .env.aks
+    applicationPassword: ""   # --set-string; immutable after 1st install
+  objectStorage:
+    type: "azure"
+    workloadIdentity:
+      enabled: true
+  azure:
+    accountName: "STORAGE_ACCOUNT"
+    containerName: "sam-artifacts"
+    connectorSpecContainerName: "sam-artifacts"
+samDeployment:
+  serviceAccount:
+    name: "agent-mesh-solace-agent-mesh-sa"
+    annotations:
+      azure.workload.identity/client-id: "UAMI_CLIENT_ID"
+  gwe:
+    image:
+      registry: "ACR.azurecr.io"
+  str:
+    image:
+      registry: "ACR.azurecr.io"
+    resources:
+      requests: {cpu: "500m", memory: 2Gi}
+      limits: {cpu: "4", memory: 6Gi}
+  awe:
+    resources:
+      requests: {cpu: "1", memory: 1500Mi}
+      limits: {cpu: "4", memory: 3Gi}
+  dbInit:
+    image:
+      registry: "ACR.azurecr.io"
+  s3Init:
+    image:
+      registry: "ACR.azurecr.io"   # unused with external persistence

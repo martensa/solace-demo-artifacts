@@ -1,0 +1,18 @@
+# G0-05 S5: MCP stub (k8s/photo-stub.yaml) with a manifest list, so the
+# workflow tool node can bind without live discovery.
+kind: connector
+name: gpos-spike-p05-photo
+description: >-
+  Gate 0 spike G0-05 S5: load_photo returns a stored competitor photo as
+  MCP image content (stand-in for media.photo).
+spec:
+  type: mcp
+  subtype: remote
+  values:
+    server_url: http://gpos-spike-p05-photo.gpos-g0.svc:8766/mcp
+    connection_type: streamable-http
+    auth_type: none
+    manifest:
+      - name: "load_photo"
+        description: "Load the stored photo of one competitor scan (stand-in for media.photo). Returns the JPEG as MCP image content."
+        inputSchema: {"properties": {"scan_id": {"title": "Scan Id", "type": "string"}, "run_id": {"default": "", "title": "Run Id", "type": "string"}}, "required": ["scan_id"], "title": "load_photoArguments", "type": "object"}

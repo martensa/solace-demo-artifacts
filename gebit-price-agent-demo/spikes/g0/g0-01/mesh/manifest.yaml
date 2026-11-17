@@ -1,0 +1,17 @@
+# G0-01 spike package (prefix gpos-spike-p01). Applied with
+#   sam config apply   (in this directory; NEVER --prune)
+# The entrypoint is rendered separately (../render.sh -> ../.rendered/).
+kind: manifest
+name: gpos-g0-01
+description: >-
+  Gate 0 spike G0-01: MCP stub connector and the raw-event workflow.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  connectors:
+    - gpos-spike-p01-tools
+  workflows:
+    - gpos-spike-p01-pos

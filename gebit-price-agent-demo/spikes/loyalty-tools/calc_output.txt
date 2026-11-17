@@ -1,0 +1,41 @@
+
+== TR1 GEBIT Ente (slow seller): p0 8.67 vat 19 cost 4.40 avail 42 v 0.85/h eps -2.0 H 30 h w 0.4 target_end 0 ref30 8.67
+ step  price  shown   units  left    GP     dGP  margin  blocked
+ none   8.67           25.5  16.5    44.5   +0.0   39.6%  
+   10   7.79   -10%    31.6  10.4    49.5   +4.9   32.8%  
+   20   6.89   -20%    40.4   1.6    53.3   +8.7   24.0%  
+   30   5.99   -30%    42.0   0.0    26.6  -17.9   12.6%  margin<20
+   40   4.99   -42%    42.0   0.0    -8.7  -53.2   -4.9%  margin<20,disc>30
+ -> slot A: 6.89 (shown -20 %), dGP +8.7
+
+== TR2 Kaffeepads 36 St (overstock + Lieferavis): p0 4.99 vat 7 cost 2.45 avail 112 v 1.4/h eps -2.2 H 30 h w 0.3 target_end 34 ref30 4.99
+ step  price  shown   units  left    GP     dGP  margin  blocked
+ none   4.99           42.0  36.0    66.5   +0.0   47.5%  
+   10   4.49   -10%    53.0  25.0    74.1   +7.6   41.6%  
+   20   3.99   -20%    68.7   9.3    81.0  +14.5   34.3%  
+   30   3.49   -30%    92.2   0.0    74.9   +8.3   24.9%  
+   40   2.99   -40%   112.0   0.0    38.6  -27.9   12.3%  disc>30
+ -> slot A: 3.99 (shown -20 %), dGP +14.5
+
+== TR6 Valentins-Pralinen (season end): p0 6.99 vat 7 cost 3.20 avail 60 v 0.36/h eps -2.0 H 66 h w 0.6 target_end 0 ref30 6.99
+ step  price  shown   units  left    GP     dGP  margin  blocked
+ none   6.99           23.8  36.2     9.6   +0.0   51.0%  
+   10   5.99   -14%    32.4  27.6    24.5  +14.9   42.8%  
+   20   5.49   -21%    38.5  21.5    33.1  +23.5   37.6%  
+   30   4.89   -30%    48.5  11.5    44.5  +34.9   30.0%  
+   40   3.99   -42%    60.0   0.0    31.7  +22.1   14.2%  disc>30
+ -> slot A: 4.89 (shown -30 %), dGP +34.9
+
+== TR3 Espresso vs competitor 6.99: eps_rel -3.82 (from 0.9/h observed vs plan 1.5/h)
+  7.99: v 0.90/h units  37.8 GP  123.5 margin  43.8% gap 14.3% shown -0% stock_ok True
+  7.49: v 1.15/h units  48.4 GP  135.5 margin  40.0% gap  7.2% shown -6% stock_ok True
+  6.99: v 1.50/h units  63.0 GP  147.0 margin  35.7% gap  0.0% shown -12% stock_ok True
+
+== TR4 Guacamole tied offer: 2.99 -> 2.09, net 1.953, margin 30.9%, unit price 1 kg = 10.45
+  anonymous: P_accept 0.35 E[GP] 0.211 score 0.068
+  Filmabend (Snacks/Dips): P_accept 0.35 E[GP] 0.211 score 0.113
+  TR5 Cantuccini 200 g: 2.29 -> 1.60 margin 36.5% E[GP] 0.191 clear 0.000 score 0.121
+  TR5 Kaffeepads 36 St: 4.99 -> 3.49 margin 24.9% E[GP] 0.284 clear 0.236 score 0.104
+  points for 8.67 EUR: 4
+  points for 14.88 EUR: 7
+  points for 12.16 EUR: 6

@@ -1,0 +1,2 @@
+{"t": 1794391226.962, "kind": "sent", "topic": "gpos/spike/p05/s3b/iv/s3biv-1-96bbf0", "scan_id": "s3biv-1-96bbf0", "img": "competitor_tag_150k.jpg", "img_bytes": 151878, "payload_bytes": 202699}
+{"t": 1794391229.934, "kind": "recv", "topic": "gpos/spike/p05/out/ok/s3biv", "scan_id": "s3biv-1-96bbf0", "dt": 2.99, "body": "```json\n{\n  \"readable\": true,\n  \"product_text\": \"Bio Vollmilch 3,8%\",\n  \"pack_size\": \"1 l\",\n  \"price_eur\": 1.19,\n  \"unit_price\": \"1 l = 1,19 €\",\n  \"valid_text\": \"FRISCHMARKT\",\n  \"confidence\": 0.95\n}\n```"}

@@ -1,0 +1,34 @@
+{
+ "@type": "type.googleapis.com/de.showcase.loyalty.v1.datatype.MembershipResolution",
+ "membershipIdentificationValue": "CLUB-0001",
+ "membershipId": "M-0001",
+ "programId": "POINTS-ID",
+ "programName": "POINTS",
+ "customerId": "CUST-DEMO-0001",
+ "anonymous": false,
+ "verified": true,
+ "status": "MEMBERSHIP_STATUS_ACTIVE",
+ "coupons": [],
+ "accounts": [
+  {
+   "accountId": "ACC-M-0001-POINTS",
+   "accountType": "POINTS-ACCOUNT-ID",
+   "accountCurrencyName": "Points",
+   "accountBalance": {
+    "scale": 0,
+    "intVal": "1240"
+   }
+  }
+ ],
+ "membershipPreferences": [
+  {
+   "key": "showcase.personaLabel",
+   "typedValue": {
+    "stringValue": "Kaffeepause"
+   }
+  }
+ ],
+ "receiptTextLines": [
+  "Markt-Bonus: 1240 Punkte"
+ ]
+}

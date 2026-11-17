@@ -1,0 +1,58 @@
+# mesh/workflows/gpos-pos-event.yaml
+kind: workflow
+name: gpos-pos-event
+description: >-
+  One run per GEBIT Purchase API event of the booth till: the engine ingests and
+  analyses it (per-scan insight, no model); a closed transaction raises the basket
+  review.
+spec:
+  appConfig:
+    version: "0.1.0"
+    workflow_timeout: "20s"
+    default_node_timeout: "6s"
+    fail_fast: true
+    skills:
+      - id: gpos_pos_event
+        name: GEBIT POS event
+        description: Analyse one POS event of the booth till.
+    nodes:
+      - id: assess
+        type: tool
+        connector: gpos-booth-tools
+        tool: assess_event
+        timeout: "5s"
+        input:
+          raw: "{{workflow.input.text}}"
+          run_id: "{{workflow.run_id}}"
+      - id: route
+        type: switch
+        depends_on: [assess]
+        cases:
+          - condition: "'{{assess.output.mcp_structured_content.verdict}}' == 'close'"
+            node: raise
+        default: done
+      - id: raise
+        type: tool
+        connector: gpos-booth-tools
+        tool: raise_basket_review
+        depends_on: [route]
+        input:
+          tx_id: "{{assess.output.mcp_structured_content.tx_id}}"
+          run_id: "{{workflow.run_id}}"
+      - id: done
+        type: tool
+        connector: gpos-booth-tools
+        tool: note_event
+        depends_on: [route]
+        input:
+          event_key: "{{assess.output.mcp_structured_content.event_key}}"
+          verdict: "{{assess.output.mcp_structured_content.verdict}}"
+          run_id: "{{workflow.run_id}}"
+    output_mapping:
+      verdict: "{{assess.output.mcp_structured_content.verdict}}"
+      event_key: "{{assess.output.mcp_structured_content.event_key}}"
+      insight: "{{assess.output.mcp_structured_content.insight_code}}"
+      review_id:
+        coalesce:
+          - "{{raise.output.mcp_structured_content.review_id}}"
+          - "none"

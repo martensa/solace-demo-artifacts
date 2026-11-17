@@ -1,0 +1,17 @@
+# gpos-demo image build context (UC1-BUILD-SPEC 12.1, 12.2): whitelist.
+# Only the app code, its pins, the Showcase protos, master data and the policy go in.
+# Never spikes/, research/, build/, mesh/, k8s/, scripts/, postgres/, .env*, .venv/,
+# and never any GEBIT material (descriptor sets are mounted at runtime only).
+*
+!app/Dockerfile
+!app/requirements.txt
+!app/gposdemo
+!proto
+!data
+!policy
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+**/.env*
+**/*.pb
+**/*.zip

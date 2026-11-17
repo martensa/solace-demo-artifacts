@@ -1,0 +1,66 @@
+# G0-09 Part B: own copy of the G0-02 B1 spike workflow (baseline),
+# names changed only; measures duplicate gated calls.
+# Question: does the agent's tool approval reach marktleitung's SAM
+# inbox and resume the run when the run was started by an event?
+kind: workflow
+name: gpos-spike-p09-b1
+description: >-
+  Gate 0 spike G0-09 B1 (copy of G0-02 B1): approval through an agent node with a gated
+  tool in an event-triggered run, notify_user after the approval.
+spec:
+  appConfig:
+    version: "0.1.1"
+    workflow_timeout: "15m"
+    default_node_timeout: "10s"
+    fail_fast: true
+    skills:
+      - id: gpos_spike_p09_b1
+        name: HIL spike B1
+        description: Agent-node approval spike (Gate 0).
+    input_schema:
+      type: object
+      properties:
+        seq: {type: [string, "null"]}
+        note: {type: [string, "null"]}
+    tools:
+      - tool_type: builtin-group
+        group_name: notification_tools
+    nodes:
+      - id: apply
+        type: agent
+        agent_name: gpos-spike-p09-approver
+        timeout: "12m"
+        instruction: >-
+          Call get_current_time exactly once, then return status and time.
+        input:
+          seq: "{{workflow.input.seq}}"
+        output_schema_override:
+          type: object
+          required: [status, time]
+          properties:
+            status: {type: string}
+            time: {type: string}
+      - id: tell
+        type: tool
+        tool_name: notify_user
+        depends_on: [apply]
+        when: "'{{apply.output.status}}' == 'applied'"
+        timeout: "5s"
+        input:
+          title: "Spike G0-09 B1: Preis aktiv"
+          message: "Freigabe angewendet (seq {{workflow.input.seq}}, {{apply.output.time}})."
+          channels: ["web"]
+      - id: tell_fail
+        type: tool
+        tool_name: notify_user
+        timeout: "5s"
+        input:
+          title: "Spike G0-09 B1: Lauf beendet ohne Freigabe"
+          message: "seq {{workflow.input.seq}}: {{workflow.error.message}}"
+          channels: ["web"]
+    on_exit:
+      on_failure: tell_fail
+    output_mapping:
+      seq: "{{workflow.input.seq}}"
+      status: "{{apply.output.status}}"
+      time: "{{apply.output.time}}"

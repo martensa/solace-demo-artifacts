@@ -1,0 +1,2 @@
+{"t": 1794390299.358, "kind": "sent", "topic": "gpos/spike/p05/s3/sc/s3sc-1-5253b2", "scan_id": "s3sc-1-5253b2", "img": "competitor_tag.jpg", "img_bytes": 66978, "payload_bytes": 89496}
+{"t": 1794390299.42, "kind": "recv", "topic": "gpos/spike/p05/out/err/s3sc", "scan_id": "s3sc-1-5253b2", "dt": 0.07, "body": {"code": -32603, "message": "Workflow \"gpos-spike-p05-s1a\" failed: node \"read\" failed: tool \"describe_image\" error: artifact resolution for describe_image: artifact parameter \"input_image\": artifact \"cp-s3sc-1-5253b2.jpg\" not found"}}

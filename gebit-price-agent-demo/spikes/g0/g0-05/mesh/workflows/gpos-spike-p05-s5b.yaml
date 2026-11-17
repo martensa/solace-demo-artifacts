@@ -1,0 +1,58 @@
+# G0-05 s5b: photo artifact -> agent node gpos-spike-p05-scout-la
+# (fast, load_artifact), because describe_image as a tool node has no
+# multimodal LLM in a workflow on 2.542.1 (S1 FAIL).
+kind: workflow
+name: gpos-spike-p05-s5b
+description: >-
+  Gate 0 spike G0-05 S5b: load_photo MCP tool node, then the scout agent reads the created artifact with load_artifact.
+spec:
+  appConfig:
+    version: "0.1.0"
+    workflow_timeout: "40s"
+    default_node_timeout: "30s"
+    fail_fast: true
+    skills:
+      - id: gpos_spike_p05_s5b
+        name: G0-05 s5b
+        description: photo artifact to scout agent node (Gate 0).
+    input_schema:
+      type: object
+      required: [scan_id]
+      properties:
+        scan_id: {type: string}
+    nodes:
+      - id: photo
+        type: tool
+        connector: gpos-spike-p05-photo
+        tool: load_photo
+        timeout: "15s"
+        input:
+          scan_id: "{{workflow.input.scan_id}}"
+          run_id: "{{workflow.run_id}}"
+      - id: scan
+        type: agent
+        agent_name: gpos-spike-p05-scout-la
+        depends_on: [photo]
+        timeout: "30s"
+        input:
+          filename: "{{photo.output.created_artifact}}"
+          scan_id: "{{workflow.input.scan_id}}"
+        instruction: >-
+          Call load_artifact exactly once with the given filename, read the
+          price tag and return exactly these keys: readable, product_text,
+          pack_size, price_eur, unit_price, valid_text, confidence.
+        output_schema_override:
+          type: object
+          required: [readable, price_eur, confidence]
+          properties:
+            readable: {type: boolean}
+            product_text: {type: string}
+            pack_size: {type: string}
+            price_eur: {type: [number, "null"]}
+            unit_price: {type: string}
+            valid_text: {type: string}
+            confidence: {type: number}
+    output_mapping:
+      scan_id: "{{workflow.input.scan_id}}"
+      variant: "s5b"
+      reading: "{{scan.output}}"

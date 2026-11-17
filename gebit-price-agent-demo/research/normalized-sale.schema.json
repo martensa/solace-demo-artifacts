@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:eurocis-price-agent:normalized-sale:1",
+  "title": "NormalizedSale",
+  "description": "One finalized GEBIT receipt (Receipt API v2) flattened for sales-velocity analytics. Derived only from PurchaseTransactionClosed / PurchaseTransactionFinalized.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source", "receipt_id", "receipt_number", "status",
+               "location", "store_id", "pos_id", "finalized_at", "utc_offset_min",
+               "local_date", "local_hour", "currency", "total_gross", "total_net",
+               "total_tax", "total_discount", "lines"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "source": {"enum": ["simulator", "gebit-lab"]},
+    "receipt_api_version": {"type": "string", "description": "PurchaseTransactionClosed.serialized_receipt_version"},
+    "event_offset": {"type": "integer", "description": "metadata.offset of the closing event"},
+    "receipt_id": {"type": "string", "format": "uuid", "description": "Receipt.receipt_id == purchase_transaction_id; idempotency key"},
+    "receipt_number": {"type": "string"},
+    "receipt_type": {"type": "string", "description": "Receipt.receipt_type, e.g. SALE"},
+    "status": {"enum": ["CLOSED", "CANCELED", "SUSPENDED"]},
+    "voided_receipt_id": {"type": ["string", "null"], "description": "receipt_reference.referenced_receipt_id when type VOID"},
+    "location": {"type": "string", "description": "Receipt.location, e.g. Root.DE.999.101.01"},
+    "store_id": {"type": "string"},
+    "pos_id": {"type": "string"},
+    "application_mode": {"type": ["string", "null"]},
+    "opened_at": {"type": "string", "format": "date-time"},
+    "finalized_at": {"type": "string", "format": "date-time"},
+    "utc_offset_min": {"type": "integer"},
+    "local_date": {"type": "string", "format": "date"},
+    "local_hour": {"type": "integer", "minimum": 0, "maximum": 23},
+    "basket_seconds": {"type": "number", "minimum": 0},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "total_gross": {"type": "number"},
+    "total_net": {"type": "number"},
+    "total_tax": {"type": "number"},
+    "total_discount": {"type": "number"},
+    "units_total": {"type": "number"},
+    "taxes": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["tax_class", "tax_amount"],
+        "properties": {
+          "tax_class": {"type": "string"}, "rate": {"type": "number"},
+          "net": {"type": "number"}, "tax_amount": {"type": "number"}, "gross": {"type": "number"}
+        }
+      }
+    },
+    "tenders": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "txn_type", "amount"],
+        "properties": {
+          "kind": {"enum": ["cash", "eft", "online", "coupon", "promotion", "financing", "fixed_value_voucher", "other"]},
+          "txn_type": {"enum": ["PAYMENT", "CHANGE", "ROUNDING", "CASHBACK", "UNSPECIFIED"]},
+          "amount": {"type": "number"},
+          "scheme": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "loyalty": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "properties": {
+        "member_ref": {"type": ["string", "null"], "description": "pseudonymised membership_id (hash), never the raw card number"},
+        "program_id": {"type": ["string", "null"]},
+        "anonymous": {"type": "boolean"},
+        "points_earned": {"type": "number"},
+        "points_burned": {"type": "number"},
+        "coupons_applied": {"type": "array", "items": {"type": "string"}},
+        "checkout_coupons": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "customer_ref": {"type": ["string", "null"], "description": "pseudonymised CustomerData.customer_id"},
+    "fiscal": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "fiscal_transaction_id": {"type": ["string", "null"]},
+        "transaction_no": {"type": ["integer", "null"]},
+        "simulated": {"type": "boolean"}
+      }
+    },
+    "extensions": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean", "null"]}},
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["position_id", "line_no", "scanned_at", "article_id", "movement",
+                     "effectual", "item_count", "unit", "quantity", "sold_units",
+                     "unit_price", "base_value", "discount_total", "effective_value",
+                     "net_value", "tax_value"],
+        "properties": {
+          "position_id": {"type": "string"},
+          "line_no": {"type": "integer", "minimum": 1},
+          "scanned_at": {"type": "string", "format": "date-time"},
+          "article_id": {"type": "string"},
+          "article_number": {"type": ["string", "null"]},
+          "gtin": {"type": ["string", "null"], "description": "capturing_information.input_value when input_type is an EAN/GTIN"},
+          "description": {"type": "string"},
+          "article_kind": {"enum": ["regular", "deposit", "service_counter", "other"]},
+          "movement": {"enum": ["sale", "return"]},
+          "effectual": {"type": "boolean", "description": "false = voided/not counted; keep the row, exclude from velocity"},
+          "item_count": {"type": "integer", "description": "signed, negative for returns"},
+          "unit": {"type": "string"},
+          "quantity": {"type": "number"},
+          "sold_units": {"type": "number", "description": "item_count for UNIT_PIECE, else item_count*quantity (in unit)"},
+          "unit_price": {"type": "number", "description": "price_per_unit (gross in PRICING_MODE_GROSS)"},
+          "price_source": {"type": ["string", "null"]},
+          "base_value": {"type": "number"},
+          "discount_total": {"type": "number"},
+          "effective_value": {"type": "number"},
+          "net_value": {"type": "number"},
+          "tax_value": {"type": "number"},
+          "tax_class": {"type": ["string", "null"]},
+          "tax_rate": {"type": ["number", "null"]},
+          "promotion_ids": {"type": "array", "items": {"type": "string"}},
+          "discounts": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "properties": {
+                "discount_id": {"type": "string"}, "type": {"type": "string"},
+                "amount": {"type": "number"}, "percentage": {"type": ["number", "null"]},
+                "promotion_id": {"type": ["string", "null"]}, "reason_code": {"type": ["string", "null"]},
+                "description": {"type": "string"}
+              }
+            }
+          },
+          "points_earned": {"type": "number"},
+          "input_method": {"type": ["string", "null"]},
+          "agent_proposal_id": {"type": ["string", "null"], "description": "demo hook: extension property linking the sale to an approved agent proposal"}
+        }
+      }
+    }
+  }
+}

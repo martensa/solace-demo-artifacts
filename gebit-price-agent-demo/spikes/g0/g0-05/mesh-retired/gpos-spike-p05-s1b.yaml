@@ -1,0 +1,46 @@
+# G0-05 S1/S3 variant b: describe_image as tool node, input = artifact
+# attached by the entrypoint (artifactProcessing). model=claude-haiku-4-5-20251001 api_base=https://lite-llm.mymaas.net
+kind: workflow
+name: gpos-spike-p05-s1b
+description: >-
+  Gate 0 spike G0-05 S1 variant b: describe_image tool node reads the
+  photo artifact that the event rule attached.
+spec:
+  appConfig:
+    version: "0.1.0"
+    workflow_timeout: "40s"
+    default_node_timeout: "30s"
+    fail_fast: true
+    skills:
+      - id: gpos_spike_p05_s1b
+        name: G0-05 S1 b
+        description: describe_image tool node spike (Gate 0).
+    input_schema:
+      type: object
+      required: [scan_id, photo_name]
+      properties:
+        scan_id: {type: string}
+        photo_name: {type: string}
+        device: {type: [string, "null"]}
+        store: {type: [string, "null"]}
+    tools:
+      - tool_type: builtin
+        tool_name: describe_image
+        tool_config:
+          model: "claude-haiku-4-5-20251001"
+          api_base: "https://lite-llm.mymaas.net"
+          api_key: "${P05_LLM_KEY}"
+    nodes:
+      - id: read
+        type: tool
+        tool_name: describe_image
+        timeout: "30s"
+        input:
+          input_image: "{{workflow.input.photo_name}}"
+          prompt: "Read the price tag or flyer. Answer only with JSON: {\"readable\": bool, \"product_text\": str, \"pack_size\": str, \"price_eur\": number, \"unit_price\": str, \"valid_text\": str, \"confidence\": number}. If the price is not clearly legible, set readable to false and price_eur to null."
+    output_mapping:
+      scan_id: "{{workflow.input.scan_id}}"
+      variant: "s1b"
+      description: "{{read.output.description}}"
+      image_filename: "{{read.output.image_filename}}"
+      image_version: "{{read.output.image_version}}"

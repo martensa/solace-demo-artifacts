@@ -1,0 +1,3 @@
+awe: n=24 (11:02:41-11:08:34, every 15 s) cpu min 7m median 10m max 38m; mem 466..531Mi
+gwe: n=24 (11:02:41-11:08:34, every 15 s) cpu min 15m median 20m max 34m; mem 313..323Mi
+str: n=24 (11:02:41-11:08:34, every 15 s) cpu min 21m median 25m max 132m; mem 379..393Mi

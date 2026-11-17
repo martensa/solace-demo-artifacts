@@ -1,0 +1,36 @@
+# gpos-config: the non-secret settings of spec 3.1 (lab values). Secrets live in
+# gpos-broker (SOLACE_*) and gpos-db (DSN_*); GPOS_DSN, GRPC_PORT, MCP_PORT and
+# HTTP_PORT are set per Deployment. scripts/install.sh k8s overlays the keys
+# GPOS_DEMO_DATE, GPOS_*_LOCATION, GPOS_DELIVERY, GATE_MIN_DELAY_S, GATE_GUARD
+# and SAM_URL from .env after `kubectl apply -k`. No LLM endpoint, key or model.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpos-config
+data:
+  GPOS_DEMO_DATE: "2027-02-16"
+  GPOS_TZ: Europe/Berlin
+  GPOS_COUNTRY: DE
+  GPOS_COMPANY: "999"
+  GPOS_BOOTH_LOCATION: Root.DE.999.101.01
+  GPOS_TEST_LOCATION: Root.DE.999.199.99
+  GPOS_PROBE_LOCATION: Root.DE.999.199.98
+  GPOS_DELIVERY: direct
+  GPOS_BUS: solace
+  GEBIT_DESCRIPTOR_SETS: /descriptors/purchase-api-2.50.0.pb:/descriptors/receipt-api-2.13.0.pb
+  SHOWCASE_DESCRIPTOR_SET: /app/descriptors/showcase.pb
+  POS_GRPC: gpos-pos:50051
+  WWS_GRPC: gpos-wws:50053
+  LOYALTY_GRPC: gpos-loyalty:50052
+  ENGINE_URL: http://gpos-engine:8765
+  POS_ADMIN_URL: http://gpos-pos:8771
+  POLICY_FILE: /app/policy/pricing-policy.yaml
+  DATA_DIR: /app/data
+  STALE_SECONDS: "20"
+  CLOSE_MAX_AGE_SECONDS: "300"
+  PROPOSAL_EXPIRY_SECONDS: "150"
+  GATE_MIN_DELAY_S: "3"
+  GATE_GUARD: block
+  GPOS_TOOL_STORE: "101"
+  SAM_URL: https://sam.solace.lab
+  LOG_LEVEL: INFO

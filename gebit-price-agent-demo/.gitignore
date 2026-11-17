@@ -1,0 +1,38 @@
+# gebit-price-agent-demo (spec 12.1): keep secrets, caches, build and
+# run output, rendered manifests and captured SAM product output out
+# of git. GEBIT vendor material (descriptor sets, API docs, sample
+# events, mail) never lives in this tree; scripts/check_hygiene.sh
+# checks the known GEBIT file names and de.gebit protos.
+.env
+.env.*
+!.env.example
+.venv/
+build/
+# Any render output dir (mesh/, spikes/**/, the planned .rendered-aks/)
+.rendered*/
+postgres/.generated/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+# Descriptor sets are build output (make protos). Exception: our own
+# showcase set, the validation basis of the loyalty spike.
+*.pb
+!spikes/loyalty-tools/showcase-loyalty-v1.pb
+# Captured SAM product output and generated files, not our own work:
+# CLI strings/schema dumps, OpenAPI, 401 capture (spikes/hitl/),
+# rendered chart, CLI doc excerpts, LLM proxy model inventory.
+spikes/hitl/
+spikes/aks/rendered-*.yaml
+spikes/mm/cli-doc-*.txt
+spikes/mm/models.json
+# Voice recordings of unconfirmed origin stay local (multimodal spike).
+spikes/mm/*.wav

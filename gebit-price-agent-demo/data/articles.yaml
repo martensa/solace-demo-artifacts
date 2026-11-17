@@ -1,0 +1,114 @@
+# data/articles.yaml -- fictional master data of the showcase store (UC1)
+# price/cost in EUR; vat in percent; w = weekly units, oldest first.
+- {number: "100001", gtin: "2099100000018", name: "GEBIT Ente (Quietscheente gelb)",
+   cat: spielwaren_geschenke, pack: "1 Stück", qty: 1, unit: "Stück", vat: 19,
+   price: 9.99, cost: 5.20, plan: 35, w: [34, 36, 31, 28, 22, 16, 12, 9],
+   stock: 96, listed: 2026-09-01, role: hero_slow_seller}
+- {number: "100002", gtin: "2099100000025", name: "Plüschhase Hoppel 25 cm",
+   cat: spielwaren_geschenke, pack: "1 Stück", qty: 1, unit: "Stück", vat: 19,
+   price: 12.99, cost: 5.90, plan: 30, w: [4, 5, 6, 7, 8, 10, 12, 14],
+   stock: 90, season: ostern, listed: 2026-09-01, role: agent_says_no}
+- {number: "100003", gtin: "2099100000032", name: "Seifenblasen-Set",
+   cat: spielwaren_geschenke, pack: "1 Stück", qty: 1, unit: "Stück", vat: 19,
+   price: 3.49, cost: 1.40, plan: 12, w: [11, 12, 13, 12, 12, 11, 12, 13],
+   stock: 28, listed: 2026-05-01}
+- {number: "100004", gtin: "2099100000049", name: "Bio-Bananen", cat: obst_gemuese,
+   pack: "1 kg", qty: 1000, unit: "g", vat: 7, price: 1.99, cost: 1.05, plan: 180,
+   w: [176, 182, 179, 185, 181, 178, 184, 180], stock: 210, listed: 2025-01-01}
+- {number: "100005", gtin: "2099100000056", name: "Äpfel Elstar", cat: obst_gemuese,
+   pack: "1 kg", qty: 1000, unit: "g", vat: 7, price: 2.79, cost: 1.45, plan: 120,
+   w: [118, 121, 119, 124, 117, 122, 120, 123], stock: 150, listed: 2025-01-01}
+- {number: "100006", gtin: "2099100000063", name: "Strauchtomaten", cat: obst_gemuese,
+   pack: "500 g", qty: 500, unit: "g", vat: 7, price: 2.49, cost: 1.30, plan: 90,
+   w: [88, 92, 86, 91, 94, 89, 90, 92], stock: 110, listed: 2025-01-01}
+- {number: "100007", gtin: "2099100000070", name: "Avocado Hass", cat: obst_gemuese,
+   pack: "1 Stück", qty: 1, unit: "Stück", vat: 7, price: 1.29, cost: 0.62, plan: 60,
+   w: [58, 61, 63, 59, 60, 62, 57, 61], stock: 80, listed: 2025-01-01}
+- {number: "100008", gtin: "2099100000087", name: "Herzpralinen Valentin",
+   cat: suesswaren_snacks, pack: "200 g", qty: 200, unit: "g", vat: 7,
+   price: 7.99, cost: 3.10, plan: 40, w: [0, 0, 0, 0, 12, 26, 38, 52], stock: 46,
+   season: valentinstag, listed: 2027-01-18, role: hero_season_end}
+- {number: "100009", gtin: "2099100000094", name: "Glühwein rot", cat: getraenke,
+   pack: "1 l", qty: 1000, unit: "ml", vat: 19, price: 3.49, cost: 1.45, plan: 30,
+   w: [48, 52, 40, 30, 22, 15, 11, 9], stock: 120, season: winter,
+   listed: 2026-11-01, role: guardrail_central_action}
+- {number: "100010", gtin: "2099100000100", name: "Vollmilch 3,5 %",
+   cat: molkerei_fruehstueck, pack: "1 l", qty: 1000, unit: "ml", vat: 7,
+   price: 1.19, cost: 0.78, plan: 220, w: [218, 224, 221, 219, 226, 220, 223, 222],
+   stock: 260, listed: 2025-01-01}
+- {number: "100011", gtin: "2099100000117", name: "Butter", cat: molkerei_fruehstueck,
+   pack: "250 g", qty: 250, unit: "g", vat: 7, price: 2.29, cost: 1.62, plan: 140,
+   w: [138, 141, 139, 143, 140, 137, 142, 141], stock: 170, listed: 2025-01-01}
+- {number: "100012", gtin: "2099100000124", name: "Espresso Bohnen kräftig",
+   cat: kaffee_tee, pack: "1 kg", qty: 1000, unit: "g", vat: 7, price: 14.49,
+   cost: 8.90, plan: 30, w: [31, 33, 30, 24, 21, 19, 18, 17], stock: 40,
+   listed: 2025-03-01, price_change: {date: 2027-01-11, from: 12.99},
+   next_delivery: {expected_on: 2027-02-18, qty: 24}, role: hero_customer_behaviour}
+- {number: "100013", gtin: "2099100000131", name: "Kaffee Crema", cat: kaffee_tee,
+   pack: "500 g", qty: 500, unit: "g", vat: 7, price: 6.99, cost: 4.10, plan: 45,
+   w: [44, 46, 45, 47, 43, 45, 46, 44], stock: 70, listed: 2025-01-01}
+- {number: "100014", gtin: "2099100000148", name: "Grüntee Sencha", cat: kaffee_tee,
+   pack: "20 Beutel", qty: 40, unit: "g", vat: 7, price: 2.99, cost: 1.35, plan: 20,
+   w: [19, 21, 20, 22, 18, 20, 21, 19], stock: 35, listed: 2025-01-01}
+- {number: "100015", gtin: "2099100000155", name: "Cantuccini Mandel",
+   cat: suesswaren_snacks, pack: "200 g", qty: 200, unit: "g", vat: 7, price: 2.29,
+   cost: 1.05, plan: 25, w: [24, 26, 25, 23, 27, 25, 24, 26], stock: 40,
+   listed: 2025-01-01}
+- {number: "100016", gtin: "2099100000162", name: "Vollkorn-Toast",
+   cat: molkerei_fruehstueck, pack: "500 g", qty: 500, unit: "g", vat: 7,
+   price: 1.69, cost: 0.82, plan: 95, w: [94, 97, 93, 96, 95, 92, 98, 95],
+   stock: 110, listed: 2025-01-01}
+- {number: "100017", gtin: "2099100000179", name: "Butter-Croissants",
+   cat: molkerei_fruehstueck, pack: "4 Stück", qty: 4, unit: "Stück", vat: 7,
+   price: 2.49, cost: 1.10, plan: 70, w: [69, 72, 68, 71, 70, 73, 69, 71],
+   stock: 60, listed: 2025-01-01}
+- {number: "100018", gtin: "2099100000186", name: "Zartbitter-Schokolade",
+   cat: suesswaren_snacks, pack: "100 g", qty: 100, unit: "g", vat: 7, price: 1.49,
+   cost: 0.64, plan: 80, w: [79, 82, 78, 81, 80, 83, 79, 81], stock: 120,
+   listed: 2025-01-01}
+- {number: "100019", gtin: "2099100000193", name: "Fruchtgummi Bärchen",
+   cat: suesswaren_snacks, pack: "200 g", qty: 200, unit: "g", vat: 7, price: 1.29,
+   cost: 0.55, plan: 65, w: [64, 66, 63, 67, 65, 62, 66, 64], stock: 90,
+   listed: 2025-01-01}
+- {number: "100020", gtin: "2099100000209", name: "Kartoffelchips Paprika",
+   cat: suesswaren_snacks, pack: "175 g", qty: 175, unit: "g", vat: 7, price: 1.79,
+   cost: 0.80, plan: 75, w: [74, 77, 73, 76, 75, 78, 74, 76], stock: 100,
+   listed: 2025-01-01}
+- {number: "100021", gtin: "2099100000216", name: "Mineralwasser still", cat: getraenke,
+   pack: "6 × 1,5 l", qty: 9000, unit: "ml", vat: 19, price: 3.29, cost: 1.50,
+   plan: 110, w: [108, 112, 109, 111, 110, 107, 113, 110], stock: 160,
+   listed: 2025-01-01}
+- {number: "100022", gtin: "2099100000223", name: "Apfelschorle", cat: getraenke,
+   pack: "1 l", qty: 1000, unit: "ml", vat: 19, price: 1.39, cost: 0.58, plan: 85,
+   w: [84, 87, 83, 86, 85, 88, 84, 86], stock: 120, listed: 2025-01-01}
+- {number: "100023", gtin: "2099100000230", name: "Craft-Pils", cat: getraenke,
+   pack: "0,33 l", qty: 330, unit: "ml", vat: 19, price: 1.89, cost: 0.90, plan: 40,
+   w: [38, 41, 39, 42, 40, 37, 41, 39], stock: 70, listed: 2025-06-01}
+- {number: "100024", gtin: "2099100000247", name: "Handseife Lavendel",
+   cat: drogerie_haushalt, pack: "300 ml", qty: 300, unit: "ml", vat: 19,
+   price: 2.49, cost: 0.95, plan: 30, w: [29, 31, 30, 28, 32, 30, 29, 31], stock: 45,
+   listed: 2025-01-01}
+- {number: "100025", gtin: "2099100000254", name: "Spülmittel Zitrone",
+   cat: drogerie_haushalt, pack: "500 ml", qty: 500, unit: "ml", vat: 19,
+   price: 1.49, cost: 0.55, plan: 50, w: [49, 51, 50, 52, 48, 50, 51, 49], stock: 80,
+   listed: 2025-01-01}
+- {number: "100026", gtin: "2099100000261", name: "Duftkerze Vanille",
+   cat: drogerie_haushalt, pack: "1 Stück", qty: 1, unit: "Stück", vat: 19,
+   price: 6.99, cost: 2.40, plan: 15, w: [14, 15, 16, 15, 14, 16, 15, 15], stock: 28,
+   listed: 2025-09-01}
+- {number: "100027", gtin: "2099100000278", name: "Einkaufstasche Jute",
+   cat: drogerie_haushalt, pack: "1 Stück", qty: 1, unit: "Stück", vat: 19,
+   price: 3.99, cost: 1.20, plan: 20, w: [19, 21, 20, 22, 19, 20, 21, 20], stock: 40,
+   listed: 2025-01-01}
+- {number: "100028", gtin: "2099100000285", name: "Kochbuch „Regional kochen“", cat: buch,
+   pack: "1 Stück", qty: 1, unit: "Stück", vat: 7, price: 24.00, cost: 15.60,
+   plan: 4, w: [4, 3, 5, 4, 2, 1, 1, 0], stock: 14, price_bound: true,
+   listed: 2026-03-01, role: guardrail_price_bound}
+- {number: "100029", gtin: "2099100000292", name: "Haferflocken zart",
+   cat: molkerei_fruehstueck, pack: "500 g", qty: 500, unit: "g", vat: 7,
+   price: 0.99, cost: 0.45, plan: 60, w: [59, 61, 58, 62, 60, 59, 61, 60], stock: 90,
+   listed: 2025-01-01}
+- {number: "100030", gtin: "2099100000308", name: "Bio-Hafermilch Barista",
+   cat: molkerei_fruehstueck, pack: "1 l", qty: 1000, unit: "ml", vat: 19,
+   price: 2.19, cost: 0.95, plan: 45, w: [44, 46, 45, 47, 43, 46, 45, 44], stock: 70,
+   listed: 2025-01-01}

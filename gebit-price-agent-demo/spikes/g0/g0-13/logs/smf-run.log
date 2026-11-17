@@ -1,0 +1,80 @@
+== Preflight: keine Abonnenten fuer gebit/, gpos/, showcase/ auf VPN sam
+   vpn: {'msgSpoolMsgCount': 4, 'msgVpnName': 'sam', 'serviceSmfPlainTextEnabled': True, 'state': 'up'}
+   queues=22 clients=13 matching_subscriptions=[]
+== Test-Queue gpos-g0-test auf VPN sam
+   create: 200 
+   subscribe gebit/rp/>: 200 
+   subscribe gpos/v1/>: 200 
+   queue: {'accessType': 'exclusive', 'bindSuccessCount': 0, 'durable': True, 'egressEnabled': True, 'highestAckedMsgId': 0, 'ingressEnabled': True, 'lastSpooledMsgId': 0, 'msgSpoolUsage': 0, 'queueName': 'gpos-g0-test', 'spooledByteCount': 0, 'spooledMsgCount': 0}
+   msgs on queue (SEMP /msgs): 0
+== Publish 10 aus python:3.13-slim linux/arm64 (solace-pubsubplus==1.12.0 von PyPI), run 095703-arm64
+   SEMP v1 client stats: client-address=172.18.0.1:48728 client-username=default client-data-messages-received=10 client-persistent-messages-received=10 client-non-persistent-messages-received=0 client-direct-messages-received=0 
+{"t": 1794387426.639, "kind": "connected", "host": "tcp://host.docker.internal:55557", "vpn": "sam", "client": "gpos-g0-13-pub-095703-arm64", "ms": 10.0, "sdk": "1.12.0", "arch": "aarch64", "python": "3.13.18"}
+{"t": 1794387426.642, "kind": "acked", "n": 1, "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400:1", "ack_ms": 2.09}
+{"t": 1794387426.644, "kind": "acked", "n": 2, "topic": "gpos/v1/health/g0-13-095703-arm64", "app_msg_id": "g0-13-095703-arm64:2", "ack_ms": 1.61}
+{"t": 1794387426.645, "kind": "acked", "n": 3, "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400:3", "ack_ms": 1.42}
+{"t": 1794387426.648, "kind": "acked", "n": 4, "topic": "gpos/v1/samrun/g0-13-095703-arm64", "app_msg_id": "g0-13-095703-arm64:4", "ack_ms": 2.14}
+{"t": 1794387426.649, "kind": "acked", "n": 5, "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400:5", "ack_ms": 1.31}
+{"t": 1794387426.65, "kind": "acked", "n": 6, "topic": "gpos/v1/proposal/draft/101/article004/prp-g0-13-095703-arm64", "app_msg_id": "g0-13-095703-arm64:6", "ack_ms": 1.13}
+{"t": 1794387426.652, "kind": "acked", "n": 7, "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400:7", "ack_ms": 1.0}
+{"t": 1794387426.653, "kind": "acked", "n": 8, "topic": "gpos/v1/approval/pending/prp-g0-13-095703-arm64", "app_msg_id": "g0-13-095703-arm64:8", "ack_ms": 1.11}
+{"t": 1794387426.654, "kind": "acked", "n": 9, "topic": "gebit/rp/purchase/v2/purchase_transaction/PurchaseTransactionClosed/DE/999/101/99/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400:9", "ack_ms": 0.85}
+{"t": 1794387426.655, "kind": "acked", "n": 10, "topic": "gpos/v1/offer/tied_offer/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "g0-13-095703-arm64:10", "ack_ms": 1.2}
+{"t": 1794387426.655, "kind": "publish_done", "count": 10, "ack_ms_p50": 1.31, "ack_ms_max": 2.14}
+{"t": 1794387434.657, "kind": "disconnected"}
+   Containerlauf 11 s (inkl. pip install, 8 s Haltezeit)
+   queue: {'accessType': 'exclusive', 'bindSuccessCount': 0, 'durable': True, 'egressEnabled': True, 'highestAckedMsgId': 0, 'ingressEnabled': True, 'lastSpooledMsgId': 45469075, 'msgSpoolUsage': 6015, 'queueName': 'gpos-g0-test', 'spooledByteCount': 6015, 'spooledMsgCount': 10}
+   msgs on queue (SEMP /msgs): 10
+   first msg fields: {'attachmentSize': 610, 'contentSize': 0, 'dmqEligible': True, 'msgId': 45469065, 'publisherId': 97, 'spooledTime': 1794387425, 'undelivered': True}
+== Consume aus gpos-g0-test (linux/arm64)
+{"t": 1794387437.068, "kind": "connected", "host": "tcp://host.docker.internal:55557", "vpn": "sam", "client": "gpos-g0-13-sub-095703-arm64", "ms": 8.9, "sdk": "1.12.0", "arch": "aarch64", "python": "3.13.18"}
+{"t": 1794387437.072, "kind": "received", "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400:1", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cd89", "arch_of_publisher": "aarch64", "ok": true}
+{"t": 1794387437.072, "kind": "received", "topic": "gpos/v1/health/g0-13-095703-arm64", "app_msg_id": "g0-13-095703-arm64:2", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cd8a", "arch_of_publisher": "aarch64", "ok": true}
+{"t": 1794387437.072, "kind": "received", "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400:3", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cd8b", "arch_of_publisher": "aarch64", "ok": true}
+{"t": 1794387437.073, "kind": "received", "topic": "gpos/v1/samrun/g0-13-095703-arm64", "app_msg_id": "g0-13-095703-arm64:4", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cd8d", "arch_of_publisher": "aarch64", "ok": true}
+{"t": 1794387437.073, "kind": "received", "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400:5", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cd8e", "arch_of_publisher": "aarch64", "ok": true}
+{"t": 1794387437.073, "kind": "received", "topic": "gpos/v1/proposal/draft/101/article004/prp-g0-13-095703-arm64", "app_msg_id": "g0-13-095703-arm64:6", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cd8f", "arch_of_publisher": "aarch64", "ok": true}
+{"t": 1794387437.073, "kind": "received", "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400:7", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cd90", "arch_of_publisher": "aarch64", "ok": true}
+{"t": 1794387437.073, "kind": "received", "topic": "gpos/v1/approval/pending/prp-g0-13-095703-arm64", "app_msg_id": "g0-13-095703-arm64:8", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cd91", "arch_of_publisher": "aarch64", "ok": true}
+{"t": 1794387437.073, "kind": "received", "topic": "gebit/rp/purchase/v2/purchase_transaction/PurchaseTransactionClosed/DE/999/101/99/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400:9", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cd92", "arch_of_publisher": "aarch64", "ok": true}
+{"t": 1794387437.073, "kind": "received", "topic": "gpos/v1/offer/tied_offer/07fdcc8d-c456-4dd4-96c5-9e2d9cd4a400", "app_msg_id": "g0-13-095703-arm64:10", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cd93", "arch_of_publisher": "aarch64", "ok": true}
+{"t": 1794387437.075, "kind": "consume_done", "received": 10, "expected": 10, "bad": 0, "gebit": 5, "gpos": 5}
+   queue: {'accessType': 'exclusive', 'bindSuccessCount': 1, 'durable': True, 'egressEnabled': True, 'highestAckedMsgId': 45469075, 'ingressEnabled': True, 'lastSpooledMsgId': 45469075, 'msgSpoolUsage': 0, 'queueName': 'gpos-g0-test', 'spooledByteCount': 6015, 'spooledMsgCount': 10}
+   msgs on queue (SEMP /msgs): 0
+== Publish 10 aus python:3.13-slim linux/amd64 (solace-pubsubplus==1.12.0 von PyPI), run 095717-amd64
+   SEMP v1 client stats: client-address=172.18.0.1:43796 client-username=default client-data-messages-received=10 client-persistent-messages-received=10 client-non-persistent-messages-received=0 client-direct-messages-received=0 
+{"t": 1794387440.076, "kind": "connected", "host": "tcp://host.docker.internal:55557", "vpn": "sam", "client": "gpos-g0-13-pub-095717-amd64", "ms": 29.2, "sdk": "1.12.0", "arch": "x86_64", "python": "3.13.18"}
+{"t": 1794387440.085, "kind": "acked", "n": 1, "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "2025d969-9d60-4cb3-89eb-a9e6376397a1:1", "ack_ms": 4.22}
+{"t": 1794387440.088, "kind": "acked", "n": 2, "topic": "gpos/v1/health/g0-13-095717-amd64", "app_msg_id": "g0-13-095717-amd64:2", "ack_ms": 2.53}
+{"t": 1794387440.09, "kind": "acked", "n": 3, "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "2025d969-9d60-4cb3-89eb-a9e6376397a1:3", "ack_ms": 1.92}
+{"t": 1794387440.092, "kind": "acked", "n": 4, "topic": "gpos/v1/samrun/g0-13-095717-amd64", "app_msg_id": "g0-13-095717-amd64:4", "ack_ms": 1.49}
+{"t": 1794387440.094, "kind": "acked", "n": 5, "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "2025d969-9d60-4cb3-89eb-a9e6376397a1:5", "ack_ms": 1.73}
+{"t": 1794387440.097, "kind": "acked", "n": 6, "topic": "gpos/v1/proposal/draft/101/article004/prp-g0-13-095717-amd64", "app_msg_id": "g0-13-095717-amd64:6", "ack_ms": 2.09}
+{"t": 1794387440.098, "kind": "acked", "n": 7, "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "2025d969-9d60-4cb3-89eb-a9e6376397a1:7", "ack_ms": 1.65}
+{"t": 1794387440.101, "kind": "acked", "n": 8, "topic": "gpos/v1/approval/pending/prp-g0-13-095717-amd64", "app_msg_id": "g0-13-095717-amd64:8", "ack_ms": 1.79}
+{"t": 1794387440.102, "kind": "acked", "n": 9, "topic": "gebit/rp/purchase/v2/purchase_transaction/PurchaseTransactionClosed/DE/999/101/99/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "2025d969-9d60-4cb3-89eb-a9e6376397a1:9", "ack_ms": 1.3}
+{"t": 1794387440.104, "kind": "acked", "n": 10, "topic": "gpos/v1/offer/tied_offer/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "g0-13-095717-amd64:10", "ack_ms": 1.58}
+{"t": 1794387440.104, "kind": "publish_done", "count": 10, "ack_ms_p50": 1.79, "ack_ms_max": 4.22}
+{"t": 1794387448.11, "kind": "disconnected"}
+   Containerlauf 11 s (inkl. pip install, 8 s Haltezeit)
+   queue: {'accessType': 'exclusive', 'bindSuccessCount': 1, 'durable': True, 'egressEnabled': True, 'highestAckedMsgId': 45469075, 'ingressEnabled': True, 'lastSpooledMsgId': 45469188, 'msgSpoolUsage': 6005, 'queueName': 'gpos-g0-test', 'spooledByteCount': 12020, 'spooledMsgCount': 20}
+   msgs on queue (SEMP /msgs): 10
+   first msg fields: {'attachmentSize': 609, 'contentSize': 0, 'dmqEligible': True, 'msgId': 45469179, 'publisherId': 99, 'spooledTime': 1794387439, 'undelivered': True}
+== Consume aus gpos-g0-test (linux/amd64)
+{"t": 1794387451.096, "kind": "connected", "host": "tcp://host.docker.internal:55557", "vpn": "sam", "client": "gpos-g0-13-sub-095717-amd64", "ms": 25.3, "sdk": "1.12.0", "arch": "x86_64", "python": "3.13.18"}
+{"t": 1794387451.107, "kind": "received", "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "2025d969-9d60-4cb3-89eb-a9e6376397a1:1", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cdfb", "arch_of_publisher": "x86_64", "ok": true}
+{"t": 1794387451.108, "kind": "received", "topic": "gpos/v1/health/g0-13-095717-amd64", "app_msg_id": "g0-13-095717-amd64:2", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cdfc", "arch_of_publisher": "x86_64", "ok": true}
+{"t": 1794387451.108, "kind": "received", "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "2025d969-9d60-4cb3-89eb-a9e6376397a1:3", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cdfd", "arch_of_publisher": "x86_64", "ok": true}
+{"t": 1794387451.108, "kind": "received", "topic": "gpos/v1/samrun/g0-13-095717-amd64", "app_msg_id": "g0-13-095717-amd64:4", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cdfe", "arch_of_publisher": "x86_64", "ok": true}
+{"t": 1794387451.108, "kind": "received", "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "2025d969-9d60-4cb3-89eb-a9e6376397a1:5", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5cdff", "arch_of_publisher": "x86_64", "ok": true}
+{"t": 1794387451.108, "kind": "received", "topic": "gpos/v1/proposal/draft/101/article004/prp-g0-13-095717-amd64", "app_msg_id": "g0-13-095717-amd64:6", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5ce00", "arch_of_publisher": "x86_64", "ok": true}
+{"t": 1794387451.108, "kind": "received", "topic": "gebit/rp/purchase/v2/basket/PositionAdded/DE/999/101/99/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "2025d969-9d60-4cb3-89eb-a9e6376397a1:7", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5ce01", "arch_of_publisher": "x86_64", "ok": true}
+{"t": 1794387451.108, "kind": "received", "topic": "gpos/v1/approval/pending/prp-g0-13-095717-amd64", "app_msg_id": "g0-13-095717-amd64:8", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5ce02", "arch_of_publisher": "x86_64", "ok": true}
+{"t": 1794387451.108, "kind": "received", "topic": "gebit/rp/purchase/v2/purchase_transaction/PurchaseTransactionClosed/DE/999/101/99/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "2025d969-9d60-4cb3-89eb-a9e6376397a1:9", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5ce03", "arch_of_publisher": "x86_64", "ok": true}
+{"t": 1794387451.108, "kind": "received", "topic": "gpos/v1/offer/tied_offer/2025d969-9d60-4cb3-89eb-a9e6376397a1", "app_msg_id": "g0-13-095717-amd64:10", "redelivered": false, "rgmid": "rmid1:4edf7-e8486e11417-00000000-02b5ce04", "arch_of_publisher": "x86_64", "ok": true}
+{"t": 1794387451.114, "kind": "consume_done", "received": 10, "expected": 10, "bad": 0, "gebit": 5, "gpos": 5}
+   queue: {'accessType': 'exclusive', 'bindSuccessCount': 2, 'durable': True, 'egressEnabled': True, 'highestAckedMsgId': 45469188, 'ingressEnabled': True, 'lastSpooledMsgId': 45469188, 'msgSpoolUsage': 0, 'queueName': 'gpos-g0-test', 'spooledByteCount': 12020, 'spooledMsgCount': 20}
+   msgs on queue (SEMP /msgs): 0
+== Test-Queue loeschen
+200 
+400 Could not find match for queue gpos-g0-test

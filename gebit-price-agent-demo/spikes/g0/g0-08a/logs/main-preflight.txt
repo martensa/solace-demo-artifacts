@@ -1,0 +1,9 @@
+{'name': 'gpos-spike-p01-pos', 'id': '01a1c9ff-196e-75b9-9589-4eb1e9ce3826', 'deployStatus': None, 'updatedAt': '2026-11-11T09:45:01.038000+00:00'}
+{'name': 'gpos-spike-ep-p01', 'id': '01a1c9ff-6a43-7e97-810e-2b062aecda36', 'deploymentStatus': 'deployed', 'updatedAt': '2026-11-11T09:45:21.731000+00:00'}
+agent-mesh-postgresql-0                             1/1   Running   0     22h
+agent-mesh-seaweedfs-0                              1/1   Running   0     22h
+agent-mesh-solace-agent-mesh-awe-598dd5bdbd-2kcq6   1/1   Running   0     52m
+agent-mesh-solace-agent-mesh-gwe-5d8bbf6b6-zs2wr    1/1   Running   0     53m
+agent-mesh-solace-agent-mesh-str-7b5794c9d7-n4g67   1/1   Running   0     52m
+awe SAM_FEATURE_WORKFLOW_HIL_PAUSE_RESUME=true
+{'id': '01a1c9ff-196e-75b9-9589-4eb1e9ce3826', 'name': 'gpos-spike-p01-pos', 'deploymentStatus': 'deployed', 'runtimeStatus': {'status': 'running'}}

@@ -1,0 +1,59 @@
+# mesh/fallback/agents/gpos-price-approver-f2.yaml -- fallback F2 only (spec 9.9).
+# Exactly gpos-spike-p09-approver-h (G0-09, hardened prompt, 0/50 duplicates):
+# gated builtin get_current_time via toolsetConfigs (the G0-02 B1 mechanics),
+# answer status "applied" plus time. Only the approval_message differs: a fixed
+# text, because the builtin tool has no proposal arguments to show. Since 12.11.
+# also the A-21 toolset exclusions of the three main agents (UC1-29).
+kind: agent
+name: gpos-price-approver-f2
+description: >-
+  Fallback F2 approver: calls one gated tool exactly once so the store manager
+  has to approve the price proposal in Agent Mesh.
+spec:
+  type: standard
+  modelProvider:
+    - fast
+  # A-21 (12.11.): SAM attaches the artifact and data toolsets to every agent anyway;
+  # the exclusions are stored per listed toolset, so both must be listed here,
+  # otherwise SAM drops toolsetExcludedTools silently. The time tool stays.
+  toolsets:
+    - builtin_time_tools
+    - builtin_artifact_tools
+    - data_analysis
+  toolsetExcludedTools:
+    builtin_artifact_tools: [list_artifacts, load_artifact, delete_artifact,
+                             append_to_artifact, artifact_search_and_replace_regex,
+                             artifact_grep]
+    data_analysis: [query_data_with_sql, create_sqlite_db, transform_data_with_jmespath,
+                    merge_structured_data, reinterpret_artifact,
+                    create_chart_from_plotly_config]
+  toolsetConfigs:
+    - toolsetName: builtin_time_tools
+      configValues:
+        hil:
+          get_current_time:
+            require_approval: true
+            approval_message: >-
+              Preisvorschlag der Messekasse freigeben? Details in der Meldung davor.
+            show_args: false
+            timeout: "2m"
+  skills:
+    - id: spike_apply
+      name: Spike apply
+      description: Calls the gated tool once (Gate 0 spike).
+  inputModes: [text]
+  outputModes: [text]
+  systemPrompt: |
+    You are a test agent of a German trade fair demo. Your whole job is
+    ONE call of the tool get_current_time. Rules:
+    1. Call get_current_time exactly once, as your first action, and put
+       no other tool call into the same response.
+    2. The call waits for a human approval. Its first result is final,
+       whatever it says: success, error, denial or timeout.
+    3. As soon as you have that first result, do not call any tool again.
+       Reply immediately with your final answer.
+    4. A second call creates a second approval request for the store
+       manager and is a serious error. Never call any other tool.
+    If the call succeeded, answer with status "applied" and the tool's
+    current_time value. If the tool returned an error or was denied,
+    answer with status "denied" and an empty time.

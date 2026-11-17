@@ -1,0 +1,173 @@
+# mesh/fallback/workflows/gpos-price-approval.yaml -- fallback F2 variant (spec 9.9).
+# Same name and contract as mesh/workflows/gpos-price-approval.yaml (rules r4/p4
+# keep their target), applied only through mesh/fallback/manifest.yaml.
+# Differences to B1: node approve runs gpos-price-approver-f2 (gated builtin
+# time tool), node apply calls the UNGATED gpos-price-apply connector, record
+# hangs on apply but reads nothing from it (apply is skipped after every deny, and
+# a whole-value reference to a skipped node arrives as null).
+# F2 TRUSTS THE MODEL: whether apply runs depends on the status the model
+# reports (G0-09 run 18 reported "denied" despite an approval; the opposite
+# error would apply after a deny). Counter-measure: GATE_GUARD=f2 (11.4) makes
+# the gate require approved_at = the gated tool's time within
+# [checked_at + GATE_MIN_DELAY_S, now + 2 s] on the engine clock.
+kind: workflow
+name: gpos-price-approval
+description: >-
+  Native approval of one staged price proposal (fallback F2): summary
+  notification, the approver agent's gated time tool waits for the store
+  manager, then apply_price runs in a tool node; the engine records the outcome.
+spec:
+  appConfig:
+    version: "0.1.2-f2"          # 0.1.2: message (required) -> tool_message (UC1-29)
+    workflow_timeout: "6m"
+    default_node_timeout: "10s"
+    fail_fast: true
+    skills:
+      - id: gpos_price_approval
+        name: Price approval
+        description: Human approval and application of one price proposal.
+    input_schema:
+      type: object
+      required: [proposal_id]
+      properties:
+        schema_version: {type: [string, "null"]}
+        proposal_id: {type: string}
+        store: {type: [string, "null"]}
+        till: {type: [string, "null"]}
+    tools:
+      - tool_type: builtin-group
+        group_name: notification_tools
+    nodes:
+      - id: check
+        type: tool
+        connector: gpos-booth-tools
+        tool: check_proposal
+        input:
+          proposal_id: "{{workflow.input.proposal_id}}"
+          run_id: "{{workflow.run_id}}"
+      - id: route
+        type: switch
+        depends_on: [check]
+        cases:
+          - condition: >-
+              '{{check.output.mcp_structured_content.status}}' == 'awaiting_approval'
+            node: inform
+          - condition: "'{{check.output.mcp_structured_content.status}}' == 'probe'"
+            node: ping
+        default: skip
+      - id: inform
+        type: tool
+        tool_name: notify_user
+        depends_on: [route]
+        timeout: "5s"
+        input:
+          title: "{{check.output.mcp_structured_content.notify_title}}"
+          message: "{{check.output.mcp_structured_content.notify_message}}"
+          channels: ["web"]
+      - id: approve
+        type: agent
+        agent_name: gpos-price-approver-f2
+        depends_on: [inform]
+        # rule 6: inform may be skipped, approve would still start without this
+        when: >-
+          '{{check.output.mcp_structured_content.status}}' == 'awaiting_approval'
+        timeout: "5m"
+        instruction: >-
+          Call get_current_time once, as one single call, and never repeat
+          it. After its first result call no further tool and immediately
+          return status and time, and in message the message text of the
+          result copied exactly ("" if it has none).
+        input:
+          proposal_id: "{{workflow.input.proposal_id}}"
+        # message is required although the pinned spike prompt does not name it: record
+        # references it, and a field missing on a node that ran fails the consumer
+        # (SAM 2.542); the instruction names it, validate-and-retry enforces it
+        output_schema_override:
+          type: object
+          required: [status, time, message]
+          properties:
+            status: {type: string}
+            time: {type: string}
+            message: {type: string}
+      - id: apply                   # F2 only
+        type: tool
+        connector: gpos-price-apply
+        tool: apply_price
+        depends_on: [approve]
+        when: "'{{approve.output.status}}' == 'applied'"   # the p09 prompt's word
+        input:
+          proposal_id: "{{workflow.input.proposal_id}}"
+          proposal_hash: "{{check.output.mcp_structured_content.proposal_hash}}"
+          article_name: "{{check.output.mcp_structured_content.article_name}}"
+          old_price: "{{check.output.mcp_structured_content.old_price}}"
+          new_price: "{{check.output.mcp_structured_content.new_price}}"
+          pct_label: "{{check.output.mcp_structured_content.pct_label}}"
+          reason_label: "{{check.output.mcp_structured_content.reason_label}}"
+          valid_to_label: "{{check.output.mcp_structured_content.valid_to_label}}"
+          run_id: "{{workflow.run_id}}"
+          approved_at: "{{approve.output.time}}"
+      - id: record
+        type: tool
+        connector: gpos-booth-tools
+        tool: record_outcome
+        depends_on: [apply]
+        # rule 6: apply is skipped after a deny, record must still run then
+        when: >-
+          '{{check.output.mcp_structured_content.status}}' == 'awaiting_approval'
+        input:
+          proposal_id: "{{workflow.input.proposal_id}}"
+          run_id: "{{workflow.run_id}}"
+          agent_status: "{{approve.output.status}}"
+          # no action_id: record_outcome decides from the database (11.5) and its
+          # default "" applies; a reference to apply would be null after a deny
+          error: ""
+          # F2 only: "" after a deny; a valid time with status denied -> failed (11.5 R5)
+          approved_at: "{{approve.output.time}}"
+          # as in B1 (11.5 R5m): the copied message of the gated tool's result
+          tool_message: "{{approve.output.message}}"
+      - id: tell
+        type: tool
+        tool_name: notify_user
+        depends_on: [record]
+        when: "'{{record.output.mcp_structured_content.notify}}' == 'yes'"
+        timeout: "5s"
+        input:
+          title: "{{record.output.mcp_structured_content.notify_title}}"
+          message: "{{record.output.mcp_structured_content.notify_message}}"
+          channels: ["web"]
+      - id: ping                    # login/notify probe only (9.7), no model
+        type: tool
+        tool_name: notify_user
+        depends_on: [route]
+        timeout: "5s"
+        input:
+          title: "{{check.output.mcp_structured_content.notify_title}}"
+          message: "{{check.output.mcp_structured_content.notify_message}}"
+          channels: ["web"]
+      - id: skip
+        type: tool
+        connector: gpos-booth-tools
+        tool: note_event
+        depends_on: [route]
+        input:
+          event_key: "{{workflow.input.proposal_id}}"
+          verdict: "{{check.output.mcp_structured_content.status}}"
+          run_id: "{{workflow.run_id}}"
+      - id: record_fail             # only via on_exit
+        type: tool
+        connector: gpos-booth-tools
+        tool: record_outcome
+        input:
+          proposal_id: "{{workflow.input.proposal_id}}"
+          run_id: "{{workflow.run_id}}"
+          agent_status: ""
+          action_id: ""
+          error: "{{workflow.error.message}}"
+    on_exit:
+      on_failure: record_fail
+    output_mapping:
+      proposal_id: "{{workflow.input.proposal_id}}"
+      outcome:
+        coalesce:
+          - "{{record.output.mcp_structured_content.outcome}}"
+          - "{{check.output.mcp_structured_content.status}}"

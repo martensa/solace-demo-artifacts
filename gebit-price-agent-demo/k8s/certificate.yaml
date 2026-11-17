@@ -1,0 +1,25 @@
+# Leaf certificate from the lab CA for the UI and the three gRPC hosts. Satisfies
+# the Kyverno cert-* policies (G0-07): ClusterIssuer solace-lab-ca-issuer, ECDSA
+# 256 with rotationPolicy Always, dnsNames only (no commonName), all on
+# .solace.lab, duration <= 2400h.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: gpos-demo
+spec:
+  secretName: gpos-demo-tls
+  dnsNames:
+    - gpos.solace.lab
+    - gpos-grpc.solace.lab
+    - gpos-wws-grpc.solace.lab
+    - gpos-loyalty-grpc.solace.lab
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: solace-lab-ca-issuer

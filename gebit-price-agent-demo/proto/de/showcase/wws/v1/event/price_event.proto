@@ -1,0 +1,47 @@
+// proto/de/showcase/wws/v1/event/price_event.proto
+// Topic: showcase/wws/v1/price/{EventName}/{country}/{company}/{store}/{articleNumber}
+syntax = "proto3";
+
+package de.showcase.wws.v1.event;
+
+import "de/showcase/wws/v1/datatype/wws_datatype.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.wws.v1.event.protobuf";
+option java_outer_classname = "PriceEventProto";
+
+message Header {
+  datatype.Timestamp event_timestamp = 1;
+}
+
+// A price action is effective; the next scan charges action_price.
+message PriceChangeApplied {
+  Header header = 1;
+  datatype.Metadata metadata = 2;
+  string action_id = 3;
+  string article_number = 4;
+  string article_name = 5;
+  string store_id = 6;
+  datatype.PriceActionKind kind = 7;
+  datatype.Money regular_price = 8;
+  datatype.Money action_price = 9;
+  int32 pct_shown = 10;
+  datatype.Money ref30 = 11;
+  datatype.OffsetTimestamp valid_from = 12;
+  datatype.OffsetTimestamp valid_to = 13;
+  string proposal_id = 14;
+  datatype.ReasonCode reason_code = 15;
+  datatype.AuthorizationInformation originator = 16;
+  datatype.AuthorizationInformation approver = 17;
+}
+
+// A price action ended (reset, EndPriceChange or expiry).
+message PriceChangeEnded {
+  Header header = 1;
+  datatype.Metadata metadata = 2;
+  string action_id = 3;
+  string article_number = 4;
+  string store_id = 5;
+  string reason = 6;
+  datatype.OffsetTimestamp ended_at = 7;
+}

@@ -1,0 +1,46 @@
+# G0-05 S5: MCP stub load_photo (stand-in for media.photo), namespace gpos-g0.
+# SAM reaches it in-cluster: http://gpos-spike-p05-photo.gpos-g0.svc:8766/mcp
+# Image built locally (Rancher Desktop shared store): imagePullPolicy Never.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpos-spike-p05-photo
+  namespace: gpos-g0
+  labels: {app: gpos-spike-p05-photo}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: gpos-spike-p05-photo}
+  template:
+    metadata:
+      labels: {app: gpos-spike-p05-photo}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001}
+      containers:
+        - name: photo
+          image: gpos-spike-p05-mcp:spike
+          imagePullPolicy: Never
+          ports:
+            - {name: mcp, containerPort: 8766}
+          readinessProbe:
+            httpGet: {path: /health, port: mcp}
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 256Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 20Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpos-spike-p05-photo
+  namespace: gpos-g0
+spec:
+  selector: {app: gpos-spike-p05-photo}
+  ports:
+    - {name: mcp, port: 8766, targetPort: mcp}

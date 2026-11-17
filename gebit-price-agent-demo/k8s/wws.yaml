@@ -1,0 +1,100 @@
+# gpos-wws: Merchandise management (showcase.wws.v1, gRPC 50053) and MCP gpos-wws-api on 8773.
+# Shape of bsg-trading-desk-demo/k8s and G0-07, hardened (spec 12.4).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpos-wws
+  labels:
+    app: gpos-wws
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-wws
+  template:
+    metadata:
+      labels:
+        app: gpos-wws
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: registry-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: wws
+          image: gpos-demo
+          imagePullPolicy: Always
+          command: ["python", "-m", "gposdemo.wws"]
+          env:
+            - name: GRPC_PORT
+              value: "50053"
+            - name: MCP_PORT
+              value: "8773"
+            - name: GPOS_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: gpos-db
+                  key: DSN_WWS
+          envFrom:
+            - configMapRef:
+                name: gpos-config
+            - secretRef:
+                name: gpos-broker
+          ports:
+            - name: grpc
+              containerPort: 50053
+            - name: http
+              containerPort: 8773
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 50Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpos-wws
+  labels:
+    app: gpos-wws
+spec:
+  selector:
+    app: gpos-wws
+  ports:
+    - name: grpc
+      port: 50053
+      targetPort: grpc
+      appProtocol: kubernetes.io/h2c
+    - name: http
+      port: 8773
+      targetPort: http

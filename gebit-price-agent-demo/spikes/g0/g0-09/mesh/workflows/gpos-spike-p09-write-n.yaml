@@ -1,0 +1,61 @@
+# G0-09 Part A2 (umlaut path, one step further): the writer's text goes
+# through workflow templates into a tool input (notify_user), is stored
+# by SAM and read back over the notify REST API. Not part of the
+# latency measurement (gpos-spike-p09-write stays a single agent node).
+kind: workflow
+name: gpos-spike-p09-write-n
+description: >-
+  Gate 0 spike G0-09: writer agent text through templates into a tool
+  input (notify_user) to check umlauts beyond the agent node.
+spec:
+  appConfig:
+    version: "0.1.0"
+    workflow_timeout: "60s"
+    default_node_timeout: "30s"
+    fail_fast: true
+    skills:
+      - id: gpos_spike_p09_write_n
+        name: Writer umlaut path spike
+        description: Writer text into a tool input (Gate 0).
+    input_schema:
+      type: object
+      required: [seq]
+      properties:
+        seq: {type: string}
+        writer_input: {type: object}
+    tools:
+      - tool_type: builtin-group
+        group_name: notification_tools
+    nodes:
+      - id: write
+        type: agent
+        agent_name: gpos-spike-p09-writer
+        timeout: "30s"
+        instruction: >-
+          Follow your system prompt. Return exactly these keys: slot,
+          headline, rationale, why_line.
+        input:
+          proposal: "{{workflow.input.writer_input}}"
+        output_schema_override:
+          type: object
+          required: [slot, headline, rationale, why_line]
+          properties:
+            slot: {type: string, enum: [A, B, none]}
+            headline: {type: string}
+            rationale: {type: string}
+            why_line: {type: string}
+      - id: tell
+        type: tool
+        tool_name: notify_user
+        depends_on: [write]
+        timeout: "5s"
+        input:
+          title: "G0-09 {{workflow.input.seq}}: {{write.output.headline}}"
+          message: "{{write.output.rationale}} | {{write.output.why_line}}"
+          channels: ["web"]
+    output_mapping:
+      seq: "{{workflow.input.seq}}"
+      slot: "{{write.output.slot}}"
+      headline: "{{write.output.headline}}"
+      rationale: "{{write.output.rationale}}"
+      why_line: "{{write.output.why_line}}"

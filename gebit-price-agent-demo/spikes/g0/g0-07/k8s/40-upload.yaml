@@ -1,0 +1,96 @@
+# HTTP upload sink (BFF stand-in) for the 2-MB body-size test, same image.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpos-g0-upload
+  namespace: gpos-g0
+  labels:
+    app: gpos-g0-upload
+    gpos/spike: g0-07
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-g0-upload
+  template:
+    metadata:
+      labels:
+        app: gpos-g0-upload
+        gpos/spike: g0-07
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: upload-sink
+          image: gpos-g0-grpc:spike
+          imagePullPolicy: Never
+          command: ["python", "/app/upload_sink.py"]
+          args: []
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpos-g0-upload
+  namespace: gpos-g0
+  labels:
+    app: gpos-g0-upload
+    gpos/spike: g0-07
+spec:
+  selector:
+    app: gpos-g0-upload
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-g0-upload
+  namespace: gpos-g0
+  labels:
+    gpos/spike: g0-07
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gpos-g0-upload.solace.lab
+      secretName: gpos-g0-grpc-tls
+  rules:
+    - host: gpos-g0-upload.solace.lab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-g0-upload
+                port:
+                  name: http

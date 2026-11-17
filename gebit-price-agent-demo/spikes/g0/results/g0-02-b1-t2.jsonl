@@ -1,0 +1,1 @@
+{"t": 1794387097.185, "kind": "recv", "topic": "gpos/spike/out/err", "body": {"code": -32603, "message": "Workflow \"gpos-spike-hil-b1\" failed: node \"apply\" failed: Agent reported error: Tool approval timed out after 10 minutes."}}

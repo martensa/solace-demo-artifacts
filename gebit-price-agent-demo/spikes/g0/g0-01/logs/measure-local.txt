@@ -1,0 +1,32 @@
+label          tool              case            wire result struct  text agent <=1800
+sdk/plan       assess_event      TR2             1009    975    394   447     0 yes
+sdk/plan       assess_event      card             963    929    371   424     0 yes
+sdk/plan       prepare_proposal  TR2 2 slots     2789   2755   1108  1312   437 NO
+sdk/plan       get_offers        card 4 offers   4150   4116   1596  2066   449 NO
+sdk/plan       note_event        default          317    283     89   102     0 yes
+compact/plan   assess_event      TR2              942    908    394   394     0 yes
+compact/plan   assess_event      card             896    862    371   371     0 yes
+compact/plan   prepare_proposal  TR2 2 slots     2552   2518   1108  1108   437 NO
+compact/plan   get_offers        card 4 offers   3614   3580   1596  1596   449 NO
+compact/plan   note_event        default          300    266     89    89     0 yes
+short/plan     assess_event      TR2              531    497    394    27     0 yes
+short/plan     assess_event      card             501    467    371    20     0 yes
+short/plan     prepare_proposal  TR2 2 slots     1239   1205   1108    21   437 yes
+short/plan     get_offers        card 4 offers   1725   1691   1596    19   449 yes
+short/plan     note_event        default          216    182     89    17     0 yes
+sdk/lean       assess_event      TR2             1009    975    394   447     0 yes
+sdk/lean       assess_event      card             963    929    371   424     0 yes
+sdk/lean       prepare_proposal  TR2 2 slots     1717   1683    701   738   437 yes
+sdk/lean       get_offers        card 4 offers   1596   1562    637   662   449 yes
+sdk/lean       note_event        default          317    283     89   102     0 yes
+compact/lean   assess_event      TR2              942    908    394   394     0 yes
+compact/lean   assess_event      card             896    862    371   371     0 yes
+compact/lean   prepare_proposal  TR2 2 slots     1670   1636    701   701   437 yes
+compact/lean   get_offers        card 4 offers   1564   1530    637   637   449 yes
+compact/lean   note_event        default          300    266     89    89     0 yes
+short/lean     assess_event      TR2              531    497    394    27     0 yes
+short/lean     assess_event      card             501    467    371    20     0 yes
+short/lean     prepare_proposal  TR2 2 slots      832    798    701    21   437 yes
+short/lean     get_offers        card 4 offers    766    732    637    19   449 yes
+short/lean     note_event        default          216    182     89    17     0 yes
+5 ['assess_event', 'prepare_proposal', 'get_offers', 'note_event', 'size_probe'] [True, True, True, True, True]

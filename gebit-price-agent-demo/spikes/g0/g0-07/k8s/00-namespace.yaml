@@ -1,0 +1,11 @@
+# G0-07 spike namespace. Kyverno clones registry-pull-secret into it and
+# trust-manager syncs the solace-lab-ca-trust-bundle ConfigMap.
+# The descriptor Secret gpos-g0-gebit-descriptors is NOT in this repo:
+# deploy.sh creates it from a local path (GEBIT_DESCRIPTOR_DIR).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpos-g0
+  labels:
+    app.kubernetes.io/part-of: gpos-g0
+    gpos/spike: g0-07

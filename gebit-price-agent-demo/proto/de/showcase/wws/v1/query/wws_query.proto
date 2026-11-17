@@ -1,0 +1,55 @@
+// proto/de/showcase/wws/v1/query/wws_query.proto
+syntax = "proto3";
+
+package de.showcase.wws.v1.query;
+
+import "de/showcase/wws/v1/datatype/wws_datatype.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.wws.v1.query.protobuf";
+option java_outer_classname = "WwsQueryProto";
+
+message ListArticles {
+  string trace_id = 1;
+  string store_id = 2;
+  // Optional filter by category tag.
+  string category = 3;
+}
+
+message GetArticle {
+  string trace_id = 1;
+  string store_id = 2;
+  oneof key {
+    string article_number = 3;
+    string gtin = 4;
+    string article_id = 5;
+  }
+}
+
+message GetEffectivePrice {
+  string trace_id = 1;
+  string article_number = 2;
+  string store_id = 3;
+  // Optional: business time; empty = demo_now().
+  datatype.OffsetTimestamp at = 4;
+}
+
+message GetSalesPerformance {
+  string trace_id = 1;
+  string article_number = 2;
+  string store_id = 3;
+}
+
+message GetSeasonInfo {
+  string trace_id = 1;
+  string article_number = 2;
+  string store_id = 3;
+}
+
+message GetPriceHistory {
+  string trace_id = 1;
+  string article_number = 2;
+  string store_id = 3;
+  // Optional: days back, default 90.
+  int32 days = 4;
+}

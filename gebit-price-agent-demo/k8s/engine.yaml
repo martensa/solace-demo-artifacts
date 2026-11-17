@@ -1,0 +1,93 @@
+# gpos-engine: Engine: MCP gpos-booth-tools and the HTTP API /api on 8765, outbox relay and
+# watchdog. SAM's str reaches it as http://gpos-engine.gpos-demo.svc:8765/mcp.
+# Shape of bsg-trading-desk-demo/k8s and G0-07, hardened (spec 12.4).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpos-engine
+  labels:
+    app: gpos-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-engine
+  template:
+    metadata:
+      labels:
+        app: gpos-engine
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: registry-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: engine
+          image: gpos-demo
+          imagePullPolicy: Always
+          command: ["python", "-m", "gposdemo.engine"]
+          env:
+            - name: MCP_PORT
+              value: "8765"
+            - name: GPOS_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: gpos-db
+                  key: DSN_ENGINE
+          envFrom:
+            - configMapRef:
+                name: gpos-config
+            - secretRef:
+                name: gpos-broker
+          ports:
+            - name: http
+              containerPort: 8765
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 50Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpos-engine
+  labels:
+    app: gpos-engine
+spec:
+  selector:
+    app: gpos-engine
+  ports:
+    - name: http
+      port: 8765
+      targetPort: http

@@ -1,0 +1,28 @@
+{
+ "@type": "type.googleapis.com/de.showcase.loyalty.v1.event.CouponRedeemed",
+ "header": {
+  "eventTimestamp": {
+   "seconds": "1802871220",
+   "nanos": 505000000
+  }
+ },
+ "metadata": {
+  "offset": "8",
+  "creationTimestamp": {
+   "seconds": "1802871220",
+   "nanos": 490000000
+  },
+  "traceId": "v-0217-0042.close"
+ },
+ "couponId": "CPN-0217-0042",
+ "membershipId": "M-0001",
+ "purchaseTransactionId": "5b1f0c2e-8d4a-4f6b-9a1e-2c7d3e4f5a60",
+ "couponPositionId": "7c1f6a20-55e1-4d0b-9a3c-2b8e4f1d6a77",
+ "discountGranted": {
+  "currency": "EUR",
+  "amount": {
+   "scale": 2,
+   "intVal": "69"
+  }
+ }
+}

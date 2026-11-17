@@ -1,0 +1,64 @@
+# G0-02 Phase A (zero code): a gated builtin tool node in an
+# event-triggered run. With workflow_hil_pause_resume and
+# workflow_tool_approval_enforcement on, `gate` must pause and the
+# approval request must reach the run identity's SAM inbox
+# (marktleitung@solace.lab via the entrypoint rule). `tell` runs only
+# after the approval; `tell_fail` reports deny/expiry via on_exit.
+kind: workflow
+name: gpos-spike-hil-a
+description: >-
+  Gate 0 spike G0-02 Phase A: gated builtin tool node pauses for
+  approval in the SAM inbox, notify_user after the approval.
+spec:
+  appConfig:
+    version: "0.1.0"
+    workflow_timeout: "5m"
+    default_node_timeout: "10s"
+    fail_fast: true
+    skills:
+      - id: gpos_spike_hil_a
+        name: HIL spike A
+        description: Gated tool node approval spike (Gate 0).
+    input_schema:
+      type: object
+      properties:
+        seq: {type: [string, "null"]}
+        note: {type: [string, "null"]}
+    tools:
+      - tool_type: builtin
+        tool_name: get_current_time
+        hil:
+          require_approval: true
+          approval_message: >-
+            Spike G0-02: GEBIT Ente 8,67 EUR -> 6,89 EUR freigeben?
+          show_args: false
+          timeout: "2m"
+      - tool_type: builtin-group
+        group_name: notification_tools
+    nodes:
+      - id: gate
+        type: tool
+        tool_name: get_current_time
+        timeout: "3m"
+      - id: tell
+        type: tool
+        tool_name: notify_user
+        depends_on: [gate]
+        timeout: "5s"
+        input:
+          title: "Spike G0-02: Preis aktiv"
+          message: "Freigabe angewendet (seq {{workflow.input.seq}})."
+          channels: ["web"]
+      - id: tell_fail
+        type: tool
+        tool_name: notify_user
+        timeout: "5s"
+        input:
+          title: "Spike G0-02: Lauf beendet ohne Freigabe"
+          message: "seq {{workflow.input.seq}}: {{workflow.error.message}}"
+          channels: ["web"]
+    on_exit:
+      on_failure: tell_fail
+    output_mapping:
+      seq: "{{workflow.input.seq}}"
+      approved_at: "{{gate.output.current_time}}"

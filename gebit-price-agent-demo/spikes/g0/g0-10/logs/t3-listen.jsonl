@@ -1,0 +1,4 @@
+{"t": 1794390627.944, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t3e-own-qos1-1-dace", "age": 7.073, "body": {"mode": "own/qos1", "now": "2026-11-11T09:50:27.770560+00:00", "seq": "t3e-own-qos1-1-dace", "ts": 1794390620.8704891}}
+{"t": 1794390627.946, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t3e-own-qos1-2-e1aa", "age": 6.863, "body": {"mode": "own/qos1", "now": "2026-11-11T09:50:27.770559+00:00", "seq": "t3e-own-qos1-2-e1aa", "ts": 1794390621.082645}}
+{"t": 1794390627.946, "kind": "recv", "topic": "gpos/spike/p10/out/ok/own", "seq": "t3e-own-qos1-3-3554", "age": 6.657, "body": {"mode": "own/qos1", "now": "2026-11-11T09:50:27.770560+00:00", "seq": "t3e-own-qos1-3-3554", "ts": 1794390621.289421}}
+{"t": 1794390661.037, "kind": "summary", "per_mode": {}}

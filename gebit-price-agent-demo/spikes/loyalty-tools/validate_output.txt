@@ -1,0 +1,15 @@
+OK   gebit_cmd_ApplyAnonymousCoupon.json           ApplyAnonymousCoupon           367 B compact
+OK   gebit_cmd_AssignLoyaltyCoupon.json            AssignLoyaltyCoupon            370 B compact
+OK   gebit_cmd_AssignLoyaltyMembership.json        AssignLoyaltyMembership        375 B compact
+OK   gebit_evt_AnonymousCouponApplied.json         AnonymousCouponApplied         596 B compact
+OK   gebit_evt_LoyaltyCouponAssigned.json          LoyaltyCouponAssigned          529 B compact
+OK   gebit_evt_LoyaltyMembershipAssigned.json      LoyaltyMembershipAssigned      566 B compact
+OK   gebit_receipt_Loyalty_member.json             Loyalty                       1919 B compact
+OK   ours_cmd_IssueCoupon.json                     IssueCoupon                    503 B compact
+OK   ours_dt_EligibleOffers.json                   EligibleOffers                1591 B compact
+OK   ours_dt_MembershipResolution.json             MembershipResolution           577 B compact
+OK   ours_evt_CouponIssued.json                    CouponIssued                   756 B compact
+OK   ours_evt_CouponRedeemed.json                  CouponRedeemed                 509 B compact
+OK   ours_evt_PointsEarned.json                    PointsEarned                   477 B compact
+OK   ours_qry_ResolveMembership.json               ResolveMembership              339 B compact
+14 ok, 0 failed

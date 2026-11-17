@@ -1,0 +1,36 @@
+# G0-09 Part B: own copy of the G0-02 B1 spike agent (baseline prompt),
+# only names, approval text and hil timeout (2m) changed. Gate on the
+# builtin time tool via the reserved `hil` key of toolsetConfigs.
+kind: agent
+name: gpos-spike-p09-approver
+description: >-
+  Gate 0 spike agent: calls one gated tool exactly once so the store
+  manager has to approve it in Agent Mesh.
+spec:
+  type: standard
+  modelProvider:
+    - fast
+  toolsets:
+    - builtin_time_tools
+  toolsetConfigs:
+    - toolsetName: builtin_time_tools
+      configValues:
+        hil:
+          get_current_time:
+            require_approval: true
+            approval_message: >-
+              Spike G0-09 B1: GEBIT Ente 8,67 EUR -> 6,89 EUR freigeben?
+            show_args: false
+            timeout: "2m"
+  skills:
+    - id: spike_apply
+      name: Spike apply
+      description: Calls the gated tool once (Gate 0 spike).
+  inputModes: [text]
+  outputModes: [text]
+  systemPrompt: |
+    You are a test agent of a German trade fair demo. Call the tool
+    get_current_time exactly once. Never call it twice and never call
+    any other tool. If the call succeeds, answer with status "applied"
+    and the tool's current_time value. If the tool returns an error or
+    is denied, answer with status "denied" and an empty time.

@@ -1,0 +1,10 @@
+{"t": 1794390620.869, "kind": "sent", "topic": "gpos/spike/p10/q1/t3e", "seq": "t3e-q1-qos1-1-299f", "qos": 1, "expiry": null}
+{"t": 1794390620.87, "kind": "sent", "topic": "gpos/spike/p10/q0/t3e", "seq": "t3e-q0-qos1-1-3098", "qos": 1, "expiry": null}
+{"t": 1794390620.872, "kind": "sent", "topic": "gpos/spike/p10/own/t3e", "seq": "t3e-own-qos1-1-dace", "qos": 1, "expiry": null}
+{"t": 1794390621.077, "kind": "sent", "topic": "gpos/spike/p10/q1/t3e", "seq": "t3e-q1-qos1-2-41c8", "qos": 1, "expiry": null}
+{"t": 1794390621.083, "kind": "sent", "topic": "gpos/spike/p10/q0/t3e", "seq": "t3e-q0-qos1-2-e782", "qos": 1, "expiry": null}
+{"t": 1794390621.085, "kind": "sent", "topic": "gpos/spike/p10/own/t3e", "seq": "t3e-own-qos1-2-e1aa", "qos": 1, "expiry": null}
+{"t": 1794390621.288, "kind": "sent", "topic": "gpos/spike/p10/q1/t3e", "seq": "t3e-q1-qos1-3-c502", "qos": 1, "expiry": null}
+{"t": 1794390621.289, "kind": "sent", "topic": "gpos/spike/p10/q0/t3e", "seq": "t3e-q0-qos1-3-33c4", "qos": 1, "expiry": null}
+{"t": 1794390621.292, "kind": "sent", "topic": "gpos/spike/p10/own/t3e", "seq": "t3e-own-qos1-3-3554", "qos": 1, "expiry": null}
+{"t": 1794390622.292, "kind": "summary", "per_mode": {"q1/qos1": {"sent": 3, "ok": 0, "dup": 0, "missing": ["t3e-q1-qos1-1-299f", "t3e-q1-qos1-2-41c8", "t3e-q1-qos1-3-c502"]}, "q0/qos1": {"sent": 3, "ok": 0, "dup": 0, "missing": ["t3e-q0-qos1-1-3098", "t3e-q0-qos1-2-e782", "t3e-q0-qos1-3-33c4"]}, "own/qos1": {"sent": 3, "ok": 0, "dup": 0, "missing": ["t3e-own-qos1-1-dace", "t3e-own-qos1-2-e1aa", "t3e-own-qos1-3-3554"]}}}

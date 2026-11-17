@@ -1,0 +1,4 @@
+# data/seasons.yaml
+- {code: valentinstag, label: "Valentinstag", start: 2027-01-18, end: 2027-02-14}
+- {code: winter, label: "Winter", start: 2026-11-01, end: 2027-02-28}
+- {code: ostern, label: "Ostern", start: 2027-03-01, end: 2027-03-28}

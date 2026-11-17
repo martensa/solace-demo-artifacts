@@ -1,0 +1,195 @@
+# mesh/workflows/gpos-basket-review.yaml
+kind: workflow
+name: gpos-basket-review
+description: >-
+  One run per closed booth transaction: the engine prepares the flagged articles
+  (rule analysis, no model), the pricing agent (fast) gathers the evidence through
+  the POS, WWS and loyalty APIs, the engine records it, the price planner (planning,
+  no tools) writes the final recommendation and the engine stages it for approval.
+spec:
+  appConfig:
+    version: "0.2.3"             # 0.2.3: gather names the tool list (UC1-31); 0.2.2: UC1-30
+    workflow_timeout: "150s"
+    default_node_timeout: "10s"
+    fail_fast: true
+    skills:
+      - id: gpos_basket_review
+        name: Basket price review
+        description: Review the purchased articles of one closed transaction.
+    input_schema:
+      type: object
+      required: [review_id]
+      properties:
+        schema_version: {type: [string, "null"]}
+        review_id: {type: string}
+        tx_id: {type: [string, "null"]}
+        store: {type: [string, "null"]}
+        till: {type: [string, "null"]}
+    nodes:
+      - id: prepare
+        type: tool
+        connector: gpos-booth-tools
+        tool: prepare_review
+        input:
+          review_id: "{{workflow.input.review_id}}"
+          run_id: "{{workflow.run_id}}"
+      - id: route
+        type: switch
+        depends_on: [prepare]
+        cases:
+          - condition: "'{{prepare.output.mcp_structured_content.candidate}}' == 'yes'"
+            node: gather
+        default: skip
+      - id: gather                  # fast: evidence through the three API connectors
+        type: agent
+        agent_name: gpos-pricing-agent
+        depends_on: [route]
+        timeout: "60s"
+        instruction: >-
+          Follow your system prompt. Call get_transaction and, for each candidate,
+          every tool of its line in tool rule 1b (customer_behaviour with consent:
+          get_article and get_purchase_behaviour) in one first response, then
+          return exactly these keys: tx_status,
+          c1_article, c1_reason, c1_holds, c1_numbers, c1_tools, c2_article,
+          c2_reason, c2_holds, c2_numbers, c2_tools.
+        input:
+          review: "{{prepare.output.mcp_structured_content.agent_input}}"
+        output_schema_override:
+          type: object
+          required: [tx_status, c1_article, c1_reason, c1_holds, c1_numbers, c1_tools,
+                     c2_article, c2_reason, c2_holds, c2_numbers, c2_tools]
+          properties:
+            tx_status: {type: string, enum: [closed, not_closed, unknown]}
+            c1_article: {type: string}
+            c1_reason: {type: string, enum: [slow_seller, season_end,
+                                             customer_behaviour, none]}
+            c1_holds: {type: string, enum: ["yes", "no", "unknown"]}
+            c1_numbers: {type: string}
+            c1_tools: {type: string}
+            c2_article: {type: string}
+            c2_reason: {type: string, enum: [slow_seller, season_end,
+                                             customer_behaviour, none]}
+            c2_holds: {type: string, enum: ["yes", "no", "unknown"]}
+            c2_numbers: {type: string}
+            c2_tools: {type: string}
+      - id: note                    # engine: validate, store and publish the evidence
+        type: tool
+        connector: gpos-booth-tools
+        tool: note_evidence
+        depends_on: [gather]
+        # hard rule 6: gather is skipped on the skip path, note would still start
+        when: "'{{prepare.output.mcp_structured_content.candidate}}' == 'yes'"
+        timeout: "5s"
+        input:
+          review_id: "{{workflow.input.review_id}}"
+          model: "fast"
+          tx_status: "{{gather.output.tx_status}}"
+          c1_article: "{{gather.output.c1_article}}"
+          c1_reason: "{{gather.output.c1_reason}}"
+          c1_holds: "{{gather.output.c1_holds}}"
+          c1_numbers: "{{gather.output.c1_numbers}}"
+          c1_tools: "{{gather.output.c1_tools}}"
+          c2_article: "{{gather.output.c2_article}}"
+          c2_reason: "{{gather.output.c2_reason}}"
+          c2_holds: "{{gather.output.c2_holds}}"
+          c2_numbers: "{{gather.output.c2_numbers}}"
+          c2_tools: "{{gather.output.c2_tools}}"
+          run_id: "{{workflow.run_id}}"
+      - id: recommend               # planning: final recommendation, no tools
+        type: agent
+        agent_name: gpos-price-planner
+        depends_on: [note]
+        # hard rule 6: on the skip path note is skipped and this stays text (never ==);
+        # a stale review (reset meanwhile) costs no planning call either
+        when: "'{{note.output.mcp_structured_content.status}}' == 'noted'"
+        # UC1-30: a clean planning answer takes 7-18 s; a stuck one (the model calls
+        # SAM's internal tools) runs ~100 s. The timeout counts per attempt, so a
+        # stuck first attempt costs 30 s and one retry follows (30 + 1 + 30 s).
+        timeout: "30s"
+        retry_strategy:
+          limit: 1
+          retry_policy: "Always"
+          backoff:
+            duration: "1s"
+        instruction: >-
+          Follow your system prompt. You need no tools: use only review and evidence
+          of this input, and return exactly these keys in the required output form,
+          as text in your first response, never as a tool call: decision,
+          article_number, reason, step_pct, headline, rationale, facts_line.
+        input:
+          review: "{{prepare.output.mcp_structured_content.agent_input}}"
+          evidence: "{{note.output.mcp_structured_content.evidence}}"
+        output_schema_override:
+          type: object
+          required: [decision, article_number, reason, step_pct, headline, rationale,
+                     facts_line]
+          properties:
+            decision: {type: string, enum: [propose, no_action]}
+            article_number: {type: string}
+            reason: {type: string, enum: [slow_seller, season_end, customer_behaviour,
+                                          none]}
+            step_pct: {type: string, enum: ["0", "10", "20", "30"]}
+            headline: {type: string}
+            rationale: {type: string}
+            facts_line: {type: string}
+      - id: stage
+        type: tool
+        connector: gpos-booth-tools
+        tool: stage_proposal
+        depends_on: [recommend]
+        when: "'{{recommend.output.decision}}' == 'propose'"
+        input:
+          review_id: "{{workflow.input.review_id}}"
+          article_number: "{{recommend.output.article_number}}"
+          reason: "{{recommend.output.reason}}"
+          step_pct: "{{recommend.output.step_pct}}"
+          headline: "{{recommend.output.headline}}"
+          rationale: "{{recommend.output.rationale}}"
+          facts_line: "{{recommend.output.facts_line}}"
+          run_id: "{{workflow.run_id}}"
+          model: "planning"
+      - id: conclude
+        type: tool
+        connector: gpos-booth-tools
+        tool: close_review
+        depends_on: [recommend]
+        when: "'{{recommend.output.decision}}' == 'no_action'"   # never != (rule 6)
+        input:
+          review_id: "{{workflow.input.review_id}}"
+          outcome: "no_action"
+          rationale: "{{recommend.output.rationale}}"
+          run_id: "{{workflow.run_id}}"
+          model: "planning"
+      - id: skip
+        type: tool
+        connector: gpos-booth-tools
+        tool: close_review
+        depends_on: [route]
+        input:
+          review_id: "{{workflow.input.review_id}}"
+          outcome: "{{prepare.output.mcp_structured_content.reason}}"
+          rationale: ""
+          run_id: "{{workflow.run_id}}"
+          model: ""
+      - id: fail                    # only via on_exit: agent or planning failure
+        type: tool
+        connector: gpos-booth-tools
+        tool: close_review
+        input:
+          review_id: "{{workflow.input.review_id}}"
+          outcome: "failed"
+          rationale: "{{workflow.error.message}}"
+          run_id: "{{workflow.run_id}}"
+          model: ""
+    on_exit:
+      on_failure: fail
+    output_mapping:
+      review_id: "{{workflow.input.review_id}}"
+      decision:
+        coalesce:
+          - "{{recommend.output.decision}}"
+          - "{{prepare.output.mcp_structured_content.reason}}"
+      proposal_id:
+        coalesce:
+          - "{{stage.output.mcp_structured_content.proposal_id}}"
+          - "none"

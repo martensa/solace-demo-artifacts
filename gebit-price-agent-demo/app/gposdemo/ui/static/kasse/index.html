@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kasse · Messestand</title>
+  <link rel="stylesheet" href="/static/shared/common.css">
+  <link rel="stylesheet" href="/static/kasse/kasse.css">
+</head>
+<body>
+  <header class="head">
+    <h1 id="head-title"></h1>
+    <span class="head-bon">
+      <span id="head-bon-label"></span>
+      <span id="head-bon" class="mono"></span>
+    </span>
+    <span id="head-status" class="status"></span>
+    <label id="test-switch" class="switch hidden">
+      <input id="test-toggle" type="checkbox">
+      <span id="test-switch-label"></span>
+    </label>
+    <button id="btn-reset" class="btn" type="button"></button>
+  </header>
+
+  <main class="kasse">
+    <section class="left" aria-label="Artikel">
+      <form id="scan-form" class="scan" autocomplete="off">
+        <input id="ean" class="ean" type="text" inputmode="numeric" autofocus>
+        <button id="ean-ok" class="btn primary" type="submit"></button>
+      </form>
+      <div id="msg" class="msg" role="alert"></div>
+      <nav id="tabs" class="tabs"></nav>
+      <div id="grid" class="grid"></div>
+      <section class="bar">
+        <h3 id="cards-title"></h3>
+        <div id="cards" class="bar-buttons"></div>
+      </section>
+      <section class="bar">
+        <h3 id="scenarios-title"></h3>
+        <div id="scenarios" class="bar-buttons"></div>
+        <div id="scenario-progress" class="muted"></div>
+      </section>
+    </section>
+
+    <aside class="bon panel" aria-label="Bon">
+      <h2 id="bon-title"></h2>
+      <div id="bon-card" class="bon-card"></div>
+      <ol id="lines" class="lines"></ol>
+      <div class="sum">
+        <span id="sum-label"></span>
+        <span id="total" class="total"></span>
+      </div>
+      <div class="actions">
+        <button id="btn-new" class="btn" type="button"></button>
+        <button id="btn-void" class="btn" type="button"></button>
+        <button id="btn-pay" class="btn primary" type="button"></button>
+        <button id="btn-cancel" class="btn danger" type="button"></button>
+      </div>
+    </aside>
+  </main>
+
+  <dialog id="reset-dialog" class="dialog">
+    <form method="dialog" class="dialog-body">
+      <h2 id="reset-title"></h2>
+      <div id="reset-scopes" class="scopes"></div>
+      <p id="reset-hint" class="muted"></p>
+      <p id="reset-result" class="msg"></p>
+      <div class="dialog-actions">
+        <button id="reset-close" class="btn" value="cancel"></button>
+        <button id="reset-go" class="btn danger" type="button"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/static/shared/texts.js"></script>
+  <script src="/static/shared/common.js"></script>
+  <script src="/static/kasse/kasse.js"></script>
+</body>
+</html>

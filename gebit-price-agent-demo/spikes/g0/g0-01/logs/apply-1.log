@@ -1,0 +1,16 @@
+using auto-detected manifest: manifest.yaml
+deploying workflow/gpos-spike-p01-pos (deploy)...
+connectors/
+  + gpos-spike-p01-tools  create
+2 connectors: 1 create, 0 update, 1 delete, 0 unchanged
+workflows/
+  + gpos-spike-p01-pos   create + deploy
+15 workflows: 1 create, 0 update, 14 delete, 0 unchanged
+
+Applied connectors:
+  + gpos-spike-p01-tools  created
+
+Applied workflows:
+  + gpos-spike-p01-pos   created
+Deployments:
+  * gpos-spike-p01-pos   deploy (deploy) completed

@@ -1,0 +1,31 @@
+# https://gpos.solace.lab -> gpos-ui:80 (BFF, /kasse, /monitor, SSE). TLS from
+# certificate.yaml (ClusterIssuer solace-lab-ca-issuer); Kyverno requires
+# spec.tls and ssl-redirect "true". No cert-manager ingress annotation: the
+# Certificate gpos-demo owns the Secret gpos-demo-tls. Buffering off and a long
+# read timeout for the SSE stream (spec 10.2).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-ui
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - gpos.solace.lab
+      secretName: gpos-demo-tls
+  rules:
+    - host: gpos.solace.lab
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http

@@ -1,0 +1,37 @@
+# G0-03: notify_user as a tool node without a model; German umlauts,
+# euro sign and en dash in title and body. Recipient = run identity.
+kind: workflow
+name: gpos-spike-notify
+description: >-
+  Gate 0 spike G0-03: one notify_user tool node, no model, umlauts.
+spec:
+  appConfig:
+    version: "0.1.1"
+    workflow_timeout: "30s"
+    default_node_timeout: "10s"
+    fail_fast: true
+    skills:
+      - id: gpos_spike_notify
+        name: Notify spike
+        description: notify_user tool node spike (Gate 0).
+    input_schema:
+      type: object
+      properties:
+        seq: {type: [string, "null"]}
+        note: {type: [string, "null"]}
+    tools:
+      - tool_type: builtin-group
+        group_name: notification_tools
+    nodes:
+      - id: tell
+        type: tool
+        tool_name: notify_user
+        timeout: "5s"
+        input:
+          title: "Preis aktiv: GEBIT Ente 6,89 € (−20 %)"
+          message: "Ä Ö Ü ä ö ü ß € – Freigabe {{workflow.input.seq}} übernommen."
+          channels: ["web"]
+    output_mapping:
+      seq: "{{workflow.input.seq}}"
+      request_id: "{{tell.output.request_id}}"
+      status: "{{tell.output.status}}"

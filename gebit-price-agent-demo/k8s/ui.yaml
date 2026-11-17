@@ -1,0 +1,94 @@
+# gpos-ui: BFF: /kasse, /monitor, POS facade, SSE on 8090 (Service port 80). One replica:
+# the SSE fan-out is in-process. ui.ctl (probes, reset, tools-list) runs here.
+# Shape of bsg-trading-desk-demo/k8s and G0-07, hardened (spec 12.4).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpos-ui
+  labels:
+    app: gpos-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-ui
+  template:
+    metadata:
+      labels:
+        app: gpos-ui
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: registry-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ui
+          image: gpos-demo
+          imagePullPolicy: Always
+          command: ["python", "-m", "gposdemo.ui"]
+          env:
+            - name: HTTP_PORT
+              value: "8090"
+          envFrom:
+            - configMapRef:
+                name: gpos-config
+            - secretRef:
+                name: gpos-broker
+          ports:
+            - name: http
+              containerPort: 8090
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: descriptors
+              mountPath: /descriptors
+              readOnly: true
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 50Mi
+        - name: descriptors
+          secret:
+            secretName: gpos-gebit-descriptors
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpos-ui
+  labels:
+    app: gpos-ui
+spec:
+  selector:
+    app: gpos-ui
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

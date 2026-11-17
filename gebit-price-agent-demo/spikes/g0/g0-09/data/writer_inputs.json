@@ -1,0 +1,20 @@
+[
+  {"article": "Bio-Süßkartoffel-Rösti 400 g", "kind": "slow_seller",
+   "valid_to": "Fr 19.02. 20:00",
+   "facts": {"sold_today": 4, "plan_so_far": 13, "stock": 38,
+             "days_of_supply": 4.6, "target_days": 2.0, "ref30": "3,49 €"},
+   "notes": ["Lieferavis: Freitag früh kommen 24 weitere Packungen (Kühlhaus Süd)."],
+   "slots": {"A": {"pct": 20, "price": "2,79 €", "units_delta": 11, "gp_delta": "4,10 €"},
+             "B": {"pct": 10, "price": "3,14 €", "units_delta": 5, "gp_delta": "2,35 €"}},
+   "blocked": [{"pct": 30, "rule": "Mindestmarge 20 %", "margin_pct": 12.6}],
+   "recommended": "A"},
+  {"article": "Münchner Weißwürste 6 Stück", "kind": "overstock",
+   "valid_to": "Sa 20.02. 14:00",
+   "facts": {"sold_today": 7, "plan_so_far": 18, "stock": 52,
+             "days_of_supply": 3.9, "target_days": 1.5, "ref30": "5,99 €"},
+   "notes": ["Weißwurst-Frühstück für Stammkunden am Samstag um 9 Uhr geplant."],
+   "slots": {"A": {"pct": 25, "price": "4,49 €", "units_delta": 16, "gp_delta": "6,20 €"},
+             "B": {"pct": 15, "price": "5,09 €", "units_delta": 8, "gp_delta": "4,05 €"}},
+   "blocked": [{"pct": 35, "rule": "Mindestmarge 20 %", "margin_pct": 11.8}],
+   "recommended": "A"}
+]

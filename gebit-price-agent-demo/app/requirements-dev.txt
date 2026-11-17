@@ -1,0 +1,4 @@
+# gpos-demo test and build tooling (UC1-BUILD-SPEC 12.3, exact pins).
+-r requirements.txt
+pytest==9.2.0
+grpcio-tools==1.85.1

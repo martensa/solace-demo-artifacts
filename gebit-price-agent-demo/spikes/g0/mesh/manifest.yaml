@@ -1,0 +1,19 @@
+# Gate 0 spike package of the EuroCIS price agent (prefix gpos-spike-).
+# Applied with:  sam config apply  (in this directory, as sam_admin)
+# NEVER --prune. The entrypoint is rendered separately (../render.sh).
+kind: manifest
+name: gpos-g0-spikes
+description: >-
+  Gate 0 spike workflows of the EuroCIS price agent (HITL, notify).
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  agents:
+    - gpos-spike-approver
+  workflows:
+    - gpos-spike-hil-a
+    - gpos-spike-hil-b1
+    - gpos-spike-notify

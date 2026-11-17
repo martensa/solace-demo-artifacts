@@ -1,0 +1,95 @@
+# mesh/entrypoints/gpos-booth-events.yaml.template
+# TEMPLATE -- rendered by scripts/render_mesh.py into mesh/.rendered/ (chmod 600).
+# Placeholders from .env; broker credentials from BROKER_CREDENTIALS_FROM.
+# Rule names are permanent (finding 21): r1_booth_till, r3_basket_review,
+# r4_price_approval. r2 and r5 stay reserved for later use cases.
+kind: entrypoint
+name: gpos-booth-events
+description: >-
+  EuroCIS price agent UC1: GEBIT POS events of the booth till, basket review
+  requests and price approval requests start the gpos workflows.
+spec:
+  type: event_mesh
+  deploy: true
+  values:
+    broker_url: "__BROKER_WS_URL__"
+    broker_vpn: "__BROKER_VPN__"
+    broker_username: "__BROKER_USERNAME__"
+    broker_password: "__BROKER_PASSWORD__"
+    tls_skip_verify: "false"
+    event_rules:
+      - name: r1_booth_till
+        # >>> R1_MODE=own
+        existingQueueName: "__R1_QUEUE__"
+        # <<< R1_MODE=own
+        # >>> R1_MODE=sam
+        subscriptions:
+          - topic: "gebit/rp/purchase/v2/basket/PositionAdded/__BOOTH__/>"
+            qos: 1
+          - topic: "gebit/rp/purchase/v2/basket/ArticlePositionVoided/__BOOTH__/>"
+            qos: 1
+          - topic: "gebit/rp/purchase/v2/loyalty/LoyaltyMembershipAssigned/__BOOTH__/>"
+            qos: 1
+          - topic: >-
+              gebit/rp/purchase/v2/purchase_transaction/PurchaseTransactionClosed/__BOOTH__/>
+            qos: 1
+          - topic: >-
+              gebit/rp/purchase/v2/purchase_transaction/PurchaseTransactionCancelled/__BOOTH__/>
+            qos: 1
+        # <<< R1_MODE=sam
+        messageFormat: json
+        targetWorkflowName: gpos-pos-event
+        inputExpression: "input.payload:"
+        defaultUserIdentity: "__RUN_IDENTITY__"
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/v1/sam/done/r1"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/v1/sam/error/r1"
+          topicType: static
+          responseType: error
+      - name: r3_basket_review
+        subscriptions:
+          - topic: "gpos/v1/review/request/__STORE__/__TILL__/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-basket-review
+        inputExpression: "input.payload:"
+        defaultUserIdentity: "__RUN_IDENTITY__"
+        acknowledgmentPolicy:
+          mode: on_receive
+        successOutput:
+          enabled: true
+          topic: "gpos/v1/sam/done/r3"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/v1/sam/error/r3"
+          topicType: static
+          responseType: error
+      - name: r4_price_approval
+        subscriptions:
+          - topic: "gpos/v1/approval/request/__STORE__/__TILL__/>"
+            qos: 1
+        messageFormat: json
+        targetWorkflowName: gpos-price-approval
+        inputExpression: "input.payload:"
+        defaultUserIdentity: "__RUN_IDENTITY__"
+        acknowledgmentPolicy:
+          mode: on_receive      # a paused run must not hit an ack timeout (plan 3.11)
+        successOutput:
+          enabled: true
+          topic: "gpos/v1/sam/done/r4"
+          topicType: static
+          responseType: structured
+        errorOutput:
+          enabled: true
+          topic: "gpos/v1/sam/error/r4"
+          topicType: static
+          responseType: error

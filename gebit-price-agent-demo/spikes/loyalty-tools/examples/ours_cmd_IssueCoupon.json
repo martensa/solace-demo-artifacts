@@ -1,0 +1,23 @@
+{
+ "@type": "type.googleapis.com/de.showcase.loyalty.v1.command.IssueCoupon",
+ "header": {
+  "traceId": "v-0217-0042",
+  "originator": {
+   "identityId": "gpos-engine"
+  }
+ },
+ "membershipId": "M-0001",
+ "offerId": "OFF-CANTUCCINI-30",
+ "channel": "ISSUE_CHANNEL_AGENT",
+ "purchaseTransactionId": "5b1f0c2e-8d4a-4f6b-9a1e-2c7d3e4f5a60",
+ "proposalId": "prp-0217-0043",
+ "displayText": "Passt zu Ihrem Espresso: Cantuccini heute 1,60 EUR statt 2,29 EUR",
+ "extensionProperties": [
+  {
+   "key": "showcase.samRunId",
+   "typedValue": {
+    "stringValue": "wfr-3f9a"
+   }
+  }
+ ]
+}

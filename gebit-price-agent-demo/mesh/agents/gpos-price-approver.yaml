@@ -1,0 +1,64 @@
+# mesh/agents/gpos-price-approver.yaml (hardened B1 prompt of G0-09, 0/50 duplicates;
+# rule 5 and the status split denied/timeout/error added 12.11.2026, UC1-27, A-30;
+# the answer cases in SAM's order with SAM's texts and the key message, UC1-29)
+kind: agent
+name: gpos-price-approver
+description: >-
+  Applies one staged price proposal through the gated apply_price tool; the store
+  manager approves every call in Agent Mesh.
+spec:
+  type: standard
+  modelProvider:
+    - fast
+  # A-21 (12.11.): SAM attaches these two toolsets to every agent anyway; the
+  # exclusions are stored per listed toolset, so both must be listed here, otherwise
+  # SAM drops toolsetExcludedTools silently. Result: no artifact or data tool.
+  toolsets: [builtin_artifact_tools, data_analysis]
+  toolsetExcludedTools:
+    builtin_artifact_tools: [list_artifacts, load_artifact, delete_artifact,
+                             append_to_artifact, artifact_search_and_replace_regex,
+                             artifact_grep]
+    data_analysis: [query_data_with_sql, create_sqlite_db, transform_data_with_jmespath,
+                    merge_structured_data, reinterpret_artifact,
+                    create_chart_from_plotly_config]
+  connectors:
+    - gpos-price-gate
+  # No additionalConfigurations: identical to gpos-spike-p09-approver-h except the
+  # gate (connector instead of toolsetConfigs, A-1) and the prompt's tool name.
+  skills:
+    - id: price_apply
+      name: Price apply
+      description: Calls the gated apply_price tool once for one staged proposal.
+  inputModes: [text]
+  outputModes: [text]
+  systemPrompt: |
+    You apply one staged price proposal of a German trade fair demo. Your whole
+    job is ONE call of the tool apply_price. Rules:
+    1. Call apply_price exactly once, as your first action, with exactly the
+       values from the input: proposal_id, proposal_hash, article_name,
+       old_price, new_price, pct_label, reason_label, valid_to_label, run_id.
+       Never change a value. Put no other tool call into the same response.
+    2. The call waits for the store manager's approval. Its first result is
+       final, whatever it says: success, error, denial or timeout.
+    3. As soon as you have that first result, do not call any tool again. Reply
+       immediately with your final answer.
+    4. A second call creates a second approval request for the store manager and
+       is a serious error. Never call any other tool, never list or load
+       artifacts.
+    5. A denial by the store manager, a timeout and any tool error are normal,
+       expected results of your job, not a failure of your task. Never end your
+       task with an error, never report it as failed and never stop without your
+       final answer.
+    Your final answer always has exactly the keys status, action_id and message.
+    For status and action_id take the FIRST of these cases that matches the
+    result of apply_price:
+    - the result's message says the call was denied, as Agent Mesh writes
+      "Tool call denied by user.": status "denied" and action_id "".
+    - the result's message says the approval timed out, as Agent Mesh writes
+      "Tool approval timed out after 2 minutes.": status "timeout" and
+      action_id "".
+    - apply_price returned its own result (status and action_id inside it):
+      that status and action_id exactly as returned.
+    - any other error: status "error" and action_id "".
+    message: the message text of the apply_price result, copied exactly (at
+    most 200 characters), or "" if the result has no message.

@@ -1,0 +1,74 @@
+//
+// account_event.proto
+//
+// Topic: showcase/loyalty/v1/account/{EventName}/{country}/{company}/{store}/{membershipId}
+//
+syntax = "proto3";
+
+package de.showcase.loyalty.v1.event;
+
+import "de/showcase/loyalty/v1/datatype/common_datatype.proto";
+import "de/showcase/loyalty/v1/event/common_event.proto";
+
+option java_multiple_files = true;
+option java_package = "de.showcase.loyalty.v1.event.protobuf";
+option java_outer_classname = "AccountEventProto";
+
+// Points were booked for a closed SALE.
+message PointsEarned {
+
+  // Mandatory: The header.
+  Header header = 1;
+
+  // Mandatory: The metadata.
+  datatype.Metadata metadata = 2;
+
+  // Mandatory: The membership id.
+  string membership_id = 3;
+
+  // Mandatory: The account id.
+  string account_id = 4;
+
+  // Mandatory: Points earned.
+  datatype.BDecimal amount = 5;
+
+  // Mandatory: Balance after booking.
+  datatype.BDecimal balance_after = 6;
+
+  // Mandatory: The purchase transaction id.
+  string purchase_transaction_id = 7;
+
+  // Mandatory: Promotion id of the earn rule, e.g. promotion-base-points.
+  string promotion_id = 8;
+
+  // List of extension properties. It can be empty.
+  repeated datatype.Property extension_properties = 9;
+}
+
+// Points were reversed because a SALE was voided (Bonstorno).
+message PointsReversed {
+
+  // Mandatory: The header.
+  Header header = 1;
+
+  // Mandatory: The metadata.
+  datatype.Metadata metadata = 2;
+
+  // Mandatory: The membership id.
+  string membership_id = 3;
+
+  // Mandatory: The account id.
+  string account_id = 4;
+
+  // Mandatory: Points reversed (negative).
+  datatype.BDecimal amount = 5;
+
+  // Mandatory: Balance after booking.
+  datatype.BDecimal balance_after = 6;
+
+  // Mandatory: The VOID purchase transaction id.
+  string purchase_transaction_id = 7;
+
+  // Mandatory: The original SALE purchase transaction id.
+  string referenced_purchase_transaction_id = 8;
+}

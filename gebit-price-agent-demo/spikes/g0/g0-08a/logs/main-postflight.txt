@@ -1,0 +1,6 @@
+agent-mesh-postgresql-0                             1/1   Running   0     22h
+agent-mesh-seaweedfs-0                              1/1   Running   0     22h
+agent-mesh-solace-agent-mesh-awe-598dd5bdbd-2kcq6   1/1   Running   0     83m
+agent-mesh-solace-agent-mesh-gwe-5d8bbf6b6-zs2wr    1/1   Running   0     84m
+agent-mesh-solace-agent-mesh-str-7b5794c9d7-n4g67   1/1   Running   0     83m
+gpos-spike-p01-stub-598fb94465-fbvmn    1/1   Running   0     49m

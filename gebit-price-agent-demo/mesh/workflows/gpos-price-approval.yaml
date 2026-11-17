@@ -1,0 +1,150 @@
+# mesh/workflows/gpos-price-approval.yaml
+kind: workflow
+name: gpos-price-approval
+description: >-
+  Native approval of one staged price proposal: summary notification, then the
+  approver agent calls the gated apply_price (variant B1); the engine records the
+  outcome. Rejections and expiries are recorded too.
+spec:
+  appConfig:
+    version: "0.1.2"             # 0.1.2: message -> tool_message (UC1-29)
+    workflow_timeout: "6m"
+    default_node_timeout: "10s"
+    fail_fast: true
+    skills:
+      - id: gpos_price_approval
+        name: Price approval
+        description: Human approval and application of one price proposal.
+    input_schema:
+      type: object
+      required: [proposal_id]
+      properties:
+        schema_version: {type: [string, "null"]}
+        proposal_id: {type: string}
+        store: {type: [string, "null"]}
+        till: {type: [string, "null"]}
+    tools:
+      - tool_type: builtin-group
+        group_name: notification_tools
+    nodes:
+      - id: check
+        type: tool
+        connector: gpos-booth-tools
+        tool: check_proposal
+        input:
+          proposal_id: "{{workflow.input.proposal_id}}"
+          run_id: "{{workflow.run_id}}"
+      - id: route
+        type: switch
+        depends_on: [check]
+        cases:
+          - condition: >-
+              '{{check.output.mcp_structured_content.status}}' == 'awaiting_approval'
+            node: inform
+          - condition: "'{{check.output.mcp_structured_content.status}}' == 'probe'"
+            node: ping
+        default: skip
+      - id: inform
+        type: tool
+        tool_name: notify_user
+        depends_on: [route]
+        timeout: "5s"
+        input:
+          title: "{{check.output.mcp_structured_content.notify_title}}"
+          message: "{{check.output.mcp_structured_content.notify_message}}"
+          channels: ["web"]
+      - id: approve
+        type: agent
+        agent_name: gpos-price-approver
+        depends_on: [inform]
+        # rule 6: inform may be skipped, approve would still start without this
+        when: >-
+          '{{check.output.mcp_structured_content.status}}' == 'awaiting_approval'
+        timeout: "5m"
+        instruction: >-
+          Call apply_price once, as one single call, and never repeat it. After its
+          first result call no further tool and immediately return status, action_id
+          and message. A denial, a timeout or a tool error is a normal result, never
+          a task failure: return status "denied" (the call was denied), "timeout"
+          (the approval timed out) or "error" (any other error) with an empty
+          action_id, and in message always the message text of the result.
+        input:
+          proposal_id: "{{workflow.input.proposal_id}}"
+          proposal_hash: "{{check.output.mcp_structured_content.proposal_hash}}"
+          article_name: "{{check.output.mcp_structured_content.article_name}}"
+          old_price: "{{check.output.mcp_structured_content.old_price}}"
+          new_price: "{{check.output.mcp_structured_content.new_price}}"
+          pct_label: "{{check.output.mcp_structured_content.pct_label}}"
+          reason_label: "{{check.output.mcp_structured_content.reason_label}}"
+          valid_to_label: "{{check.output.mcp_structured_content.valid_to_label}}"
+          run_id: "{{workflow.run_id}}"
+        output_schema_override:
+          type: object
+          required: [status, action_id, message]
+          properties:
+            status: {type: string}
+            action_id: {type: string}
+            message: {type: string}
+      - id: record
+        type: tool
+        connector: gpos-booth-tools
+        tool: record_outcome
+        depends_on: [approve]
+        when: >-
+          '{{check.output.mcp_structured_content.status}}' == 'awaiting_approval'
+        input:
+          proposal_id: "{{workflow.input.proposal_id}}"
+          run_id: "{{workflow.run_id}}"
+          agent_status: "{{approve.output.status}}"
+          action_id: "{{approve.output.action_id}}"
+          error: ""
+          # SAM's own words on a denial or timeout as the approver copied them (11.5
+          # R5m); the engine ignores an unresolved reference, record_fail passes none
+          tool_message: "{{approve.output.message}}"
+      - id: tell
+        type: tool
+        tool_name: notify_user
+        depends_on: [record]
+        when: "'{{record.output.mcp_structured_content.notify}}' == 'yes'"
+        timeout: "5s"
+        input:
+          title: "{{record.output.mcp_structured_content.notify_title}}"
+          message: "{{record.output.mcp_structured_content.notify_message}}"
+          channels: ["web"]
+      - id: ping                    # login/notify probe only (9.7), no model
+        type: tool
+        tool_name: notify_user
+        depends_on: [route]
+        timeout: "5s"
+        input:
+          title: "{{check.output.mcp_structured_content.notify_title}}"
+          message: "{{check.output.mcp_structured_content.notify_message}}"
+          channels: ["web"]
+      - id: skip
+        type: tool
+        connector: gpos-booth-tools
+        tool: note_event
+        depends_on: [route]
+        input:
+          event_key: "{{workflow.input.proposal_id}}"
+          verdict: "{{check.output.mcp_structured_content.status}}"
+          run_id: "{{workflow.run_id}}"
+      - id: record_fail             # only via on_exit; the engine classifies the
+                                    # error text and the clock (11.5 R3a, R6, R7)
+        type: tool
+        connector: gpos-booth-tools
+        tool: record_outcome
+        input:
+          proposal_id: "{{workflow.input.proposal_id}}"
+          run_id: "{{workflow.run_id}}"
+          agent_status: ""
+          action_id: ""
+          error: "{{workflow.error.message}}"
+    on_exit:
+      on_failure: record_fail
+    output_mapping:
+      proposal_id: "{{workflow.input.proposal_id}}"
+      outcome:
+        coalesce:
+          - "{{record.output.mcp_structured_content.outcome}}"
+          - "{{check.output.mcp_structured_content.status}}"

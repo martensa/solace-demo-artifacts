@@ -1,0 +1,93 @@
+# gpos-gate: Gate: MCP gpos-price-gate on 8766, the only price-changing tool (apply_price).
+# Same DB role as the engine (gpos_engine); no relay, the engine publishes.
+# Shape of bsg-trading-desk-demo/k8s and G0-07, hardened (spec 12.4).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpos-gate
+  labels:
+    app: gpos-gate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-gate
+  template:
+    metadata:
+      labels:
+        app: gpos-gate
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      imagePullSecrets:
+        - name: registry-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gate
+          image: gpos-demo
+          imagePullPolicy: Always
+          command: ["python", "-m", "gposdemo.engine.gate"]
+          env:
+            - name: MCP_PORT
+              value: "8766"
+            - name: GPOS_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: gpos-db
+                  key: DSN_ENGINE
+          envFrom:
+            - configMapRef:
+                name: gpos-config
+            - secretRef:
+                name: gpos-broker
+          ports:
+            - name: http
+              containerPort: 8766
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 50Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpos-gate
+  labels:
+    app: gpos-gate
+spec:
+  selector:
+    app: gpos-gate
+  ports:
+    - name: http
+      port: 8766
+      targetPort: http
