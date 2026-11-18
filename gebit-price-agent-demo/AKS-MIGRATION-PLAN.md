@@ -1,11 +1,15 @@
 # AKS-Migrationsplan: EuroCIS-Showcase vom Lab nach Azure
 
-Stand 17.11.2026, überarbeitet nach den Owner-Entscheidungen vom 17.11.2026
-(Abschnitt 2); die Fassung vom 16.11. liegt im sda-Commit 7a860c5.
-Vorschlag für den Owner, read-only erarbeitet: Es wurde nichts
-angelegt, geändert oder gelöscht. Messe: EuroCIS 2027, 16.-18.02.2027.
-Gates: G2a 18.12.2026, G2b 15.01.2027, G3 22.01.2027, Freeze G4
-05.02.2027 [Quelle: PLAN 0.3].
+Stand 18.11.2026, überarbeitet nach der Azure-Prüfung und der
+Owner-Entscheidung vom 18.11.2026 (Abschnitt 2; die
+Owner-Entscheidungen vom 17.11. gelten weiter). Die Fassung vom 17.11.
+liegt im sda-Commit 9f66efd, die vom 16.11. in 7a860c5. Was sich am
+18.11. geändert hat, fasst 8.6 zusammen. Vorschlag für den Owner,
+read-only erarbeitet: Für diese Fassung wurde in Azure und im Lab nichts
+angelegt, geändert oder gelöscht; die Ressourcengruppe
+`gebit-showcase` hat der Owner selbst angelegt. Messe: EuroCIS 2027,
+16.-18.02.2027. Gates: G2a 18.12.2026, G2b 15.01.2027, G3 22.01.2027,
+Freeze G4 05.02.2027 [Quelle: PLAN 0.3].
 
 Lesehinweis:
 
@@ -15,24 +19,33 @@ Lesehinweis:
   sda/gebit-price-agent-demo, `PLAN` = gpd/IMPLEMENTATION-PLAN.md
   (zitiert nach Abschnitt, weil der PLAN parallel nachgezogen wird),
   `RA` = gpd/research/impl/research-aks.md.
-- "Befehl (16.11.)" bzw. "Befehl (17.11.)" heißt: read-only im Lab oder
-  gegen öffentliche APIs ausgeführt, am genannten Tag 2026.
+- "Befehl (16.11.)", "Befehl (17.11.)" bzw. "Befehl (18.11.)" heißt:
+  read-only im Lab oder gegen öffentliche APIs ausgeführt, am genannten
+  Tag 2026. Am 18.11. kam ein read-only Azure-Check in der Subscription
+  `azure-se` dazu (Azure CLI 2.85.0, nach dem `az login` des Owners).
 - [A] markiert eine Annahme, die noch zu prüfen ist.
 - Preise: Listenpreise Pay-as-you-go, EUR ohne MwSt., Germany West
   Central, 730 h/Monat [Quelle: `prices.azure.com/api/retail/prices`,
-  16.11., am 17.11. neu geprüft].
+  16.11., am 17.11. und 18.11. neu geprüft].
 - Platzhalter: `<p>` (neutrales DNS-Label-Präfix ohne Kunden- oder
   Projektnamen), `<fqdn>` =
   `<p>.germanywestcentral.cloudapp.azure.com`, `<acr>`, `<kv>`,
-  `<owner-ip>`, `<owner-objectId>`, `<subscription>`, `<tenant>`. Die
-  Werte stehen nur lokal, nie in diesem Dokument.
-- Entscheidungen dieses Plans heißen `AKS-E1` bis `AKS-E20`, damit sie
+  `<owner-ip>`, `<owner-upn>` und `<deputy-upn>` (Subjekte der
+  ClusterRoleBindings), `<owner-objectId>` und `<deputy-objectId>`
+  (Key-Vault-Access-Policies), `<owner-name>` und `<dd.mm.yyyy>`
+  (Werte der Pflicht-Tags `Owner` und `Created Date`), `<subscription>`
+  (nur die ID) und `<tenant>`. Die Werte stehen nur lokal, nie in
+  diesem Dokument. Ausgeschrieben stehen dürfen die Subscription
+  `azure-se`, die Ressourcengruppe `gebit-showcase` und die
+  Node-Ressourcengruppe `gebit-showcase-nodes`.
+- Entscheidungen dieses Plans heißen `AKS-E1` bis `AKS-E21`, damit sie
   nicht mit den PLAN-Entscheidungen (PLAN-E1 bis PLAN-E8) und den
   Owner-Punkten O1-O9 kollidieren. Ihr Status steht in Abschnitt 2.
 - `kaks` und `haks` sind die einzigen Ad-hoc-Wege zu AKS für kubectl
   und helm (Definition in P1 Schritt 6). Lab-Befehle tragen
   `--context rancher-desktop`.
-- Keine Secrets, IDs, E-Mail-Adressen (außer Lab-Demo-Identitäten wie
+- Keine Secrets, IDs (Objekt-, Subscription-, Tenant-IDs), UPNs,
+  Personennamen, E-Mail-Adressen (außer Lab-Demo-Identitäten wie
   `marktleitung@solace.lab`) oder LLM-Hostnamen in diesem Dokument.
   Das GEBIT-Material heißt hier nur "GEBIT-Descriptor-Set"; den
   vollqualifizierten Namen des Purchase-Service nennt der Plan nicht
@@ -40,22 +53,49 @@ Lesehinweis:
 
 ## 0. Kurzfassung
 
-- **Festlegung (Owner, 17.11.):** Ein AKS-Cluster (Kubernetes 1.36,
-  Germany West Central, 1 x `Standard_D8ps_v6`, arm64, Free-Tier, kein
-  HA) baut den Lab-Stack mit denselben Charts, Versionen, Namen und
-  Image-Digests nach ("Parität zuerst"). SAM bleibt gebündelt
-  (Postgres + SeaweedFS), Keycloak, Broker und Demo-DB laufen im
-  Cluster. Bewusst anders als im Lab: Traefik statt ingress-nginx, ein
-  Hostname mit Pfad-Routing, Keycloak unter `/auth`.
+- **Festlegung (Owner, 17.11. und 18.11.):** Ein AKS-Cluster
+  (Kubernetes 1.36, Germany West Central, 1 x `Standard_D8ps_v6`,
+  arm64, Free-Tier, kein HA) in der Subscription `azure-se`,
+  Ressourcengruppe `gebit-showcase`, baut den Lab-Stack mit denselben
+  Charts, Versionen, Namen und Image-Digests nach ("Parität zuerst").
+  SAM bleibt gebündelt (Postgres + SeaweedFS), Keycloak, Broker und
+  Demo-DB laufen im Cluster. Bewusst anders als im Lab: Traefik statt
+  ingress-nginx, ein Hostname mit Pfad-Routing, Keycloak unter `/auth`.
+- **Nur Contributor, keine Rollenzuweisungen (Owner, 18.11.,
+  AKS-E21):** Der Owner ist über eine Gruppe Contributor auf
+  `azure-se`, nicht Owner und nicht User Access Administrator.
+  Rollenzuweisungen, Locks und Policy-Ausnahmen kommen im Plan nicht
+  mehr vor. Folgen: AKS-verwaltetes VNet in der Node-RG statt
+  BYO-Subnetz (Azure CNI Overlay mit Cilium bleibt), System-Identität
+  statt `id-aks-cp`, ACR-Pull über ein Pull-only-Token mit dem Secret
+  `acr-pull` je Namespace statt `--attach-acr`, Entra ID mit
+  Kubernetes-RBAC statt Azure RBAC (Bootstrap per Admin-Zugang, dann
+  lokale Accounts aus und Zertifikate rotieren, oder eine eigene
+  Admin-Gruppe, AKS-E13), Key Vault im Access-Policy-Modus,
+  `pip-aks-ingress` ohne Lock in der Node-RG, AKS-verwaltete
+  Egress-IP. Der Preis: Kubernetes-RBAC und Access Policies sind keine
+  Grenze gegen die anderen Contributors von `azure-se`, und Label und
+  IPs leben nur so lange wie der Cluster (2.2).
+- **Azure-Lage geprüft (18.11., read-only):** Eine Deny-Policy
+  verlangt die Tags `Owner` und `Created Date` auf jeder
+  Ressourcengruppe; `az aks create` gibt sie deshalb für die Node-RG
+  `gebit-showcase-nodes` mit (AKS-E1). Die Quota reicht ohne Antrag
+  (DPSv6 0 von 350 vCPU belegt, regional 150 frei bei einem Bedarf von
+  16), `Standard_D8ps_v6` hat keine Restriction, AKS 1.36.5 ist
+  verfügbar, Defender kostet nichts (alle relevanten Pläne Free). Vor
+  P1 offen: Azure CLI 2.85.0 auf 2.93 oder neuer heben und kubelogin
+  installieren (freigegeben, AKS-E15 (e)).
 - **Öffentlich für alle, ohne WireGuard:** Ein Azure-Name `<fqdn>` auf
-  der statischen IP `pip-aks-ingress` (nur 80/443), dazu die
-  Egress-IP `pip-aks-egress`. SAM bekommt `/`, Keycloak `/auth/...`,
-  Kasse und Monitor ihre Pfade (`/kasse`, `/monitor`, unverändert und
-  ohne Login), die drei gRPC-Server ihre Service-Pfade (Reflection an,
-  Route erst nach der GEBIT-Bestätigung aus AKS-E16). Weitere
-  BFF-Seiten mit Schreib- oder LLM-Wirkung (`/freigabe`, `/foto`,
-  `/op`) und `/etikett` bekommen erst nach Owner-Entscheidung einen
-  öffentlichen Pfad (Frage 23). Den API-Server erreichen nur
+  der statischen IP `pip-aks-ingress` (nur 80/443), die direkt nach dem
+  Create in `gebit-showcase-nodes` entsteht; ausgehend nutzt der
+  Cluster die AKS-verwaltete Egress-IP (Adresse erst nach dem Create
+  bekannt, neu bei jedem Neuaufbau). SAM bekommt `/`, Keycloak
+  `/auth/...`, Kasse und Monitor ihre Pfade (`/kasse`, `/monitor`,
+  unverändert und ohne Login), die drei gRPC-Server ihre Service-Pfade
+  (Reflection an, Route erst nach der GEBIT-Bestätigung aus AKS-E16).
+  Weitere BFF-Seiten mit Schreib- oder LLM-Wirkung (`/freigabe`,
+  `/foto`, `/op`) und `/etikett` bekommen erst nach Owner-Entscheidung
+  einen öffentlichen Pfad (Frage 23). Den API-Server erreichen nur
   freigegebene IPs (`aks-allow-me.sh`); Grafana, Prometheus, SEMP,
   Keycloak-Admin und Traefik-Dashboard gibt es nur per Port-Forward.
   Missbrauchsschutz: Rate-Limits je Client-IP (`public-guard`, auch
@@ -67,9 +107,9 @@ Lesehinweis:
   Secret, Erneuerung um den 15.01. (AKS-E4).
 - **Ersetzt statt portiert:** Lab-CA, trust-manager, Kyverno,
   registry:2 und (nur auf AKS) ingress-nginx werden zu Let's Encrypt,
-  ACR, eingebauter ValidatingAdmissionPolicy und Traefik v3.7.19 mit
-  NGINX-Provider. Das Lab behält ingress-nginx; dieselben
-  NGINX-Ingress-Manifeste laufen auf beiden Zielen.
+  ACR (Pull per Token), eingebauter ValidatingAdmissionPolicy und
+  Traefik v3.7.19 mit NGINX-Provider. Das Lab behält ingress-nginx;
+  dieselben NGINX-Ingress-Manifeste laufen auf beiden Zielen.
 - **Zuerst Sicherheitsgeländer:** Kein Skript pinnt heute einen
   kube-Kontext. Ein Lab-`stop.sh` gegen AKS würde dort SAM löschen und
   zugleich Lab-Keycloak-Client und Lab-Broker-Queues abräumen. Deshalb
@@ -79,8 +119,10 @@ Lesehinweis:
 - **LiteLLM-Key geschützt:** SAM speichert ihn im Klartext in der
   Plattform-DB. Auf AKS gibt es deshalb ein eigenes
   SAM-Postgres-Passwort, NetworkPolicies, `grafana_ro` ohne die
-  Key-Tabellen und Backups ohne deren Daten (AKS-E19, 1.4). Neu:
+  Key-Tabellen und Backups ohne deren Daten (AKS-E19, 1.4), dazu
   rpm/tpm-Limits am Messe-Key gegen anonyme Dauerschleifen (AKS-E11).
+  Gegen ein Mitglied der Contributor-Gruppe, das sich Cluster-Admin
+  verschafft, hilft das nicht (AKS-E21, 2.2).
 - **Broker 10.26.0.9219 (LTS) in Lab und AKS:** Neuer Arbeitsposten
   Lab-Upgrade von 10.25.0.208, Risiko mittel bis hoch, weil beide
   Broker-DBs im Container-Layer liegen und `start.sh` sie neu erzeugen
@@ -89,42 +131,52 @@ Lesehinweis:
   (AKS-E8). `start.sh`, `stop.sh` und `docker compose up/pull/down`
   sind in emd tabu, bis die emd-Skripte an die externen Volumes
   angepasst sind (1.4).
-- **Phasen:** P0 Klärungen und Geländer (bis 27.11.), P1 Azure,
-  Cluster, CLI, öffentlicher Zugang (KW49), P2 Add-ons mit Traefik und
-  TLS (KW49-50), P3 Keycloak unter `/auth` (KW50), P4 Broker (Lab
-  KW48-49, AKS KW51), P5 SAM (KW51, G2a 18.12.), P6 Demo mit
-  Pfad-Ingresses, `public-guard` und Image 0.1.4 (G2b 15.01.), P7
-  Härtung und Betrieb (G3 22.01., G4 05.02.). Summe 23,5 PT,
-  bis G2a 13,5 PT (Aufteilung und Puffer in Abschnitt 4).
-  Prüfpunkte am 04.12. und 11.12. entscheiden früh, ob der AKS-Teil von
-  G2a nach G2b wandert.
-- **Kosten:** rund 300-340 EUR/Monat bei 24/7 (1 Node, Free-Tier, 2
-  Public IPs, kein WireGuard), rund 145-185 EUR/Monat im Aufbau mit
-  Nacht- und Wochenend-Stopp; Projektsumme bis 20.02.2027 rund
-  470-600 EUR ohne LLM-Token (mit Defender for Containers rund
-  520-660 EUR), Ziel unter 1.500 EUR (3.4). Ein Monatsbudget-Alarm
-  über alle drei Ressourcengruppen bleibt, neu skaliert auf 250 EUR
-  statt 450 EUR [A] (AKS-E1).
+- **Phasen:** P0 Klärungen und Geländer (bis 27.11.; die Azure-Checks
+  sind seit 18.11. erledigt), P1 Azure nur mit Contributor: Cluster,
+  Zugriff mit Kubernetes-RBAC, ACR-Token, Key Vault, CLI, öffentlicher
+  Zugang (KW49), P2 Add-ons mit Traefik und TLS (KW49-50), P3 Keycloak
+  unter `/auth` (KW50), P4 Broker (Lab KW48-49, AKS KW51), P5 SAM
+  (KW51, G2a 18.12.), P6 Demo mit Pfad-Ingresses, `public-guard` und
+  Image 0.1.4 (G2b 15.01.), P7 Härtung und Betrieb (G3 22.01., G4
+  05.02.). Summe 23,5 PT (mit Puffer rund 27,0), bis G2a 13,5 PT (Aufteilung
+  und Puffer in Abschnitt 4). Prüfpunkte am 04.12. und 11.12.
+  entscheiden früh, ob der AKS-Teil von G2a nach G2b wandert.
+- **Kosten:** rund 300-340 EUR/Monat bei 24/7 (1 Node, Free-Tier,
+  2 Public IPs, kein WireGuard), rund 145-185 EUR/Monat im Aufbau
+  mit Nacht- und Wochenend-Stopp; Projektsumme bis 20.02.2027 rund
+  460-590 EUR ohne LLM-Token, Ziel unter 1.500 EUR (3.4).
+  Defender-Kosten entfallen (alle relevanten Pläne Free, 18.11.). Ein
+  Monatsbudget-Alarm auf Subscription-Ebene, gefiltert auf
+  `gebit-showcase` und `gebit-showcase-nodes`, bleibt, skaliert auf
+  250 EUR statt 450 EUR [A] (AKS-E1).
 - **Bewusst akzeptiert (2.2):** gpos teilt den Origin mit SAM; das
   AKS-Routing weicht vom Lab ab; SAM ruft sich über `<fqdn>` selbst
   auf (Hairpin-Test in P1); anonyme Schreib-RPCs; ein Node ohne HA.
-- **Vor den Schreibschritten in P0:** `az login` neu (der Token
-  scheiterte am 16.11. mit AADSTS9002313; Abhilfe laut CLI: `az
-  logout`, dann `az login --tenant <tenant>`), Azure CLI 2.85.0 auf
-  2.93 oder neuer heben (freigegeben, AKS-E15 (e)).
+  Seit 18.11. als Folge von AKS-E21: Label, Ingress- und Egress-IP
+  verschwinden mit dem Cluster, und jedes Mitglied der
+  Contributor-Gruppe kann sich Zugang zu Cluster und Key Vault
+  verschaffen [A: ausdrückliche Bestätigung des Owners offen].
 - **Noch offen:** AKS-E18 (G0-11a/b nach G2a) und AKS-E20 (Betreiber
-  und Stellvertreter) warten auf den Owner, ebenso die Exposition von
-  `/freigabe`, `/foto`, `/op` und `/etikett` (AKS-E5, Frage 23, vor
-  G2b). Offen mit harter Vorbedingung: die schriftliche Bestätigung,
-  dass die GEBIT-Freigabe das Descriptor-Set als Secret in Azure und
-  die öffentliche Reflection abdeckt (AKS-E16; vor dem ersten
-  GEBIT-Secret in Azure, spätestens 09.12.). [A]-Bestätigungen: der
-  API-Server-Weg (AKS-E5), die Budgethöhe (AKS-E1), AKS-E9 und
-  AKS-E12. Zu belegen bzw. zu beantworten: der 1-Node-Systempool beim
-  Create in P1 (AKS-E3), Betreiber-Antwort und Key-Limits bis 27.11.
-  (AKS-E11). Dazu Go und Fenster für das Lab-Broker-Upgrade (AKS-E8),
-  das Label-Präfix `<p>` (AKS-E4), das Konto beim Rückfall-ACME-CA
-  (Owner, bis 04.12.) und der Schutz des Approver-Logins (P3).
+  und Stellvertreter, neu: dessen Azure-Zugang über eine
+  Contributor-Gruppe, bis 27.11.) warten auf den Owner, ebenso die
+  Exposition von `/freigabe`, `/foto`, `/op` und `/etikett` (AKS-E5,
+  Frage 23, vor G2b). Offen mit harter Vorbedingung: die schriftliche
+  Bestätigung, dass die GEBIT-Freigabe das Descriptor-Set als Secret in
+  Azure, die öffentliche Reflection und den Zugriffskreis aus AKS-E21
+  abdeckt (AKS-E16; vor dem ersten GEBIT-Secret in Azure, spätestens
+  09.12.). Owner-Wahl bis 27.11.: Label-Scope `SubscriptionReuse`
+  (AKS-E4), Bootstrap mit Zertifikatsrotation oder eigener
+  Admin-Gruppe (AKS-E13), Ablauf und Scope-Map des ACR-Tokens
+  (AKS-E21); NRG-Lockdown als Lock-Ersatz erst
+  nach dem LB-Nachweis in P2 (P2 Schritt 10).
+  [A]-Bestätigungen: der API-Server-Weg (AKS-E5), die Budgethöhe
+  (AKS-E1), AKS-E9 und AKS-E12. Zu belegen in P1: der
+  1-Node-Systempool (AKS-E3), die Node-RG mit Pflicht-Tags trotz
+  Deny-Policy (AKS-E1), Ingress- und Egress-IP über Stop/Start
+  (AKS-E4, AKS-E11). Dazu Betreiber-Antwort und Key-Limits bis 27.11.
+  (AKS-E11), Go und Fenster für das Lab-Broker-Upgrade (AKS-E8), das
+  Label-Präfix `<p>` (AKS-E4), das Konto beim Rückfall-ACME-CA (Owner,
+  bis 04.12.) und der Schutz des Approver-Logins (P3).
 
 ## 1. Ziel und Abgrenzung
 
@@ -143,7 +195,8 @@ gewollte Lab-Änderung ist das Broker-Upgrade auf 10.26.0.9219
 Bewusst anders als im Lab, und nur in den AKS-Overlays: Traefik statt
 ingress-nginx (AKS-E6), ein öffentlicher Hostname mit Pfad-Routing
 statt eines Hosts je App (AKS-E4, 2.1), Keycloak unter `/auth`
-(AKS-E10), ein Node ohne HA (AKS-E3).
+(AKS-E10), ein Node ohne HA (AKS-E3). Auf Azure-Seite kommt der Plan
+ohne Rollenzuweisungen und Locks aus (AKS-E21).
 
 ### 1.2 Was nach AKS geht
 
@@ -154,12 +207,13 @@ statt eines Hosts je App (AKS-E4, 2.1), Keycloak unter `/auth`
 | TLS | private Root/Intermediate-CA, nur `solace.lab`, cert-manager v1.20.2 | Let's Encrypt HTTP-01 über cert-manager v1.21.3, ein Zertifikat für `<fqdn>` als Traefik-Default (`TLSStore`); Rückfall-Issuer einer ACME-CA mit EAB | sli pki/manifests/02-pki-ca-hierarchy.yaml:126-131; `letsencrypt.org/docs/rate-limits` |
 | Monitoring | kube-prometheus-stack 83.5.0, Loki 6.55.0, Tempo 2.0.0, Alloy 1.11.0 | gleiche Versionen, Prometheus auf PVC statt emptyDir, Images aus ACR, Grafana ohne Ingress (Port-Forward) | Befehl `helm list -A` (16.11.); sli pki/manifests/05-monitoring-values.yaml:48-70 |
 | Identity | Keycloak 26.2 (Floating-Tag) + Postgres 17, Realm `solace-lab`, eigener Host | Keycloak 26.8.2 gepinnt unter `/auth`, gleicher Realm, `*@solace.lab` unverändert | sli keycloak/manifests/03-keycloak.yaml:141; `api.github.com/repos/keycloak/keycloak/releases`; `www.keycloak.org/server/hostname` |
+| Cluster-Zugriff | kubeconfig von Rancher Desktop (Kontext `rancher-desktop`) | Entra ID mit Kubernetes-RBAC (ClusterRoleBindings), kubelogin, eigene kubeconfig `~/.kube/aks-eurocis.yaml` nur über `kaks`/`haks`; lokale Accounts nach dem Bootstrap aus (AKS-E13) | `learn.microsoft.com/azure/aks/kubernetes-rbac-entra-id`; `learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad` |
 | SAM | 2.542.1, Chart 2.3.10, str 1.80.2, ns `sam-solace-lab`, gebündelt | identisch, zweites Values-Overlay; `sam.dnsName` = `<fqdn>`, SAM besitzt `/` | amd local-k8s-values.yaml:156-160; SAM-Chart 2.3.10 templates/_config_helpers.tpl:10-108 |
 | Broker | `solace-1` 10.25.0.208 in Docker, VPN `sam` + `default`; Upgrade auf 10.26.0.9219 geplant (AKS-E8) | ein PubSub+ Standard 10.26.0.9219 (LTS) per Helm, ClusterIP, kein DMR | Befehl SEMP monitor (16.11.); emd docker-compose.yaml:27-57; Docker-Hub-Tags-API (17.11.) |
 | GEBIT-Demo | ns `gpos-demo`, 6 Deployments, Image 0.1.3 arm64 | gleiches Image in ACR, in P6 Image 0.1.4 (gebündelter Reflection-Endpunkt); kustomize-Overlay `aks` mit Pfad-Ingresses | Befehl `kubectl -n gpos-demo get deploy` (16.11.) |
 | Demo-DB | Host-Docker `postgres` 18.3, DB `gpos` 25 MB | Postgres-18-StatefulSet im eigenen Namespace `gpos-data`, neu aus dem Seed | Befehl `docker exec postgres psql` (read-only, 16.11.) |
 | SAM-Paket | `gpos-uc1`: 5 Connectoren, 3 Agents, 3 Workflows, RBAC, 2 Entrypoints | inhaltlich unverändert; Haupt-Manifeste unverändert angewendet, nur die Entrypoints je Ziel gerendert | gpd mesh/manifest.yaml:11-15 |
-| Neu | - | ACR, Key Vault, 2 statische Public IPs (`pip-aks-ingress` mit DNS-Label, `pip-aks-egress`), 3 Ressourcengruppen | - |
+| Neu | - | ACR Basic mit Pull-only-Token (Secret `acr-pull` je Namespace), Key Vault im Access-Policy-Modus, `pip-aks-ingress` (statisch, DNS-Label) und die AKS-verwaltete Egress-IP in der Node-RG; zwei Ressourcengruppen: `gebit-showcase` (vom Owner angelegt, Metadaten in West Europe; Cluster, ACR und Key Vault in Germany West Central) und `gebit-showcase-nodes` (legt AKS beim Create an: VM, Disks, LB, VNet, beide IPs) | Befehl (18.11.) `az group show`; `learn.microsoft.com/azure/aks/faq` |
 
 ### 1.3 Was im Lab bleibt
 
@@ -230,7 +284,54 @@ statt eines Hosts je App (AKS-E4, 2.1), Keycloak unter `/auth`
   `docker compose stop`/`start` der bestehenden Container.
 - Jeder kubectl- und helm-Aufruf gegen AKS läuft über `kaks`/`haks`
   oder einen Skript-Wrapper mit `require_kube_context`; die
-  AKS-kubeconfig liegt nie in `~/.kube/config`.
+  AKS-kubeconfig liegt nie in `~/.kube/config`. Die Admin-kubeconfig
+  entsteht bei jedem Bootstrap- und Break-glass-Lauf nur in einem per
+  `trap` gelöschten Temp-Verzeichnis (umask 077), nie unter `~/.kube`;
+  danach sind die lokalen Accounts aus (AKS-E13, P1 Schritt 6).
+- Keine Rollenzuweisungen, Locks oder Policy-Ausnahmen (AKS-E21).
+  Tabu sind damit auch Flags, die eine Zuweisung auslösen oder
+  voraussetzen: `--attach-acr` (die CLI scheitert nach dem Create mit
+  einem Fehler, der Cluster bleibt ohne AcrPull), `--vnet-subnet-id`,
+  auch zusammen mit `--assign-identity` (nur eine Warnung, der Cluster
+  bleibt ohne Subnetzrechte), `--enable-azure-rbac`, eine
+  BYO-Kubelet-Identität und AKS Automatic [Quelle: azure-cli dev
+  acs/_roleassignments.py:101-140,
+  acs/managed_cluster_decorator.py, Stand 18.11.;
+  `learn.microsoft.com/azure/aks/cluster-container-registry-integration`].
+- Regionale Ressourcen bekommen `-l germanywestcentral`, also `az aks
+  create`, `az acr create`, `az keyvault create` und `az network
+  public-ip create`: Die Ressourcengruppe `gebit-showcase` liegt in
+  West Europe, ohne `-l` landeten ACR und Key Vault dort. Ohne Region
+  bleiben die globalen Activity-Log- und Resource-Health-Alarme (`az
+  monitor activity-log alert create` kennt kein `-l`), die Action
+  Group mit `-l Global` (ohne Angabe nähme sie die Region der RG) und
+  das Budget per `az rest`; auch `az acr token create` kennt kein
+  `-l`. Alarme und Action Group liegen in `gebit-showcase`, nie in der
+  Node-RG [Quelle: `az monitor activity-log alert create --help`, `az
+  monitor action-group create --help`, `az acr token create --help`,
+  2.85.0].
+- Nie `az group delete -n gebit-showcase`: Die Ressourcengruppe gehört dem Owner
+  und trägt ACR und Key Vault. Den Cluster entfernt nur `az aks delete`, und das
+  nur über `sli/aks/aks-rebuild.sh` (P7); es nimmt `gebit-showcase-nodes` samt
+  beider IPs mit. In der Node-RG liegt außer den AKS-Ressourcen nur
+  `pip-aks-ingress`, weil Learn sie nur für Ressourcen mit dem Lebenszyklus des
+  Clusters vorsieht [Quelle: `learn.microsoft.com/azure/aks/faq`].
+- `az aks create` und jedes `az aks update --tags` nur mit allen vier
+  Tags (`Owner`, `Created Date`, `purpose`, `deleteAfter`): `--tags`
+  ersetzt das ganze Set auf Cluster, zugehörigen Ressourcen und
+  Node-RG, und ohne die Pflicht-Tags lehnt die Deny-Policy die Node-RG
+  ab [Quelle: `learn.microsoft.com/azure/aks/use-tags`].
+- Das Passwort des ACR-Tokens erscheint nie in argv oder Ausgabe; es
+  liegt nur im Key Vault (`acr-pull-token`) und in `sli/aks/.env.aks`
+  (chmod 600, P1 Schritt 3).
+- `set -x`-Mitschnitte gehen nur per `BASH_XTRACEFD` nach
+  `~/.config/eurocis-aks/xtrace/` (chmod 700), nie in ein Repo. In
+  `sli/aks/*.sh` und gpd `install.sh` laufen Zuweisungen und Aufrufe
+  mit Secret, objectId, UPN, Tag-Wert oder IP ohne xtrace, also
+  zwischen `{ set +x; } 2>/dev/null` und `set -x`: das Laden von
+  `.env.aks`, `aks_tags` samt `az aks create --tags`, `OWNER_OID`,
+  `kaks auth whoami`, die IP-Abfragen und `db_password`. P1 und P6
+  prüfen die Mitschnitte per Zählabfrage.
 - Änderungen an geteilter Lab-Infra nur im Rahmen der Freigaben
   AKS-E15 (a) bis (e); das Broker-Upgrade im Lab braucht zusätzlich
   ein eigenes Go und ein Wartungsfenster.
@@ -244,40 +345,102 @@ statt eines Hosts je App (AKS-E4, 2.1), Keycloak unter `/auth`
 ## 2. Entscheidungen des Owners
 
 Nummern mit Präfix `AKS-`; PLAN-Entscheidungen heißen hier PLAN-E1 bis
-PLAN-E8. Die Owner-Entscheidungen vom 17.11.2026 sind bindend; die
-Empfehlungen vom 16.11. stehen im sda-Commit 7a860c5.
+PLAN-E8. Die Owner-Entscheidungen vom 17.11. und 18.11.2026 sind
+bindend; die Empfehlungen vom 16.11. stehen im sda-Commit 7a860c5, die
+Fassung vom 17.11. im sda-Commit 9f66efd.
 
 Status:
 
 - **entschieden 17.11.:** Owner-Entscheidung vom 17.11.2026.
+- **entschieden 18.11.:** Owner-Entscheidung vom 18.11.2026 (nur
+  Contributor, AKS-E21). "Geändert 18.11." heißt: eine Zeile vom 17.11.
+  folgt dieser Entscheidung; "ergänzt 18.11." heißt: sie nimmt die
+  Prüfung vom 18.11. auf.
 - **[A] Bestätigung offen:** Annahme oder Default der Planung; gilt,
   bis der Owner abweicht.
 - **Owner-Bestätigung offen:** vom Owner noch nicht beantwortet; die
   Empfehlung ist bis zur Frist die Arbeitsgrundlage.
 - **offen:** noch zu klären oder freizugeben.
 
+**Prüfung 18.11.2026** (read-only nach dem `az login` des Owners,
+Azure CLI 2.85.0) [Quelle: Befehl (18.11.): Konto, Rollen inklusive
+Gruppen, Ressourcengruppe, Policy-Zuweisungen, Provider, Usages,
+Compute-SKU-API, AKS-Versionen, Defender-Pläne]:
+
+- **Subscription und Rechte:** `azure-se` ist die einzige Subscription
+  (Enabled, Default). Der Owner hat über eine Gruppe Contributor auf
+  Subscription-Ebene, dazu "Azure Service Bus Data Sender"; er ist
+  nicht Owner und nicht User Access Administrator. Contributor hat die
+  NotActions `Microsoft.Authorization/*/Write` und `.../Delete`, also
+  keine Rollenzuweisungen, keine Locks und keine Policy-Ausnahmen. Er
+  hat aber `listClusterAdminCredential`, `listClusterUserCredential`,
+  `runCommand`, `managedClusters/write`, `rotateClusterCertificates`,
+  `vaults/accessPolicies/write`, `registries/tokens/write` und darf
+  eigene Budgets anlegen [Quelle:
+  `learn.microsoft.com/azure/role-based-access-control/built-in-roles/privileged`;
+  `learn.microsoft.com/azure/azure-resource-manager/management/lock-resources`;
+  `learn.microsoft.com/azure/cost-management-billing/costs/tutorial-acm-create-budgets`].
+- **Ressourcengruppe:** Der Owner hat `gebit-showcase` in West Europe
+  angelegt, mit den Tags `Owner` und `Created Date` (Format
+  dd.mm.yyyy). Ressourcen darin dürfen in Germany West Central liegen;
+  die Metadaten der RG bleiben in West Europe [Quelle:
+  `learn.microsoft.com/azure/azure-resource-manager/management/overview`].
+- **Policies:** 2 x "Require a tag on resource groups" (deny, Tags
+  `Owner` und `Created Date`), 2 x "Inherit a tag from the resource
+  group" (modify, dieselben Tags), "ASC Default" (audit). Die
+  Deny-Policy prüft nur, ob der Tag da ist, nicht Wert oder Format;
+  die Inherit-Policy überschreibt beide Tags an jeder Ressource mit dem
+  Wert ihrer RG [Quelle: `github.com/Azure/azure-policy`
+  built-in-policies/policyDefinitions/Tags, Stand 18.11.; A: dass die
+  Zuweisungen genau diese Built-ins nutzen]. AKS legt seine Node-RG
+  selbst an; `az aks create --tags` gilt für Cluster, zugehörige
+  Ressourcen und Node-RG [Quelle:
+  `learn.microsoft.com/azure/aks/use-tags`]. Ohne die beiden Tags
+  verweigert die Policy den Create.
+- **Provider:** ContainerService, ContainerRegistry, KeyVault, Network,
+  Compute, ManagedIdentity, OperationsManagement, Insights und Security
+  sind registriert; Microsoft.Quota nicht, es wird nicht gebraucht.
+- **Quota Germany West Central:** DPSv6 0 von 350 vCPU, DPSv5 0 von
+  350, Total Regional 200 von 350 (150 frei; Bedarf 16 mit
+  Surge-Node), Public IPs 7 von 1000, Standard-LBs 0 von 1000. Kein
+  Antrag; Re-Check vor dem Create und vor dem Refresh am 26.01., weil
+  die Subscription geteilt ist.
+- **SKUs:** `Standard_D8ps_v6` (Arm64) in den Zonen 1-3 ohne
+  Restriction, ohne Ephemeral-OS-Disk; `Standard_D8ps_v5` und
+  `Standard_D8as_v6` ebenfalls ohne Restriction.
+- **AKS-Versionen:** 1.36 (Default, Patch 1.36.5), 1.37 (1.37.1),
+  1.35 (1.35.9).
+- **Defender for Cloud:** alle Pläne Free (unter anderem Containers,
+  KubernetesService, ContainerRegistry, KeyVaults, VirtualMachines),
+  Standard nur Discovery und FoundationalCspm, ohne Kostenwirkung hier.
+  Defender-Kosten 0 EUR, kein Sensor auf dem Node zu erwarten [A:
+  Re-Check vor G4].
+- **Mac:** Azure CLI weiter 2.85.0, kubelogin fehlt; beides ist
+  freigegeben (AKS-E15 (e)), aber noch nicht installiert.
+
 | Nr | Entscheidung | Status | Festlegung bzw. Empfehlung | Alternativen | Bis wann |
 |---|---|---|---|---|---|
-| AKS-E1 | Subscription, Kostenstelle, Quota, Budget (Plan-Punkt O4 [Quelle: PLAN 0.5]) | entschieden 17.11.; Budgethöhe [A] Bestätigung offen | Bestehende Subscription, die der Owner mit `az login` nutzt; P0 prüft Rechte, Policies und Defender-Pläne. Quota-Bedarf (3.5), Antrag am 20.11., falls P0 eine Lücke zeigt: DPSv6 16 vCPU (1 Node plus Surge-Node beim Node-Image-Update), DPSv5 16 vCPU nur, falls `az vm list-skus` für `Standard_D8ps_v6` eine Restriction zeigt (P0 Schritt 4), Total Regional mindestens 16; 2 Standard-Public-IPs (Default-Quota 10 oder 20 [Quelle: `learn.microsoft.com/azure/azure-resource-manager/management/azure-subscription-service-limits`]). Monatsbudget-Alarm wie bisher auf `rg-eurocis-base`, `rg-eurocis-aks` und `rg-eurocis-nodes` (Actual 100 %, Forecast 100 %, 01.12.2026-31.03.2027), neu skaliert: 250 EUR statt 450 EUR, zwischen Stopp-Betrieb und 24/7, damit ein vergessener Nachtstopp den Forecast auslöst [A: Kosten 3.4]. Projektziel unter 1.500 EUR, verfolgt per Cost-Analysis-Ansicht | eigene Subscription; ohne Rechte auf Subscription-Ebene je RG ein Budget; Quota-Antrag meist in Minuten (Auto-Freigabe), sonst Support-Fall mit Tagen [Quelle: `learn.microsoft.com/azure/quotas/per-vm-quota-requests`] | Quota-Antrag 20.11.; Budget in P1 |
-| AKS-E2 | Region | entschieden 17.11. | Germany West Central; folgt aus dem Namen `<fqdn>` (AKS-E4) | West Europe (gleiche v6-Preise [Quelle: Retail-API 16.11.]), dann ein anderer Name | erledigt |
-| AKS-E3 | Architektur, Größe, Verfügbarkeit | entschieden 17.11.; Zulässigkeit 1-Node-Systempool [A], Beweis beim Create in P1 | arm64, 1 x `Standard_D8ps_v6` (8 vCPU / 32 GiB) im Pool `main` (System-Modus), kein HA: gleiche Digests wie im Lab, kein Multi-Arch-Build. Die Requests passen auf einen Node (mit Broker `prod1k` rund 91 % CPU und 70 % RAM der Allocatable, 3.2); Abnahme in P1: mindestens 7,8 CPU und 28,5 GiB allocatable. Microsoft Learn verlangt für produktive System-Pools mindestens 2 Nodes (3 empfohlen) [Quelle: `learn.microsoft.com/azure/aks/use-system-pools`], der AKS-Quickstart legt mit `--node-count 1` an [Quelle: `learn.microsoft.com/azure/aks/learn/quick-kubernetes-deploy-cli`]; der Create in P1 ist der Beweis [A]. Kein N-1-Drill mehr. Folge: Node-Image-Update oder Node-Ausfall heißt einige Minuten Ausfall der ganzen Demo; Rückfall L3 (Lab) | 2 Nodes mit HA (vom Owner verworfen, rund +239 EUR/Monat bei 24/7 mit OS-Disk); amd64 1 x `D8as_v6` (rund +68 EUR/Monat bei 24/7, +1-1,5 PT, keine Quota mehr beantragt); `D8ps_v5` bei Dpsv6-Engpass | Beweis beim Create (P1, KW49) |
-| AKS-E4 | Domain, DNS, TLS | entschieden 17.11.; Präfix `<p>` offen | Ein Azure-Name `<fqdn>` = `<p>.germanywestcentral.cloudapp.azure.com`: DNS-Label auf der statischen Standard-IP `pip-aks-ingress` in `rg-eurocis-base` mit Lock `CanNotDelete` (eine gelöschte IP gibt das Label für jeden frei). Der Traefik-Service nutzt `service.beta.kubernetes.io/azure-pip-name` (plus `azure-load-balancer-resource-group`), nie `azure-dns-label-name`; die Control-Plane-Identität `id-aks-cp` bekommt Network Contributor auf `rg-eurocis-base` [Quelle: `learn.microsoft.com/azure/aks/static-ip`]. Mit `pip-aks-egress` sind es 2 Public IPs; LB-Regeln nur für 80 und 443 (mit der Outbound-Regel 3 Regeln, innerhalb der 5 im LB-Grundpreis [Quelle: Retail-API 17.11.]). Keine eigene Domain, keine Azure-DNS-Zone, kein DNS-01. Pfad-Routing auf 443 nach 2.1. TLS: ACME HTTP-01 über cert-manager, ein Zertifikat für `<fqdn>` als Traefik-Default (`TLSStore`); ob der SAM-Ingress `secretName` weglässt oder `sam-tls` vor `helm install` im SAM-Namespace liegt, entscheidet ein Test in P2 [Quelle: SAM-Chart 2.3.10 templates/_validations.tpl:110-113]. LE-Risiko: `cloudapp.azure.com` steht nicht auf der Public Suffix List, alle Azure-Kunden teilen den Bucket `azure.com` (50 neue Zertifikate je Woche); die Ausstellung kann tagelang scheitern [Quelle: `publicsuffix.org/list/public_suffix_list.dat` (17.11.); `letsencrypt.org/docs/rate-limits`; `community.letsencrypt.org/t/217855`]. Gegenmittel: erst LE-Staging, dann früh Produktion (P2); vorbereiteter Rückfall-ClusterIssuer einer ACME-CA mit EAB (ZeroSSL oder Google Trust Services; das Konto legt der Owner an, EAB-Daten nur in Key Vault und `.env.aks`); ausgestelltes Secret sichern; `cmctl renew` um den 15.01., damit die automatische Erneuerung nicht in den Freeze fällt [A: 90 Tage Laufzeit, Erneuerung nach zwei Dritteln]. `<p>` ist neutral, ohne Kunden- oder Projektnamen (CT-Logs sind öffentlich), Verfügbarkeit per `CheckDnsNameAvailability` prüfen [A] | eigene Domain mit DNS-01 (bisherige Empfehlung, vom Owner verworfen); weitere Varianten in 8.5 | Präfix und `pip-aks-ingress` ab 20.11. (P0); LE-Produktion früh in P2; Rückfall-Konto und EAB-Daten bis 04.12. (Prüfpunkt) |
-| AKS-E5 | Zugriffsmodell, Missbrauchsschutz | entschieden 17.11.; API-Server-Weg [A] Bestätigung offen; Exposition von `/freigabe`, `/foto`, `/op`, `/etikett`: Owner-Bestätigung offen | Öffentlich für alle, ohne WireGuard und ohne internes LB (was entfällt, steht in 8.5). Kasse (mit `/kunde`) und Monitor bleiben unverändert und ohne Login. Nicht vom Owner entschieden ist die Exposition der übrigen BFF-Seiten samt API-Routen: `/freigabe` beantwortet pausierte SAM-HITL-Läufe über die BFF (jeder könnte Preise freigeben oder ablehnen), `/foto` startet mit jedem Upload den Vision-Agenten, `/op` schaltet auf L4 [Quelle: PLAN 1.4 (Fläche A), PLAN 9 R24]. Bis zur Antwort (Frage 23) bekommen sie keinen Pfad auf `<fqdn>`. Öffentlich ist nur der Traefik-LoadBalancer-Service (VAP), mit `externalTrafficPolicy: Local` für echte Client-IPs. Nicht öffentlich: Grafana, Prometheus, Broker-SEMP, Keycloak-Admin-Konsole, Traefik-Dashboard (Port-Forward). Missbrauchsschutz: Komponente `public-guard` mit Traefik-Rate-Limits je Client-IP auf `/api/pos/`, `/api/demo/reset`, `/api/events` und den drei gRPC-Service-Pfaden (429 statt 503), dazu rpm/tpm-Limits am Messe-Key (AKS-E11); alle Standgeräte hinter einer NAT-IP teilen sich die Limits [A: Werte in P6 messen]. API-Server: authorized IP ranges; der Helfer `sli/aks/aks-allow-me.sh` ermittelt die aktuelle IP, mergt sie in die bestehende Liste und schreibt die volle Liste, weil `az aks update --api-server-authorized-ip-ranges` die Liste ersetzt (bis 2 min Laufzeit, höchstens 200 Bereiche) [Quelle: `learn.microsoft.com/azure/aks/api-server-authorized-ip-ranges`]; Break-glass `az aks command invoke` aus jedem Netz [Quelle: `learn.microsoft.com/azure/aks/access-private-cluster`]; `aks-allow-me.sh` gilt als Freeze-Ausnahme, weil es nur ergänzt [A] | API-Server nur mit Entra ID und Conditional Access, ohne IP-Bereiche (aus jedem Netz, Endpunkt aber scannbar); privat mit WireGuard (bisherige Empfehlung, vom Owner verworfen); für die offenen Seiten: öffentlich, nur Port-Forward bzw. Lab, oder ein Schutz vor G2b | Abweichung vom API-Server-Weg bis 27.11.; Seiten-Exposition vor G2b [Quelle: PLAN 9 R24] |
+| AKS-E1 | Subscription, Ressourcengruppen, Kostenstelle, Quota, Budget (Plan-Punkt O4 [Quelle: PLAN 0.5]) | entschieden 17.11., ergänzt 18.11.; Budgethöhe [A] Bestätigung offen; Werte der Pflicht-Tags und Zahl der RGs entschieden 18.11.; Kostenstelle offen [A] | Subscription `azure-se` (Prüfung 18.11.). Owner-Vorgabe 18.11.: so wenige Ressourcengruppen wie möglich, also genau zwei; mehr legt der Plan nicht an. Ressourcengruppe `gebit-showcase` (vom Owner angelegt, West Europe) für den Cluster `aks-eurocis`, ACR und Key Vault, alle mit `-l germanywestcentral` (AKS-E2). Die Node-RG `gebit-showcase-nodes` legt AKS beim Create an (`--node-resource-group`; nur beim Create setzbar, die RG darf vorher nicht existieren und ist später nicht umbenennbar [Quelle: `learn.microsoft.com/azure/aks/faq`]), mit `--tags Owner=<owner-name> "Created Date=<dd.mm.yyyy>" purpose=eurocis2027 deleteAfter=2027-02-28`; ohne die beiden Pflicht-Tags verweigert die Deny-Policy sie [Quelle: `learn.microsoft.com/azure/aks/use-tags`]. `Owner` ist immer der Owner selbst (Owner-Vorgabe 18.11.); der Wert kommt aus dem Tag von `gebit-showcase` bzw. aus `OWNER_TAG` in der nicht versionierten `.env.aks` und steht nie im Repo. `Owner` und `Created Date` tragen die Werte von `gebit-showcase`, weil die Inherit-Policy abweichende Werte am Cluster überschreibt und Cluster und Node-RG sonst auseinanderlaufen [A]; der Tag-Name `Owner` ist für neue Cluster nicht mehr reserviert [Quelle: faq]. Nach dem Create `az group show -n gebit-showcase-nodes --query "keys(tags)" -o tsv` prüfen (nur Schlüssel, Werte per stillem Vergleich gegen `gebit-showcase`, P1 Schritt 4). Die Namen `rg-eurocis-base`, `rg-eurocis-aks` und `rg-eurocis-nodes` entfallen. Quota reicht ohne Antrag (Bedarf 16 vCPU mit Surge-Node und 2 Public IPs, 3.5; Bestand siehe Prüfung 18.11.); Re-Check vor dem Create und vor dem Refresh am 26.01. Defender: alle relevanten Pläne Free, 0 EUR. Budget: ein Monatsbudget auf Subscription-Ebene `azure-se`, gefiltert auf `gebit-showcase` und `gebit-showcase-nodes` (Actual 100 %, Forecast 100 %, 01.12.2026-31.03.2027), 250 EUR statt 450 EUR, zwischen Stopp-Betrieb und 24/7, damit ein vergessener Nachtstopp den Forecast auslöst [A: Kosten 3.4]; Contributor darf eigene Budgets anlegen [Quelle: tutorial-acm-create-budgets]. Der feste Name der Node-RG hält den Filter über Neuaufbauten stabil; `gebit-showcase` enthält nur Showcase-Ressourcen [A]; ob Cost Management für den Angebotstyp von `azure-se` verfügbar ist, prüft P0 read-only [A]. Projektziel unter 1.500 EUR, verfolgt per Cost-Analysis-Ansicht | je RG ein Budget (ebenfalls mit Contributor möglich); eigene Subscription (nicht vorhanden); Policy-Ausnahme für die Node-RG (nur durch einen Subscription-Owner) | Policy-Built-ins und Cost Management read-only in P0 (Frage 6); Quota-Re-Check vor dem Create (P1); Budget in P1 nach dem Create |
+| AKS-E2 | Region | entschieden 17.11., ergänzt 18.11. | Germany West Central für alle regionalen Ressourcen; folgt aus dem Namen `<fqdn>` (AKS-E4). Die RG `gebit-showcase` liegt in West Europe: zulässig, ihre Metadaten bleiben dort, und jede regionale Ressource braucht `-l germanywestcentral` (1.4; Activity-Log-Alarme, Action Group und Budget sind global bzw. ohne Region). Fällt West Europe aus, leitet ARM Control-Plane-Aufrufe in eine Backup-Region um; Microsoft empfiehlt dieselbe Region für RG und Ressourcen [Quelle: `learn.microsoft.com/azure/azure-resource-manager/management/overview`]; Restrisiko gering [A] | West Europe (gleiche v6-Preise [Quelle: Retail-API 16.11.], passend zur RG), dann ein anderer Name | erledigt |
+| AKS-E3 | Architektur, Größe, Verfügbarkeit | entschieden 17.11.; Zulässigkeit 1-Node-Systempool [A], Beweis beim Create in P1 | arm64, 1 x `Standard_D8ps_v6` (8 vCPU / 32 GiB) im Pool `main` (System-Modus), kein HA: gleiche Digests wie im Lab, kein Multi-Arch-Build. Die SKU ist in Germany West Central ohne Restriction verfügbar, Zonen 1-3 (Prüfung 18.11.). Die Requests passen auf einen Node (mit Broker `prod1k` rund 91 % CPU und 70 % RAM der Allocatable, 3.2); Abnahme in P1: mindestens 7,8 CPU und 28,5 GiB allocatable. Microsoft Learn verlangt für produktive System-Pools mindestens 2 Nodes (3 empfohlen) [Quelle: `learn.microsoft.com/azure/aks/use-system-pools`], der AKS-Quickstart legt mit `--node-count 1` an [Quelle: `learn.microsoft.com/azure/aks/learn/quick-kubernetes-deploy-cli`]; der Create in P1 ist der Beweis [A]. Kein N-1-Drill mehr. Folge: Node-Image-Update oder Node-Ausfall heißt einige Minuten Ausfall der ganzen Demo; Rückfall L3 (Lab) | 2 Nodes mit HA (vom Owner verworfen, rund +239 EUR/Monat bei 24/7 mit OS-Disk); amd64 1 x `D8as_v6` (rund +68 EUR/Monat bei 24/7, +1-1,5 PT; SKU frei (18.11.); Familien-Quota Standard DASv6 nicht geprüft [A], vor einem Wechsel read-only prüfen); `D8ps_v5` bei Dpsv6-Engpass (ebenfalls frei) | Beweis beim Create (P1, KW49) |
+| AKS-E4 | Domain, DNS, TLS | entschieden 17.11., geändert 18.11. (AKS-E21); Präfix `<p>`, Label-Scope und NRG-Lockdown: Owner-Bestätigung offen | Ein Azure-Name `<fqdn>` = `<p>.germanywestcentral.cloudapp.azure.com`: DNS-Label auf der statischen Standard-IP `pip-aks-ingress`. Claude legt sie nach Freigabe direkt nach dem Create in der Node-RG an (`az network public-ip create -g gebit-showcase-nodes -n pip-aks-ingress -l germanywestcentral --sku Standard --allocation-method Static --version IPv4 --dns-name <p>`, P1 Schritt 4); die Pflicht-Tags erbt sie von der Node-RG. Keine Rollenzuweisung: Die Control-Plane-Identität hat per Default Contributor auf ihrer Node-RG [Quelle: `learn.microsoft.com/azure/aks/static-ip`; `learn.microsoft.com/azure/aks/managed-identity-overview`]. Kein Lock, er bräuchte Owner oder User Access Administrator (AKS-E21). Der Traefik-Service nutzt `service.beta.kubernetes.io/azure-pip-name: pip-aks-ingress` und setzt `azure-load-balancer-resource-group: gebit-showcase-nodes` explizit wie das Manifest auf Learn [Quelle: static-ip]; ohne die Annotation sucht der Cloud-Provider in der RG seiner Cloud-Konfiguration, bei AKS der Node-RG [Quelle: cloud-provider-azure master pkg/provider/azure_loadbalancer.go:4298-4307; A: gleiches Verhalten in der CCM-Version von AKS 1.36]; die VAP lässt die Annotation nur fehlend oder mit `gebit-showcase-nodes` zu. Nie `azure-dns-label-name`: Der Cloud-Provider gleicht DNS-Settings nur mit dieser Annotation ab, ein leerer Wert löscht das Label; eine IP ohne sein Service-Tag gilt als nutzererstellt und wird nie gelöscht, auch nicht mit dem Service [Quelle: `github.com/kubernetes-sigs/cloud-provider-azure` pkg/provider/azure_loadbalancer.go, master 18.11.; A: gleiches Verhalten in der CCM-Version von AKS 1.36]. Folge ohne Lock: `az aks delete` löscht die Node-RG samt IP; eine gelöschte statische IP ist nicht wiederherstellbar, das Label ist danach für jeden in der Region frei [Quelle: faq; `learn.microsoft.com/azure/virtual-network/ip-services/public-ip-addresses`]. Ein Neuaufbau bindet `<p>` sofort neu und bekommt eine neue IP. Owner-Optionen: (1) Domain Name Label Scope `--dns-name-scope SubscriptionReuse`, nur beim Anlegen setzbar (Public Preview ohne SLA; der Name bekommt einen Hash, `<p>.<hash>.germanywestcentral.cloudapp.azure.com`, ist aus anderen Subscriptions nicht belegbar, und ein Neuaufbau in `azure-se` bekommt denselben Namen) [Quelle: public-ip-addresses, "Domain Name Label Scope"]; (2) NRG-Lockdown `az aks update --nrg-lockdown-restriction-level ReadOnly` nach dem LB-Nachweis in P2 als Lock-Ersatz gegen versehentliches Löschen (keine Rollenzuweisung nötig; im Modus ReadOnly kann auch der Owner die IP nicht ändern, dafür kurz auf Unrestricted) [Quelle: `learn.microsoft.com/azure/aks/node-resource-group-lockdown`; A: Zusammenspiel mit dem Cloud-Provider in P2 testen]. Mit der AKS-verwalteten Outbound-IP sind es 2 Public IPs; LB-Regeln nur für 80 und 443 (mit der Outbound-Regel 3 Regeln, innerhalb der 5 im LB-Grundpreis [Quelle: Retail-API 17.11.]). Keine eigene Domain, keine Azure-DNS-Zone, kein DNS-01. Pfad-Routing auf 443 nach 2.1. TLS: ACME HTTP-01 über cert-manager, ein Zertifikat für `<fqdn>` als Traefik-Default (`TLSStore`); ob der SAM-Ingress `secretName` weglässt oder `sam-tls` vor `helm install` im SAM-Namespace liegt, entscheidet ein Test in P2 [Quelle: SAM-Chart 2.3.10 templates/_validations.tpl:110-113]. LE-Risiko: `cloudapp.azure.com` steht nicht auf der Public Suffix List, alle Azure-Kunden teilen den Bucket `azure.com` (50 neue Zertifikate je Woche); die Ausstellung kann tagelang scheitern [Quelle: `publicsuffix.org/list/public_suffix_list.dat` (17.11.); `letsencrypt.org/docs/rate-limits`; `community.letsencrypt.org/t/217855`]. Gegenmittel: erst LE-Staging, dann früh Produktion (P2); vorbereiteter Rückfall-ClusterIssuer einer ACME-CA mit EAB (ZeroSSL oder Google Trust Services; das Konto legt der Owner an, EAB-Daten nur in Key Vault und `.env.aks`); ausgestelltes Secret sichern; `cmctl renew` um den 15.01., damit die automatische Erneuerung nicht in den Freeze fällt [A: 90 Tage Laufzeit, Erneuerung nach zwei Dritteln]. `<p>` ist neutral, ohne Kunden- oder Projektnamen (CT-Logs sind öffentlich). Verfügbarkeit per `CheckDnsNameAvailability` am 20.11. und direkt vor dem Anlegen erneut prüfen, weil das Label bis zum Create frei bleibt [A] | eigene Domain mit DNS-01 (bisherige Empfehlung, vom Owner verworfen); IP schon in P0 in `gebit-showcase` anlegen und nach dem Create per `az resource move` in die Node-RG schieben, um das Label früher zu reservieren [A: Move in die Node-RG und Erhalt des Labels ungeprüft]; IP mit Lock außerhalb der Node-RG (bräuchte Lock und Network Contributor, ausgeschlossen durch AKS-E21); weitere Varianten in 8.5 | Präfix `<p>` bis 20.11.; Label-Scope bis 27.11. (Frage 7); NRG-Lockdown nach dem LB-Nachweis in P2 (P2 Schritt 10, Frage 29); neues G3-Kriterium (Frage 31); Verfügbarkeit am 20.11. und direkt vor dem Anlegen; `pip-aks-ingress` direkt nach dem Create (P1, ab 30.11.); LE-Produktion früh in P2; Rückfall-Konto und EAB-Daten bis 04.12. (Prüfpunkt) |
+| AKS-E5 | Zugriffsmodell, Missbrauchsschutz | entschieden 17.11., Break-glass geändert 18.11.; API-Server-Weg [A] Bestätigung offen; Exposition von `/freigabe`, `/foto`, `/op`, `/etikett`: Owner-Bestätigung offen | Öffentlich für alle, ohne WireGuard und ohne internes LB (was entfällt, steht in 8.5). Kasse (mit `/kunde`) und Monitor bleiben unverändert und ohne Login. Nicht vom Owner entschieden ist die Exposition der übrigen BFF-Seiten samt API-Routen: `/freigabe` beantwortet pausierte SAM-HITL-Läufe über die BFF (jeder könnte Preise freigeben oder ablehnen), `/foto` startet mit jedem Upload den Vision-Agenten, `/op` schaltet auf L4 [Quelle: PLAN 1.4 (Fläche A), PLAN 9 R24]. Bis zur Antwort (Frage 23) bekommen sie keinen Pfad auf `<fqdn>`. Öffentlich ist nur der Traefik-LoadBalancer-Service (VAP), mit `externalTrafficPolicy: Local` für echte Client-IPs. Nicht öffentlich: Grafana, Prometheus, Broker-SEMP, Keycloak-Admin-Konsole, Traefik-Dashboard (Port-Forward). Missbrauchsschutz: Komponente `public-guard` mit Traefik-Rate-Limits je Client-IP auf `/api/pos/`, `/api/demo/reset`, `/api/events` und den drei gRPC-Service-Pfaden (429 statt 503), dazu rpm/tpm-Limits am Messe-Key (AKS-E11); alle Standgeräte hinter einer NAT-IP teilen sich die Limits [A: Werte in P6 messen]. API-Server: authorized IP ranges; der Helfer `sli/aks/aks-allow-me.sh` ermittelt die aktuelle IP, mergt sie in die bestehende Liste und schreibt die volle Liste, weil `az aks update --api-server-authorized-ip-ranges` die Liste ersetzt (bis 2 min Laufzeit, höchstens 200 Bereiche) [Quelle: `learn.microsoft.com/azure/aks/api-server-authorized-ip-ranges`]; er braucht `managedClusters/write`, also Contributor (AKS-E20), und bekommt eine Option für eine fremde IP. Break-glass bei IP-Sperre: `az aks command invoke` aus jedem Netz; es läuft über ARM, aber mit dem Entra-Token des Aufrufers und damit unter Kubernetes-RBAC, hilft also nicht bei fehlendem ClusterRoleBinding; der Run-Pod fordert 200m CPU und 500Mi an [Quelle: `learn.microsoft.com/azure/aks/access-private-cluster`; azure-cli acs/custom.py, 2.85.0 und 2.93.0]. Break-glass bei RBAC-Lockout: `aks_update --enable-local-accounts`, `az aks get-credentials --admin --file` nur in ein per `trap` gelöschtes Temp-Verzeichnis (Muster aus P1 Schritt 6), reparieren, wieder `--disable-local-accounts` mit Nachweis (`disableLocalAccounts` gleich `true`, Negativtest), danach Zertifikate rotieren (AKS-E13). `aks-allow-me.sh` gilt als Freeze-Ausnahme, weil es nur ergänzt [A] | API-Server nur mit Entra ID und Conditional Access, ohne IP-Bereiche (aus jedem Netz, Endpunkt aber scannbar); privat mit WireGuard (bisherige Empfehlung, vom Owner verworfen); für die offenen Seiten: öffentlich, nur Port-Forward bzw. Lab, oder ein Schutz vor G2b | Abweichung vom API-Server-Weg bis 27.11.; Seiten-Exposition vor G2b [Quelle: PLAN 9 R24] |
 | AKS-E6 | Ingress-Controller | entschieden 17.11. | Traefik v3 mit ingress-nginx-Provider statt ingress-nginx: Chart 42.4.1, Image `traefik:v3.7.19` per Digest (nie unter v3.7.18, das fünf GHSAs behob; kein v3.8.0-rc) [Quelle: `api.github.com/repos/traefik/traefik/releases` und `.../security-advisories` (17.11.)], cert-manager v1.21.3; ein Deployment mit 1 Replika hinter genau einem LoadBalancer-Service (`pip-aks-ingress`, 80/443). Geschlossene Lücken: `ports.websecure.transport.respondingTimeouts.readTimeout: 3600s` (sonst schneidet Traefik HTTP/1.1-SSE und MCP nach 60 s ab); `azure-load-balancer-tcp-idle-timeout: "30"`; eigene IngressClass `nginx` (Controller `k8s.io/ingress-nginx`), weil das SAM-Chart die Klasse beim Install prüft und das Traefik-Chart sie nicht anlegt; Provider `kubernetesIngress` aus, `kubernetesCRD` an (Middleware, TLSStore); `proxy-request-buffering: "on"` für SAM und gpos-ui, sonst wirkt `proxy-body-size` nicht; HSTS per Headers-Middleware ohne `includeSubDomains`; kein Redirect auf EntryPoint-Ebene, damit HTTP-01 durchkommt (`ssl-redirect` je Ingress liefert 308); nie Buffering auf der SSE-Route `/api/events` [Quelle: Traefik v3.7.19 docs ingress-nginx.md:265-502, entrypoints.md:128-130; pkg/provider/kubernetes/ingress-nginx/middleware.go:176-213; SAM-Chart 2.3.10 templates/_validations.tpl:185-189]. Das Lab behält ingress-nginx (dieselben NGINX-Ingress-Manifeste laufen auf beiden); Traefik-eigene Werte beweist erst P2. Traefik-Patch-Releases im Freeze nur als Ausnahme mit Smoke-Test [A] | ingress-nginx 4.15.1 (bisherige Empfehlung; archiviert, CVE-2026-116472 ohne Fix); App-Routing Gateway API; Application Gateway for Containers (ab rund 125 EUR/Monat) | erledigt; Nachweis in P2 |
 | AKS-E7 | SAM-Persistenz | entschieden 17.11. | gebündelt (Postgres + SeaweedFS 2 CPU/2Gi, seit sda-Commit cd08a17 in amd `local-k8s-values.yaml`) auf `managed-csi-premium`, Superuser-Passwort aus Key Vault (`sam-pg-admin`), Schutz nach AKS-E19; Keycloak- und Demo-DB ebenfalls im Cluster | extern: PG Flexible + Blob (+1,5-2 PT, rund +108 EUR/Monat, nie im Lab gelaufen); der PLAN nennt gebündelt selbst als Rückfall [Quelle: PLAN 6.2, Nr. 11] | erledigt |
-| AKS-E8 | Broker | entschieden 17.11.; Lab-Upgrade: Go offen | PubSub+ Standard 10.26.0.9219 (LTS, Tags `latest`/`lts`, Index-Digest beginnt mit `sha256:c0020e53ed48`) für Lab und AKS, per Digest gepinnt; nicht 10.26.10 (Rolling Release ohne Wartungsreleases, Support nur bis zum nächsten LTS, kein Weg zurück auf 10.26.0.x) [Quelle: Docker-Hub-Tags-API (17.11.); `solace.com/support/support-dates-for-release-versions`; docs.solace.com Upgrade-Selector]. AKS: `pubsubplus` 3.10.0 mit `service.type: ClusterIP` und `storage.useStorageGroup: true` explizit, P10 128Gi, VPN-Layout wie im Lab, eigene User `sam` und `gpos`. Größe `prod1k` (Requests und Limits 2 vCPU / 6,4 GiB, Guaranteed, 1000 Verbindungen; mehr RAM, als der Lab-Broker heute belegt, 4,19 GiB); zwingt das Sizing dazu (Kriterium in 3.2: die nach P2 gemessenen CPU-Requests von System, Traefik, cert-manager, Monitoring und Defender liegen über 2044m, dann reißt `prod1k` die 92-%-Grenze), dann `dev` (Request 1 vCPU / 3,3 GiB, 100 Verbindungen): reicht für die rund 11 Verbindungen der Demo, liegt beim RAM aber unter dem Lab-Verbrauch (OOM-Risiko) [A]. Der Lab-Broker läuft mit dem Default von 100 Verbindungen [A: per SEMP `show system` bzw. SEMPv2-GET prüfen]. Neuer Arbeitsposten Lab-Upgrade 10.25.0.208 auf 10.26.0.9219: Beide Broker-DBs liegen im Container-Layer (1.4). Schritte: SEMPv2-Baseline, `docker commit` als Rückfall, Storage auf ein externes Volume, Tag plus Digest in emd `.env.example`, Terraform-Provider fest pinnen, `docker compose up -d --no-deps` je Broker, `solace-2` zuerst, danach `terraform plan` ohne Änderungen. Risiko mittel bis hoch: Volume-Kopie der SolOS-DB ungeprobt; 36 Queues, Client-Usernames und ein ACL-Profil liegen außerhalb von Terraform. Eigenes Owner-Go und Wartungsfenster; fertig und mit SAM- und GEBIT-Flows im Lab bewiesen vor P4 Teil B (AKS) und P5 | 10.26.10.14510 (Rolling, Support nur bis Juni 2027); 10.25.0.208 auf AKS (dann zwei Versionen); Solace Cloud (ein VPN je Service, TLS-only, Änderung an `bus.py` nach UC1-Freeze) | Go vor der Probe an `solace-2` (KW48) [A]; `solace-1` bis zum Prüfpunkt 04.12., spätestens 10.12. |
+| AKS-E8 | Broker | entschieden 17.11.; Lab-Upgrade: Go offen | PubSub+ Standard 10.26.0.9219 (LTS, Tags `latest`/`lts`, Index-Digest beginnt mit `sha256:c0020e53ed48`) für Lab und AKS, per Digest gepinnt; nicht 10.26.10 (Rolling Release ohne Wartungsreleases, Support nur bis zum nächsten LTS, kein Weg zurück auf 10.26.0.x) [Quelle: Docker-Hub-Tags-API (17.11.); `solace.com/support/support-dates-for-release-versions`; docs.solace.com Upgrade-Selector]. AKS: `pubsubplus` 3.10.0 mit `service.type: ClusterIP` und `storage.useStorageGroup: true` explizit, P10 128Gi, VPN-Layout wie im Lab, eigene User `sam` und `gpos`. Größe `prod1k` (Requests und Limits 2 vCPU / 6,4 GiB, Guaranteed, 1000 Verbindungen; mehr RAM, als der Lab-Broker heute belegt, 4,19 GiB); zwingt das Sizing dazu (Kriterium in 3.2: die nach P2 gemessenen CPU-Requests von System, Traefik, cert-manager und Monitoring liegen über 2044m, dann reißt `prod1k` die 92-%-Grenze; einen Defender-Sensor gibt es nicht, alle Pläne Free, 18.11.), dann `dev` (Request 1 vCPU / 3,3 GiB, 100 Verbindungen): reicht für die rund 11 Verbindungen der Demo, liegt beim RAM aber unter dem Lab-Verbrauch (OOM-Risiko) [A]. Der Lab-Broker läuft mit dem Default von 100 Verbindungen [A: per SEMP `show system` bzw. SEMPv2-GET prüfen]. Neuer Arbeitsposten Lab-Upgrade 10.25.0.208 auf 10.26.0.9219: Beide Broker-DBs liegen im Container-Layer (1.4). Schritte: SEMPv2-Baseline, `docker commit` als Rückfall, Storage auf ein externes Volume, Tag plus Digest in emd `.env.example`, Terraform-Provider fest pinnen, `docker compose up -d --no-deps` je Broker, `solace-2` zuerst, danach `terraform plan` ohne Änderungen. Risiko mittel bis hoch: Volume-Kopie der SolOS-DB ungeprobt; 36 Queues, Client-Usernames und ein ACL-Profil liegen außerhalb von Terraform. Eigenes Owner-Go und Wartungsfenster; fertig und mit SAM- und GEBIT-Flows im Lab bewiesen vor P4 Teil B (AKS) und P5 | 10.26.10.14510 (Rolling, Support nur bis Juni 2027); 10.25.0.208 auf AKS (dann zwei Versionen); Solace Cloud (ein VPN je Service, TLS-only, Änderung an `bus.py` nach UC1-Freeze) | Go vor der Probe an `solace-2` (KW48) [A]; `solace-1` bis zum Prüfpunkt 04.12., spätestens 10.12. |
 | AKS-E9 | Monitoring | [A] Bestätigung offen (Zugriff entschieden 17.11.) | OSS im Cluster, Lab-Versionen, Images aus ACR, Tempo bleibt (im Owner-Scope); Grafana und Prometheus ohne Ingress, Zugriff per Port-Forward | Azure Managed Prometheus + Grafana (+125-215 EUR/Monat, Dashboards und ServiceMonitors portieren) | 04.12. |
 | AKS-E10 | Keycloak | entschieden 17.11. | bleibt im Cluster, Realm `solace-lab`, 26.8.2 gepinnt, generierte Passwörter. Unter `/auth`: `KC_HTTP_RELATIVE_PATH=/auth`, `KC_HOSTNAME=https://<fqdn>/auth`, `KC_HTTP_MANAGEMENT_RELATIVE_PATH=/` (Probes bleiben `/health/*` auf Port 9000); beide Pfade sind Build-Optionen, der Start ohne `--optimized` übernimmt sie [Quelle: `www.keycloak.org/server/hostname`; sli keycloak/manifests/03-keycloak.yaml:141-144]. Issuer `https://<fqdn>/auth/realms/solace-lab`; Ingress nur für `/auth/realms/solace-lab/` und `/auth/resources/`; Admin-Konsole per Port-Forward (ob `KC_HOSTNAME_ADMIN` nötig ist, klärt P3); die Keycloak-Admin-Skripte nehmen `KEYCLOAK_URL` als Präfix (`.../auth`). SAM-Client: `redirectUris` exakt `https://<fqdn>/api/v1/auth/callback` statt Wildcard, die auf dem geteilten Host auch gpos- und Keycloak-Pfade deckte [Quelle: amd scripts/setup-keycloak-client.sh:17, 124-125] | 26.2-Lab-Digest (Release-Linie ohne Upstream-Support); Entra ID als IdP (nicht empfohlen: RBAC-Manifeste, Claim-Mapping); eigener Host (verworfen mit AKS-E4) | `KC_HOSTNAME_ADMIN` in P3 |
-| AKS-E11 | LiteLLM | entschieden 17.11.; Betreiber-Antwort offen | statische Egress-IP `pip-aks-egress` aus P0, an den Betreiber bis 25.11.; Messe-Key (O5, 150 USD, Alarme bei 50 und 80 % [Quelle: PLAN 0.5]) nur in die SAM-Konfiguration. Neu: Der Betreiber setzt `rpm_limit` und `tpm_limit` (dazu `max_budget`) am Messe-Key [Quelle: `docs.litellm.ai/docs/proxy/users`]; Grund: Kasse und Reset sind anonym, ein Skript mit einem Review alle 5 s kostet rund 7-36 USD/h und leert den Key in 4-21 h, danach steht die Demo [A; Quelle: PLAN 0.5 (O5), PLAN 8.6] | kein separater Messe-Key (dann Lab-Key auf AKS) | Anfrage 20.11., IP an den Betreiber bis 25.11., Bestätigung und Limits 27.11., Test in P1 (03.12.) |
-| AKS-E12 | Kyverno, trust-manager, Lab-Registry auf AKS | [A] Bestätigung offen | nicht installieren; ValidatingAdmissionPolicy + PriorityClasses. VAP neu: `type: LoadBalancer` nur für den Service `traefik/traefik` mit `azure-pip-name: pip-aks-ingress` und `azure-load-balancer-resource-group: rg-eurocis-base` (fängt auch den öffentlichen LB-Default des `pubsubplus`-Charts und einen zweiten LB-Service im Namespace `traefik`); TLS- und Redirect-Regeln nehmen HTTP-01-Solver-Ingresses (Label `acme.cert-manager.io/http01-solver`) aus | Kyverno 3.7.1 gepinnt mit umgeschriebenen Policies (+0,5 PT; Chart 3.9.2+ blockiert `az aks stop`) | 27.11. |
-| AKS-E13 | Cluster-Zugriff, Mac-Tools | entschieden 17.11. | Entra ID + Azure RBAC, lokale Accounts aus, eigene kubeconfig `~/.kube/aks-eurocis.yaml` nur über `kaks`/`haks`; Mac-Tools freigegeben (AKS-E15 (e)): Azure CLI als Cask (2.93 oder neuer), Microsoft-kubelogin aus dem Tap `Azure/kubelogin` | lokaler Admin-kubeconfig (statisches Admin-Zertifikat 3 Monate auf der Platte) | erledigt; Installation in P0 |
-| AKS-E14 | Version, Tier, Wartung, Laufzeiten | entschieden 17.11. | 1.36.x gepinnt, Auto-Upgrade aus, Node-OS-Kanal SecurityPatch Mi 08-12 Uhr; manueller Node-Image-Refresh Di 26.01.2027; `notAllowedDates` 20.01.2027 und 27.01.-20.02.2027 auf allen drei Wartungskonfigurationen. Free-Tier für das ganze Projekt, kein Wechsel auf Standard (kein Uptime-SLA). Mit einem Node heißt jedes Node-Image-Update einige Minuten Ausfall; die Sperre um die Messe bleibt deshalb. Nachts stoppen bis G4 (Start frühestens 30 min nach Stop), ab 05.02. 24/7 | Standard-Tier ab G2b (bisherige Empfehlung, rund 66 EUR/Monat); 1.35 (EOL März 2027); Node-OS `None` mit einem manuellen Refresh | erledigt; Konfiguration in P1 |
-| AKS-E15 | Freigaben geteilte Infra und Mac-Tools | entschieden 17.11. (alle erteilt) | (a) amd-Working-Tree committet (sda-Commit cd08a17, erledigt); (b) Profil + Kontext-Guard in amd-Skripten inkl. Keycloak-Teardown-Skripten; (c) neue Ordner `sli/aks/`, `emd/aks/`, `emd/terraform-aks/`, `amd/manifests/aks/`; (d) Broker-Pin 10.26.0.9219 per Tag und Digest in emd `.env.example`, wirksam erst mit dem Lab-Upgrade, das ein eigenes Go braucht (AKS-E8); (e) Mac-Tools Azure CLI 2.93 oder neuer und Microsoft-kubelogin | alles in gpd (Lab-Skripte ohne Guard) | erledigt |
-| AKS-E16 | GEBIT, gRPC | entschieden 17.11.; Descriptor-Set in Azure und öffentliche Reflection: offen (Planungsannahme ja [A], gehandelt wird erst nach schriftlicher Bestätigung) | Laut Owner liegt die schriftliche GEBIT-Freigabe seit 17.11.2026 vor; gpd ist im öffentlichen sda-Repo committet (sda-Commit 7a860c5). Alle drei gRPC-Endpunkte sind öffentlich für alle, Reflection an; der Owner akzeptiert, dass jeder die anonymen Schreib-RPCs aufrufen kann (z. B. Preisänderung in der WWS, Coupons im Loyalty-Dienst, Reset); `public-guard` bremst sie je Client-IP (P6 Schritt 8). Routing über den Service-Pfad auf `<fqdn>:443` (2.1). Neuer Arbeitsposten in P6: Image 0.1.4 mit einem gebündelten Reflection-Endpunkt, der für alle drei Dienste aus beiden Descriptor-Pools antwortet (GEBIT aus dem Secret-Mount, Showcase aus dem Image) [A: rund 0,5 PT]; bis dahin nutzen grpcurl und Postman für zwei der drei Server das lokale Descriptor-Set (`-protoset`); gRPC-Health nur im Cluster. Planungsannahme: Die Freigabe deckt auch das GEBIT-Descriptor-Set als K8s-Secret in Azure GWC, Zugriff von Owner und Stellvertretung (AKS-E20), Löschung bis 20.02. und die öffentliche Reflection. Diese gibt nicht nur die Dienstliste heraus, sondern die GEBIT-Descriptor-Dateien selbst (Purchase-API samt Abhängigkeiten) [A: Owner bestätigt]. Harte Vorbedingung: Ohne schriftliche Bestätigung kommt kein GEBIT-Material nach Azure (auch nicht für `gebitsim` in P2 Schritt 7) und keine Reflection-Route auf `<fqdn>`; nie in Git, Images oder ACR | deckt die Freigabe das Secret nicht: Descriptor-Set nur im Lab, Messe aus dem Lab (L3), G0-11b (3) mit einem Testserver ohne GEBIT-Material; deckt sie nur die öffentliche Reflection nicht: Reflection-Pfade ungeroutet (bisherige Variante c), `-protoset` für alle drei Dienste | Bestätigung bis 27.11., spätestens 09.12. (vor dem ersten GEBIT-Secret in Azure, P2 Schritt 7; G0-11b (3) mit `gebitsim` am 11.12.); Image 0.1.4 in P6 |
-| AKS-E17 | Secrets | entschieden 17.11. (mit AKS-E4) | Key Vault (RBAC-Modus, Soft-Delete 7 Tage, ohne Purge-Schutz) als Kopie außerhalb des Macs für generierte Secrets (hex, ohne Zeilenumbruch), TLS-Backups und die EAB-Daten des Rückfall-Issuers, ohne CSI-Treiber; LiteLLM-Key und GEBIT-Material nie im Key Vault | nur `.env.aks` + Passwortmanager des Owners | Anlage in P1 |
+| AKS-E11 | LiteLLM | entschieden 17.11., geändert 18.11. (AKS-E21); Betreiber-Antwort offen | Egress über die AKS-verwaltete Outbound-IP des Standard-LB in `gebit-showcase-nodes` (Default `managedOutboundIPs.count` 1), kein BYO `pip-aks-egress`: Eine eigene IP außerhalb der Node-RG bräuchte Rechte der Cluster-Identität, also eine Rollenzuweisung [Quelle: `learn.microsoft.com/azure/aks/configure-load-balancer-standard`]. Die Adresse steht erst nach dem Create fest; P1 liest sie aus `networkProfile.loadBalancerProfile.effectiveOutboundIPs[].id` und meldet sie sofort dem Betreiber. Stop/Start behält sie [A: nicht dokumentiert, P1 misst vor und nach dem ersten Zyklus]; jeder Neuaufbau bringt eine neue IP und, falls es eine Allowlist gibt, eine neue Freischaltung (Vorlaufzeit des Betreibers erfragen, ins Neuaufbau-Runbook). Anfrage an den Betreiber am 20.11. ohne IP, mit dem Hinweis auf die wechselnde IP. Messe-Key (O5, 150 USD, Alarme bei 50 und 80 % [Quelle: PLAN 0.5]) nur in die SAM-Konfiguration. Der Betreiber setzt `rpm_limit` und `tpm_limit` (dazu `max_budget`) am Messe-Key [Quelle: `docs.litellm.ai/docs/proxy/users`]; Grund: Kasse und Reset sind anonym, ein Skript mit einem Review alle 5 s kostet rund 7-36 USD/h und leert den Key in 4-21 h, danach steht die Demo [A; Quelle: PLAN 0.5 (O5), PLAN 8.6] | kein separater Messe-Key (dann Lab-Key auf AKS); stabile BYO-Egress-IP außerhalb der Node-RG (braucht eine Rollenzuweisung, ausgeschlossen durch AKS-E21) | Anfrage 20.11. (ohne IP), Antwort und Limits 27.11., IP direkt nach dem Create (P1, ab 30.11.), Freischaltung vor dem LLM-Test in P1 (03.12.) (Fragen 5 und 26) |
+| AKS-E12 | Kyverno, trust-manager, Lab-Registry auf AKS | [A] Bestätigung offen; geändert 18.11. (AKS-E21) | nicht installieren; ValidatingAdmissionPolicy + PriorityClasses. VAP neu: `type: LoadBalancer` nur für den Service `traefik/traefik` mit `azure-pip-name: pip-aks-ingress`, `azure-load-balancer-resource-group` fehlend oder gleich `gebit-showcase-nodes` (fängt auch den öffentlichen LB-Default des `pubsubplus`-Charts und einen zweiten LB-Service im Namespace `traefik`); TLS- und Redirect-Regeln nehmen HTTP-01-Solver-Ingresses (Label `acme.cert-manager.io/http01-solver`) aus | Kyverno 3.7.1 gepinnt mit umgeschriebenen Policies (+0,5 PT; Chart 3.9.2+ blockiert `az aks stop`) | 27.11. |
+| AKS-E13 | Cluster-Zugriff, Mac-Tools | entschieden 17.11., geändert 18.11. (AKS-E21); Bootstrap-Variante: Owner-Bestätigung offen | AKS-verwaltetes Entra ID mit Kubernetes-RBAC: `--enable-aad` ohne `--enable-azure-rbac` (Azure RBAC für Kubernetes bräuchte Rollenzuweisungen). Bootstrap einmal direkt nach dem Create, mit noch aktiven lokalen Accounts: (1) Entra-kubeconfig per `az aks get-credentials --file ~/.kube/aks-eurocis.yaml --context aks-eurocis`, dann `kubelogin convert-kubeconfig -l azurecli --kubeconfig ~/.kube/aks-eurocis.yaml --context aks-eurocis` (nutzt die `az login`-Sitzung; ohne `--file` bzw. `--kubeconfig` träfen beide `~/.kube/config`) [Quelle: `azure.github.io/kubelogin/cli/convert-kubeconfig.html`]; (2) `kaks auth whoami` zeigt den Benutzernamen, den AKS ableitet (nur notieren, nie ins Repo); (3) `az aks get-credentials --admin` in ein per `trap` gelöschtes Temp-Verzeichnis (umask 077; Contributor hat `listClusterAdminCredential`), damit ein ClusterRoleBinding auf `cluster-admin` mit `kind: User` und `name: <owner-upn>`; Learn bindet Nutzer desselben Tenants per UPN, Nutzer aus anderen Tenants per objectId und Gruppen per objectId mit `kind: Group` [Quelle: `learn.microsoft.com/azure/aks/kubernetes-rbac-entra-id`]; (4) `kaks auth can-i '*' '*' -A` ergibt yes; (5) `aks_update --disable-local-accounts`, dann `disableLocalAccounts` gleich `true` prüfen; erst danach der Negativtest, bei dem `--admin` in einem per `trap` gelöschten Temp-Verzeichnis mit "Getting static credential isn't allowed" scheitern muss (P1 Schritt 6); (6) `az aks rotate-certs` vor dem ersten Workload, weil Learn nach genutzten lokalen Accounts die Rotation verlangt; Nodes, VMSS und Disks entstehen neu, bis 30 min Ausfall, danach die kubeconfig neu holen [Quelle: `learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad`; `learn.microsoft.com/azure/aks/rotate-certificates`]. Das Binding des Stellvertreters legt der Owner später mit seiner Entra-Identität an (AKS-E20). Eigene kubeconfig nur über `kaks`/`haks`. Mac-Tools freigegeben (AKS-E15 (e)): Azure CLI als Cask (2.93 oder neuer), Microsoft-kubelogin aus dem Tap `Azure/kubelogin` | Azure RBAC für Kubernetes (braucht Rollenzuweisungen, ausgeschlossen); Admin-Gruppe per `--aad-admin-group-object-ids <group-objectId>` beim Create mit `--disable-local-accounts`, ohne Admin-Zertifikat und ohne Rotation, nur wenn der Owner eine eigene Entra-Sicherheitsgruppe anlegen darf (nicht die Contributor-Gruppe); lokale Accounts dauerhaft an (statisches Admin-Zertifikat für jeden Contributor abrufbar) | Bootstrap-Variante bis 27.11. (Frage 28); Bootstrap in P1 (KW49); Installation der Mac-Tools in P0 (noch offen) |
+| AKS-E14 | Version, Tier, Wartung, Laufzeiten | entschieden 17.11. | 1.36.x gepinnt (am 18.11. Default in Germany West Central, Patch 1.36.5), Auto-Upgrade aus, Node-OS-Kanal SecurityPatch Mi 08-12 Uhr; manueller Node-Image-Refresh Di 26.01.2027; `notAllowedDates` 20.01.2027 und 27.01.-20.02.2027 auf allen drei Wartungskonfigurationen. Free-Tier für das ganze Projekt, kein Wechsel auf Standard (kein Uptime-SLA). Mit einem Node heißt jedes Node-Image-Update einige Minuten Ausfall; die Sperre um die Messe bleibt deshalb. Nachts stoppen bis G4 (Start frühestens 30 min nach Stop), ab 05.02. 24/7 | Standard-Tier ab G2b (bisherige Empfehlung, rund 66 EUR/Monat); 1.35 (EOL März 2027); 1.37 (1.37.1, am 18.11. verfügbar, nicht Default); Node-OS `None` mit einem manuellen Refresh | erledigt; Konfiguration in P1 |
+| AKS-E15 | Freigaben geteilte Infra und Mac-Tools | entschieden 17.11. (alle erteilt); (e) am 18.11. noch nicht ausgeführt | (a) amd-Working-Tree committet (sda-Commit cd08a17, erledigt); (b) Profil + Kontext-Guard in amd-Skripten inkl. Keycloak-Teardown-Skripten; (c) neue Ordner `sli/aks/`, `emd/aks/`, `emd/terraform-aks/`, `amd/manifests/aks/`; (d) Broker-Pin 10.26.0.9219 per Tag und Digest in emd `.env.example`, wirksam erst mit dem Lab-Upgrade, das ein eigenes Go braucht (AKS-E8); (e) Mac-Tools Azure CLI 2.93 oder neuer und Microsoft-kubelogin; freigegeben, am 18.11. noch nicht installiert (CLI 2.85.0, kein kubelogin) | alles in gpd (Lab-Skripte ohne Guard) | Freigaben (a) bis (e) erteilt (17.11.); umgesetzt: (a) (cd08a17); (b) in P0 Schritt 10, (c) ab P0/P1, (d) mit P4 Teil A, (e) Installation vor P1 (P0 Schritt 8) |
+| AKS-E16 | GEBIT, gRPC | entschieden 17.11.; Descriptor-Set in Azure und öffentliche Reflection: offen (Planungsannahme ja [A], gehandelt wird erst nach schriftlicher Bestätigung) | Laut Owner liegt die schriftliche GEBIT-Freigabe seit 17.11.2026 vor; gpd ist im öffentlichen sda-Repo committet (sda-Commit 7a860c5). Alle drei gRPC-Endpunkte sind öffentlich für alle, Reflection an; der Owner akzeptiert, dass jeder die anonymen Schreib-RPCs aufrufen kann (z. B. Preisänderung in der WWS, Coupons im Loyalty-Dienst, Reset); `public-guard` bremst sie je Client-IP (P6 Schritt 8). Routing über den Service-Pfad auf `<fqdn>:443` (2.1). Neuer Arbeitsposten in P6: Image 0.1.4 mit einem gebündelten Reflection-Endpunkt, der für alle drei Dienste aus beiden Descriptor-Pools antwortet (GEBIT aus dem Secret-Mount, Showcase aus dem Image) [A: rund 0,5 PT]; bis dahin nutzen grpcurl und Postman für zwei der drei Server das lokale Descriptor-Set (`-protoset`); gRPC-Health nur im Cluster. Planungsannahme: Die Freigabe deckt auch das GEBIT-Descriptor-Set als K8s-Secret in Azure GWC, Zugriff von Owner und Stellvertretung (AKS-E20), Löschung bis 20.02. und die öffentliche Reflection. Diese gibt nicht nur die Dienstliste heraus, sondern die GEBIT-Descriptor-Dateien selbst (Purchase-API samt Abhängigkeiten) [A: Owner bestätigt]. Seit 18.11.: Technisch erreicht jedes Mitglied der Contributor-Gruppe von `azure-se` das Secret, weil es lokale Accounts wieder einschalten kann (AKS-E21); die Bestätigung muss diesen Kreis abdecken [A: Owner klärt den Mitgliederkreis]. Harte Vorbedingung: Ohne schriftliche Bestätigung kommt kein GEBIT-Material nach Azure (auch nicht für `gebitsim` in P2 Schritt 7) und keine Reflection-Route auf `<fqdn>`; nie in Git, Images oder ACR | deckt die Freigabe das Secret nicht: Descriptor-Set nur im Lab, Messe aus dem Lab (L3), G0-11b (3) mit einem Testserver ohne GEBIT-Material; deckt sie nur die öffentliche Reflection nicht: Reflection-Pfade ungeroutet (bisherige Variante c), `-protoset` für alle drei Dienste | Bestätigung bis 27.11., spätestens 09.12. (vor dem ersten GEBIT-Secret in Azure, P2 Schritt 7; G0-11b (3) mit `gebitsim` am 11.12.; Fragen 4 und 27); Image 0.1.4 in P6 |
+| AKS-E17 | Secrets | entschieden 17.11. (mit AKS-E4), geändert 18.11. (AKS-E21) | Key Vault im Access-Policy-Modus (`az keyvault create -g gebit-showcase -l germanywestcentral -n <kv> --enable-rbac-authorization false --no-self-perms --retention-days 7`; Soft-Delete 7 Tage, ohne Purge-Schutz) als Kopie außerhalb des Macs für generierte Secrets (hex, ohne Zeilenumbruch), TLS-Backups, die EAB-Daten des Rückfall-Issuers und das Passwort des ACR-Tokens (`acr-pull-token`, AKS-E21), ohne CSI-Treiber; LiteLLM-Key und GEBIT-Material nie im Key Vault. Rechte per Access Policy, nur auf Secrets: Owner `az keyvault set-policy -n <kv> --object-id <owner-objectId> --secret-permissions get list set delete recover` (objectId zur Laufzeit aus `az ad signed-in-user show`), Stellvertreter `--object-id <deputy-objectId> --secret-permissions get list`; Contributor darf Access Policies setzen [Quelle: `learn.microsoft.com/azure/key-vault/general/assign-access-policy`]. Ohne `--no-self-perms` bekäme der Owner beim Create automatisch alle Rechte auf Keys, Secrets, Zertifikate und Storage; ohne `--enable-rbac-authorization false` legt die CLI den Vault im RBAC-Modus an [Quelle: azure-cli keyvault/custom.py und _params.py, 2.85.0 und 2.93.0]. Access Policies nennt Learn ein Legacy-Modell, sie bleiben aber voll unterstützt [Quelle: `learn.microsoft.com/azure/key-vault/general/rbac-access-policy`]. Key-Vault-Schritte (Anlage, Policies, Rückbau) mit Azure CLI 2.93: 2.85.0 nutzt die Kontroll-API 2025-05-01, die am 27.02.2027 endet [Quelle: `learn.microsoft.com/azure/key-vault/general/access-control-default`]. Grenze: Jeder Contributor von `azure-se` kann sich selbst eine Policy setzen (AKS-E21); "ASC Default" meldet den Modus vermutlich als Abweichung, nur kosmetisch [A] | Key Vault im RBAC-Modus (braucht die Rollenzuweisung "Key Vault Secrets Officer", ausgeschlossen); nur `.env.aks` + Passwortmanager des Owners | Anlage in P1 |
 | AKS-E18 | Gate-Verschiebung G0-11a/G0-11b | Owner-Bestätigung offen | G0-11a nach G2a (18.12., P5), die LiteLLM-Probe in P1 ist nur Frühindikator; Prüfung (4) DSN-TLS entfällt mit AKS-E7; Prüfung (2) Vision auf Modellebene in P5, mit `gpos-price-scout` in P6; G0-11b gRPC (3) bleibt am 11.12. (P2 Schritt 7, über Traefik und `<fqdn>`), HITL (1) wandert nach P5 (18.12.); AP12 S1-S3 von KW48 nach KW49/50 | PLAN-Termine 03.12./11.12. halten (verlangt den Cluster schon in KW48, vor dem Ende von P0) | 27.11. |
 | AKS-E19 | Schutz der SAM-Datenbank | entschieden 17.11. | eigenes Superuser-Passwort `sam-pg-admin` ab dem ersten Install; NetworkPolicies nur für SAM-Postgres und SeaweedFS (abweichend von RA R15 [Quelle: RA:599]); `grafana_ro` nur mit expliziter Tabellenliste | Chart-Default `password` ohne NetworkPolicy (RA R15): dann kann jeder Pod im Cluster, auch die öffentliche BFF ohne Login, den LiteLLM-Key lesen | vor dem ersten SAM-Install (P5) |
-| AKS-E20 | Betrieb an Probetagen und Messe | Owner-Bestätigung offen | Betreiber und Stellvertreter namentlich; Vorschlag nach PLAN 6.4/7.3: Person C Betreiber, Entwickler A Stellvertreter (bei O9 = (b): A Betreiber, Owner Stellvertreter) [A]; eigene Konten, Rollen, Allowlist-Eintrag und Keycloak-User. Die Stellvertreter-Rolle (P7 Schritt 7) bekommt `managedClusters/write` für `aks-allow-me.sh`, ohne `delete` und `stop` [A]; Test mit seinem Konto direkt nach der Zuweisung, vor G3; scheitert er an verknüpften Ressourcen, kommen Join- und Assign-Rechte dazu [A]; Break-glass `az aks command invoke` | nur der Owner (Risiko in Abschnitt 7) | Name 20.11., Rollen bis G3 |
+| AKS-E20 | Betrieb an Probetagen und Messe | Owner-Bestätigung offen; geändert 18.11. (AKS-E21); Azure-Zugang des Stellvertreters offen | Betreiber und Stellvertreter namentlich; Vorschlag nach PLAN 6.4/7.3: Person C Betreiber, Entwickler A Stellvertreter (bei O9 = (b): A Betreiber, Owner Stellvertreter) [A]; eigene Konten, Allowlist-Eintrag und Keycloak-User. Azure: Eine eigene Rolle ohne `delete` und `stop` gibt es nicht, weil der Owner keine Rollen zuweisen kann (AKS-E21). `az aks get-credentials`, `aks-allow-me.sh` (`managedClusters/write`), `az aks start`/`stop` und `command invoke` kann der Stellvertreter nur mit eigenem Contributor (oder Ähnlichem) auf `azure-se`, etwa über eine Gruppe; damit hat er auch `stop` und `delete`, die Grenze ist eine Runbook-Regel. Fehlt dieser Zugang, bleiben diese Schritte beim Owner, oder ein Subscription-Owner weist zu (offen für den Owner). kubectl allein geht auch ohne Azure-Recht [A: Test vor G3 mit einem Konto ohne Subscription-Zugriff, P7 Schritt 7]: Die Entra-User-kubeconfig enthält kein Geheimnis und fordert nur die Anmeldung [Quelle: `learn.microsoft.com/azure/aks/control-kubeconfig-access`]. Ohne Subscription bricht ein einfaches `az login` mit "No subscriptions found" ab; er meldet sich deshalb mit `az login --tenant <tenant> --allow-no-subscriptions` an (bei einem Gast liefert erst `--tenant` ein Token des richtigen Tenants), prüft `kaks auth whoami` und nennt seine objectId per `az ad signed-in-user show --query id -o tsv`. Ohne Azure CLI konvertiert er die weitergegebene kubeconfig mit `kubelogin convert-kubeconfig -l interactive` (oder `-l devicecode`) statt `-l azurecli`, je mit `--kubeconfig ~/.kube/aks-eurocis.yaml` [Quelle: azure-cli 2.85.0 core/_profile.py:206-207; `az login --help`, 2.85.0]. Dazu braucht er ein Konto im Tenant, ein ClusterRoleBinding (`<deputy-upn>`, bei einem Gast aus einem anderen Tenant die objectId; Username vorher per `kaks auth whoami` bestätigen) und seine IP in der Allowlist, die der Owner per `aks-allow-me.sh` mit der Option für eine fremde IP einträgt. Key Vault: Access Policy mit `<deputy-objectId>` (AKS-E17). Test mit seinem Konto vor G3; Break-glass wie AKS-E5 | nur der Owner (Risiko in Abschnitt 7) | Name 20.11. (Frage 2); Azure-Zugang des Stellvertreters bis 27.11. (Frage 24); Binding, Policy und Test bis G3 |
+| AKS-E21 | Azure-Rechte: nur Contributor | entschieden 18.11.; Folgen (2.2) und Zugriffskreis der Contributor-Gruppe: Owner-Bestätigung offen [A]; Scope-Map und Ablauf des ACR-Tokens: Owner-Bestätigung offen | Keine Rollenzuweisungen, keine Locks, keine Policy-Ausnahmen; alles läuft mit Contributor (Prüfung 18.11.). Umsetzung: (1) Netz: kein BYO-VNet (dafür bräuchte die Cluster-Identität Network Contributor, und der Ersteller müsste die Zuweisung anlegen), sondern das AKS-verwaltete VNet in der Node-RG, weiter Azure CNI Overlay mit Cilium [Quelle: `learn.microsoft.com/azure/aks/azure-cni-powered-by-cilium`; `learn.microsoft.com/azure/aks/concepts-network-cni-overview`]; Name und Adressraum stehen auf keiner Learn-Seite [A: beobachtet 10.224.0.0/12, ohne Überlappung mit Pod- und Service-CIDR; nach dem Create protokollieren], eigene UDRs oder Service-Endpoints daran sind nicht supportet. (2) Identität: System-Identität statt UAMI `id-aks-cp`. (3) ACR Basic in `gebit-showcase` mit `--role-assignment-mode rbac` (explizit, weil Contributor im ABAC-Modus weder pusht noch pullt) und ohne `--attach-acr`; Pull über ein repository-scoped Token mit Pull-only-Scope-Map über alle Repositories (`content/read`, `metadata/read`; eigene Scope-Map mit `*` oder die System-Scope-Map `_repositories_pull`), angelegt mit `--no-passwords`; das Passwort (`password1`, `password2` als Rotationsreserve) hat einen Ablauf nach dem Rückbau (Vorschlag 28.02.2027 [A: Owner]) und liegt nur im Key Vault und in `sli/aks/.env.aks` (chmod 600); Secret `acr-pull` (Typ dockerconfigjson) in jedem Namespace, der aus ACR zieht, vor `helm`/`kustomize` (Helfer `sli/aks/acr-pull.sh`); `imagePullSecrets` über die Chart-Werte, ein Patch des default-ServiceAccount nur für Test-Pods; `az aks check-acr` sagt hier nichts [Quelle: `learn.microsoft.com/azure/container-registry/container-registry-token-based-repository-permissions`; `learn.microsoft.com/azure/container-registry/container-registry-rbac-abac-repository-permissions`; `learn.microsoft.com/azure/container-registry/container-registry-auth-kubernetes`]. (4) Cluster-Zugriff: Entra ID mit Kubernetes-RBAC (AKS-E13). (5) Key Vault im Access-Policy-Modus (AKS-E17). (6) `pip-aks-ingress` ohne Lock in der Node-RG (AKS-E4), AKS-verwaltete Egress-IP (AKS-E11). (7) Pflicht-Tags beim Create (AKS-E1). (8) Budget und Activity-Log-Alarme legt der Owner als Contributor an, die Zugriffs- und Löschalarme schon vor dem Create (`foundation.sh pre`, P1 Schritt 8). Die CLI-Flags, die Zuweisungen auslösen, sind tabu (1.4). Preis: Kubernetes-RBAC und Access Policies sind keine Grenze gegen die anderen Contributors von `azure-se`; jeder von ihnen kann lokale Accounts wieder einschalten und Admin-Credentials holen, sich eine Key-Vault-Policy setzen oder ACR-Tokens anlegen [Quelle: `learn.microsoft.com/azure/key-vault/general/assign-access-policy`; `learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad`]. Das steht im Activity Log; Alarme darauf erkennen Missbrauch, verhindern ihn aber nicht (2.2) | Rollenzuweisungen durch einen Subscription-Owner (`--attach-acr`, Azure RBAC für Kubernetes, Network Contributor für BYO-Netz und IPs, Key-Vault-RBAC, Lock auf der Ingress-IP); vom Owner am 18.11. ausgeschlossen | erledigt; Umsetzung in P1; Ablauf und Scope-Map des ACR-Tokens bis 27.11. (Frage 30); Zugriffskreis (Frage 27) bis 27.11., spätestens 09.12. (AKS-E16) |
 
 ### 2.1 Pfade auf `<fqdn>` (AKS-E4)
 
@@ -334,6 +497,66 @@ Vom Owner am 17.11. akzeptiert:
   Node-Ausfall stoppt alles für einige Minuten. Gegenmittel:
   Wartungssperre um die Messe, Neuaufbau-Drill in P7, L3 warm.
 
+Folgen der Entscheidung vom 18.11. (AKS-E21), mit ihr in Kauf
+genommen [A: ausdrückliche Bestätigung des Owners offen]:
+
+- **Label und IPs ohne Lock:** Jedes `az aks delete`, auch durch ein
+  beliebiges Mitglied der Contributor-Gruppe, löscht
+  `gebit-showcase-nodes` samt `pip-aks-ingress` und Outbound-IP; das
+  Label ist sofort für jeden in der Region frei, eine gelöschte
+  statische IP ist nicht wiederherstellbar [Quelle:
+  `learn.microsoft.com/azure/aks/faq`; public-ip-addresses]. Ein
+  Neuaufbau bekommt neue Ingress- und Egress-IPs; `<fqdn>` bleibt nur
+  bei sofortiger Neubindung. Das G3-Kriterium "Ingress-IP
+  unverändert" (P7-Abnahme der Fassung vom 17.11., sda-Commit
+  9f66efd) soll "`<fqdn>` unverändert" heißen (Owner-Bestätigung
+  offen, Frage 31). Gegenmittel: Runbook-Regel (den Cluster nur beim
+  Rückbau oder im Neuaufbau-Drill löschen, nur über
+  `sli/aks/aks-rebuild.sh`, dann sofort neu binden),
+  Activity-Log-Alarme vor dem Create auf `managedClusters/delete`,
+  das Löschen von `pip-aks-ingress`, Key Vault, ACR und der beiden
+  RGs (P1 Schritt 8), Owner-Optionen Label-Scope und NRG-Lockdown
+  (AKS-E4).
+- **Egress-IP spät und nicht stabil:** Bekannt erst nach dem Create
+  (ab 30.11.), neu bei jedem Neuaufbau (AKS-E11). Mit einer Allowlist
+  liegen zwischen Create und LLM-Test (03.12.) nur wenige Tage, und
+  jeder Neuaufbau wartet auf eine neue Freischaltung; das kann den
+  Neuaufbau-Drill in P7 verlängern.
+- **Contributor-Gleichrang:** Jedes Mitglied der Contributor-Gruppe
+  von `azure-se` kann lokale Accounts einschalten und Cluster-Admin
+  werden, sich eine Key-Vault-Policy setzen oder ein ACR-Token
+  anlegen, und so an das GEBIT-Descriptor-Secret, den LiteLLM-Key
+  (über die SAM-Datenbank) und die generierten Secrets kommen.
+  Gegenmittel: Activity-Log-Alarme (Contributor darf sie anlegen) auf
+  `managedClusters/write`, `listClusterAdminCredential/action`,
+  `vaults/accessPolicies/write`, `registries/tokens/write` und
+  `registries/generateCredentials/action`, angelegt in P1 vor dem
+  Create (`foundation.sh pre`); der Owner klärt den Mitgliederkreis und
+  prüft ihn gegen die GEBIT-Freigabe (AKS-E16). Die Grenze ist
+  organisatorisch, nicht technisch.
+- **Admin-Zertifikat aus dem Bootstrap:** Es bleibt bis zur Rotation
+  gültig; `az aks rotate-certs` vor dem ersten Workload kostet bis 30
+  min, im Neuaufbau-Drill erneut (AKS-E13).
+- **Ablauf des ACR-Tokens:** Ein abgelaufenes Passwort fällt erst beim
+  nächsten Pull auf, etwa beim Surge-Node am 26.01. (ImagePullBackOff).
+  Gegenmittel: Ablauf nach dem Rückbau, Restlaufzeit im Preflight,
+  `password2` als Rotationsreserve (AKS-E21).
+- **Tag-Deny bei Cluster-Updates:** Laut einem Community-Report
+  schrieben spätere `az aks update` und `az aks nodepool update` die
+  Node-RG zeitweise ohne die Cluster-Tags und scheiterten mit
+  RequestDisallowedByPolicy [Quelle:
+  `github.com/Azure/AKS/issues/5856`, ohne Antwort von Microsoft].
+  Betroffen wären etwa `--disable-local-accounts`, `aks-allow-me.sh`
+  und der NRG-Lockdown. Gegenmittel: begrenzt wiederholen, bei einem
+  Failed-State `az aks update -g gebit-showcase -n aks-eurocis` zum
+  Reconcile [Quelle:
+  `learn.microsoft.com/troubleshoot/azure/azure-kubernetes/error-codes/requestdisallowedbypolicy-error`];
+  eine Ausnahme kann nur ein Subscription-Owner anlegen [A: P1
+  beobachtet].
+- **RG-Metadaten in West Europe:** Fällt die Region aus, laufen
+  Schreibzugriffe auf `gebit-showcase` über eine Backup-Region
+  (AKS-E2) [A: Risiko gering].
+
 Restrisiken mit Gegenmittel:
 
 - **Let's Encrypt im geteilten Bucket:** Ausstellung kann tagelang
@@ -377,9 +600,14 @@ Restrisiken mit Gegenmittel:
 
 ## 3. Sizing
 
-Stand 17.11.2026, nach den Owner-Entscheidungen vom selben Tag: ein
-Node ohne HA, Free-Tier für das ganze Projekt, arm64, Traefik statt
-ingress-nginx, öffentlich ohne WireGuard, Broker 10.26.0.9219 LTS.
+Stand 18.11.2026, nach den Owner-Entscheidungen vom 17.11. (ein Node
+ohne HA, Free-Tier für das ganze Projekt, arm64, Traefik statt
+ingress-nginx, öffentlich ohne WireGuard, Broker 10.26.0.9219 LTS)
+und vom 18.11. (nur Contributor, keine Rollenzuweisungen; Cluster,
+ACR und Key Vault in `gebit-showcase`, Node-RG
+`gebit-showcase-nodes`). Quota, SKUs und Defender-Pläne stammen aus
+dem read-only Azure-Check vom 18.11. [Quelle: read-only Azure-Check
+mit az CLI 2.85.0 in der Subscription `azure-se`, 18.11.].
 
 ### 3.1 Gemessener Lab-Footprint der umziehenden Teile
 
@@ -452,7 +680,7 @@ Requests auf AKS = max(Lab-Request, gemessener Peak + Cache), gerundet
 | Demo-Postgres (neu, `gpos-data`) | 100m | 256Mi | Ist 173 MiB |
 | Broker `prod1k` (10.26.0.9219) | 2000m | 6515Mi | Chart-Größe [Quelle: pubsubplus 3.10.0 templates/solaceStatefulSet.yaml:70-72, 92-94] |
 | **Summe Workloads** | **6375m** | **19827Mi (19,4 GiB)** | |
-| AKS-Systempods auf einem Node [A] | 750m | 1536Mi | RA:414 nennt 0,3-0,5 CPU und 0,7-1 GiB je Node; die Deployments (CoreDNS, metrics-server, konnectivity je 2 Replikas) liegen jetzt alle auf dem einen Node |
+| AKS-Systempods auf einem Node [A] | 750m | 1536Mi | RA:414 nennt 0,3-0,5 CPU und 0,7-1 GiB je Node; die Deployments (CoreDNS, metrics-server, konnectivity je 2 Replikas) liegen jetzt alle auf dem einen Node; kein Defender-Sensor (3.3) |
 | **Summe auf 1 Node** | **7125m** | **21363Mi (20,9 GiB)** | |
 | zum Vergleich: Broker `dev` statt `prod1k` | 1000m | 3410Mi | [Quelle: pubsubplus 3.10.0 templates/solaceStatefulSet.yaml:67-69, 89-91] |
 | **Summe auf 1 Node mit `dev`** | **6125m** | **18258Mi (17,8 GiB)** | |
@@ -489,14 +717,17 @@ Freier Platz für kurzlebige Pods: Ein Rolling Update legt erst den
 neuen Pod an. Der SAM-Chart setzt keine `strategy`, also gilt der
 Default mit einem Zusatz-Pod [Quelle: SAM-Chart 2.3.10 templates,
 `grep strategy` ohne Treffer]; der größte ist awe mit 1000m/1Gi
-[Quelle: SAM-Chart 2.3.10 values.yaml:555]. Dazu kommen der
-Break-glass-Pod von `az aks command invoke` (200m/500Mi [Quelle:
-`learn.microsoft.com/azure/aks/access-private-cluster`]) und der
-HTTP-01-Solver von cert-manager. Mit `prod1k` bleiben 695m frei: Ein
-awe-Update passt nicht sofort. Der neue Pod (`demo-critical` als
-`globalDefault`) verdrängt dann einen `demo-observability`-Pod
-(Preemption); Monitoring hat einige Minuten eine Lücke, die Demo
-nicht. Mit `dev` (1695m frei) passt awe ohne Verdrängung.
+[Quelle: SAM-Chart 2.3.10 values.yaml:555]. Dazu kommen der Pod von
+`az aks command invoke` (Notweg bei fehlender IP-Freigabe, läuft mit
+der Entra-Identität des Aufrufers unter Kubernetes-RBAC; 200m/500Mi
+Requests, 500m/1Gi Limits [Quelle:
+`learn.microsoft.com/azure/aks/access-private-cluster`; azure-cli dev
+acs/custom.py, 18.11.]) und der HTTP-01-Solver von cert-manager. Mit
+`prod1k` bleiben 695m frei: Ein awe-Update passt nicht sofort. Der
+neue Pod (`demo-critical` als `globalDefault`) verdrängt dann einen
+`demo-observability`-Pod (Preemption); Monitoring hat einige Minuten
+eine Lücke, die Demo nicht. Mit `dev` (1695m frei) passt awe ohne
+Verdrängung.
 
 Broker `prod1k` oder `dev` (AKS-E8: `prod1k`, außer das
 Sizing erzwingt `dev`):
@@ -517,9 +748,10 @@ Sizing erzwingt `dev`):
 - Empfehlung: `prod1k`. Das Sizing erzwingt `dev` nicht.
   Umschaltkriterium vor P4, dieselbe Grenze wie in P1 und P7: Liegt
   die nach P2 gemessene Summe der CPU-Requests (System, Traefik,
-  cert-manager, Monitoring, ggf. Defender-Sensor) über 2044m (geplant
-  1975m), überschreitet `prod1k` mit den restlichen 5150m die
-  92-%-Grenze (7194m von 7820m), und P4 installiert `dev`.
+  cert-manager, Monitoring) über 2044m (geplant 1975m), überschreitet
+  `prod1k` mit den restlichen 5150m die 92-%-Grenze (7194m von
+  7820m), und P4 installiert `dev`. Ein Defender-Sensor zählt nur
+  mit, falls entgegen dem Check vom 18.11. doch einer läuft (3.3).
 - Die Größe gilt ab dem ersten Boot: Die Skalierungsparameter werden
   nur beim ersten Start ohne Datenbank ausgewertet [Quelle:
   `docs.solace.com/Software-Broker/SW-Broker-Upgrade/Docker-Upgrade-Current-Release.htm`;
@@ -536,11 +768,15 @@ Verworfen (Preise: Retail-API 17.11., siehe 3.4):
 - 1 x E8ps_v6 (8 vCPU/64 GiB, 0,3959/h): gleiche CPU-Enge, RAM nicht
   nötig, +69,5 EUR/Monat.
 - 1 x D16ps_v6 (16 vCPU/64 GiB, 0,6015/h): löst die CPU-Enge, kostet
-  +219,6 EUR/Monat und für den Surge-Node 32 vCPU Quota.
+  aber +219,6 EUR/Monat. Die Quota wäre da (32 vCPU mit Surge-Node;
+  3.5), sie ist nicht der Grund.
 - B-Serie (als System-Pool nicht unterstützt [Quelle:
   `learn.microsoft.com/azure/aks/use-system-pools`]), AKS Automatic und
   Node Auto-Provisioning (nicht stoppbar [Quelle:
-  `learn.microsoft.com/azure/aks/node-auto-provisioning`]).
+  `learn.microsoft.com/azure/aks/node-auto-provisioning`]). AKS
+  Automatic würde zudem beim Create eine Rollenzuweisung anlegen, die
+  ein Contributor nicht darf [Quelle: azure-cli dev
+  acs/managed_cluster_decorator.py, 18.11.].
 
 ### 3.3 Empfohlener Node-Pool, Updates und Storage
 
@@ -558,15 +794,16 @@ Verworfen (Preise: Retail-API 17.11., siehe 3.4):
   bis AKS den Node repariert; Rückfall ist L3 im Lab. Einen N-1-Drill
   gibt es nicht mehr.
 - Keine Zonenfestlegung: regionaler Pool, LRS-Disks [A: hängen an
-  jedem nicht-zonalen Node]. Test in P1: Pool kurz auf 2 Nodes
-  skalieren, einen Test-Pod mit PVC per cordon auf den zweiten Node
-  zwingen, zurück auf 1 Node; das ist derselbe Weg wie beim
-  Surge-Node. Alternative `--zones 1`, falls `az vm list-skus`
-  Restriktionen zeigt.
+  jedem nicht-zonalen Node]. `Standard_D8ps_v6` ist in Germany West
+  Central in den Zonen 1-3 ohne Restriction verfügbar (SKU-Check
+  18.11.); der frühere Rückfall `--zones 1` bei einer Restriction ist
+  damit nicht nötig. Test in P1: Pool kurz auf 2 Nodes skalieren,
+  einen Test-Pod mit PVC per cordon auf den zweiten Node zwingen,
+  zurück auf 1 Node; das ist derselbe Weg wie beim Surge-Node.
 - OS-Disk 128 GiB P10 managed: Dpsv6 hat keine ephemeral OS-Disk
-  [Quelle: `learn.microsoft.com/azure/virtual-machines/sizes/general-purpose/dpsv6-series`];
-  die arm64-Images allein sind rund 17,6 GB unkomprimiert [Quelle:
-  Befehl `docker system df -v`, 16.11.].
+  [Quelle: `learn.microsoft.com/azure/virtual-machines/sizes/general-purpose/dpsv6-series`;
+  SKU-Check 18.11.]; die arm64-Images allein sind rund 17,6 GB
+  unkomprimiert [Quelle: Befehl `docker system df -v`, 16.11.].
 - arm64 trägt alle Images (AKS-E3): SAM und gpos-demo
   sind arm64-only; Broker 10.26.0.9219 ist multi-arch (Index-Digest
   beginnt mit `sha256:c0020e53ed48`); Traefik v3.7.19 und cert-manager
@@ -577,28 +814,63 @@ Verworfen (Preise: Retail-API 17.11., siehe 3.4):
   nach der Messe Thema und bräuchte je Image eine Prüfung. arm64 als
   System-Pool auf v6 ist nicht ausdrücklich dokumentiert (die
   Learn-Seite nennt nur v5) [A]; der Create in P1 ist der Beweis.
-- Ist Defender for Containers in der Subscription aktiv (P0), belegt
-  sein Sensor-DaemonSet CPU und RAM auf dem Node; in P2 mit `kaks top
-  pods -A` messen und in 3.2 nachtragen [A: Größe]. Der Messwert
-  zählt beim Umschaltkriterium für den Broker mit.
-- Die Node-Ressourcengruppe heißt fest `rg-eurocis-nodes`
-  (`--node-resource-group`, nur beim Create setzbar). VM, OS-Disk,
-  PVC-Disks und der Load Balancer liegen dort. Beide statischen
-  Public IPs (`pip-aks-ingress` mit DNS-Label und Lock
-  `CanNotDelete`, `pip-aks-egress`) liegen in `rg-eurocis-base`; die
-  AKS-Steuerungsebenen-Identität braucht dort Network Contributor
-  [Quelle: `learn.microsoft.com/azure/aks/static-ip`].
+- Defender for Cloud: Laut Check vom 18.11. stehen alle für das
+  Projekt relevanten Pläne auf Free (Containers, KubernetesService,
+  ContainerRegistry, KeyVaults, VirtualMachines); nur Discovery und
+  FoundationalCspm laufen als Standard, ohne Kostenwirkung hier. Ein
+  Sensor-DaemonSet ist damit nicht zu erwarten [A: in P2 mit `kaks
+  get ds -A` bestätigen]. Die Subscription ist geteilt; schaltet
+  jemand einen Plan ein, ändern sich Kosten (3.4) und Node-Last.
+  Re-Check der Pläne vor G4 [A].
+- Die Node-Ressourcengruppe heißt fest `gebit-showcase-nodes`
+  (`--node-resource-group`, nur beim Create setzbar; die RG darf
+  vorher nicht existieren und ist später nicht umbenennbar) [Quelle:
+  `learn.microsoft.com/azure/aks/faq`]. AKS legt sie selbst an und
+  gibt ihr die Tags aus `--tags`, darunter die Pflicht-Tags `Owner`
+  und `Created Date` (AKS-E1, P1 Schritt 4) [Quelle:
+  `learn.microsoft.com/azure/aks/use-tags`]. Darin liegen VM-Scale-Set,
+  OS-Disk, PVC-Disks, der Load Balancer, das AKS-verwaltete VNet, die
+  AKS-verwaltete Outbound-IP und `pip-aks-ingress`.
+- Kein BYO-Netz: Ein eigenes Subnetz bräuchte Network Contributor für
+  die Cluster-Identität, also eine Rollenzuweisung; das verwaltete
+  VNet in der Node-RG umgeht das [Quelle:
+  `learn.microsoft.com/azure/aks/concepts-network-cni-overview`].
+  Name und Adressraum stehen auf keiner Learn-Seite (beobachtet
+  `aks-vnet-<n>` mit 10.224.0.0/12) [A]; gegen Pod-CIDR 10.244.0.0/16
+  und Service-CIDR 10.0.0.0/16 gäbe es keine Überlappung. Nach dem
+  Create mit `az network vnet list -g gebit-showcase-nodes -o table`
+  protokollieren.
+- `pip-aks-ingress` (Standard, statisch, DNS-Label `<p>`) entsteht
+  direkt nach dem Create in `gebit-showcase-nodes` (P1 Schritt 4).
+  Die Steuerungsebenen-Identität hat in ihrer Node-RG per Default
+  Contributor, eine Rollenzuweisung entfällt [Quelle:
+  `learn.microsoft.com/azure/aks/static-ip`]. Einen Lock gibt es
+  nicht, weil Locks Owner oder User Access Administrator brauchen
+  [Quelle:
+  `learn.microsoft.com/azure/azure-resource-manager/management/lock-resources`].
+  Folge: `az aks delete` löscht die Node-RG samt beider IPs und der
+  PVC-Disks; das Label ist danach für jeden frei, und ein Neuaufbau
+  braucht neue IPs und die Backups (AKS-E4, P7) [Quelle:
+  `learn.microsoft.com/azure/aks/faq`]. Cluster, ACR und Key Vault
+  liegen in `gebit-showcase` (RG in westeurope, Ressourcen in
+  germanywestcentral) und überleben einen Neuaufbau.
 
 Node-Image-Update auf einem Node:
 
 1. AKS legt mit `max-surge 1` einen zweiten Node mit neuem Image an
-   (Quota +8 vCPU, rund 0,30 EUR je Stunde) [Quelle:
+   (8 vCPU mehr, rund 0,30 EUR je Stunde; die Quota reicht laut
+   Check vom 18.11., 3.5) [Quelle:
    `learn.microsoft.com/azure/aks/auto-upgrade-node-os-image`].
 2. Der alte Node wird gesperrt und geleert. Alle Pods starten auf dem
    neuen Node neu, die Azure-Disks hängen um, und die Images fehlen
-   dort noch im Cache (rund 17,6 GB, aus ACR in derselben Region). Der
-   Broker hat bis 1200 s Zeit zum Herunterfahren [Quelle: pubsubplus
-   3.10.0 templates/solaceStatefulSet.yaml:57].
+   dort noch im Cache (rund 17,6 GB, aus ACR in derselben Region).
+   Die Pulls laufen über das ACR-Token im Secret `acr-pull` (P1
+   Schritt 3); ein abgelaufenes Token-Passwort fällt erst hier auf,
+   als `ImagePullBackOff` auf dem neuen Node. Der Preflight vor dem
+   26.01. prüft deshalb die Restlaufzeit [A: Ablauf nach dem Rückbau,
+   Owner bestätigt]. Der Broker hat bis 1200 s Zeit zum
+   Herunterfahren [Quelle: pubsubplus 3.10.0
+   templates/solaceStatefulSet.yaml:57].
 3. Ausfall: einige Minuten für Demo, SAM und Keycloak [A: 5-15 min];
    der erste Refresh misst den echten Wert.
 4. Keine PDB darf den Drain blockieren: Traefik ohne PDB [Quelle:
@@ -612,9 +884,11 @@ Node-Image-Update auf einem Node:
    Mi 08:00-12:00 (Reimage nur bei Bedarf), manueller Refresh Di
    26.01.2027, `notAllowedDates` 20.01. und 27.01.-20.02.2027. Reaktive
    Wartung bleibt ein Risiko (Abschnitt 7).
-6. Reicht die Quota nur für 8 vCPU, geht der Refresh ohne Surge
-   (`--max-surge 0` mit `--max-unavailable 1`) [A: Flag in Azure CLI
-   2.93 prüfen]; der Ausfall dauert dann bis zum Reimage des Nodes.
+6. Fällt die freie regionale Quota der geteilten Subscription vor dem
+   Refresh unter 16 vCPU (18.11.: 150 frei, 3.5), geht der Refresh
+   ohne Surge (`--max-surge 0` mit `--max-unavailable 1`) [A: Flag in
+   Azure CLI 2.93 prüfen]; der Ausfall dauert dann bis zum Reimage
+   des Nodes.
 
 | PVC | Größe | Klasse | Tier, EUR/Monat |
 |---|---|---|---|
@@ -638,30 +912,33 @@ wo ein Chartwert existiert (SAM:
 verifiziert vom SAM-Leser; AKS-E7). Abgerechnet wird je Disk die
 nächste Tier-Stufe (E1 4 GiB, E2 8 GiB, E3 16 GiB) [A]; Standard SSD
 kostet zusätzlich 0,0018 EUR je 10.000 Operationen [Quelle:
-Retail-API 17.11.].
+Retail-API 17.11.]. Alle PVC-Disks entstehen in
+`gebit-showcase-nodes`.
 
 ### 3.4 Kosten
 
 Listenpreise Pay-as-you-go, EUR ohne MwSt., 730 h/Monat [Quelle:
 Befehl `curl https://prices.azure.com/api/retail/prices` mit
 `currencyCode=EUR`, `armRegionName` germanywestcentral, LB-Zähler
-unter `Global`, 17.11.]. Nachtstopp = Laufzeit 10 h an 22
-Arbeitstagen (220 Laufstunden je Monat) wie bisher.
+unter `Global`, 17.11.; Node, LB, Public IP und ACR am 18.11.
+unverändert]. Nachtstopp = Laufzeit 10 h an 22 Arbeitstagen (220
+Laufstunden je Monat) wie bisher.
 
 | Posten | Ressourcengruppe | EUR/Monat 24/7 | EUR/Monat Nachtstopp | Quelle |
 |---|---|---|---|---|
-| 1 x D8ps_v6 (0,3007/h) | rg-eurocis-nodes | 219,5 | 66,2 | Retail-API |
-| AKS Free-Tier, ganzes Projekt | rg-eurocis-aks | 0 | 0 | Owner-Entscheidung 17.11. |
-| Zeile "FreeTierInfrastructureCost Uptime SLA" (0,0449/h ab 01.10.2026) | rg-eurocis-aks [A] | 0-32,8 | 0-32,8 [A: 9,9 bei Abrechnung nur der Laufzeit] | Retail-API, ohne Doku |
-| OS-Disk P10 | rg-eurocis-nodes | 19,5 | 19,5 | Retail-API 19,4623 |
-| Broker-PVC P10 | rg-eurocis-nodes | 19,5 | 19,5 | Retail-API |
-| Premium-PVCs P3, P3, P4 | rg-eurocis-nodes | 10,8 | 10,8 | Retail-API (P3 2,8008, P4 5,213) |
-| Standard-SSD-PVCs E2, E3, E3, E2 | rg-eurocis-nodes | 3,2 + bis rund 6 Transaktionen [A] | 3,2 + bis rund 2 [A] | Retail-API (E2 0,5386, E3 1,0772) |
-| Standard LB, 3 Regeln (TCP 80, TCP 443, Outbound) | rg-eurocis-nodes | 16,4 | 16,4 [A: läuft im Stopp weiter] | Retail-API 0,0224/h für die ersten 5 Regeln |
-| 2 statische Public IPs (`pip-aks-ingress`, `pip-aks-egress`) | rg-eurocis-base | 6,6 | 6,6 | Retail-API 0,0045/h |
-| ACR Basic (0,1496/Tag) | rg-eurocis-base | 4,6 | 4,6 | Retail-API [A: bis 10 GiB inklusive, darüber 0,0898/GB] |
-| Key Vault (0,0269 je 10.000 Operationen) | rg-eurocis-base | unter 0,1 | unter 0,1 | Retail-API |
-| Datenabfluss ins Internet, LB-Datenverarbeitung | - | rund 0 | rund 0 | Retail-API: die ersten 100 GB/Monat frei, LB 0,0045/GB [A: Demo unter 10 GB] |
+| 1 x D8ps_v6 (0,3007/h) | gebit-showcase-nodes | 219,5 | 66,2 | Retail-API |
+| AKS Free-Tier, ganzes Projekt | gebit-showcase | 0 | 0 | Owner-Entscheidung 17.11. |
+| Zeile "FreeTierInfrastructureCost Uptime SLA" (0,0449/h ab 01.10.2026) | gebit-showcase [A: am Cluster-Objekt] | 0-32,8 | 0-32,8 [A: 9,9 bei Abrechnung nur der Laufzeit] | Retail-API, ohne Doku |
+| OS-Disk P10 | gebit-showcase-nodes | 19,5 | 19,5 | Retail-API 19,4623 |
+| Broker-PVC P10 | gebit-showcase-nodes | 19,5 | 19,5 | Retail-API |
+| Premium-PVCs P3, P3, P4 | gebit-showcase-nodes | 10,8 | 10,8 | Retail-API (P3 2,8008, P4 5,213) |
+| Standard-SSD-PVCs E2, E3, E3, E2 | gebit-showcase-nodes | 3,2 + bis rund 6 Transaktionen [A] | 3,2 + bis rund 2 [A] | Retail-API (E2 0,5386, E3 1,0772) |
+| Standard LB, 3 Regeln (TCP 80, TCP 443, Outbound) | gebit-showcase-nodes | 16,4 | 16,4 [A: läuft im Stopp weiter] | Retail-API 0,0224/h für die ersten 5 Regeln |
+| 2 Standard-Public-IPs: `pip-aks-ingress` (DNS-Label) und die AKS-verwaltete Outbound-IP | gebit-showcase-nodes | 6,6 | 6,6 [A: beide bleiben im Stopp bestehen] | Retail-API 0,0045/h je IP (Zähler "Standard IPv4 Static Public IP") |
+| ACR Basic (0,1496/Tag), Pull-Token ohne Aufpreis | gebit-showcase | 4,6 | 4,6 | Retail-API [A: bis 10 GiB inklusive, darüber 0,0898/GB; Tokens ohne eigene Preisposition] |
+| Key Vault im Access-Policy-Modus (0,0269 je 10.000 Operationen) | gebit-showcase | unter 0,1 | unter 0,1 | Retail-API |
+| Defender for Cloud | - | 0 | 0 | Check 18.11.: alle relevanten Pläne Free (3.3) |
+| Datenabfluss ins Internet, LB-Datenverarbeitung | gebit-showcase-nodes [A] | rund 0 | rund 0 | Retail-API: die ersten 100 GB/Monat frei, LB 0,0045/GB [A: Demo unter 10 GB] |
 | **Summe Messe-Konfiguration** | | **rund 300-340** | **rund 145-185** | |
 
 - **Rechnung:** 24/7 ohne Free-Tier-Zeile 300,0 EUR, mit ihr 332,8 EUR,
@@ -669,11 +946,23 @@ Arbeitstagen (220 Laufstunden je Monat) wie bisher.
   ACR, KV) plus 66,2 EUR Node = 146,7 EUR; mit der Free-Tier-Zeile
   156,6 EUR (nur Laufzeit) bis 179,5 EUR (jede Stunde), plus
   Transaktionen.
+- **Outbound-IP:** Ohne BYO-IP (die bräuchte außerhalb der Node-RG
+  eine Rollenzuweisung) legt AKS genau eine Standard-SKU-IP in der
+  Node-RG an und verwaltet sie selbst [Quelle:
+  `learn.microsoft.com/azure/aks/load-balancer-standard`;
+  `learn.microsoft.com/azure/aks/configure-load-balancer-standard`].
+  Standard-IPs sind immer statisch [Quelle:
+  `learn.microsoft.com/azure/virtual-network/ip-services/public-ip-addresses`],
+  und die Retail-API kennt für Standard nur den Zähler "Standard IPv4
+  Static Public IP" mit 0,0045/h [Quelle: Retail-API 18.11.]. Die
+  Outbound-IP kostet also wie die frühere `pip-aks-egress`; die Summe
+  ändert sich nicht.
 - **LB-Regeln:** Traefik ist der einzige LoadBalancer-Service, mit TCP
-  80 und 443 auf `pip-aks-ingress`; dazu die Outbound-Regel auf
-  `pip-aks-egress`. Mit 3 Regeln bleibt es beim Grundpreis 0,0224/h;
-  ab der sechsten Regel kostet jede 0,009/h (6,57 EUR/Monat).
-  Ausgehende Regeln zählen mit, eingehende NAT-Regeln nicht [Quelle:
+  80 und 443 auf `pip-aks-ingress`; dazu die Outbound-Regel auf der
+  AKS-verwalteten Outbound-IP. Mit 3 Regeln bleibt es beim
+  Grundpreis 0,0224/h; ab der sechsten Regel kostet jede 0,009/h
+  (6,57 EUR/Monat). Ausgehende Regeln zählen mit, eingehende
+  NAT-Regeln nicht [Quelle:
   `azure.microsoft.com/pricing/details/load-balancer`]. Die VAP (nur
   der Service `traefik/traefik` darf LoadBalancer sein, P2 Schritt 3)
   hält das so.
@@ -681,120 +970,171 @@ Arbeitstagen (220 Laufstunden je Monat) wie bisher.
   Posten je Owner-Entscheidung und die verworfene Variante mit 6
   DNS-Labels (7 IPs, 13 LB-Regeln, rund 69 EUR/Monat mehr) stehen in
   8.5.
-- **Aufteilung je RG (24/7):** `rg-eurocis-base` rund 11 EUR,
-  `rg-eurocis-aks` 0-33 EUR (nur die unklare Free-Tier-Zeile [A]),
-  `rg-eurocis-nodes` rund 289-295 EUR. Ein Budget nur auf
-  `rg-eurocis-base` und `rg-eurocis-aks` sähe also höchstens rund 44
-  von 300-340 EUR.
+- **Gegenüber dem 17.11.:** Die Summen bleiben. Die Entscheidung vom
+  18.11. verschiebt nur Posten: LB und beide IPs liegen in
+  `gebit-showcase-nodes`, die verwaltete Outbound-IP ersetzt
+  `pip-aks-egress` zum gleichen Preis, ACR-Token und Access Policies
+  kosten nichts extra. Der bedingte Defender-Zuschlag (bis rund
+  +49 EUR/Monat bei 24/7) entfällt, weil alle Pläne Free sind.
+- **Aufteilung je RG (24/7):** `gebit-showcase` rund 4,6 EUR (ACR,
+  Key Vault) plus 0-32,8 EUR, falls die Free-Tier-Zeile am
+  Cluster-Objekt abgerechnet wird [A]; `gebit-showcase-nodes` rund
+  295 EUR (Node, Disks, LB, beide IPs) plus bis rund 6 EUR
+  Transaktionen. Ein Budget nur auf `gebit-showcase` sähe also
+  höchstens rund 38 von 300-340 EUR; die Node-RG gehört in den
+  Filter.
 - **Free-Tier:** Die Steuerungsebene hat kein Uptime-SLA; das betrifft
   kubectl und helm, nicht die laufenden Pods. Die Preiszeile
   "FreeTierInfrastructureCost Uptime SLA" steht seit 01.10.2026 in der
   Retail-API, ohne Doku [Quelle: Retail-API 17.11.;
   `azure.microsoft.com/pricing/details/kubernetes-service`]. Nach Tag 1
   im Cost Management prüfen, ob und wann sie abgerechnet wird.
-- **Mit Stopp (Aufbau):** Im Stopp laufen Disks, IPs, LB [A], ACR und
-  KV weiter: rund 80,5 EUR/Monat. Der Node kostet 0,30 EUR je
+- **Mit Stopp (Aufbau):** Im Stopp laufen Disks, beide IPs, LB [A],
+  ACR und KV weiter: rund 80,5 EUR/Monat. Dass Ingress- und
+  Outbound-IP Stopp und Start unverändert überstehen, ist nicht
+  dokumentiert [A: Messung in P1]. Der Node kostet 0,30 EUR je
   Laufstunde (0,35 mit Free-Tier-Zeile).
+- **Neuaufbau:** `az aks delete` gibt beide IPs frei, der Create legt
+  neue an. Die Kosten bleiben gleich; neu zu binden sind aber das
+  Label `<p>` auf der neuen `pip-aks-ingress` und die neue Egress-IP
+  beim LiteLLM-Betreiber (AKS-E4, AKS-E11, P7).
 - **amd64-Variante (nicht geplant, AKS-E3):** 1 x
   D8as_v6 (0,3941/h) kostet +68,2 EUR/Monat bei 24/7, +20,5 EUR mit
   Stopp. Rückfall-Familie Dpsv5 (D8ps_v5, 0,3304/h): +21,7 bzw. +6,5
-  EUR.
-- **Bedingt, nur wenn Defender in der Subscription aktiv ist** (nicht
-  in der Basissumme) [Quelle: Retail-API 17.11.]: Defender for
-  Containers kostet 0,0084 EUR je vCore-Stunde, also 49,1 EUR/Monat bei
-  24/7 (8 vCores) und 14,8 EUR/Monat mit Nachtstopp. [A] Defender for
-  Servers könnte auch die Node-VM abrechnen: P1 0,006/h (4,4 bzw. 1,3
-  EUR), P2 0,018/h (13,1 bzw. 4,0 EUR). Die SecurityPatch-VHDs in
-  `rg-eurocis-nodes` kosten einige EUR [Quelle:
-  `learn.microsoft.com/azure/aks/auto-upgrade-node-os-image`; A: Höhe].
+  EUR. Beide SKUs sind laut SKU-Check vom 18.11. ohne Restriction.
+- **Defender for Cloud:** 0 EUR, alle relevanten Pläne Free (3.3).
+  Schaltet jemand in der geteilten Subscription Defender for
+  Containers ein, kämen 0,0084 EUR je vCore-Stunde dazu, also 49,1
+  EUR/Monat bei 24/7 (8 vCores) und 14,8 EUR/Monat mit Nachtstopp
+  [Quelle: Retail-API 17.11.]; der Re-Check vor G4 fängt das [A].
+- **SecurityPatch-VHDs:** Die Node-OS-Updates im Kanal SecurityPatch
+  legen VHDs in `gebit-showcase-nodes` ab; sie kosten einige EUR
+  [Quelle: `learn.microsoft.com/azure/aks/auto-upgrade-node-os-image`;
+  A: Höhe].
 - **Projektsumme** (Free-Tier durchgehend, Nachtstopp bis G4, ab 05.02.
   24/7, Rückbau 20.02.2027) [A: Laufmuster]:
-  - November rund 8 EUR (beide IPs ab rund 20.11., rund 2 EUR; ACR,
-    Key Vault und Cluster ab 30.11. aus P1);
+  - November rund 6 EUR (vor P1 keine Azure-Ressource; Cluster, beide
+    IPs, ACR und Key Vault ab 30.11. aus P1);
   - Dezember rund 135-185 EUR (180-230 Laufstunden, Feiertage
     gestoppt);
   - Januar rund 140-190 EUR (200-250 Laufstunden inkl. 24-h-Lauf
     18./19.01.);
   - Februar bis 20.02. rund 180-210 EUR (Nachtstopp bis 04.02., dann
     24/7, zusammen rund 425-435 Laufstunden).
-  - Gesamt rund 470-600 EUR ohne LLM-Token; mit aktivem Defender for
-    Containers rund 520-660 EUR. Beides liegt deutlich unter dem Ziel
-    von 1.500 EUR (AKS-E1). Das obere Ende enthält die Free-Tier-Zeile
-    für jede Stunde und die Disk-Transaktionen.
-- **Budget (AKS-E1), neu skaliert:** ein Budget auf
-  Subscription-Ebene, gefiltert auf `ResourceGroupName` in
-  `rg-eurocis-base`, `rg-eurocis-aks`, `rg-eurocis-nodes`; Zeitraster
-  monatlich, **250 EUR** (statt 450 EUR), 01.12.2026 bis 31.03.2027;
-  Benachrichtigung bei Actual 100 % und Forecast 100 %. Begründung:
-  Die erwarteten Monate liegen bei 135-210 EUR, ein Monat 24/7 bei
-  300-340 EUR; 450 EUR würde nicht einmal einen ganzen vergessenen
-  Monat melden. Budgets setzen sich je Periode zurück, Kostendaten
-  kommen mit 8-24 h Verzug [Quelle:
+  - Gesamt rund 460-590 EUR ohne LLM-Token (Summe der Monate 461-591 EUR);
+    Defender kommt nicht mehr dazu. Das liegt deutlich unter dem Ziel von 1.500
+    EUR (AKS-E1). Das obere Ende enthält die Free-Tier-Zeile für jede Stunde und
+    die Disk-Transaktionen.
+- **Budget (AKS-E1):** ein Budget auf Subscription-Ebene `azure-se`,
+  gefiltert auf `ResourceGroupName` in `gebit-showcase` und
+  `gebit-showcase-nodes`; Zeitraster monatlich, **250 EUR** (statt
+  450 EUR), 01.12.2026 bis 31.03.2027; Benachrichtigung bei Actual
+  100 % und Forecast 100 % per Mail. Recht: Contributor darf eigene
+  Budgets anlegen, ändern und löschen, auch auf Subscription-Ebene mit
+  RG-Filter [Quelle:
   `learn.microsoft.com/azure/cost-management-billing/costs/tutorial-acm-create-budgets`].
-  Zweck: ein mehrtägig vergessener Stopp im Dezember oder Januar und
-  Restkosten im März (ein weiterlaufender Cluster mit rund 10-11
-  EUR/Tag hebt den Forecast innerhalb weniger Tage über 250 EUR [A:
-  Forecast-Modell]). Im Februar (24/7 ab 05.02.) löst der Forecast sehr
-  wahrscheinlich aus, weil er den Rückbau am 20.02. nicht kennt; das ist
-  erwartet. Die Projektsumme läuft separat über eine gespeicherte
-  Cost-Analysis-Ansicht mit demselben Filter im wöchentlichen
-  Kosten-Check; den vergessenen Nachtstopp fängt der Abend-Check (P1).
-  Das Azure-Budget sieht keine LLM-Kosten; die begrenzen der Messe-Key
-  (O5) und seine rpm-/tpm-Limits (AKS-E11).
+  Anlage in P1 nach dem Create, weil `gebit-showcase-nodes` erst dann
+  existiert. Der feste Name der Node-RG hält den Filter über
+  Neuaufbauten stabil. Annahmen: `gebit-showcase` enthält nur
+  Showcase-Ressourcen, sonst zählt das Budget fremde Kosten mit [A];
+  Cost Management ist für den Angebotstyp von `azure-se` verfügbar
+  [A: P0 prüft read-only, im Portal unter "Budgets" oder mit `az
+  consumption budget list`; die CLI-Gruppe ist Preview, Learn rät zu
+  REST oder Portal]. Alternative: je RG ein Budget mit geteiltem
+  Betrag. Begründung der Höhe: Die erwarteten Monate liegen bei
+  135-210 EUR, ein Monat 24/7 bei 300-340 EUR; 450 EUR würde nicht
+  einmal einen ganzen vergessenen Monat melden. Budgets setzen sich je
+  Periode zurück, Kostendaten kommen mit 8-24 h Verzug [Quelle:
+  dito]. Zweck: ein mehrtägig vergessener Stopp im Dezember oder
+  Januar und Restkosten im März (ein weiterlaufender Cluster mit rund
+  10-11 EUR/Tag hebt den Forecast innerhalb weniger Tage über 250 EUR
+  [A: Forecast-Modell]). Im Februar (24/7 ab 05.02.) löst der Forecast
+  sehr wahrscheinlich aus, weil er den Rückbau am 20.02. nicht kennt;
+  das ist erwartet. Die Projektsumme läuft separat über eine
+  gespeicherte Cost-Analysis-Ansicht mit demselben Filter im
+  wöchentlichen Kosten-Check; den vergessenen Nachtstopp fängt der
+  Abend-Check (P1). Das Azure-Budget sieht keine LLM-Kosten; die
+  begrenzen der Messe-Key (O5) und seine rpm-/tpm-Limits (AKS-E11).
 
-### 3.5 Quota-Bedarf
+### 3.5 Quota
 
-| Quota (Germany West Central) | Bedarf | Vorhanden |
+Geprüft am 18.11., kein Antrag nötig [Quelle: read-only Azure-Check
+mit az CLI 2.85.0, Subscription `azure-se`, 18.11.]:
+
+| Quota (Germany West Central) | Bedarf | Stand 18.11. (belegt von Limit) |
 |---|---|---|
-| Standard DPSv6 Family vCPUs | 16 (8 für den Node + 8 für den Surge-Node beim Node-Image-Update) | unbekannt |
-| Standard DPSv5 Family vCPUs (arm64-Rückfall, nur bei Restriction für `Standard_D8ps_v6`, P0 Schritt 4) | 16 | unbekannt |
-| Total Regional vCPUs | mindestens 16 | unbekannt |
-| Standard Public IPv4 | 2 (`pip-aks-ingress`, `pip-aks-egress`) | unbekannt; Default 10 für die meisten Angebote, 20 für Pay-as-you-go [Quelle: `learn.microsoft.com/azure/azure-resource-manager/management/azure-subscription-service-limits`] |
+| Standard DPSv6 Family vCPUs | 16 (8 für den Node + 8 für den Surge-Node beim Node-Image-Update; ebenso beim 2-Node-Test in P1) | 0 von 350 |
+| Standard DPSv5 Family vCPUs (arm64-Rückfall `Standard_D8ps_v5`) | 16, nur bei einem Wechsel der Familie | 0 von 350 |
+| Total Regional vCPUs | 16 | 200 von 350 (150 frei) |
+| Public IPs | 2 (`pip-aks-ingress`, AKS-verwaltete Outbound-IP) | 7 von 1000 |
+| Standard Load Balancers | 1 (der AKS-LB in `gebit-showcase-nodes`) | 0 von 1000 |
 
-Andere Familien (amd64, B-Serie) braucht der Plan nicht (AKS-E3). Der
-Surge-Node bleibt Pflicht, sonst gilt der Weg ohne Surge aus 3.3
-Punkt 6.
+SKU-Lage am selben Tag (Compute-SKU-API): `Standard_D8ps_v6` Arm64,
+Zonen 1-3, keine Restriction, keine ephemeral OS-Disk;
+`Standard_D8ps_v5` und `Standard_D8as_v6` ebenfalls ohne
+Restriction. Andere Familien (amd64, B-Serie) braucht der Plan nicht
+(AKS-E3). Der Surge-Node bleibt Pflicht, sonst gilt der Weg ohne
+Surge aus 3.3 Punkt 6. Der Resource Provider Microsoft.Quota ist
+nicht registriert und wird nicht gebraucht.
 
-"Unbekannt", weil am 16.11. jeder ARM-Aufruf mit AADSTS9002313
-scheiterte [Quelle: Befehl `az aks get-versions -l
-germanywestcentral`, 16.11., zweimal]. P0 prüft nach dem Owner-Login
-in der bestehenden Subscription mit `az vm list-usage -l
-germanywestcentral` und `az network list-usages -l
-germanywestcentral`. Fehlen DPSv6-vCPUs, stellt der Owner am 20.11.
-den Antrag über "My quotas" im Portal (eine Schreibaktion), DPSv5 16
-vCPU nur, falls `az vm list-skus` für `Standard_D8ps_v6` eine
-Restriction zeigt (P0 Schritt 4), dann im selben Antrag. Eine
-freigegebene Familien-Quota hebt die
-regionale Quota mit an [Quelle:
-`learn.microsoft.com/azure/quotas/per-vm-quota-requests`]; P0 prüft sie
-trotzdem. Zeigt DPSv6 "not available for increase", stellt der Owner
-noch am selben Tag einen Support-Fall und weicht auf DPSv5 oder West
-Europe aus.
+Damit entfällt der frühere Ablauf (Antrag am 20.11. über "My quotas",
+DPSv5 nur bei Restriction, Support-Fall bei "not available for
+increase"); P0 Schritt 4 ist ein erledigter Check.
+
+Re-Check, weil die Subscription geteilt ist und andere schon 200
+regionale vCPUs belegen (read-only, `az vm list-usage -l
+germanywestcentral -o table` und `az network list-usages -l
+germanywestcentral -o table`):
+
+- direkt vor dem Create (P1 Schritt 1);
+- vor dem Node-Image-Refresh am 26.01.2027 (Surge-Node, 8 vCPU mehr);
+- vor G4 (05.02.).
+
+Grenzen: Unter 16 freien regionalen vCPU läuft der Refresh ohne Surge
+(3.3 Punkt 6). Unter 8 scheitern schon Create und Neuaufbau.
+Dann stellt der Owner einen Antrag über "My quotas"; dafür reicht
+Contributor, und eine freigegebene Familien-Quota hebt die regionale
+Quota mit an [Quelle:
+`learn.microsoft.com/azure/quotas/per-vm-quota-requests`]. Ob der
+Antrag die Registrierung von Microsoft.Quota verlangt, ist offen [A].
 
 ## 4. Vorgehen in Phasen
 
 | Phase | Inhalt | PT | Kalender | Gate |
 |---|---|---|---|---|
-| P0 | Vorbereitung, Klärungen, Azure-Vorab (RG, Ingress-IP mit DNS-Label, Egress-IP), Sicherheitsgeländer, Lab-Broker-Upgrade einplanen | 2,5 | KW47-48 (16.-27.11.) | - |
-| P1 | Azure-Grundlagen, Cluster (1 Node, Free-Tier), ACR, Key Vault, CLI, API-Server-Allowlist, Hairpin-Test | 2,0 | KW49 (30.11.-04.12.) | Prüfpunkt 04.12. |
-| P2 | Plattform-Add-ons (Traefik, cert-manager mit HTTP-01, VAP, Monitoring) | 3,0 | KW49-50 (03.-10.12.) | - |
+| P0 | Vorbereitung, Klärungen, Azure-Checks (am 18.11. erledigt: Rechte, Policies, Quota, SKUs, Defender), Wahl und Prüfung des DNS-Labels `<p>`, Sicherheitsgeländer, Lab-Broker-Upgrade einplanen | 2,25 | KW47-48 (16.-27.11.) | - |
+| P1 | Azure-Grundlagen nur mit Contributor: Cluster in `gebit-showcase` (1 Node, Free-Tier, Pflicht-Tags, Node-RG `gebit-showcase-nodes`), Zugriff per Entra ID und Kubernetes-RBAC (Bootstrap, lokale Accounts aus), ACR mit Pull-Token, Key Vault mit Access Policies, `pip-aks-ingress` mit DNS-Label, Egress-IP an den LiteLLM-Betreiber, Budget, CLI, API-Server-Allowlist, Hairpin-Test | 2,25 | KW49 (30.11.-04.12.) | Prüfpunkt 04.12. |
+| P2 | Plattform-Add-ons (Traefik, cert-manager mit HTTP-01, VAP, Monitoring), Pull-Secret `acr-pull` je Namespace | 3,0 | KW49-50 (03.-10.12.) | - |
 | P3 | Keycloak unter `/auth` | 1,25 | KW50 (10.-11.12.) | Prüfpunkt 11.12. (P2 + P3) |
 | P4 | Broker 10.26.0.9219: Teil A Lab-Broker-Upgrade (1,0 PT, eigenes Go), Teil B AKS (1,25 PT) | 2,25 | Teil A KW48-49 (bis 04.12., spätestens 10.12.), Teil B KW51 (14.-15.12.) | Prüfpunkt 04.12. (Teil A) |
 | P5 | SAM | 2,5 | KW51 (15.-17.12.), 0,5 PT Puffer bis 18.12. | G2a 18.12. |
 | P6 | GEBIT-Demo portieren, Image 0.1.4 mit gemeinsamem Reflection-Endpunkt | 5,75 | KW52-KW1 (Vorarbeit im Lab), KW1-2 auf AKS | G2b 15.01. |
-| P7 | Härtung und Betrieb | 4,25 | KW3-KW7 | G3 22.01., G4 05.02. |
+| P7 | Härtung und Betrieb, Neuaufbau-Drill mit neuer Ingress- und Egress-IP und Neubindung des Labels | 4,25 | KW3-KW7 | G3 22.01., G4 05.02. |
 | | **Summe** | **23,5** (mit 15 % Puffer von 3,5 PT rund 27,0) | | |
 
 Wer: "Claude" heißt Skripte schreiben, read-only prüfen und
 Schreibbefehle erst nach Freigabe des Owners je Schritt ausführen.
 "Owner" heißt Logins, Passwörter, Freigaben, Wahl des DNS-Labels,
 Konten (etwa beim ACME-Rückfall-CA) und Kontakte. "C" ist die dritte
-Person aus O9 (ab 23.11.); die PT des Plans sind ihr Aufwand.
+Person aus O9 (ab 23.11.); die PT des Plans sind ihr Aufwand, bis auf
+0,5 PT von P0 in KW47 (Owner und Claude).
 
 Namen: `<p>` ist das DNS-Label der Ingress-IP (AKS-E4), `<fqdn>`
 steht für `<p>.germanywestcentral.cloudapp.azure.com`. Das ist der
 einzige öffentliche Name des Projekts; alle Apps hängen per Pfad
-darunter.
+darunter. Ressourcengruppen: `gebit-showcase` (vom Owner angelegt,
+westeurope, mit Cluster, ACR und Key Vault in germanywestcentral)
+und `gebit-showcase-nodes` (legt AKS beim Create an). Die Ingress-IP
+`pip-aks-ingress` liegt in der Node-RG und lebt nur so lange wie der
+Cluster; ein Cluster-Delete gibt IP und Label frei.
+
+Rechte-Regel für alle Phasen (Owner-Entscheidung 18.11., AKS-E21):
+Jeder Azure-Schritt kommt mit Contributor aus. Der Plan legt keine
+Rollenzuweisung, keinen Lock und keine Policy-Ausnahme an und nutzt
+keine Flags, die eine Zuweisung auslösen; die Liste der tabuisierten
+Befehle und Flags sowie die Regeln zu `-l germanywestcentral` (nur
+regionale Ressourcen), Tags, `az group delete` und `set -x` stehen in
+1.4.
 
 Kontext-Regel für alle Phasen: Jeder AKS-Befehl in diesem Plan läuft
 über `kaks`/`haks` (P1 Schritt 6) oder über ein Skript, das
@@ -802,94 +1142,126 @@ Kontext-Regel für alle Phasen: Jeder AKS-Befehl in diesem Plan läuft
 `--context rancher-desktop`. Ausgenommen ist nur `helm template` ohne
 `--validate`, weil es keinen Cluster kontaktiert.
 
-### P0 Vorbereitung und Klärungen (2,5 PT, 16.-27.11.)
+### P0 Vorbereitung und Klärungen (2,25 PT, 16.-27.11.)
 
-**Ziel:** Azure-Lage geklärt, die Owner-Entscheidungen vom 17.11.
-(AKS-E1 bis AKS-E20) im PLAN verankert, Ingress-IP mit DNS-Label und
-Egress-IP angelegt, Lab-Broker-Upgrade terminiert, Lab gegen
-Verwechslung mit AKS geschützt, bevor eine AKS-Credential auf dem Mac
-existiert.
+**Ziel:** Azure-Lage geklärt (am 18.11. read-only erledigt), die
+Owner-Entscheidungen vom 17.11. und 18.11. (AKS-E1 bis AKS-E21) im
+PLAN verankert, DNS-Label `<p>` gewählt und geprüft, Mac-Tools
+aktualisiert, Lab-Broker-Upgrade terminiert, Lab gegen Verwechslung
+mit AKS geschützt, bevor eine AKS-Credential auf dem Mac existiert.
+In P0 entsteht keine Azure-Ressource: Die Ingress-IP legt erst P1 nach
+dem Create in der Node-RG an, die Egress-IP verwaltet AKS selbst
+(Owner-Entscheidung 18.11.).
+
+"Azure-Check 18.11." heißt in diesem Plan: read-only-Abfragen mit
+Azure CLI 2.85.0 nach dem `az login` des Owners am 18.11.2026 (Konto,
+Rollen, Provider, Usages, SKUs, AKS-Versionen, Policy-Zuweisungen,
+Defender-Pläne).
 
 **Schritte:**
 
-1. Owner: Neu anmelden, in der bestehenden Subscription (AKS-E1). Der
-   gecachte Token scheitert mit AADSTS9002313,
-   `~/.azure/azureProfile.json` ist vom 11.09.2025 [Quelle: Befehl
-   `ls -la ~/.azure`, 16.11.]. Die CLI selbst nennt als Abhilfe
-   `az logout` und `az login` mit `--tenant` [Quelle: Befehl
-   `az aks get-versions -l germanywestcentral`, 16.11.].
+1. Erledigt am 18.11.: Der Owner hat sich neu angemeldet. Ergebnis:
+   Die einzige Subscription ist `azure-se` (Enabled, Default). Der
+   Owner hat dort Contributor über eine Gruppe und "Azure Service Bus
+   Data Sender", weder Owner noch User Access Administrator. Er hat
+   die Ressourcengruppe `gebit-showcase` angelegt (westeurope, Tags
+   `Owner` und `Created Date` im Format dd.mm.yyyy). Der
+   AADSTS9002313-Fehler vom 16.11. ist damit erledigt [Quelle:
+   Azure-Check 18.11.]. Tenant-ID, Subscription-ID und Tag-Werte
+   stehen nur lokal, nie in diesem Dokument.
+2. Erledigt am 18.11. (Claude, read-only) [Quelle: Azure-Check 18.11.]:
+   - Provider registriert: ContainerService, ContainerRegistry,
+     KeyVault, Network, Compute, ManagedIdentity,
+     OperationsManagement, Insights, Security. `Microsoft.Quota` ist
+     nicht registriert und wird nicht gebraucht (kein Antrag,
+     Schritt 4).
+   - AKS-Versionen in Germany West Central: 1.36 (Default, neuester
+     Patch 1.36.5), 1.37 (1.37.1), 1.35 (1.35.9).
+   - SKUs: `Standard_D8ps_v6` Arm64, Zonen 1-3, ohne Restriction, ohne
+     ephemeral OS-Disk; `Standard_D8ps_v5` und `Standard_D8as_v6`
+     ebenfalls ohne Restriction.
+   - Quota: Schritt 4.
+   - Policies auf der Subscription: 2 x "Require a tag on resource
+     groups" (Effekt deny; Tags `Owner` und `Created Date`), 2 x
+     "Inherit a tag from the resource group" (modify, dieselben Tags),
+     "ASC Default" (audit). Folgen: Jede neue RG braucht beide Tags.
+     AKS legt seine Node-RG selbst an, also gibt `az aks create` die
+     Tags per `--tags` mit; sie gehen an den Cluster, seine Ressourcen
+     und die Node-RG [Quelle:
+     `learn.microsoft.com/azure/aks/use-tags`]. Die Inherit-Policy
+     setzt `Owner` und `Created Date` an jeder Ressource einer RG auf
+     die Werte der RG, auch wenn ein anderer Wert mitkommt [A: gilt,
+     wenn die Zuweisungen die Built-in-Definitionen nutzen; Rest-Check
+     unten; Quelle: `github.com/Azure/azure-policy`,
+     Tags/InheritTag_AddOrReplace_Modify.json]. Die Deny-Policy prüft
+     nur, ob ein Tag da ist, nicht Wert oder Format [Quelle:
+     Tags/ResourceGroupRequireTag_Deny.json].
+   - Rollen: Contributor hat `Microsoft.Authorization/*/Write` und
+     `Microsoft.Authorization/*/Delete` als NotActions, also keine
+     Rollenzuweisungen, keine Locks und keine Policy-Exemptions
+     [Quelle:
+     `learn.microsoft.com/azure/role-based-access-control/built-in-roles/privileged`;
+     `learn.microsoft.com/azure/azure-resource-manager/management/lock-resources`].
+     Enthalten sind unter anderem `listClusterAdminCredential`,
+     `listClusterUserCredential`, `runCommand`,
+     `rotateClusterCertificates`, `vaults/accessPolicies/write`,
+     `registries/tokens/write` und eigene Budgets [Quelle: dieselbe
+     Rollenseite;
+     `learn.microsoft.com/azure/cost-management-billing/costs/tutorial-acm-create-budgets`].
+   - Defender for Cloud: Alle Pläne sind Free (unter anderem
+     Containers, KubernetesService, ContainerRegistry, KeyVaults,
+     VirtualMachines), nur Discovery und FoundationalCspm sind Standard
+     und hier ohne Kostenwirkung. Kein Defender-Sensor, keine
+     Defender-Kosten; Re-Check vor G4 [A].
+
+   Antworten auf die früheren Klärungsfragen, nach der
+   Owner-Entscheidung vom 18.11. (keine Rollenzuweisungen, alles mit
+   Contributor):
+   - Rollen zuweisen: nein. Daher kein `--attach-acr`, kein Azure RBAC
+     für Kubernetes, keine Network-Contributor-Zuweisung, keine
+     Key-Vault-Datenrolle, keine eigene Rolle für den Stellvertreter.
+   - Locks setzen: nein. Daher kein Lock auf der Ingress-IP
+     (Schritt 5).
+   - Key-Vault-Datenrollen: entfallen, der Vault läuft im
+     Access-Policy-Modus (P1 Schritt 3).
+   - Budget: Contributor reicht (P1 Schritt 8).
+
+   Rest, Claude read-only bis 27.11.:
 
    ```bash
-   az logout
-   az login --tenant <tenant>     # Tenant nur lokal, nie im Dokument
-   az account set --subscription <subscription>
-   ```
-
-2. Claude, read-only:
-
-   ```bash
-   for p in ContainerService ContainerRegistry Network Compute \
-            KeyVault ManagedIdentity; do
-     az provider show -n Microsoft.$p --query registrationState -o tsv
-   done
-   az aks get-versions -l germanywestcentral -o table
-   az vm list-skus -l germanywestcentral --resource-type virtualMachines \
-     --query "[?name=='Standard_D8ps_v6'||name=='Standard_D8ps_v5'].\
-   {n:name,z:locationInfo[0].zones,r:restrictions}"
-   az vm list-usage -l germanywestcentral -o table
-   az network list-usages -l germanywestcentral -o table  # Standard-IPs
-   # Policies inkl. der von Management Groups geerbten
+   az group show -n gebit-showcase --query "{l:location,t:tags}" -o json
+   # Zuweisungen inkl. der geerbten; Built-in oder Custom an der ID
    az policy assignment list --filter "atScope()" \
-     --query "[].{n:displayName,s:scope,mode:enforcementMode,def:policyDefinitionId}" \
+     --query "[].{n:displayName,d:policyDefinitionId,e:enforcementMode}" \
      -o table
-   # je Zuweisung zu Public IP, managedClusters, Region, Tags, SKUs:
-   az policy set-definition show --name <name> [--management-group <mg>] \
-     --query "policyDefinitions[].policyDefinitionId" -o tsv
-   az policy definition show --name <name> [--management-group <mg>] \
-     --query "{e:policyRule.then.effect,p:parameters.effect.defaultValue}"
-   # Rollen inkl. Gruppen, Management Groups und Resource Groups
-   az role assignment list --assignee <owner-objectId> --all \
-     --include-groups --query "[].{r:roleDefinitionName,s:scope,c:condition}" \
-     -o table
-   # effektive Rechte (Gruppen und Vererbung inklusive, Deny Assignments nicht)
+   # nur für IDs /providers/Microsoft.Authorization/policyDefinitions/<guid>
+   az policy definition show --name <guid> \
+     --query "{n:displayName,m:mode,e:policyRule.then.effect}"
+   # Cost Management für den Angebotstyp verfügbar? (Preview-Gruppe)
+   az consumption budget list -o none && echo ok
+   # optional, schriftlicher Beleg der NotActions
    az rest --method get --url "/subscriptions/{subscriptionId}/providers/\
    Microsoft.Authorization/permissions?api-version=2022-04-01" \
-     --query "value[].{a:actions,n:notActions}"
-   # nur falls leer oder ohne Owner: PIM-berechtigte Rollen
-   az rest --method get --url "/subscriptions/{subscriptionId}/providers/\
-   Microsoft.Authorization/roleEligibilityScheduleInstances?\
-   api-version=2020-10-01&\$filter=asTarget()"
-   # Defender-Pläne (Ausgabe ist {value:[...]})
-   az security pricing list \
-     --query "value[?pricingTier=='Standard'].{plan:name,sub:subPlan}" -o table
+     --query "value[].notActions"
    ```
 
-   `az policy assignment list` zeigt ohne `--filter` nur Zuweisungen
-   genau auf der Subscription; geerbte Deny-Policies fehlten dann
-   [Quelle: azure-cli 2.85.0 resource/policy.py:231-237].
-   `az role assignment list` zeigt ohne `--all` nur die
-   Subscription-Ebene; `--include-inherited` ist neben `--all` überflüssig
-   [Quelle: `az role assignment list --help`, 2.85.0]. `az rest` setzt
-   `{subscriptionId}` selbst ein, die ID erscheint nirgends. Eine
-   `az policy state summarize`-Abfrage ist kein Beleg: Sie bewertet nur
-   bestehende Ressourcen. `D8ps_v5` steht nur als Kapazitäts-Rückfall
-   in der Abfrage (arm64 bleibt, AKS-E3). Zu klären ist:
-   - Darf der Owner Rollen zuweisen
-     (`Microsoft.Authorization/roleAssignments/write` effektiv, nicht in
-     notActions)? Gebraucht für `--attach-acr`, AKS-RBAC, Network
-     Contributor auf `rg-eurocis-base` und Key Vault Secrets Officer.
-     Bei "Role Based Access Control Administrator" mit Condition muss
-     sie diese Rollen erlauben.
-   - Darf der Owner Locks setzen (`Microsoft.Authorization/locks/write`
-     effektiv)? Von den eingebauten Rollen haben das nur Owner und User
-     Access Administrator [A: laut Learn "lock-resources", hier mit dem
-     Rechte-Abruf belegen]. Gebraucht für den Lock auf
-     `pip-aks-ingress` (Schritt 5).
-   - Welche Key-Vault-Datenrollen erbt der Owner schon?
-   - Hat der Owner Owner, Contributor oder Cost Management Contributor
-     auf der Subscription (für das Budget mit Filter)?
-   - Welche Anmeldehäufigkeit setzt Conditional Access (Frage an die
-     IT)? Bei kurzer Frequenz plant P7 eine tägliche Neuanmeldung.
+   `az policy assignment list` zeigt ohne `--filter` nur Zuweisungen genau auf
+   der Subscription; geerbte Deny-Policies fehlten dann [Quelle: azure-cli
+   2.85.0 resource/policy.py:231-237]. Built-in oder Custom zeigt schon die
+   `policyDefinitionId`: Präfix
+   `/providers/Microsoft.Authorization/policyDefinitions/<guid>` (bzw.
+   `.../policySetDefinitions/` für Initiativen wie "ASC Default") ist Built-in,
+   `/subscriptions/...` oder
+   `/providers/Microsoft.Management/managementGroups/...` ist Custom. `az policy
+   definition show` läuft nur für Built-ins: Es sucht in der Subscription und
+   unter den Built-ins, eine Custom-Definition auf Management-Group-Ebene
+   bräuchte `--management-group` und Leserecht dort, das Contributor auf
+   Subscription-Ebene nicht hat [Quelle: `az policy definition show --help`,
+   2.85.0]. Die Regel einer solchen Definition geht als Frage an den
+   Subscription-Owner (Frage 6). `az rest` setzt `{subscriptionId}` selbst ein,
+   die ID erscheint nirgends. Die Tag-Werte von `gebit-showcase` erscheinen nur
+   im Terminal. Offen bleibt die Anmeldehäufigkeit per Conditional Access (Frage
+   an die IT); bei kurzer Frequenz plant P7 eine tägliche Neuanmeldung.
 3. Owner: Entscheidungen. Am 17.11. hat der Owner die Kernfragen
    entschieden; Inhalt und Status je AKS-E stehen in Abschnitt 2.
    AKS-E9, AKS-E12 und die [A]-Teile anderer Zeilen gelten als
@@ -904,84 +1276,133 @@ existiert.
    öffentliche Reflection abdeckt (Schritt 6): Die Planung nimmt ja an
    [A], gehandelt wird aber erst nach schriftlicher Bestätigung
    (AKS-E16).
-4. Owner, am 20.11.: Quota-Antrag über "My quotas" für Germany West
-   Central (3.5), nur wo `az vm list-usage` bzw.
-   `az network list-usages` darunter liegt:
-   - Standard DPSv6 Family 16 vCPU: ein Node plus ein Surge-Node beim
-     Node-Image-Upgrade (P1 Schritt 4); Total Regional mindestens 16.
-   - Standard Public IPs: Platz für 2 (`pip-aks-ingress`,
-     `pip-aks-egress`); der Default liegt für die meisten Angebote bei
-     10 [Quelle: learn.microsoft.com, Seite
-     "azure-subscription-service-limits"].
-   - DPSv5 16 vCPU nur, falls Schritt 2 für `Standard_D8ps_v6` eine
-     Restriction zeigt.
 
-   Bei "not available for increase" am selben Tag einen Support-Fall
-   stellen.
-5. Claude nach Freigabe, Azure-Vorab (show-or-create, idempotent), ab
-   20.11. und nach grünem Schritt 2:
-   - Basis-RG und Egress-IP:
+   Am 18.11. hat der Owner entschieden: keine Rollenzuweisungen, alles
+   mit Contributor. Daraus folgen RG `gebit-showcase` für Cluster, ACR
+   und Key Vault (Ressourcen in germanywestcentral), die Node-RG
+   `gebit-showcase-nodes`, kein BYO-VNet, `pip-aks-ingress` in der
+   Node-RG ohne Lock, die AKS-verwaltete Outbound-IP als Egress-IP,
+   ACR-Pull per Token, Entra ID mit Kubernetes-RBAC und der Key Vault
+   im Access-Policy-Modus. Betroffen sind laut Abschnitt 2 (Stand
+   18.11.) AKS-E4, AKS-E5, AKS-E11, AKS-E12, AKS-E13, AKS-E17 und
+   AKS-E20 (geändert) sowie AKS-E1 und AKS-E2 (ergänzt). Neu zu entscheiden,
+   bis 27.11. und damit vor dem Create (bis auf den Lockdown); bis
+   dahin gilt die Empfehlung:
+   - Tag-Werte: Der Owner hat `Owner` und `Created Date` auf
+     `gebit-showcase` gesetzt. Cluster, Node-RG und alle Ressourcen
+     tragen dieselben Werte; P1 liest sie zur Laufzeit aus der RG und
+     schreibt sie nie in eine Datei. Ein eigenes `Created Date` für die
+     Node-RG ist praktisch nicht möglich, weil die Inherit-Policy den
+     Cluster-Tag ohnehin auf den RG-Wert setzt [A]. Empfehlung: so
+     akzeptieren.
+   - Zugang zum Cluster: einmaliger Bootstrap mit dem
+     Admin-Zertifikat, danach lokale Accounts aus und `az aks
+     rotate-certs` (P1 Schritt 6; Empfehlung). Alternative: eine
+     eigene Entra-Sicherheitsgruppe (Owner und Stellvertreter) und
+     `--aad-admin-group-object-ids <group-objectId>` beim Create; dann
+     gibt es kein Admin-Zertifikat und keine Rotation. Geht nur, wenn
+     der Tenant dem Owner das Anlegen von Gruppen erlaubt; die Gruppe,
+     über die er Contributor hat, kommt nicht in Frage [A:
+     Mitgliederkreis].
+   - DNS-Label-Optionen (bis 27.11., vor dem Anlegen in P1 Schritt
+     4a; Schritt 5): Label-Scope oder IP-Umzug; Empfehlung: keins von
+     beiden.
+   - Node-RG-Lockdown `ReadOnly` als Ersatz für den Lock (P1 Schritt
+     4, P2 Schritt 10): nicht bis 27.11., sondern nach dem LB-Nachweis
+     in P2 (P2 Schritt 10, Frage 29).
+   - Ablauf des ACR-Token-Passworts: 2027-02-28T23:59:59Z (gleich
+     `deleteAfter`, nach der Messe) [A].
+   - Contributor-Gleichrang: Jedes Mitglied der Contributor-Gruppe
+     von `azure-se` kann sich im Access-Policy-Modus selbst Zugriff
+     auf die Key-Vault-Secrets geben [Quelle:
+     `learn.microsoft.com/azure/key-vault/general/assign-access-policy`]
+     und mit `az aks update --enable-local-accounts` plus `az aks
+     get-credentials --admin` Cluster-Admin werden [Quelle:
+     `learn.microsoft.com/azure/aks/local-accounts`], also auch
+     GEBIT-Descriptor-Secret und LiteLLM-Key lesen. Der Owner
+     akzeptiert das oder klärt es mit dem Subscription-Owner und
+     prüft es gegen die GEBIT-Freigabe (AKS-E16: Zugriff "Owner und
+     Stellvertretung"). Gegenmittel sind nur Activity-Log-Alarme (P1
+     Schritt 8).
+   - Kostenstelle aus O4 (PLAN 0.5) [A: offen].
+4. Erledigt am 18.11., ohne Antrag: Quota-Check für Germany West
+   Central (3.5) [Quelle: Azure-Check 18.11.]. Standard DPSv6 Family
+   0 von 350 vCPU, Standard DPSv5 Family 0 von 350, Total Regional 200
+   von 350 (150 frei; Bedarf 16 mit dem Surge-Node), Public IPs 7 von
+   1000 (Bedarf 2: `pip-aks-ingress` und die AKS-verwaltete
+   Outbound-IP), Standard-LBs 0 von 1000. Weil die Subscription
+   geteilt ist, prüft P1 Schritt 1 direkt vor dem Create erneut, ebenso
+   P7 vor dem Refresh am 26.01. Fallen die freien regionalen vCPU unter
+   16, gilt der Weg ohne Surge aus 3.3 Punkt 6, und der Owner stellt
+   dann den Antrag.
+5. Owner, bis 20.11.: DNS-Label `<p>` wählen; Claude prüft read-only.
+   Eine Anlage von RG und IPs in P0 entfällt. Die frühere Anlage von
+   `rg-eurocis-base` mit nur `purpose` und `deleteAfter` hätte die
+   Tag-Policy ohnehin abgelehnt. `<p>` ist neutral, ohne Kunden- oder
+   Projektnamen, weil der Name mit dem ersten Zertifikat in den
+   öffentlichen CT-Logs steht [A]; 3-63 Zeichen nach
+   `^[a-z][a-z0-9-]{1,61}[a-z0-9]$` [Quelle: Recherche 17.11.;
+   PSRule-Regel Azure.PublicIP.DNSLabel]. Dazu ein Ersatz-Label, falls
+   `<p>` bis zum Create belegt wird.
 
-     ```bash
-     az group show -n rg-eurocis-base -o none 2>/dev/null || \
-       az group create -n rg-eurocis-base -l germanywestcentral \
-         --tags purpose=eurocis2027 deleteAfter=2027-02-28
-     az network public-ip show -g rg-eurocis-base -n pip-aks-egress \
-       -o none 2>/dev/null || \
-       az network public-ip create -g rg-eurocis-base -n pip-aks-egress \
-         --sku Standard --allocation-method Static -l germanywestcentral
-     az network public-ip show -g rg-eurocis-base -n pip-aks-egress \
-       --query ipAddress -o tsv
-     ```
+   ```bash
+   nslookup <p>.germanywestcentral.cloudapp.azure.com  # NXDOMAIN
+   az rest --method get --url "/subscriptions/{subscriptionId}/\
+   providers/Microsoft.Network/locations/germanywestcentral/\
+   CheckDnsNameAvailability?domainNameLabel=<p>&api-version=2024-05-01" \
+     --query available                   # true
+   ```
 
-   - Ingress-IP mit DNS-Label, erst nach Owner-Go. Der Owner wählt
-     `<p>` bis 20.11.: neutral, ohne Kunden- oder Projektnamen, weil
-     der Name mit dem ersten Zertifikat in den öffentlichen CT-Logs
-     steht [A]; 3-63 Zeichen nach `^[a-z][a-z0-9-]{1,61}[a-z0-9]$`
-     [Quelle: Recherche 17.11.; PSRule-Regel Azure.PublicIP.DNSLabel].
-     Erst die Verfügbarkeit, dann anlegen und sperren:
+   Gründe:
+   - Ein Label gehört zu genau einer Public IP; Subdomains oder
+     Wildcards darunter gibt es nicht [Quelle: learn.microsoft.com,
+     Seite "public-ip-addresses"; Befehl `dig`, 17.11.]. Ein Name,
+     eine Ingress-IP (AKS-E4).
+   - Das Label hängt an der IP, nicht am Service. Die IP entsteht in
+     P1 Schritt 4 in der Node-RG `gebit-showcase-nodes`: Nur dort
+     bindet der Cluster eine selbst angelegte IP ohne Rollenzuweisung,
+     weil seine Control-Plane-Identität per Default Contributor auf
+     der Node-RG hat [Quelle: `learn.microsoft.com/azure/aks/static-ip`;
+     `learn.microsoft.com/azure/aks/managed-identity-overview`]. Einen
+     Lock kann der Owner nicht setzen (Schritt 2).
+   - Folge: Wer den Cluster löscht, löscht die Node-RG samt IP, und
+     das Label ist danach für jeden in der Region frei [Quelle:
+     `learn.microsoft.com/azure/aks/faq`; learn public-ip-addresses].
+     Ein Neuaufbau bindet `<p>` sofort neu (P7). Zwischen der Wahl am
+     20.11. und dem Create (ab 30.11.) und bei jedem Neuaufbau kann ein
+     Dritter `<p>` belegen; deshalb prüft P1 Schritt 4 die
+     Verfügbarkeit direkt vor der Anlage erneut.
+   - Der Traefik-Service nutzt `azure-pip-name`, nie
+     `azure-dns-label-name`: Der Cloud-Provider fasst das Label nur an,
+     wenn diese Annotation da ist, und ein leerer Wert löscht es
+     [Quelle: `learn.microsoft.com/azure/aks/static-ip`;
+     `cloud-provider-azure.sigs.k8s.io/topics/loadbalancer`;
+     cloud-provider-azure azure_loadbalancer.go, Stand 18.11.].
+   - Der Endpunkt `CheckDnsNameAvailability` ist nur über die
+     Recherche belegt [A]; maßgeblich sind NXDOMAIN und ein
+     erfolgreicher Create, denn Azure lehnt ein vergebenes Label ab.
 
-     ```bash
-     nslookup <p>.germanywestcentral.cloudapp.azure.com  # NXDOMAIN
-     az rest --method get --url "/subscriptions/{subscriptionId}/\
-     providers/Microsoft.Network/locations/germanywestcentral/\
-     CheckDnsNameAvailability?domainNameLabel=<p>&api-version=2024-05-01" \
-       --query available                   # true
-     az network public-ip show -g rg-eurocis-base -n pip-aks-ingress \
-       -o none 2>/dev/null || \
-       az network public-ip create -g rg-eurocis-base -n pip-aks-ingress \
-         --sku Standard --allocation-method Static -l germanywestcentral \
-         --dns-name <p> \
-         --tags purpose=eurocis2027 deleteAfter=2027-02-28
-     az lock create -n lock-pip-aks-ingress --lock-type CanNotDelete \
-       -g rg-eurocis-base --resource pip-aks-ingress \
-       --resource-type Microsoft.Network/publicIPAddresses
-     az network public-ip show -g rg-eurocis-base -n pip-aks-ingress \
-       --query "{ip:ipAddress,fqdn:dnsSettings.fqdn}" -o tsv
-     ```
+   Owner-Optionen gegen das freigegebene Label, Entscheidung bis
+   27.11., vor P1 Schritt 4a (Empfehlung: keine):
+   - (a) Label-Scope `--dns-name-scope SubscriptionReuse` beim Anlegen
+     der IP: Ein Neuaufbau in `azure-se` bekommt dasselbe FQDN, andere
+     Subscriptions nicht. Das FQDN erhält einen Hash-Anteil
+     (`<p>.<hash>.germanywestcentral.cloudapp.azure.com`, dann gilt
+     dieser Name als `<fqdn>`), der Scope ist nur beim Anlegen setzbar,
+     und die Funktion ist Public Preview ohne SLA [Quelle: learn
+     public-ip-addresses, "Domain Name Label Scope"]. Mit Scope
+     wiederholt P1 Schritt 4a die Verfügbarkeitsprüfung in der
+     gescopten Form.
+   - (b) Die IP schon in P0 in `gebit-showcase` anlegen und nach dem
+     Create per `az resource move` in die Node-RG schieben, vor einem
+     Neuaufbau zurück. Standard-IPs dürfen innerhalb einer
+     Subscription die RG wechseln [Quelle:
+     `learn.microsoft.com/azure/azure-resource-manager/management/move-limitations/networking-move-limitations`];
+     ob der Move in die AKS-Node-RG geht und das Label ihn übersteht,
+     ist ungeprüft [A].
 
-     Gründe:
-     - Ein Label gehört zu genau einer Public IP; Subdomains oder
-       Wildcards darunter gibt es nicht [Quelle: learn.microsoft.com,
-       Seite "public-ip-addresses"; Befehl `dig`, 17.11.]. Ein Name,
-       eine Ingress-IP (AKS-E4).
-     - Das Label hängt an der IP, nicht am Service. Ein Neuaufbau des
-       Clusters behält Name und IP; erst das Löschen der IP gibt den
-       Namen für jeden frei. Daher der Lock `CanNotDelete`, und der
-       Traefik-Service nutzt `azure-pip-name`, nie
-       `azure-dns-label-name` (ein leerer Wert löscht das Label)
-       [Quelle: `learn.microsoft.com/azure/aks/static-ip`;
-       `cloud-provider-azure.sigs.k8s.io/topics/loadbalancer`].
-     - Ohne `--dns-name-scope`: Die Preview hängt einen Hash an den
-       Namen [Quelle: learn public-ip-addresses, "Domain Name Label
-       Scope"].
-     - Der Endpunkt `CheckDnsNameAvailability` ist nur über die Recherche
-       belegt [A]; maßgeblich sind NXDOMAIN und ein erfolgreicher
-       Create, denn Azure lehnt ein vergebenes Label ab.
-     - Beim Rückbau (P7 Schritt 8) zuerst den Lock entfernen.
-
-     Kosten je IP rund 1 EUR bis 30.11. (0,0045 EUR/h). Keine DNS-Zone,
-     kein Azure DNS, kein DNS-01 (AKS-E4).
+   Kosten vor P1: keine. Keine DNS-Zone, kein Azure DNS, kein DNS-01
+   (AKS-E4).
 6. Owner: Anfragen und Konten.
    - GEBIT (AKS-E16): Die schriftliche Freigabe liegt laut Owner seit
      17.11. vor. Der Owner bestätigt schriftlich bis 27.11., spätestens
@@ -992,24 +1413,39 @@ existiert.
      abdeckt; die gibt die GEBIT-Descriptor-Dateien selbst an jeden
      heraus, nicht nur die Dienstliste. Technisch ist Reflection
      entschieden: öffentlich und an (AKS-E16). Ohne Bestätigung kommt
-     kein GEBIT-Material nach Azure.
-   - LiteLLM-Betreiber in zwei Stufen: am 20.11. Gibt es eine
+     kein GEBIT-Material nach Azure. Dazu der Contributor-Gleichrang
+     aus Schritt 3.
+   - LiteLLM-Betreiber in zwei Stufen. Am 20.11.: Gibt es eine
      Quell-IP-Allowlist, gilt sie auch für `/v1/*`, wie lange dauert
-     eine Freischaltung, kommt ein Messe-Key (O5)? Dazu der
-     Missbrauchsschutz (AKS-E11): `rpm_limit` und `tpm_limit` auf dem
-     Messe-Key, neben `max_budget` 150 USD [Quelle:
+     eine Freischaltung und eine Änderung, kommt ein Messe-Key (O5)?
+     Dazu der Missbrauchsschutz (AKS-E11): `rpm_limit` und `tpm_limit`
+     auf dem Messe-Key, neben `max_budget` 150 USD [Quelle:
      `docs.litellm.ai/docs/proxy/users`]; Werte nach der Lab-Messung
      in P5 [A]. Den Key setzt der Betreiber; sein Wert landet nur in
      SAMs Modellkonfiguration. Hinweis: Das Lab erreicht den Proxy
      heute ohne Firmen-VPN, eine Allowlist ist daher unwahrscheinlich
-     [Quelle: RA:90; Befehl `scutil --nc list`, 16.11.] [A].
-     Spätestens am 25.11. die Egress-IP aus Schritt 5, falls die
-     Antwort "Allowlist ja" lautet oder noch fehlt.
+     [Quelle: RA:90; Befehl `scutil --nc list`, 16.11.] [A]. Der
+     Betreiber erfährt am 20.11. auch: Die Egress-IP ist die
+     AKS-verwaltete Outbound-IP, bekannt erst nach dem Create (P1
+     Schritt 4, ab 30.11.), und jeder Neuaufbau des Clusters bringt
+     eine neue. Zweite Stufe: Der Owner meldet die IP direkt nach dem
+     Create, falls die Antwort "Allowlist ja" lautet oder noch fehlt;
+     die Bestätigung braucht es vor dem LLM-Test in P1 Schritt 8
+     (03.12.).
    - ACME-Rückfall (AKS-E4): Der Owner legt bis 04.12. ein Konto bei
      einem ACME-CA mit External Account Binding an (ZeroSSL oder
      Google Trust Services). Die EAB-Daten kommen nur in den Key Vault
      (P1 Schritt 3, ab 30.11.) und nach `sli/aks/.env.aks`
      (gitignored, Schritt 10), nie in Git oder ein Dokument.
+   - Stellvertreter (AKS-E20), bis 27.11.: Hat er ein Konto im
+     Tenant von `azure-se`, als Mitglied oder Gast? Ist er über eine
+     Gruppe Contributor (oder hat eine Rolle mit
+     `listClusterUserCredential`, `runCommand` und
+     `managedClusters/write`)? Ohne das bleiben `az aks
+     get-credentials`, `aks-allow-me.sh`, `az aks start` und `az aks
+     command invoke` beim Owner (P1 Schritt 7), oder ein
+     Subscription-Owner weist eine Rolle zu; das liegt außerhalb der
+     Rechte des Owners.
 7. Erledigt am 17.11. (AKS-E15 (a)): Der offene amd-Working-Tree ist
    als Commit cd08a17 im Repo. Darin stecken SeaweedFS 2 CPU/2Gi,
    beide HIL-Flags, Sonnet-5-Planning, `scripts/models/set-pricing.sh`
@@ -1017,8 +1453,9 @@ existiert.
    `git show --stat cd08a17`, 17.11.]. Damit installiert AKS aus einem
    sauberen Checkout nicht mehr den SeaweedFS-Default, der am 16.11.
    hing. cd08a17 ist zugleich die Baseline für Schritt 13.
-8. Mac-Tools, vom Owner am 17.11. freigegeben (AKS-E15 (e), AKS-E13);
-   Claude installiert vor P1:
+8. Offen: Mac-Tools, vom Owner am 17.11. freigegeben (AKS-E15 (e),
+   AKS-E13); Claude installiert vor P1, am 18.11. noch nicht
+   ausgeführt (`az version` 2.85.0):
 
    ```bash
    brew uninstall --formula azure-cli   # verwaiste Formel 2.85.0
@@ -1033,14 +1470,30 @@ existiert.
    homebrew-core hat `azure-cli` nach `homebrew/cask` verschoben
    (`brew info --formula azure-cli`: "No available formula";
    tap_migrations.json); `brew upgrade azure-cli` und `az upgrade`
-   migrieren eine verwaiste Formel nicht. Nach dem Wechsel die zitierten
-   Hilfetexte (`az aks maintenanceconfiguration add --help`,
-   `az aks get-credentials --help`, `az aks update --help`) erneut
-   prüfen. Für kubelogin die Tap-Formel, nicht die Core-Formel
-   `kubelogin` (int128/OIDC) und nicht `az aks install-cli` (legt ein
-   zweites kubectl nach `/usr/local/bin`) [Quelle: Befehl
-   `brew info kubelogin`; `az aks install-cli --help`]. Später kommt
-   `cmctl` dazu (P2).
+   migrieren eine verwaiste Formel nicht. Zusätzlicher Grund seit
+   18.11.: Key Vault schaltet alle Kontroll-API-Versionen vor
+   2026-02-01 am 27.02.2027 ab; erst Azure CLI 2.90 kann 2026-02-01,
+   2.85.0 nutzt 2025-05-01. Ein Rückbau oder Purge des Vaults nach
+   dem 27.02.2027 scheiterte mit 2.85.0 [Quelle:
+   `learn.microsoft.com/azure/key-vault/general/access-control-default`;
+   azure-cli 2.85.0 site-packages azure/mgmt/keyvault/_configuration.py:49].
+   Alle Azure-Schreibschritte ab P1 laufen deshalb nur mit 2.93 oder
+   neuer. Nach dem Wechsel die zitierten Hilfetexte erneut prüfen:
+   `az aks maintenanceconfiguration add --help`, `az aks
+   get-credentials --help`, `az aks update --help` (auch
+   `--disable-local-accounts`, `--nrg-lockdown-restriction-level`),
+   `az acr create --help` (`--role-assignment-mode`), `az acr token
+   credential generate --help` und `az network public-ip create
+   --help` (`--dns-name-scope`). Diese drei Flags gibt es schon in
+   2.85.0 [Quelle: `--help`-Ausgaben 2.85.0, 18.11.]; 2.93 bleibt
+   wegen der Key-Vault-API Pflicht. Nach der kubelogin-Installation
+   `kubelogin convert-kubeconfig --help` prüfen (`--kubeconfig`,
+   `--context`, `-l interactive`, `-l devicecode`). Für kubelogin die
+   Tap-Formel, nicht
+   die Core-Formel `kubelogin` (int128/OIDC) und nicht `az aks
+   install-cli` (legt ein zweites kubectl nach `/usr/local/bin`)
+   [Quelle: Befehl `brew info kubelogin`; `az aks install-cli
+   --help`]. Später kommt `cmctl` dazu (P2).
 9. Owner und Claude, vor jeder gpd-Änderung: Baseline festhalten. gpd
    ist seit 17.11.2026 im sda-Repo versioniert (Commit 7a860c5;
    GEBIT-Zustimmung, O8 entfällt [Quelle: PLAN 0.5]); Baseline =
@@ -1064,21 +1517,31 @@ existiert.
      wiederhergestellten Baum, nie `--prune`, dann das Gate erneut. Der
      Rückweg wird einmal in KW48 geprobt.
 10. Claude: zuerst die Ignore-Regeln, bevor irgendeine `.env.aks`
-    existiert (EAB-Daten ab P0 Schritt 6, Client-Secret ab P3,
+    existiert (EAB-Daten ab P0 Schritt 6, Kopie des
+    ACR-Pull-Token-Passworts ab P1 Schritt 3, Client-Secret ab P3,
     LiteLLM-Key ab P5); der Owner committet direkt auf master. Heute
     ignoriert die amd-`.gitignore` nur `.env`, die sli-`.gitignore`
     gar keine Env-Datei, und die gpd-Regel `.env.*` schluckt auch die
     geplante Vorlage `.env.aks.example` [Quelle: Befehl `git
     check-ignore -v`, 17.11.; sli .gitignore; gpd .gitignore:6-8]:
-    - amd-`.gitignore` um `.env.aks` ergänzen;
-    - neue `sli/aks/.gitignore` (AKS-E15 (c)) mit `.env.aks`, `*.pem`,
-      `*.key` und `*.json` samt Ausnahme `!maint-*.json`; die
-      sli-seitige Env-Datei heißt `sli/aks/.env.aks` (EAB-Daten,
-      Directory-URL, `AKS_FQDN`);
-    - gpd-`.gitignore` um `!.env.aks.example`.
+    - amd-`.gitignore` um `.env.aks*` mit Ausnahme
+      `!.env.aks.example` (amd-Vorlage, 5.2), `*.swp` und `*~`
+      ergänzen, damit auch Swap- und Backup-Dateien wie
+      `.env.aks.swp`, `.env.aks~` und `.env.aks.bak` draußen bleiben;
+    - neue `sli/aks/.gitignore` (AKS-E15 (c)) mit `.env.aks*`,
+      `*.swp`, `*~`, `*.log`, `*.pem`, `*.key` und `*.json` samt
+      Ausnahme `!maint-*.json`; die sli-seitige Env-Datei heißt
+      `sli/aks/.env.aks` (EAB-Daten, ACR-Pull-Token, Directory-URL,
+      `AKS_FQDN`);
+    - gpd-`.gitignore` um `!.env.aks.example` (`*.swp` und `*~` deckt
+      sie schon ab);
+    - jede `.env.aks` entsteht per `umask 077` mit Modus 600, bevor
+      ein Secret hineinkommt; xtrace-Mitschnitte nur unter
+      `~/.config/eurocis-aks/xtrace/` (chmod 700, 1.4).
 
     Dann das Sicherheitsgeländer in amd (Details in 5.2):
-    `SAM_PROFILE=lab|aks` lädt `.env` bzw. `.env.aks`;
+    `SAM_PROFILE=lab|aks` lädt `.env` bzw. `.env.aks`, nur über
+    `load_env DIR` und nie schon beim Sourcen von `common.sh`;
     `require_kube_context` prüft Kontextname und Server-URL des
     Clusters; `kaks`/`haks` für `aks`, `--context rancher-desktop` für
     `lab`; `SAM_HOME` je Profil und der Auth-Cache-Pfad unter
@@ -1233,76 +1696,97 @@ existiert.
       der bestehenden Container.
     - Claude, read-only: `docker compose up --dry-run` in emd bestätigt
       die Neuerzeugung [A: bisher nur per Hash-Vergleich].
-    - Owner: Go und Wartungsfenster (SAM-Lab steht dabei) bis 27.11.
-      festlegen, Termin spätestens KW49, damit der Lab-Nachweis vor dem
-      11.12. steht. Risiko mittel bis hoch: Die Volume-Kopie der
-      SolOS-DB ist ungeprobt, 36 Queues und die iCargo-User liegen
-      außerhalb von Terraform.
+    - Owner: Go und Wartungsfenster (SAM-Lab steht dabei) bis 27.11. festlegen,
+      Termin `solace-1` bis 04.12. (Prüfpunkt), spätestens 10.12., damit der
+      Lab-Nachweis vor dem 11.12. steht. Risiko mittel bis hoch: Die
+      Volume-Kopie der SolOS-DB ist ungeprobt, 36 Queues und die iCargo-User
+      liegen außerhalb von Terraform.
 
-**Wer:** Owner Schritte 1, 3, 4, 6 und die Freigaben bzw. Termine in
-5, 9 und 14; Claude 2, 5, 8, 10-14; Schritt 7 ist erledigt. In KW47
-tragen Owner und Claude P0 (Schritte 1-8); ab 23.11. übernimmt C die
-Schritte 9-14 gemeinsam mit Claude.
+**Wer:** Owner Schritte 3, 5 (Label), 6 und die Freigaben bzw.
+Termine in 9 und 14; Claude 8 und 10-14. Erledigt sind Schritt 7
+(17.11.) sowie die Schritte 1, 2 und 4 (18.11.; Login des Owners,
+read-only-Checks von Claude); offen aus Schritt 2 sind nur die
+Rest-Checks. In KW47 tragen Owner und Claude P0 (Schritte 2 Rest, 3,
+5, 6, 8); ab 23.11. übernimmt C die Schritte 9-14 gemeinsam mit
+Claude.
 
 **Abnahme:**
 
-- `az version` zeigt 2.93.0 oder neuer; `az aks get-versions` listet
-  1.36.x.
-- Quota: Bis 27.11. zeigt `az vm list-usage` für Standard DPSv6 Family
-  ein Limit von mindestens 16 vCPU, Total Regional mindestens 16, und
-  `az network list-usages` Platz für 2 Standard Public IPs; keine
-  SKU-Restriction für `Standard_D8ps_v6`.
-- Alle Provider Registered. Unter den `atScope()`-Zuweisungen ist keine
-  mit enforcementMode Default und Effekt Deny oder DenyAction auf
+- `az version` zeigt 2.93.0 oder neuer; `az aks get-versions -l
+  germanywestcentral` listet 1.36.x (am 18.11.: 1.36.5);
+  `kubelogin --version` zeigt Azure-kubelogin.
+- Azure-Lage, erfüllt am 18.11. [Quelle: Azure-Check 18.11.]:
+  Subscription `azure-se`; alle gebrauchten Provider Registered; keine
+  SKU-Restriction für `Standard_D8ps_v6`; Quota ohne Antrag
+  ausreichend (DPSv6 0 von 350, Total Regional 150 frei, Public IPs 7
+  von 1000, Standard-LBs 0 von 1000); Defender-Pläne Free (außer
+  Discovery und FoundationalCspm), also keine Defender-Kosten und kein
+  Sensor.
+- Policies: Die Tag-Pflicht auf RGs (deny) und die Tag-Vererbung
+  (modify) sind gefunden. Workaround als Entscheidung im PLAN: RG
+  `gebit-showcase` vom Owner, `--tags` mit `Owner` und `Created Date`
+  beim Create für die Node-RG. Der Rest-Check hat notiert, ob die
+  Zuweisungen die Built-in-Definitionen nutzen und ob es weitere
+  Deny- oder DenyAction-Zuweisungen auf
   `Microsoft.Network/publicIPAddresses`,
-  `Microsoft.ContainerService/managedClusters`, die Region
-  germanywestcentral, Pflicht-Tags oder die geplanten SKUs. Gibt es
-  eine, steht eine Exemption oder ein Workaround als Entscheidung im
-  PLAN.
-- Die effektiven Aktionen des Owners decken
+  `Microsoft.ContainerService/managedClusters`,
+  `Microsoft.ContainerRegistry/registries`,
+  `Microsoft.KeyVault/vaults`, die Region germanywestcentral oder die
+  geplanten SKUs gibt (am 18.11. außer der Tag-Pflicht keine).
+- Rechte: Der Owner hat Contributor ohne
   `Microsoft.Authorization/roleAssignments/write` und
-  `Microsoft.Authorization/locks/write` ab (auch über Gruppe oder
-  Management Group); eine nur PIM-berechtigte Rolle ist vor P1
-  aktiviert; die Rechte für das Budget sind geklärt (sonst je RG ein
-  Budget).
-- Defender-Pläne notiert (Containers, VirtualMachines inkl. subPlan,
-  ContainerRegistry, KeyVault, Arm). Ist Containers oder
-  VirtualMachines Standard, klärt der Owner Ausnahme oder
-  Kostenübernahme mit dem Subscription-Owner (AKS-E1). Eine Ausnahme
-  auf Ressourcenebene ist nicht zugesagt; Rückfall ist die eigene
-  Subscription, sofern der Plan nicht von der Management Group erbt.
-- AKS-E1 bis AKS-E20 schriftlich in PLAN 0.5 (oder neuem Abschnitt
-  0.5a AKS), je mit dem Status aus Abschnitt 2 ("entschieden 17.11.",
-  "[A] Bestätigung offen", "Owner-Bestätigung offen" für AKS-E18,
-  AKS-E20 und die Seiten-Exposition in AKS-E5, "offen" für den
-  Descriptor-Teil von AKS-E16). PLAN-E8 und der AKS-Teil von PLAN-E7
-  (PLAN 0.2) verweisen auf AKS-E3 bis AKS-E8 (17.11.2026), O4 (PLAN
-  0.5) auf
-  AKS-E1/AKS-E2/AKS-E4, O6 (PLAN 0.5) auf AKS-E15. So gibt es je
+  `Microsoft.Authorization/locks/write`; der Plan kommt ohne beides
+  aus. Budgets darf er als Contributor anlegen; `az consumption budget
+  list` gelingt (Cost Management für den Angebotstyp verfügbar), sonst
+  ist das Budget ein offener Punkt für P1.
+- AKS-E1 bis AKS-E21 schriftlich in PLAN 0.5 (oder neuem Abschnitt 0.5a AKS), je
+  mit dem Status aus Abschnitt 2 ("entschieden 17.11.", "geändert 18.11." bzw.
+  "ergänzt 18.11." für die Zeilen aus Schritt 3, "entschieden 18.11." für
+  AKS-E21, "[A] Bestätigung offen", "Owner-Bestätigung offen" für AKS-E18,
+  AKS-E20, die Seiten-Exposition in AKS-E5, die Tag-Werte in AKS-E1, Präfix,
+  Label-Scope und Lockdown in AKS-E4, die Bootstrap-Variante in AKS-E13 und die
+  offenen Punkte in AKS-E21, "offen" für den Descriptor-Teil von AKS-E16).
+  PLAN-E8 und der AKS-Teil von PLAN-E7 (PLAN 0.2) verweisen auf AKS-E3 bis
+  AKS-E8 (17.11.2026), O4 (PLAN 0.5) auf AKS-E1/AKS-E2/AKS-E4 und ist am 18.11.
+  erledigt (bis auf die Kostenstelle), O6 (PLAN 0.5) auf AKS-E15. So gibt es je
   Entscheidung eine Quelle.
-- `pip-aks-ingress` angelegt: `dnsSettings.fqdn` ist `<fqdn>`,
-  `nslookup <fqdn>` liefert die IP der Ressource, `az lock list -g
-  rg-eurocis-base` zeigt `lock-pip-aks-ingress` (CanNotDelete).
-- `pip-aks-egress` angelegt; der Betreiber hat schriftlich bestätigt:
-  keine Quell-IP- oder Key-IP-Einschränkung, oder die IP ist
-  eingetragen (auch für den Messe-Key O5); die Anfrage zu
-  `rpm_limit`/`tpm_limit` ist gestellt. Fehlt die Antwort am 27.11.:
-  Eskalation, Eintrag im Risikoregister, der LiteLLM-Test am 03.12.
-  gilt als gefährdet.
-- `kubelogin --version` zeigt Azure-kubelogin; amd-Working-Tree sauber
-  (Commit cd08a17).
+- Die neuen Owner-Punkte aus Schritt 3 sind entschieden oder tragen
+  bis 27.11. die Empfehlung als Arbeitsstand: Tag-Werte, Bootstrap
+  (Admin-Zertifikat plus Rotation oder Entra-Gruppe), Label-Optionen,
+  Token-Ablauf, Contributor-Gleichrang. Der Lockdown ist vertagt auf
+  P2 Schritt 10.
+- Label: `<p>` und ein Ersatz-Label gewählt; `nslookup
+  <p>.germanywestcentral.cloudapp.azure.com` liefert NXDOMAIN,
+  `CheckDnsNameAvailability` liefert `true`. Eine Public IP gibt es
+  noch nicht; die Anlage prüft P1.
+- LiteLLM: Die Anfrage ist gestellt, auch zu `rpm_limit`/`tpm_limit`
+  und zur Vorlaufzeit einer Allowlist-Änderung; der Betreiber weiß,
+  dass die Egress-IP erst nach dem Create kommt und sich bei jedem
+  Neuaufbau ändert. Bis 27.11. liegt schriftlich vor: keine Quell-IP-
+  oder Key-IP-Einschränkung, oder "Allowlist ja" mit der Zusage, die
+  IP ab 30.11. kurzfristig einzutragen (auch für den Messe-Key O5).
+  Fehlt die Antwort am 27.11.: Eskalation, Eintrag im
+  Risikoregister, der LiteLLM-Test am 03.12. gilt als gefährdet.
+- Stellvertreter: Bis 27.11. ist bekannt, ob er im Tenant ist (Mitglied
+  oder Gast) und ob er über eine Gruppe Contributor hat; sonst steht
+  der Punkt offen in AKS-E20 und im Risikoregister.
+- amd-Working-Tree sauber (Commit cd08a17).
 - Ignore-Regeln vor der ersten `.env.aks`: `git check-ignore -q`
   gelingt für `sli/aks/.env.aks`,
   `agent-mesh-deployment/.env.aks` und
-  `gebit-price-agent-demo/.env.aks`, nicht für
-  `gebit-price-agent-demo/.env.aks.example` und
-  `sli/aks/maint-default.json`.
+  `gebit-price-agent-demo/.env.aks`, in amd und `sli/aks` auch für
+  `.env.aks.swp`, `.env.aks~`, `.env.aks.bak` und in `sli/aks` für
+  `x.log`, nicht für `gebit-price-agent-demo/.env.aks.example`,
+  `agent-mesh-deployment/.env.aks.example` und
+  `sli/aks/maint-default.json`. Jede vorhandene `.env.aks` hat Modus
+  600 (`stat -f %Lp`), `~/.config/eurocis-aks/xtrace/` Modus 700.
 - gpd: Baseline-Commit im sda-Repo benannt, Referenzen gesichert,
   Rückweg einmal geprobt.
 - Lab: Call-Log-Diff leer (bis auf die Kontext-Zusätze), Render-Diff
   leer, `make test` grün, `make smoke` READY auf Kasse 99, ein S1-e2e
   liefert "proposed 100001 7,99".
-- Negativtests, jeweils mit `set -x`-Log:
+- Negativtests, jeweils mit `set -x`-Log per `BASH_XTRACEFD` unter
+  `~/.config/eurocis-aks/xtrace/` (nie im Repo, 1.4):
   - `SAM_PROFILE=aks scripts/stop.sh` bricht bei Kontext
     `rancher-desktop` ab, bevor ein kubectl-, helm-, SEMP- oder
     Keycloak-Aufruf läuft.
@@ -1330,98 +1814,153 @@ Schritte 9-14 gemeinsam mit Claude.
   `--context` allein reicht nicht, weil der Kontext ohne die Datei nicht
   existiert. Ausgenommen und aufgelistet: Kommentarzeilen, Lab-Befehle
   mit `--context rancher-desktop`, `helm template`/`helm lint` und die
-  Lab-Messquellen in den Tabellen.
+  Lab-Messquellen in den Tabellen. Ebenso hat jedes `kubelogin
+  convert-kubeconfig` ein `--kubeconfig` und jedes `az aks
+  get-credentials` ein `--file`; sonst träfen beide `~/.kube/config`.
 - sam-CLI-Spike mit Antworten auf (a) bis (d) dokumentiert.
 - Lab-Broker: Owner-Go und Wartungsfenster terminiert (`solace-2` in
   KW48, `solace-1` bis 04.12., spätestens 10.12.);
   die Sofort-Regel aus Schritt 14 steht im Risikoregister (Abschnitt 7);
   das Ergebnis von `docker compose up --dry-run` ist notiert.
 
-**Abhängigkeiten:** Owner-Login; Owner-Go und Label `<p>` für
-`pip-aks-ingress`; O9 für C ab 23.11. AKS-E15 ist seit 17.11. erteilt.
+**Abhängigkeiten:** Owner-Login (erledigt 18.11.); Label `<p>` bis
+20.11.; Antworten des Owners zu Schritt 3 und zum Stellvertreter bis
+27.11.; O9 für C ab 23.11. AKS-E15 ist seit 17.11. erteilt.
 
-### P1 Azure-Grundlagen, Cluster, ACR, CLI-Anbindung (2,0 PT, KW49)
+### P1 Azure-Grundlagen, Cluster, ACR, CLI-Anbindung (2,25 PT, KW49)
 
-**Ziel:** Cluster in Endform (ein Node, Free-Tier), per CLI nur von
-freigegebenen IPs erreichbar, ohne die Default-kubeconfig zu berühren;
-die Ingress-IP ist einmal öffentlich und aus dem Cluster heraus
-(Hairpin) belegt. Prüfpunkt 04.12.: Ist die P1-Abnahme nicht grün,
-wandert der AKS-Teil von G2a nach G2b (Mechanik aus PLAN 6.2)
-und P5 nach KW1.
+**Ziel:** Cluster in Endform (ein Node, Free-Tier), angelegt nur mit
+Contributor-Rechten, ohne eine einzige Rollenzuweisung und ohne Lock.
+Per CLI nur von freigegebenen IPs und nur mit Entra-Identität
+erreichbar (lokale Accounts nach dem Bootstrap aus), ohne die
+Default-kubeconfig zu berühren. Pull aus ACR per Token, Key Vault im
+Access-Policy-Modus, die Ingress-IP mit Label in der Node-RG einmal
+öffentlich und aus dem Cluster heraus (Hairpin) belegt, die Egress-IP
+an den LiteLLM-Betreiber gemeldet. Prüfpunkt 04.12.: Ist die
+P1-Abnahme nicht grün, wandert der AKS-Teil von G2a nach G2b (Mechanik
+aus PLAN 6.2) und P5 nach KW1.
 
-**Layout:** Drei Ressourcengruppen, damit ein Neuaufbau Ingress-IP mit
-Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
+**Layout:** Zwei Ressourcengruppen (Owner-Entscheidung 18.11.).
 
-- `rg-eurocis-base`: VNet `10.20.0.0/16` (`snet-aks` /22), ACR, Key
-  Vault, `pip-aks-ingress` (Label `<p>`, Lock), `pip-aks-egress`, UAMI
-  `id-aks-cp`. Genau zwei öffentliche IPs im Projekt.
-- `rg-eurocis-aks`: nur der Cluster.
-- `rg-eurocis-nodes`: die Node-Ressourcengruppe mit festem Namen (VM,
-  Disks, LB); sie verschwindet mit dem Cluster.
-- Pod-CIDR 10.244.0.0/16, Service-CIDR 10.0.0.0/16: keine Überlappung
-  mit Lab-k3s 10.42/10.43. Stand-LAN und Firmen-VPN spielen für den
-  Adressplan keine Rolle, weil kein Netz gekoppelt wird.
+- `gebit-showcase`: vom Owner angelegt, Metadaten in westeurope,
+  Pflicht-Tags `Owner` und `Created Date`. Darin der Cluster
+  `aks-eurocis`, die ACR `<acr>` und der Key Vault `<kv>`, alle in
+  germanywestcentral. Eine RG in einer anderen Region als ihre
+  Ressourcen ist zulässig; fällt westeurope aus, leitet ARM
+  Steuerungsaufrufe in eine Backup-Region um, Microsoft empfiehlt aber
+  dieselbe Region [Quelle:
+  `learn.microsoft.com/azure/azure-resource-manager/management/overview`].
+- `gebit-showcase-nodes`: die Node-RG, von AKS beim Create angelegt
+  (`--node-resource-group`, Tags aus `--tags`). Darin VM-Scale-Set,
+  OS- und PVC-Disks, Standard-LB, das AKS-verwaltete VNet, die
+  AKS-verwaltete Outbound-IP (Egress) und `pip-aks-ingress` (Label
+  `<p>`, angelegt nach dem Create). Sie verschwindet mit dem Cluster,
+  samt beider IPs; das Label wird dann frei [Quelle:
+  `learn.microsoft.com/azure/aks/faq`].
+- Ein Neuaufbau behält ACR mit Token, Key Vault und Budget, aber
+  nicht Ingress-IP, Label-Bindung und Egress-IP (P7). Genau zwei
+  öffentliche IPs im Projekt.
+- Kein BYO-VNet, keine UAMI, keine Rollenzuweisung, kein Lock.
+  `vnet-eurocis`, `snet-aks`, `id-aks-cp`, `pip-aks-egress` und die
+  RGs `rg-eurocis-*` entfallen. Ein BYO-Subnetz bräuchte Network
+  Contributor für die Cluster-Identität, vergeben vom Ersteller
+  [Quelle: `learn.microsoft.com/azure/aks/azure-cni-powered-by-cilium`,
+  Prerequisites; `learn.microsoft.com/azure/aks/concepts-network-cni-overview`].
+- Netz: Azure CNI Overlay mit Cilium im AKS-verwalteten VNet
+  (eigene UDRs oder Service-Endpoints dort sind nicht unterstützt und
+  nicht nötig [Quelle: concepts-network-cni-overview]). Pod-CIDR
+  10.244.0.0/16, Service-CIDR 10.0.0.0/16: keine Überlappung mit
+  Lab-k3s 10.42/10.43 und mit dem VNet, das AKS beobachtet als
+  10.224.0.0/12 anlegt [A: steht nicht auf Learn; Schritt 4
+  protokolliert es]. Stand-LAN und Firmen-VPN spielen keine Rolle,
+  weil kein Netz gekoppelt wird.
 
-**Schritte (Claude nach Freigabe):**
+Regeln für jeden Azure-Schreibbefehl ab P1:
 
-1. Basis prüfen: `rg-eurocis-base`, `pip-aks-egress` und
-   `pip-aks-ingress` mit Label und Lock stammen aus P0 Schritt 5.
-   Show-or-create wie dort, dann `nslookup <fqdn>` (liefert die IP von
-   `pip-aks-ingress`) und `az lock list -g rg-eurocis-base -o table`.
-2. Netz, Identität, Netzrechte:
+- Nur mit Azure CLI 2.93 oder neuer (P0 Schritt 8).
+- `az aks create`, `az acr create`, `az keyvault create` und `az
+  network public-ip create` bekommen `-l germanywestcentral`, weil
+  `gebit-showcase` in westeurope liegt und ein Befehl ohne `-l` die
+  Region der RG nähme. Globale Ressourcen ohne Region: Activity-Log-
+  und Resource-Health-Alarme, die Action Group mit `-l Global` und das
+  Budget per `az rest` (1.4).
+- Nie `az group delete -n gebit-showcase` (nimmt ACR und Key Vault
+  mit, und die RG gehört dem Owner); den Cluster löscht nur `az aks
+  delete` (P7).
+- `az aks update --tags` und `az aks nodepool update --tags` ersetzen
+  das ganze Tag-Set; nur mit allen vier Tags, besser gar nicht
+  [Quelle: `learn.microsoft.com/azure/aks/use-tags`].
+- Kein Secret in argv oder Ausgabe: Werte laufen per Pipe nach
+  `--file /dev/stdin`, jede Secret-Schreibung endet mit `-o none`.
+- Scheitert `az aks update`, `az aks nodepool update` oder `az aks
+  rotate-certs` mit `RequestDisallowedByPolicy`: höchstens dreimal im
+  Abstand von 60 s wiederholen (`aks_update`, 5.1), bei einem
+  Failed-State `az aks update
+  -g gebit-showcase -n aks-eurocis` als Reconcile [Quelle:
+  `learn.microsoft.com/troubleshoot/azure/azure-kubernetes/error-codes/requestdisallowedbypolicy-error`].
+  Ein Community-Report beschreibt, dass AKS die Node-RG bei späteren
+  Updates zeitweise ohne die Cluster-Tags schreibt und dann an einer
+  Tag-Deny-Policy scheitert [Quelle: `github.com/Azure/AKS/issues/5856`,
+  ohne Antwort von Microsoft] [A]. Eine Exemption kann der Owner nicht
+  anlegen; dafür braucht es einen Subscription-Owner.
+
+Die Befehle der Schritte 3 und 4a/4b fasst `sli/aks/foundation.sh
+pre|post` zusammen, die Alarme und das Budget aus Schritt 8
+`sli/aks/alerts.sh` (Zugriffs- und Löschalarme schon in
+`foundation.sh pre`, vor dem Create), den Bootstrap aus Schritt 6
+`sli/aks/bootstrap-rbac.sh`; `az aks delete` läuft nur über
+`sli/aks/aks-rebuild.sh` (P7, Dateiliste in 5.1).
+
+**Schritte (Claude nach Freigabe, in der `az`-Sitzung des Owners):**
+
+1. Vorbedingungen prüfen, read-only:
 
    ```bash
-   az network vnet create -g rg-eurocis-base -n vnet-eurocis \
-     --address-prefixes 10.20.0.0/16 \
-     --subnet-name snet-aks --subnet-prefixes 10.20.0.0/22
-   az identity create -g rg-eurocis-base -n id-aks-cp
-   CP_PID=$(az identity show -g rg-eurocis-base -n id-aks-cp \
-     --query principalId -o tsv)
-   BASE_ID=$(az group show -n rg-eurocis-base --query id -o tsv)
-   az role assignment create --role "Network Contributor" \
-     --assignee-object-id "$CP_PID" \
-     --assignee-principal-type ServicePrincipal --scope "$BASE_ID"
+   az version --query '"azure-cli"' -o tsv          # >= 2.93.0
+   kubelogin --version
+   az group show -n gebit-showcase --query \
+     '[location, tags.Owner != `null`, tags."Created Date" != `null`]' -o tsv
+   az group exists -n gebit-showcase-nodes          # false
+   az vm list-usage -l germanywestcentral -o table  # DPSv6, Regional
+   az network list-usages -l germanywestcentral -o table
+   nslookup <p>.germanywestcentral.cloudapp.azure.com  # NXDOMAIN
    ```
 
-   Network Contributor auf der ganzen `rg-eurocis-base`: Der
-   Cloud-Provider verwaltet dort das BYO-Subnetz, die Outbound-IP und
-   die Ingress-IP, die der Traefik-Service per `azure-pip-name` und
-   `azure-load-balancer-resource-group` aus einer fremden RG bindet;
-   dafür braucht die Control-Plane-Identität Rechte auf diese RG
-   [Quelle: `learn.microsoft.com/azure/aks/static-ip`]. Die Rolle
-   wirkt nur auf `Microsoft.Network/*`, ACR und Key Vault bleiben
-   unberührt [A]. Die Rolle wird **vor** dem Create vergeben. Für eine
-   frisch angelegte Identity kann der RBAC-Dienst die Zuweisung während
-   der Replikation ablehnen (PrincipalNotFound);
-   `--assignee-principal-type` vermeidet den Graph-Lookup [Quelle:
-   `az role assignment create --help`, 2.85.0;
-   `learn.microsoft.com/azure/role-based-access-control/role-assignments-cli`].
-   Ein erneuter Lauf ist harmlos, weil die CLI eine bestehende Zuweisung
-   als Erfolg wertet. `id-cert-manager` entfällt: HTTP-01 braucht weder
-   Workload Identity noch DNS Zone Contributor (AKS-E4).
-3. ACR, Testimages, Key Vault; Secrets generiert, nie ausgegeben:
+   Die Abfrage zeigt nur, ob die Tags von `gebit-showcase` gesetzt
+   sind (`true`), nicht ihre Werte; fehlt einer, endet P1 hier. Die
+   Node-RG darf vor dem Create nicht existieren.
+   Standard DPSv6 Family und Total Regional brauchen je mindestens 16
+   freie vCPU (3.5); weniger als 16 heißt Refresh ohne Surge (3.3
+   Punkt 6), weniger als 8 heißt Antrag durch den Owner. Ist `<p>`
+   inzwischen belegt, gilt das Ersatz-Label (P0 Schritt 5).
+2. Netz, Identität und Netzrechte: entfällt seit 18.11. Kein VNet,
+   keine UAMI `id-aks-cp`, keine `az role assignment create`, also
+   auch kein Risiko `PrincipalNotFound`. Das VNet legt AKS in der
+   Node-RG an (Schritt 4); die System-Identität des Clusters hat dort
+   per Default Contributor, vergeben von AKS, nicht vom Aufrufer
+   [Quelle: `learn.microsoft.com/azure/aks/managed-identity-overview`,
+   Tabelle "Control plane"]. `id-cert-manager` entfällt weiterhin:
+   HTTP-01 braucht weder Workload Identity noch DNS Zone Contributor
+   (AKS-E4). Die Schrittnummern bleiben, weil andere Phasen auf
+   Schritt 3, 4, 6 und 8 verweisen.
+3. Key Vault, ACR, Testimages, Pull-Token; Secrets generiert, nie
+   ausgegeben:
 
    ```bash
-   az acr create -g rg-eurocis-base -n <acr> --sku Basic --admin-enabled false
-   az acr import -n <acr> --source docker.io/curlimages/curl:8.23.0 \
-     --image curl:8.23.0                     # multi-arch inkl. arm64
-   az acr import -n <acr> --source docker.io/traefik/whoami:v1.12.0 \
-     --image whoami:v1.12.0                  # multi-arch inkl. arm64
-   az keyvault create -g rg-eurocis-base -n <kv> \
-     --enable-rbac-authorization true --retention-days 7 -o none
-   KV_ID=$(az keyvault show -n <kv> -g rg-eurocis-base --query id -o tsv)
+   az keyvault show -n <kv> -o none 2>/dev/null ||
+     az keyvault create -g gebit-showcase -l germanywestcentral -n <kv> \
+       --enable-rbac-authorization false --no-self-perms \
+       --retention-days 7 -o none
    OWNER_OID=$(az ad signed-in-user show --query id -o tsv)
-   [ -n "$(az role assignment list --assignee-object-id "$OWNER_OID" \
-       --scope "$KV_ID" --role "Key Vault Secrets Officer" -o tsv)" ] || \
-     az role assignment create --role "Key Vault Secrets Officer" \
-       --assignee-object-id "$OWNER_OID" --assignee-principal-type User \
-       --scope "$KV_ID" -o none
-   for i in $(seq 1 40); do         # Rolle greift nach einigen Minuten
+   az keyvault set-policy -g gebit-showcase -n <kv> \
+     --object-id "$OWNER_OID" \
+     --secret-permissions get list set delete recover -o none
+   for i in $(seq 1 20); do         # Wirkzeit undokumentiert [A]
      az keyvault secret list --vault-name <kv> -o none 2>/dev/null && break
      sleep 15
    done
    az keyvault secret list --vault-name <kv> -o none || \
-     { echo "KV-Rolle greift nicht: az logout/az login" >&2; exit 1; }
+     { echo "KV-Policy greift nicht" >&2; exit 1; }
    newsecret() {                    # nur anlegen, wenn er fehlt
      az keyvault secret show --vault-name <kv> -n "$1" -o none 2>/dev/null ||
        openssl rand -hex 24 | tr -d '\n' |
@@ -1429,17 +1968,67 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
          --file /dev/stdin -o none
    }
    newsecret keycloak-admin
+
+   az acr show -n <acr> -o none 2>/dev/null ||
+     az acr create -g gebit-showcase -l germanywestcentral -n <acr> \
+       --sku Basic --admin-enabled false --role-assignment-mode rbac -o none
+   az acr show -n <acr> --query roleAssignmentMode -o tsv
+   az acr import -n <acr> --source docker.io/curlimages/curl:8.23.0 \
+     --image curl:8.23.0                     # multi-arch inkl. arm64
+   az acr import -n <acr> --source docker.io/traefik/whoami:v1.12.0 \
+     --image whoami:v1.12.0                  # multi-arch inkl. arm64
+   az acr repository list -n <acr> -o tsv    # Datenebene als Contributor
+
+   az acr token show -r <acr> -n aks-pull -o none 2>/dev/null ||
+     az acr token create -r <acr> -n aks-pull \
+       --scope-map _repositories_pull --no-passwords -o none
+   az keyvault secret show --vault-name <kv> -n acr-pull-token \
+     -o none 2>/dev/null ||
+     az acr token credential generate -r <acr> -n aks-pull --password1 \
+       --expiration 2027-02-28T23:59:59Z \
+       --query "passwords[?name=='password1'].value | [0]" -o tsv |
+       tr -d '\n' |
+       az keyvault secret set --vault-name <kv> -n acr-pull-token \
+         --file /dev/stdin -o none
+   az acr token show -r <acr> -n aks-pull \
+     --query "{s:status,p:credentials.passwords[].{n:name,e:expiry}}" -o json
+   # Kopie für acr-pull.sh, nie ausgegeben, nur wenn noch keine da ist
+   umask 077; E=<sli>/aks/.env.aks
+   git -C <sli> check-ignore -q aks/.env.aks || exit 1
+   grep -q '^ACR_PULL_TOKEN=' "$E" 2>/dev/null ||
+     { printf 'ACR_PULL_TOKEN='
+       az keyvault secret show --vault-name <kv> -n acr-pull-token \
+         --query value -o tsv; } >> "$E"
+   chmod 600 "$E"
+   sli/aks/alerts.sh access   # Zugriffs- und Löschalarme vor dem Create
    ```
 
    `newsecret` gilt auch für: keycloak-db, Realm-User (je User),
    grafana-admin, grafana-ro, solace-admin, broker-sam, broker-gpos,
    sam-session, sam-pg-admin, gpos-postgres-admin, gpos-db-Rollen (je
    Rolle). Begründungen:
-   - Im RBAC-Modus bekommt der Ersteller des Vaults kein Recht auf
-     Secrets, auch nicht als Owner; nur Key Vault Secrets Officer oder
-     Administrator, und die Zuweisung greift erst nach einigen Minuten
-     [Quelle: `learn.microsoft.com/azure/key-vault/general/rbac-guide`].
-     Secrets Officer deckt auch die späteren Lesezugriffe ab.
+   - Access-Policy-Modus statt RBAC: Eine Key-Vault-Datenrolle
+     bräuchte eine Rollenzuweisung. `--enable-rbac-authorization false`
+     muss explizit stehen, weil die CLI RBAC als Default nimmt und neue
+     Vaults ab API 2026-02-01 ohnehin RBAC bekommen [Quelle: `az
+     keyvault create --help`, 2.85.0;
+     `learn.microsoft.com/azure/key-vault/general/access-control-default`].
+     Access Policies gelten als Legacy-Modell, sind aber voll
+     unterstützt [Quelle:
+     `learn.microsoft.com/azure/key-vault/general/rbac-access-policy`].
+     `vaults/accessPolicies/write` hat Contributor (P0 Schritt 2), aber
+     auch jeder andere Contributor von `azure-se` kann sich so selbst
+     eine Policy setzen [Quelle: Learn assign-access-policy]; Alarm in
+     Schritt 8, Abwägung in P0 Schritt 3. "ASC Default" meldet den
+     Vault vermutlich als Abweichung (Audit ohne Wirkung) [A].
+   - `--no-self-perms`: Ohne das Flag legt die CLI für den Aufrufer
+     eine Policy mit allen Key-, Secret-, Zertifikats- und
+     Storage-Rechten an [Quelle: azure-cli 2.85.0
+     keyvault/custom.py:419-426]. Der Owner braucht nur Secrets (auch
+     TLS-Backups und EAB-Daten sind Secrets). `OWNER_OID` entsteht zur
+     Laufzeit und steht nirgends. Die Policy des Stellvertreters
+     (`az keyvault set-policy --object-id <deputy-objectId>
+     --secret-permissions get list`) folgt in P7 Schritt 7.
    - `-o none` ist Pflicht: `secret set` gibt den Wert sonst aus
      [Quelle: azure-cli 2.85.0 keyvault/_transformers.py:192-200].
      Nie `--value "$(...)"`, das legt den Wert in die argv.
@@ -1450,49 +2039,130 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
      `openssl rand -hex 12` [Quelle: gpd scripts/install.sh:51, 136-138].
    - Nicht generiert, sondern vom Owner selbst eingetragen: die
      EAB-Kennung und der EAB-HMAC des ACME-Rückfall-CA (P0 Schritt 6),
-     als `acme-eab-kid` und `acme-eab-hmac`, je per
-     `pbpaste | tr -d '\n' | az keyvault secret set --vault-name <kv>
-     -n <name> --file /dev/stdin -o none`; daneben nur in
-     `sli/aks/.env.aks`.
-     P2 baut daraus den Rückfall-ClusterIssuer.
+     als `acme-eab-kid` und `acme-eab-hmac`, je per `read -rs V`
+     (Wert einfügen, kein Echo), `printf %s "$V" | az keyvault secret
+     set --vault-name <kv> -n <name> --file /dev/stdin -o none`, dann
+     `unset V` und `pbcopy </dev/null`, damit der Wert nicht in der
+     Zwischenablage, ihrem Verlauf oder Universal Clipboard bleibt;
+     daneben nur in `sli/aks/.env.aks` (chmod 600). P2 baut daraus den
+     Rückfall-ClusterIssuer.
+   - `--retention-days 7` ist das Minimum und nur beim Anlegen setzbar;
+     ohne Purge-Schutz, damit ein Purge beim Rückbau möglich bleibt.
+     Vault und ACR nur per show-or-create: Ein zweites `az keyvault
+     create` auf einen bestehenden Vault schriebe ihn per PUT neu und
+     könnte die Access Policies leeren [A].
+   - ACR im Modus `rbac`, explizit: Im Modus "RBAC Registry + ABAC
+     Repository Permissions" hat Contributor keine Datenebene, also
+     weder Push noch Pull, und Learn kündigt ABAC als künftigen Default
+     an [Quelle: Learn container-registry-rbac-abac-repository-permissions
+     und container-registry-rbac-built-in-roles-directory-reference].
+     Heute ist `rbac` der CLI-Default [Quelle: `az acr create --help`,
+     2.85.0]. Der Owner pusht in P2, P5 und P6 per `az acr login` und
+     `docker buildx imagetools create`. Erwartet ist
+     `LegacyRegistryPermissions` als `roleAssignmentMode`: Die CLI
+     bildet `rbac` darauf ab [Quelle: azure-cli 2.85.0
+     acr/custom.py:676-689; azure-mgmt-containerregistry
+     models/_enums.py:356].
+   - `--admin-enabled false`: kein Admin-Benutzer; Pods ziehen nur per
+     Token. `az acr import` ist eine ARM-Aktion, die Contributor deckt,
+     und übernimmt bei Multi-Arch-Images alle Plattformen [Quelle:
+     Learn container-registry-import-images].
+   - Pull-Token statt `--attach-acr`: Die AcrPull-Zuweisung für die
+     Kubelet-Identität verlangt Owner oder vergleichbare Rechte
+     [Quelle:
+     `learn.microsoft.com/azure/aks/cluster-container-registry-integration`].
+     Tokens und Scope Maps gibt es in allen Tarifen, in Basic je 100
+     [Quelle: Learn container-registry-token-based-repository-permissions
+     und container-registry-skus]. `_repositories_pull` ist die
+     System-Scope-Map "pull any repository" und deckt auch künftige
+     Repos; eine eigene Scope Map mit Repo-Liste wäre enger, verlangt
+     aber Pflege je neuem Image (Owner-Option). Ein Token gehört zu
+     keiner Entra-Identität: Wer das Passwort hat, zieht jedes Image
+     dieser ACR, pusht aber nichts.
+   - `--no-passwords`, weil `token create` sonst zwei Passwörter ohne
+     Ablauf (9999-12-31) erzeugt und ausgibt [Quelle: `az acr token
+     create --help`, 2.85.0]. Das Passwort entsteht erst per
+     `credential generate` mit Ablauf 2027-02-28T23:59:59Z (gleich
+     `deleteAfter`, nach der Messe, nicht im Freeze) [A: Owner, P0
+     Schritt 3] und geht ohne Ausgabe in den Key Vault; die Replikation
+     dauert bis 60 s [Quelle: Learn token-based-repository-permissions].
+     Das Filterformat der `--query` prüft der erste Lauf [A]. Eine
+     Kopie liegt nur in `sli/aks/.env.aks` (gitignored, P0 Schritt 10,
+     chmod 600); der Block oben schreibt sie per `umask 077` und nur
+     nach erfolgreichem `git check-ignore`, ohne den Wert auszugeben.
+     `password2` bleibt Reserve für eine Rotation ohne Ausfall. Ein
+     abgelaufenes Passwort fällt erst beim nächsten Pull auf (Surge-Node
+     am 26.01., Pod-Neustart auf neuem Node); P7 prüft die Restlaufzeit
+     im Preflight.
    - `whoami` dient nur dem Hairpin-Test in Schritt 8 (Docker Hub
      v1.12.0 vom 29.07.2026, Index-Digest-Präfix
      `sha256:c4717a8d1f01`, amd64/arm64/arm) [Quelle:
      Docker-Hub-Tags-API, 17.11.].
-   - `--retention-days 7` ist das Minimum und nur beim Anlegen setzbar;
-     ohne Purge-Schutz, damit ein Purge beim Rückbau möglich bleibt.
+   - Basic enthält 10 GiB; `az acr show-usage` misst nach den ersten
+     Pushes in P2, ob die arm64-Images darunter bleiben [A].
    - Der LiteLLM-Key kommt nicht in den Key Vault.
-4. Cluster:
+4. Cluster, danach Ingress-IP und Egress-IP:
 
    ```bash
-   az group create -n rg-eurocis-aks -l germanywestcentral \
-     --tags purpose=eurocis2027 deleteAfter=2027-02-28
    OWNER_IP=$(dig -4 +short myip.opendns.com @resolver1.opendns.com |
      grep -E '^[0-9.]+$')
-   az aks create -g rg-eurocis-aks -n aks-eurocis -l germanywestcentral \
+   T_OWNER=$(az group show -n gebit-showcase --query tags.Owner -o tsv)
+   T_DATE=$(az group show -n gebit-showcase \
+     --query 'tags."Created Date"' -o tsv)
+   [ -n "$T_OWNER" ] && [ -n "$T_DATE" ] || \
+     { echo "Pflicht-Tags auf gebit-showcase fehlen" >&2; exit 1; }
+   TAGS=("Owner=$T_OWNER" "Created Date=$T_DATE" \
+     purpose=eurocis2027 deleteAfter=2027-02-28)
+   az aks create -g gebit-showcase -n aks-eurocis -l germanywestcentral \
      --kubernetes-version 1.36.<patch> --tier free \
-     --node-resource-group rg-eurocis-nodes \
+     --node-resource-group gebit-showcase-nodes \
      --nodepool-name main --node-vm-size Standard_D8ps_v6 --node-count 1 \
      --max-pods 110 --node-osdisk-size 128 \
      --network-plugin azure --network-plugin-mode overlay \
-     --network-dataplane cilium --vnet-subnet-id <snet-aks-id> \
+     --network-dataplane cilium \
      --pod-cidr 10.244.0.0/16 --service-cidr 10.0.0.0/16 \
      --dns-service-ip 10.0.0.10 \
-     --assign-identity <id-aks-cp-id> \
-     --load-balancer-outbound-ips <pip-aks-egress-id> \
-     --attach-acr <acr-id> \
-     --enable-aad --enable-azure-rbac --disable-local-accounts \
+     --load-balancer-managed-outbound-ip-count 1 \
+     --enable-aad \
      --api-server-authorized-ip-ranges "${OWNER_IP}/32" \
      --auto-upgrade-channel none --node-os-upgrade-channel SecurityPatch \
-     --no-ssh-key --tags purpose=eurocis2027 deleteAfter=2027-02-28
-   az aks nodepool update -g rg-eurocis-aks --cluster-name aks-eurocis \
-     -n main --max-surge 1
-   az group update -n rg-eurocis-nodes \
-     --tags purpose=eurocis2027 deleteAfter=2027-02-28   # [A]
-   az role assignment create \
-     --role "Azure Kubernetes Service RBAC Cluster Admin" \
-     --assignee-object-id <owner-objectId> --assignee-principal-type User \
-     --scope <aks-id>
+     --no-ssh-key --tags "${TAGS[@]}" --nodepool-tags "${TAGS[@]}" -o none
+   az aks nodepool update -g gebit-showcase --cluster-name aks-eurocis \
+     -n main --max-surge 1 -o none
+   az group show -n gebit-showcase-nodes --query "keys(tags)" -o tsv
+   [ "$(az group show -n gebit-showcase-nodes --query tags.Owner -o tsv)" \
+     = "$T_OWNER" ] || echo "Owner-Tag der Node-RG weicht ab" >&2
+   az network vnet list -g gebit-showcase-nodes \
+     --query "[].{n:name,a:addressSpace.addressPrefixes}" -o tsv
+   ```
+
+   4a. Ingress-IP in der Node-RG, direkt nach dem Create; vorher die
+   Verfügbarkeit von `<p>` erneut prüfen (P0 Schritt 5):
+
+   ```bash
+   nslookup <p>.germanywestcentral.cloudapp.azure.com  # NXDOMAIN
+   az network public-ip show -g gebit-showcase-nodes -n pip-aks-ingress \
+     -o none 2>/dev/null || \
+     az network public-ip create -g gebit-showcase-nodes \
+       -n pip-aks-ingress -l germanywestcentral \
+       --sku Standard --allocation-method Static --version IPv4 \
+       --dns-name <p> \
+       --tags purpose=eurocis2027 deleteAfter=2027-02-28 -o none
+   az network public-ip show -g gebit-showcase-nodes -n pip-aks-ingress \
+     --query "{ip:ipAddress,fqdn:dnsSettings.fqdn,t:keys(tags)}" -o json
+   nslookup <fqdn>                          # = ipAddress
+   ```
+
+   4b. Egress-IP lesen; der Owner meldet sie dem LiteLLM-Betreiber (P0
+   Schritt 6), die Adresse steht nur lokal in
+   `~/.config/eurocis-aks/egress-ip` (chmod 600), die Ingress-IP aus
+   4a ebenso in `~/.config/eurocis-aks/ingress-ip` (Register für den
+   Vergleich in P5 Schritt 6 und P7):
+
+   ```bash
+   EGRESS_ID=$(az aks show -g gebit-showcase -n aks-eurocis --query \
+     "networkProfile.loadBalancerProfile.effectiveOutboundIPs[0].id" -o tsv)
+   az network public-ip show --ids "$EGRESS_ID" --query ipAddress -o tsv
    ```
 
    - Ein Node, kein HA (AKS-E3, AKS-E14). Learn nennt für produktive
@@ -1503,10 +2173,89 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
      [A: AKS nimmt den Ein-Node-System-Pool ohne Einschränkung an; der
      Create ist der Beweis]. Einen N-1-Fall und einen N-1-Drill gibt es
      nicht mehr. `--max-surge 1` heißt beim Node-Image-Upgrade ein
-     zweiter Node auf Zeit, daher 16 vCPU Quota (P0 Schritt 4)
-     [Quelle: `az aks nodepool update --help`, 2.85.0].
+     zweiter Node auf Zeit; die 16 vCPU Quota sind da (P0 Schritt 4)
+     [Quelle: `az aks nodepool update --help`, 2.85.0]. `az aks create`
+     kennt in 2.85.0 kein `--max-surge`, daher das Nodepool-Update.
+   - `--kubernetes-version`: der neueste 1.36-Patch am Tag des Creates
+     (am 18.11.: 1.36.5) [Quelle: Azure-Check 18.11.].
    - Free-Tier für das ganze Projekt, kein Wechsel auf Standard
      (AKS-E14).
+   - Nur Contributor: Der Befehl enthält bewusst kein
+     `--vnet-subnet-id`, `--assign-identity`,
+     `--load-balancer-outbound-ips`, `--attach-acr` und
+     `--enable-azure-rbac`; der Default-Create mit System-Identität
+     löst keine Rollenzuweisung aus [Quelle: Learn
+     aks-service-permissions; azure-cli dev
+     acs/managed_cluster_decorator.py, 18.11.]. `--attach-acr` endete
+     nach dem Cluster-PUT und rund 110 s Versuchen mit "Could not create
+     a role assignment for ACR" und Exit-Code ungleich 0, der Cluster
+     stünde ohne Pull-Recht da; `--vnet-subnet-id` gäbe nur eine
+     Warnung, und der Cluster hätte keine Netzrechte [Quelle: azure-cli
+     dev acs/_roleassignments.py, 18.11.]. `--enable-azure-rbac`
+     bräuchte Rollenzuweisungen für jeden Zugriff.
+   - `--disable-local-accounts` fehlt beim Create mit Absicht: Der
+     Bootstrap in Schritt 6 braucht einmal das Admin-Zertifikat, weil
+     es ohne Rollenzuweisung und ohne Admin-Gruppe sonst niemanden mit
+     Kubernetes-Rechten gibt [Quelle:
+     `learn.microsoft.com/azure/aks/kubernetes-rbac-entra-id`]. Mit der
+     Entra-Gruppe aus P0 Schritt 3 stünden stattdessen
+     `--aad-admin-group-object-ids <group-objectId>` und
+     `--disable-local-accounts` schon im Create.
+   - `--load-balancer-managed-outbound-ip-count 1` ist der Default und
+     steht explizit, damit niemand eine BYO-IP ergänzt. AKS verwaltet
+     den Lebenszyklus dieser IP; sie ist nicht als BYO-IP
+     wiederverwendbar und nach einem Neuaufbau neu [Quelle:
+     `learn.microsoft.com/azure/aks/configure-load-balancer-standard`].
+     Eine über Neuaufbauten stabile Egress-IP gibt es ohne
+     Rollenzuweisung nicht: Eine IP außerhalb der Node-RG braucht
+     Rechte der Cluster-Identität darauf [Quelle: ebenda].
+   - Tags: `--tags` gehen an den Cluster, seine Ressourcen (LB, IPs,
+     NSG, VNet, Kubelet-Identität) und an die Node-RG [Quelle:
+     `learn.microsoft.com/azure/aks/use-tags`]; `--nodepool-tags`
+     tagt Pool, Scale-Set und Instanzen. `Owner` und `Created Date`
+     kommen zur Laufzeit aus `gebit-showcase`, weil die Inherit-Policy
+     abweichende Werte am Cluster ohnehin überschreibt [A]; die Werte
+     stehen nur in der Shell-Variable, die Prüfungen zeigen nur
+     Schlüssel. Tag-Namen mit Leerzeichen sind erlaubt [Quelle: Learn
+     tag-resources; A: Parsing von `"Created Date=..."` durch die CLI,
+     die Abfrage danach belegt es]. `Owner` war früher für AKS
+     reserviert, das gilt nur für Altressourcen [Quelle: AKS-FAQ].
+     Annahme [A]: AKS legt die Node-RG in einem Schritt mit den
+     Cluster-Tags an, sodass die Deny-Policy durchlässt (ein
+     Community-Report sah das beim Create durchweg so, Azure/AKS
+     #5856). Scheitert der Create trotzdem mit
+     `RequestDisallowedByPolicy`, braucht es eine Exemption durch
+     einen Subscription-Owner.
+   - `--node-resource-group` geht nur beim Create; die Gruppe darf
+     vorher nicht existieren, liegt in derselben Subscription, ist
+     später nicht umbenennbar, und die Namen darin wählt AKS. Ohne den
+     Parameter hieße sie
+     `MC_gebit-showcase_aks-eurocis_germanywestcentral` [Quelle:
+     AKS-FAQ]. Der feste Name hält den Budget-Filter über Neuaufbauten
+     stabil (Schritt 8).
+   - Die Node-RG ist per Default `Unrestricted`, ein Contributor darf
+     dort Ressourcen anlegen [Quelle:
+     `learn.microsoft.com/azure/aks/node-resource-group-lockdown`], und
+     Learn legt die statische IP eines Service selbst dorthin, ohne
+     weitere Rollenzuweisung [Quelle:
+     `learn.microsoft.com/azure/aks/static-ip`]. Owner-Option als
+     Ersatz für den Lock (P0 Schritt 3): nach dem LB-Nachweis in P2
+     `az aks update --nrg-lockdown-restriction-level ReadOnly` (laut
+     FAQ Schutz gegen versehentliches Löschen; Recht: nur
+     `managedClusters/write`). Danach kann auch der Owner
+     `pip-aks-ingress` weder ändern noch löschen; zum Ändern kurz auf
+     `Unrestricted` [A: Zusammenspiel mit dem Cloud-Provider testen].
+   - `pip-aks-ingress`: Standard, statisch, IPv4, Label `<p>` (mit
+     Option (a) aus P0 Schritt 5 zusätzlich `--dns-name-scope
+     SubscriptionReuse`). `Owner` und `Created Date` erbt die IP per
+     Policy von der Node-RG [A]. Kein Lock und keine Rollenzuweisung;
+     der Cloud-Provider löscht eine selbst angelegte IP nie, auch nicht
+     mit dem Service (Schritt 8 belegt das).
+   - Egress: Die Adresse ist erst nach dem Create bekannt und geht
+     sofort an den Betreiber, falls er eine Allowlist hat oder noch
+     nicht geantwortet hat. Schritt 8 vergleicht sie nach `az aks
+     rotate-certs` (Schritt 6) mit der Adresse, die ein Pod nach außen
+     zeigt, und erneut nach Stop/Start [A: bleibt gleich].
    - `--api-server-authorized-ip-ranges` enthält beim Create nur die
      aktuelle Owner-IP. API-Server-IP und Outbound-IP des Standard-LB
      fügt AKS beim Create selbst hinzu; höchstens 200 Bereiche
@@ -1515,19 +2264,10 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
      kann AKS-E5 auf reines Entra ID mit Conditional Access umstellen;
      dann entfallen Liste und Helfer.
    - Ohne `--enable-oidc-issuer` und `--enable-workload-identity`:
-     HTTP-01 braucht keine Workload Identity (Schritt 2); beides ist
+     HTTP-01 braucht keine Workload Identity (AKS-E4); beides ist
      später per `az aks update` nachrüstbar.
-   - `--node-resource-group` geht nur beim Create, die Gruppe darf
-     vorher nicht existieren; ohne den Parameter hieße sie
-     `MC_rg-eurocis-aks_aks-eurocis_germanywestcentral`.
-     Entra-Integration ist nicht rückbaubar [Quelle:
+   - Entra-Integration ist nicht rückbaubar [Quelle:
      `learn.microsoft.com/azure/aks/enable-authentication-microsoft-entra-id`].
-   - Break-glass von jedem Netz: `az aks command invoke` (läuft über
-     die Azure-API, nicht über den API-Server-Endpunkt [Quelle:
-     `learn.microsoft.com/azure/aks/access-private-cluster`]),
-     `sli/aks/aks-allow-me.sh` (ebenfalls über ARM) oder
-     `az aks update --enable-local-accounts`. Rollen für den
-     Stellvertreter folgen bis G3 (P7 Schritt 7).
 5. Wartung: drei JSON-Dateien (`default`,
    `aksManagedAutoUpgradeSchedule`, `aksManagedNodeOSUpgradeSchedule`),
    je mit zwei `notAllowedDates`-Bereichen: 2027-01-20 bis 2027-01-20
@@ -1543,7 +2283,7 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
    ```bash
    for n in default aksManagedAutoUpgradeSchedule \
             aksManagedNodeOSUpgradeSchedule; do
-     az aks maintenanceconfiguration add -g rg-eurocis-aks \
+     az aks maintenanceconfiguration add -g gebit-showcase \
        --cluster-name aks-eurocis -n $n --config-file maint-$n.json
    done
    ```
@@ -1568,17 +2308,18 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
    Sperre trotzdem brechen (Abschnitt 7). Die JSON-Dateien gehören in
    die Neuaufbau-Skripte, weil die Konfigurationen mit dem Cluster
    verschwinden.
-6. CLI anbinden, getrennt vom Lab, und die Wrapper festlegen:
+6. CLI anbinden, getrennt vom Lab, die Wrapper festlegen und den
+   Zugriff bootstrappen:
 
    ```bash
-   az aks get-credentials -g rg-eurocis-aks -n aks-eurocis \
+   az aks get-credentials -g gebit-showcase -n aks-eurocis \
      --file ~/.kube/aks-eurocis.yaml --context aks-eurocis
    kubelogin convert-kubeconfig -l azurecli \
-     --kubeconfig ~/.kube/aks-eurocis.yaml
+     --kubeconfig ~/.kube/aks-eurocis.yaml --context aks-eurocis
    AKS_KUBECONFIG="$HOME/.kube/aks-eurocis.yaml"
    kaks() { KUBECONFIG="$AKS_KUBECONFIG" kubectl --context aks-eurocis "$@"; }
    haks() { KUBECONFIG="$AKS_KUBECONFIG" helm --kube-context aks-eurocis "$@"; }
-   kaks get nodes -o wide
+   kaks auth whoami                 # Username und Gruppen, ohne Binding
    ```
 
    Ohne `--file` würde `az` in `~/.kube/config` mergen und den aktuellen
@@ -1599,6 +2340,130 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
      `--context`/`--kube-context`). In Skripten ruft der Wrapper vorher
      `require_kube_context aks-eurocis` auf, der auch die Server-URL
      des Clusters prüft.
+   - Die User-kubeconfig eines Entra-Clusters enthält kein Geheimnis;
+     sie fordert eine Anmeldung an [Quelle:
+     `learn.microsoft.com/azure/aks/control-kubeconfig-access`].
+     `kubelogin -l azurecli` nutzt die `az login`-Sitzung im selben
+     Tenant [Quelle:
+     `azure.github.io/kubelogin/concepts/login-modes/azurecli.html`].
+
+   Bootstrap der Kubernetes-Rechte, einmal je Cluster, als Skript
+   `sli/aks/bootstrap-rbac.sh` (nach `require_kube_context
+   aks-eurocis`, idempotent):
+
+   ```bash
+   set -euo pipefail
+   umask 077
+   { set +x; } 2>/dev/null                          # Username nie im Log
+   ME=$(kaks auth whoami -o jsonpath='{.status.userInfo.username}')
+   [ -n "$ME" ] || { echo "whoami leer" >&2; exit 1; }
+   ADM_DIR=$(mktemp -d); ADM="$ADM_DIR/admin.yaml"   # nie unter ~/.kube
+   trap 'rm -rf "$ADM_DIR"' EXIT                    # auch bei exit 1
+   trap 'exit 1' INT TERM HUP                       # Signal -> EXIT-Trap
+   az aks get-credentials -g gebit-showcase -n aks-eurocis --admin \
+     --file "$ADM"
+   [ "$(kubectl --kubeconfig "$ADM" config view --minify \
+         -o jsonpath='{.clusters[0].cluster.server}')" = \
+     "$(kaks config view --minify \
+         -o jsonpath='{.clusters[0].cluster.server}')" ] || exit 1
+   kubectl --kubeconfig "$ADM" create clusterrolebinding \
+     eurocis-owner-admin --clusterrole=cluster-admin --user="$ME" \
+     --dry-run=client -o yaml | kubectl --kubeconfig "$ADM" apply -f -
+   rm -rf "$ADM_DIR"
+   kaks auth can-i '*' '*' -A                       # yes
+   ```
+
+   Danach im selben Skript (Schritte 6 und 7 von `bootstrap-rbac.sh`,
+   5.1), je mit eigener Freigabe:
+
+   ```bash
+   aks_update --disable-local-accounts -o none       # sli/aks/lib.sh
+   [ "$(az aks show -g gebit-showcase -n aks-eurocis \
+         --query disableLocalAccounts -o tsv)" = true ] ||
+     { echo "lokale Accounts noch an" >&2; exit 1; }
+   D=$(mktemp -d); trap 'rm -rf "${ADM_DIR:-}" "$D"' EXIT  # Negativtest
+   if az aks get-credentials -g gebit-showcase -n aks-eurocis --admin \
+        --file "$D/x.yaml" 2>"$D/err"; then
+     echo "FEHLER: Admin-Credential abrufbar" >&2; exit 1
+   fi
+   grep -q "Getting static credential isn't allowed" "$D/err"
+   az aks rotate-certs -g gebit-showcase -n aks-eurocis --yes  # bis 30 min
+   az aks get-credentials -g gebit-showcase -n aks-eurocis \
+     --file ~/.kube/aks-eurocis.yaml --context aks-eurocis \
+     --overwrite-existing
+   kubelogin convert-kubeconfig -l azurecli \
+     --kubeconfig ~/.kube/aks-eurocis.yaml --context aks-eurocis
+   kaks auth can-i '*' '*' -A                       # yes
+   ```
+
+   `rotate-certs` läuft erst, wenn `disableLocalAccounts` gleich
+   `true` ist und `--admin` mit der erwarteten Meldung scheitert.
+   Scheitert `--disable-local-accounts` an RequestDisallowedByPolicy
+   (Azure/AKS #5856), wiederholt `aks_update` begrenzt; gelingt der
+   Negativtest dennoch, liegt die Admin-Datei nur im per `trap`
+   gelöschten Verzeichnis.
+
+   - Kubernetes-RBAC mit Entra: Für Nutzer desselben Tenants ist das
+     Subjekt der UPN, für Nutzer aus einem anderen Tenant die
+     objectId, Gruppen gehen per `kind: Group` mit ihrer objectId
+     [Quelle: `learn.microsoft.com/azure/aks/kubernetes-rbac-entra-id`].
+     Gast-UPNs haben die Form `<name>_<domain>#EXT#@<tenant>...`
+     [Quelle: Learn control-kubeconfig-access]. Das Skript nimmt den
+     Namen, den `kaks auth whoami` vor jeder Bindung meldet; damit ist
+     das Format für Mitglied und Gast richtig, und der Name kommt nie
+     ins Repo (Platzhalter `<owner-upn>`) [A: AKS erlaubt jedem
+     angemeldeten Nutzer die SelfSubjectReview; sonst zeigt die
+     Forbidden-Meldung von `kaks get ns` denselben Namen].
+   - Der Server-Vergleich verhindert, dass eine fremde Admin-Datei die
+     Bindung in einen anderen Cluster schreibt. Die Admin-Datei liegt
+     nur für Sekunden in einem eigenen Temp-Verzeichnis mit umask 077
+     und nie in `~/.kube`; der `trap` löscht es auch dann, wenn ein
+     Schritt scheitert (`set -e`, `exit 1`, Abbruch per Signal). Dieses
+     Muster gilt für jeden Weg zur Admin-kubeconfig, auch für
+     Break-glass (unten, P7 Schritte 3 und 7). `--admin` geht vor
+     `--context` [Quelle: `az aks get-credentials --help`, 2.85.0].
+   - Erst wenn `kaks auth can-i '*' '*' -A` mit der Entra-kubeconfig
+     `yes` ergibt, gehen die lokalen Accounts aus; sonst sperrte sich
+     der Owner aus. Danach scheitert `get-credentials --admin` mit
+     "Getting static credential isn't allowed because this cluster is
+     set to disable local accounts" [Quelle:
+     `learn.microsoft.com/azure/aks/local-accounts`].
+   - Rotation: Learn verlangt sie, wenn auf dem Cluster schon lokale
+     Accounts genutzt wurden, damit ausgegebene Zertifikate ungültig
+     werden; ob AKS ein altes Admin-Zertifikat nach
+     `--disable-local-accounts` sonst noch annimmt, sagt Learn nicht
+     [Quelle: Learn local-accounts]. `az aks rotate-certs` legt Nodes,
+     Scale-Set und Disks neu an und kann bis zu 30 min Ausfall bringen
+     [Quelle: `learn.microsoft.com/azure/aks/rotate-certificates`];
+     deshalb jetzt, vor dem ersten Workload und vor dem PVC-Test in
+     Schritt 8. Danach die kubeconfig neu holen. Mit der Entra-Gruppe
+     aus P0 Schritt 3 entfallen Admin-Zertifikat und Rotation.
+   - Die Bindung des Stellvertreters legt der Owner später mit seiner
+     Entra-Identität an (P7 Schritt 7), mit dem Namen aus dessen
+     eigenem `kaks auth whoami`; dafür braucht es keinen Admin-Zugang
+     mehr.
+   - Kubernetes-RBAC ist keine Grenze gegenüber den anderen
+     Contributors von `azure-se`: Jeder von ihnen kann lokale Accounts
+     wieder einschalten und Admin-Credentials holen [Quelle: Learn
+     local-accounts]. Das Activity Log zeichnet es auf; den Alarm
+     setzt Schritt 8.
+
+   Break-glass, jeweils mit Contributor:
+   - Eigene IP nicht in der Liste (fremdes Netz):
+     `sli/aks/aks-allow-me.sh` oder `az aks command invoke`; beide
+     laufen über die Azure-API, nicht über den API-Server-Endpunkt
+     [Quelle: `learn.microsoft.com/azure/aks/access-private-cluster`].
+     `command invoke` reicht das Entra-Token des Aufrufers weiter, es
+     gilt also Kubernetes-RBAC [Quelle: azure-cli acs/custom.py, 2.85.0
+     Z. 2620-2626]. Sein Pod fordert 200m CPU und 500Mi an [Quelle:
+     Learn access-private-cluster]; auf dem knappen Node braucht er
+     zeitweise Platz (3.2).
+   - Bindung fehlt oder ist falsch (RBAC-Lockout): `aks_update
+     --enable-local-accounts`, Admin-Datei nach dem Muster oben (`set -euo
+     pipefail`, `umask 077`, `mktemp -d` mit `trap`), Bindung reparieren,
+     `--disable-local-accounts` mit demselben Nachweis wie oben, danach `az aks
+     rotate-certs`. Das kostet bis zu 30 min Ausfall, also nie an Probetagen
+     oder auf der Messe, außer im Notfall.
 7. API-Server-Zugriff: `sli/aks/aks-allow-me.sh` (AKS-E5; Arbeitsstand,
    solange der Owner nichts anderes vorgibt). `az aks update
    --api-server-authorized-ip-ranges` ersetzt die ganze Liste; eine
@@ -1610,11 +2475,11 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
    eine einzelne IP und nie eine leere Liste:
    - ohne Option: `powerState.code` muss `Running` sein [A: `az aks
      update` wird auf einem gestoppten Cluster abgelehnt]; die Liste
-     lesen (`az aks show -g rg-eurocis-aks -n aks-eurocis --query
+     lesen (`az aks show -g gebit-showcase -n aks-eurocis --query
      apiServerAccessProfile.authorizedIpRanges -o tsv`), die aktuelle
      IPv4 per `dig -4 +short myip.opendns.com @resolver1.opendns.com`
      ermitteln und als /32 ergänzen, wenn sie fehlt; die vollständige,
-     deduplizierte Liste mit `az aks update -g rg-eurocis-aks -n
+     deduplizierte Liste mit `az aks update -g gebit-showcase -n
      aks-eurocis --api-server-authorized-ip-ranges <liste>` schreiben;
      dann bis 2 min `kaks get --raw /readyz` (nach
      `require_kube_context aks-eurocis`).
@@ -1623,9 +2488,13 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
    - `--prune <ip>`: einen Eintrag entfernen, den der Helfer selbst
      hinzugefügt hat; bricht ab, wenn die Liste danach leer wäre.
      Einträge, die AKS selbst gesetzt hat, bleiben unberührt.
+   - `--add <ip>`: nur durch den Owner, für die IP des Stellvertreters,
+     falls dieser keine Azure-Rechte hat (siehe unten).
    - Register `~/.config/eurocis-aks/allowed-ips` (chmod 600; IP, Datum,
      Zweck wie "Büro", "5G", "Stand"); nie im Repo, nie in diesem
      Dokument.
+   - Bei `RequestDisallowedByPolicy` gilt die Regel aus dem Kopf von
+     P1 (begrenzt wiederholen, Reconcile).
 
    Der Owner ruft den Helfer selbst auf (sein `az login`), Claude nur
    nach Freigabe. Aufrufe: nach dem Create zur Kontrolle und nach jedem
@@ -1637,26 +2506,58 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
    `learn.microsoft.com/azure/aks/start-stop-cluster`], spielt keine
    Rolle mehr, weil kubectl den FQDN auflöst. Offen für P7 und
    Abschnitt 7: Im Freeze ist der Helfer der einzige erlaubte
-   `az aks update`, und er ändert nur die IP-Liste [A]; der
-   Stellvertreter braucht dafür
-   `Microsoft.ContainerService/managedClusters/write`, eventuell plus
-   Join- und Assign-Rechte (Test vor G3, P7 Schritt 7), oder arbeitet
-   über `az aks command invoke`.
+   `az aks update`, und er ändert nur die IP-Liste [A].
+
+   Stellvertreter: Eine eigene, enge Rolle ist ohne Rollenzuweisung
+   nicht möglich. Für `aks-allow-me.sh`, `az aks start`, `az aks
+   get-credentials` und `az aks command invoke` braucht er Azure-Rechte
+   aus einer Gruppe mit Contributor (oder Ähnlichem) auf `azure-se`
+   (P0 Schritt 6). Dann hat er auch `stop` und `delete`; die Grenze
+   ist eine Runbook-Regel. Ohne diese Gruppe bleiben diese Schritte
+   beim Owner; kubectl ginge mit der weitergegebenen User-kubeconfig,
+   einem eigenen Binding und seiner IP per `--add` [A: Test in P7
+   Schritt 7 mit einem Konto ohne Subscription-Zugriff]. Dann scheitert
+   ein einfaches `az login` mit "No subscriptions found" [Quelle:
+   azure-cli 2.85.0 core/_profile.py:206-207]; der Stellvertreter
+   meldet sich mit `az login --tenant <tenant> --allow-no-subscriptions`
+   an (bei einem Gast holt erst `--tenant` ein Token des richtigen
+   Tenants), prüft `kaks auth whoami` und liest seine objectId mit `az
+   ad signed-in-user show --query id -o tsv`. Ohne Azure CLI geht
+   `kubelogin convert-kubeconfig -l interactive` (oder `-l devicecode`)
+   `--kubeconfig ~/.kube/aks-eurocis.yaml --context aks-eurocis` statt
+   `-l azurecli`. Ein `LinkedAuthorizationFailed` wie bei BYO-Ressourcen
+   droht nicht mehr, weil der Cluster nur auf eigene Ressourcen
+   verweist [A].
 8. Prüfungen und Wächter. `az aks check-acr` entfällt: Es startet
    `mcr.microsoft.com/aks/canipull:v0.1.0`, ein reines amd64-Image (auf
-   Cobalt-Nodes "exec format error"), und holt eine temporäre
+   Cobalt-Nodes "exec format error"), holt eine temporäre
    Devicecode-kubeconfig, die nicht konvertiert wird [Quelle: azure-cli
    2.85.0 acs/_consts.py:226, acs/custom.py:1897-1906, 2150-2195; Befehl
    `curl https://mcr.microsoft.com/v2/aks/canipull/manifests/v0.1.0`,
-   16.11.]. `check-acr` kommt nur bei einem amd64-Rückfall wieder in
-   Frage.
+   16.11.], und prüft die AcrPull-Zuweisung der Kubelet-Identität, die
+   es ohne `--attach-acr` nicht gibt.
+
+   Pull-Secret per Helfer `sli/aks/acr-pull.sh <ns>...` (nach
+   `require_kube_context aks-eurocis`, idempotent; entsteht hier, P2
+   Schritt 1 führt ihn in der Dateiliste von `sli/aks/`). Kern je
+   Namespace, ohne Passwort in einer argv:
 
    ```bash
-   KUBELET=$(az aks show -g rg-eurocis-aks -n aks-eurocis \
-     --query identityProfile.kubeletidentity.objectId -o tsv)
-   az role assignment list --assignee-object-id "$KUBELET" \
-     --scope "$(az acr show -n <acr> --query id -o tsv)" \
-     --query "[].roleDefinitionName" -o tsv          # enthält AcrPull
+   az keyvault secret show --vault-name <kv> -n acr-pull-token \
+     --query value -o tsv |
+     jq -Rc --arg r <acr>.azurecr.io --arg u aks-pull \
+       '{auths:{($r):{username:$u,password:.,auth:(($u+":"+.)|@base64)}}}' |
+     kaks -n "$ns" create secret generic acr-pull \
+       --type=kubernetes.io/dockerconfigjson \
+       --from-file=.dockerconfigjson=/dev/stdin \
+       --dry-run=client -o yaml |
+     kaks -n "$ns" apply --server-side -f -
+   ```
+
+   ```bash
+   sli/aks/acr-pull.sh default
+   kaks -n default patch serviceaccount default \
+     -p '{"imagePullSecrets":[{"name":"acr-pull"}]}'
    kaks -n default run acr-pull --restart=Never --image-pull-policy=Always \
      --image=<acr>.azurecr.io/curl:8.23.0 -- curl --version
    kaks -n default wait pod/acr-pull \
@@ -1664,14 +2565,32 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
    kaks -n default delete pod acr-pull
    kaks -n default run egress --rm -i --restart=Never \
      --image=<acr>.azurecr.io/curl:8.23.0 -- curl -s ifconfig.me
+   # = Adresse aus Schritt 4b
    kaks -n default run llm --rm -i --restart=Never \
      --image=<acr>.azurecr.io/curl:8.23.0 -- \
      curl -s --max-time 15 -o /dev/null -w '%{http_code}' \
      <litellm-base>/v1/models
    ```
 
-   Das curl-Image nimmt `curl` als erstes Argument an [A: Entrypoint
-   von curlimages].
+   - Das curl-Image nimmt `curl` als erstes Argument an [A: Entrypoint
+     von curlimages].
+   - `--from-file=...=/dev/stdin` mit kubectl auf macOS ist [A];
+     Rückfall: das Secret-Manifest per `jq` aus stdin bauen und per
+     `kaks apply --server-side -f -` anlegen. `--server-side` schreibt
+     keine `last-applied-configuration`-Annotation mit den Daten.
+   - Der Patch des default-ServiceAccount gilt nur für neue Pods ohne
+     eigene `imagePullSecrets`, die genau diesen ServiceAccount nutzen
+     [Quelle:
+     `kubernetes.io/docs/tasks/configure-pod-container/configure-service-account`,
+     "Add ImagePullSecrets to a service account";
+     `kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin`].
+     Er dient nur den Test-Pods in `default` (und `p2-test` in P2).
+     Charts mit eigenem ServiceAccount bekommen `acr-pull` über ihre
+     Values; jede Phase legt Namespace und Secret vor helm oder
+     kustomize an: `traefik`, `monitoring` und `p2-test` (P2), `iam`
+     (P3), `solace` (P4), `sam-solace-lab` (P5; Pflicht vor `helm
+     install`, weil das SAM-Chart jedes genannte Pull-Secret per lookup
+     prüft), `gpos-data` und `gpos-demo` (P6).
 
    Hairpin- und Ingress-IP-Test, bevor P2 Traefik installiert. SAM
    ruft sich über seine externe URL selbst auf (OAuth-Flow, Platform
@@ -1692,7 +2611,7 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
      namespace: default
      annotations:
        service.beta.kubernetes.io/azure-pip-name: pip-aks-ingress
-       service.beta.kubernetes.io/azure-load-balancer-resource-group: rg-eurocis-base
+       service.beta.kubernetes.io/azure-load-balancer-resource-group: gebit-showcase-nodes
    spec:
      type: LoadBalancer
      externalTrafficPolicy: Local
@@ -1718,21 +2637,39 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
    # danach aks-allow-me.sh --prune <hotspot-ip>
    kaks -n default delete svc hairpin-test
    kaks -n default delete pod echo
-   az network public-ip show -g rg-eurocis-base -n pip-aks-ingress \
+   az network public-ip show -g gebit-showcase-nodes -n pip-aks-ingress \
      --query "{c:ipConfiguration.id,f:dnsSettings.fqdn}" -o tsv
    ```
 
    Gründe und Rückfall:
-   - Der Test belegt zugleich, dass der Lock das Binden nicht stört
-     [A], dass `azure-pip-name` mit `azure-load-balancer-resource-group`
-     die IP aus `rg-eurocis-base` nimmt, statt eine neue zu erzeugen,
-     und dass `externalTrafficPolicy: Local` die echte Client-IP
-     erhält (`RemoteAddr` in der whoami-Antwort ist die öffentliche
-     Mac-IP), Voraussetzung für die Traefik-Rate-Limits je Client-IP
+   - Der Test belegt, dass `azure-pip-name` die IP aus der Node-RG
+     nimmt, statt eine neue zu erzeugen, und dass
+     `externalTrafficPolicy: Local` die echte Client-IP erhält
+     (`RemoteAddr` in der whoami-Antwort ist die öffentliche Mac-IP),
+     Voraussetzung für die Traefik-Rate-Limits je Client-IP
      (Komponente `public-guard`, P2) [Quelle:
      `learn.microsoft.com/azure/aks/configure-load-balancer-standard`].
-     Die Annotation muss beim Anlegen da sein, sonst erzeugt AKS
-     zuerst eine eigene IP [A].
+     `azure-load-balancer-resource-group: gebit-showcase-nodes` steht
+     explizit wie beim Traefik-Service (P2 Schritt 5) und wie im
+     Manifest auf Learn [Quelle:
+     `learn.microsoft.com/azure/aks/static-ip`]; ohne sie suchte der
+     Cloud-Provider in der RG seiner Cloud-Konfiguration, bei AKS der
+     Node-RG [Quelle: cloud-provider-azure master
+     pkg/provider/azure_loadbalancer.go:4298-4307; A: CCM-Stand von AKS
+     1.36]. Fehlt die IP, legt
+     der Cloud-Provider keine an; der Service scheitert mit "PublicIP
+     from annotation
+     azure-pip-name(-IPv6)=... doesn't exist" [Quelle:
+     cloud-provider-azure azure_loadbalancer.go, Stand 18.11.]. Die
+     Annotation muss beim Anlegen da sein, sonst erzeugt AKS zuerst
+     eine eigene IP [A].
+   - Pflicht, als Ersatz für den Lock: Nach dem Löschen von
+     `hairpin-test` existiert `pip-aks-ingress` weiter, mit
+     unverändertem Label. Der Cloud-Provider wertet eine IP ohne Tag
+     `k8s-azure-service` als vom Nutzer angelegt und löscht sie nie,
+     auch nicht mit dem Service [Quelle: cloud-provider-azure
+     azure_loadbalancer.go und pkg/consts/consts.go, Stand 18.11.; A:
+     welche CCM-Version AKS 1.36 ausliefert, ist nicht geprüft].
    - Port 80 ist nur für die Testdauer offen; der Service verschwindet
      vor P2, weil die VAP dort LoadBalancer nur für den Service
      `traefik/traefik` zulässt.
@@ -1752,33 +2689,44 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
 
    PVC-Umzug (3.3): Ein Node-Image-Update hängt alle Disks an den
    Surge-Node. Der Test belegt das vor P4, mit einem zweiten Node für
-   rund 1 h (rund 0,30 EUR, Quota aus P0 Schritt 4):
+   rund 1 h (rund 0,30 EUR; Quota vorhanden, P0 Schritt 4):
 
    ```bash
-   az aks nodepool scale -g rg-eurocis-aks --cluster-name aks-eurocis \
+   az aks nodepool scale -g gebit-showcase --cluster-name aks-eurocis \
      -n main --node-count 2
    # Test-Pod mit 1Gi-PVC (managed-csi) schreibt eine Datei; den
    # ersten Node mit kaks cordon sperren, Pod löschen und neu anlegen:
    # er startet auf dem zweiten Node, die Datei ist da
    kaks uncordon <node-1>
-   az aks nodepool scale -g rg-eurocis-aks --cluster-name aks-eurocis \
+   az aks nodepool scale -g gebit-showcase --cluster-name aks-eurocis \
      -n main --node-count 1
    ```
 
-   Stop und Start:
+   Stop und Start, mit beiden öffentlichen IPs vorher und nachher (nur
+   lokal notiert):
 
    ```bash
-   az aks stop -g rg-eurocis-aks -n aks-eurocis   # blockiert bis zum Ende
-   az aks show -g rg-eurocis-aks -n aks-eurocis \
+   az network public-ip show --ids "$EGRESS_ID" --query ipAddress -o tsv
+   az network public-ip show -g gebit-showcase-nodes -n pip-aks-ingress \
+     --query ipAddress -o tsv
+   az aks stop -g gebit-showcase -n aks-eurocis   # blockiert bis zum Ende
+   az aks show -g gebit-showcase -n aks-eurocis \
      --query "{p:powerState.code,s:provisioningState}" -o tsv
    # = Stopped / Succeeded, dann mindestens 30 min warten
-   az aks start -g rg-eurocis-aks -n aks-eurocis  # Dauer ab hier notieren
+   az aks start -g gebit-showcase -n aks-eurocis  # Dauer ab hier notieren
    sli/aks/aks-allow-me.sh --check && kaks get --raw /readyz
+   # danach beide IP-Abfragen von oben wiederholen
    ```
 
    Microsoft verlangt nach einem Stop 15-30 min Pause vor dem Start
    [Quelle: `learn.microsoft.com/azure/aks/start-stop-cluster`, Caution
-   unter "Start an AKS cluster"]. Dazu entstehen hier minimale Wrapper
+   unter "Start an AKS cluster"]. Zu Public IPs in der Node-RG sagt die
+   Seite nichts; dokumentiert ist nur, dass alle Objekte außer
+   Standalone-Pods erhalten bleiben [Quelle: ebenda]. Erwartung:
+   Beide IPs bleiben, weil LB und IP-Ressourcen in der Node-RG
+   bestehen [A]; dieser Zyklus ist die Messung. Ändert sich die
+   Egress-IP doch, meldet der Owner sie neu, und das Risiko kommt ins
+   Register. Dazu entstehen hier minimale Wrapper
    `sli/aks/aks-stop.sh` (schreibt die UTC-Zeit eines erfolgreichen
    Stops nach `~/.config/eurocis-aks/last-stop`) und
    `sli/aks/aks-start.sh` (verweigert den Start innerhalb von 30 min
@@ -1790,31 +2738,93 @@ Label, Egress-IP (LiteLLM-Allowlist), ACR und Key Vault behält.
    zweite Prüfung, weil Einträge spät kommen können [A].
 
    Kostenwächter:
-   - Budget nach 3.4 (Betrag laut AKS-E1) im Portal oder per
-     `az rest --method put` auf
+   - Budget nach 3.4 (250 EUR, Actual 100 % und Forecast 100 %,
+     01.12.2026-31.03.2027) auf Subscription-Ebene `azure-se`,
+     gefiltert auf `ResourceGroupName` in `gebit-showcase` und
+     `gebit-showcase-nodes`; im Portal oder per `az rest --method put`
+     auf
      `/subscriptions/{subscriptionId}/providers/Microsoft.Consumption/budgets/eurocis-aks`
      mit `filter.dimensions` und `notifications`. Nicht
      `az consumption budget create`: Preview ohne
-     Benachrichtigungs-Parameter.
+     Benachrichtigungs-Parameter. Ein Contributor darf eigene Budgets
+     anlegen, ändern und löschen, auch mit RG-Filter [Quelle:
+     `learn.microsoft.com/azure/cost-management-billing/costs/tutorial-acm-create-budgets`].
+     Annahme: `gebit-showcase` enthält nur Showcase-Ressourcen, sonst
+     zählt das Budget fremde Kosten mit [A].
    - Abend-Check auf dem Owner-Mac bis 05.02. (launchd, read-only):
-     `az aks show -g rg-eurocis-aks -n aks-eurocis --query
+     `az aks show -g gebit-showcase -n aks-eurocis --query
      powerState.code -o tsv` meldet abends per Benachrichtigung, wenn der
      Cluster noch `Running` ist. Ein Activity-Log-Alarm bemerkt einen
      ausgebliebenen Stopp nicht.
    - Activity-Log-Alarm auf start/stop (nur Information),
-     Resource-Health-Alarm (kostenlos).
+     Resource-Health-Alarm (kostenlos); Budget und diese beiden legt
+     `alerts.sh cost` nach dem Create an, in `gebit-showcase` und ohne
+     Region (1.4).
 
-**Wer:** Claude Schritte 1-8 nach Freigabe; Owner Entra-Login,
-`aks-allow-me.sh` für die eigenen Netze, Hotspot-Test, EAB-Daten in
-den Key Vault, Budget im Portal.
+   Zugriffs- und Löschwächter (Activity-Log-Alarme, kostenlos;
+   Contributor darf Alarme und Aktionsgruppen anlegen, weil seine
+   Actions `*` sind, P0 Schritt 2), angelegt schon in Schritt 3 per
+   `alerts.sh access` aus `foundation.sh pre`, also vor dem Create und
+   vor dem Fenster mit aktiven lokalen Accounts. Regeln und Action
+   Group liegen in `gebit-showcase`, ohne `-l` bzw. mit `-l Global`
+   (1.4); Scope ist die Subscription, eingegrenzt per Bedingung auf
+   `resourceGroup` `gebit-showcase` bzw. `gebit-showcase-nodes`, weil
+   die Node-RG vor dem Create noch nicht existiert. Je ein Alarm auf
+   `Microsoft.ContainerService/managedClusters/listClusterAdminCredential/action`
+   (löst beim eigenen Bootstrap in Schritt 6 einmal aus),
+   `.../managedClusters/write` (unter anderem das Wiedereinschalten
+   lokaler Accounts; jeder Lauf von `aks-allow-me.sh` löst ihn auch
+   aus), `.../managedClusters/delete`,
+   `Microsoft.KeyVault/vaults/accessPolicies/write`,
+   `Microsoft.KeyVault/vaults/delete`,
+   `Microsoft.KeyVault/locations/deletedVaults/purge/action`
+   (Subscription),
+   `Microsoft.ContainerRegistry/registries/tokens/write`,
+   `Microsoft.ContainerRegistry/registries/generateCredentials/action`
+   (ein zweites Passwort für `aks-pull` per `az acr token credential
+   generate --password2` löst `tokens/write` nicht aus),
+   `Microsoft.ContainerRegistry/registries/delete`,
+   `Microsoft.Network/publicIPAddresses/delete` in
+   `gebit-showcase-nodes` und
+   `Microsoft.Resources/subscriptions/resourceGroups/delete` für
+   `gebit-showcase` und `gebit-showcase-nodes`. Der Key Vault ist die
+   einzige Kopie der generierten Secrets und des TLS-Backups außerhalb
+   des Macs, hat nur 7 Tage Soft-Delete und keinen Purge-Schutz (AKS-E17);
+   nach einem Vault-Delete stellt `az keyvault recover -n <kv>` ihn
+   binnen 7 Tagen wieder her (Runbook, P7 Schritt 4). Die Alarme
+   erkennen Missbrauch durch andere Contributors oder ein
+   versehentliches Löschen, verhindern aber nichts (P0 Schritt 3,
+   Abschnitt 7).
+
+**Wer:** Claude Schritte 1-8 nach Freigabe, in der `az`-Sitzung des
+Owners; Owner: Freigabe je Schreibschritt, Entra-Login (der Bootstrap
+bindet seinen Namen), `aks-allow-me.sh` für die eigenen Netze,
+Hotspot-Test, EAB-Daten in den Key Vault, Meldung der Egress-IP an
+den LiteLLM-Betreiber, Budget im Portal und Empfänger der Alarme.
 
 **Abnahme:**
 
-- `az aks show`: Version 1.36.x, overlay/cilium, maxPods 110,
+- Create ohne Rollenzuweisung: `az aks create` endet mit Exit-Code 0
+  und ohne die Warnung "Could not create a role assignment". `az aks
+  show`: Version 1.36.x, overlay/cilium, maxPods 110,
   `upgradeChannel none`, `nodeOSUpgradeChannel SecurityPatch`,
-  `disableLocalAccounts true`, `nodeResourceGroup rg-eurocis-nodes`,
+  `aadProfile.managed true`, `aadProfile.enableAzureRbac false`,
+  `disableLocalAccounts true`, `nodeResourceGroup
+  gebit-showcase-nodes`, `identity.type SystemAssigned`,
+  `networkProfile.loadBalancerProfile.managedOutboundIPs.count 1`,
   `sku.tier Free`; `apiServerAccessProfile.authorizedIpRanges` enthält
   die Owner-IP und sonst nur Einträge, die AKS selbst gesetzt hat.
+- Policy-Tags, nur Schlüssel ausgegeben: `az group show -n
+  gebit-showcase-nodes --query "keys(tags)" -o tsv` und `az aks show
+  -g gebit-showcase -n aks-eurocis --query "keys(tags)" -o tsv` nennen
+  `Owner`, `Created Date`, `purpose` und `deleteAfter`. Die Werte von
+  `Owner` und `Created Date` prüft ein stiller Vergleich gegen
+  `gebit-showcase`, etwa `[ "$(az group show -n gebit-showcase-nodes
+  --query tags.Owner -o tsv)" = "$(az group show -n gebit-showcase
+  --query tags.Owner -o tsv)" ] && echo ok`, ebenso für `Created Date`
+  und für `az aks show`; `pip-aks-ingress` trägt `Owner` und `Created
+  Date` [A: per Vererbung; Prüfung ebenfalls nur per `keys(tags)`].
+  Name und Adressraum des AKS-verwalteten VNet sind protokolliert.
 - 1 Node Ready, `kubernetes.io/arch=arm64`, mindestens 7,8 CPU und
   28,5 GiB (29184Mi) allocatable, gemessen mit
   `kaks get nodes -o custom-columns=N:.metadata.name,CPU:.status.allocatable.cpu,MEM:.status.allocatable.memory`.
@@ -1823,6 +2833,17 @@ den Key Vault, Budget im Portal.
   und 75 % RAM. `maxSurge` des Pools ist 1.
 - `kubectl config current-context` ohne `KUBECONFIG` ist weiter
   `rancher-desktop`; `~/.kube/config` enthält kein `aks-eurocis`.
+- Entra-Login und lokale Accounts: `kaks get nodes` läuft über
+  kubelogin (azurecli) ohne statische Credential; `kaks auth whoami`
+  zeigt den Namen des Owners (UPN bei einem Mitglied [A]); `kaks auth
+  can-i '*' '*' -A` ergibt `yes` über die Bindung
+  `eurocis-owner-admin`; `disableLocalAccounts` ist `true`, und erst
+  danach scheitert `az aks get-credentials --admin` mit "Getting static
+  credential isn't allowed"; kein Temp-Verzeichnis aus Schritt 6
+  existiert mehr (auch nicht nach einem gezielt abgebrochenen
+  Probelauf); `az aks rotate-certs` ist gelaufen (Datum
+  notiert) oder die Entra-Gruppe ersetzt den Bootstrap
+  (Owner-Entscheidung aus P0 Schritt 3).
 - API-Zugriff: Von der Owner-IP ist `kaks get --raw /readyz` ok. Vom
   Handy-Hotspot (nicht in der Liste) läuft `kaks get nodes` in den
   Timeout; nach `aks-allow-me.sh` auf dem Hotspot ist `kaks get --raw
@@ -1830,46 +2851,80 @@ den Key Vault, Budget im Portal.
   <hotspot-ip>` stellt die vorherige Liste her (Vergleich vorher und
   nachher). `--prune` auf den letzten Eintrag bricht ab, ohne
   `az aks update` aufzurufen.
-- Ingress-IP und Hairpin: `hairpin-test` bekommt die IP von
-  `pip-aks-ingress`; `curl http://<fqdn>/` liefert vom Mac und vom
-  Hotspot 200, `RemoteAddr` ist die öffentliche Client-IP. Aus einem
-  Pod liefert derselbe Aufruf 200, oder das Ergebnis "Hairpin
-  scheitert" ist dokumentiert und der `coredns-custom`-Rückfall für P2
-  eingeplant. Nach dem Löschen des Tests ist `ipConfiguration` leer,
-  Label und Lock sind da, `nslookup <fqdn>` liefert dieselbe IP, und
-  kein Service im Cluster hat den Typ LoadBalancer
+- Ingress-IP und Hairpin: `pip-aks-ingress` liegt in
+  `gebit-showcase-nodes` (Standard, Static), `dnsSettings.fqdn` ist
+  `<fqdn>`. `hairpin-test` bekommt diese IP; `curl http://<fqdn>/`
+  liefert vom Mac und vom Hotspot 200, `RemoteAddr` ist die
+  öffentliche Client-IP. Aus einem Pod liefert derselbe Aufruf 200,
+  oder das Ergebnis "Hairpin scheitert" ist dokumentiert und der
+  `coredns-custom`-Rückfall für P2 eingeplant. Nach dem Löschen des
+  Tests existiert `pip-aks-ingress` weiter, `ipConfiguration` ist
+  leer, das Label ist unverändert, `nslookup <fqdn>` liefert dieselbe
+  IP, und kein Service im Cluster hat den Typ LoadBalancer
   (`kaks get svc -A | grep -c LoadBalancer` ergibt 0).
-- `id-aks-cp` hat Network Contributor auf `rg-eurocis-base`
-  (`az role assignment list --assignee-object-id "$CP_PID" --scope
-  "$BASE_ID"`).
 - PVC-Umzug: Die Datei ist nach dem Neustart auf dem zweiten Node da;
   danach hat der Pool wieder 1 Node, Test-Pod und PVC sind gelöscht.
 - `az aks maintenanceconfiguration show` listet für alle drei
   Konfigurationen beide Sperrbereiche.
-- Die Kubelet-Identity hat AcrPull auf der ACR; Pod `acr-pull` (arm64,
-  Pull-Policy Always) erreicht `Succeeded` ohne ErrImagePull,
-  ImagePullBackOff oder exec format error; der Egress-Pod meldet
-  `pip-aks-egress`; LiteLLM antwortet aus dem Pod mit einem HTTP-Code
-  (kein Timeout). Der HTTP-Code belegt nur TCP/TLS; den Nachweis der
-  Freischaltung bringen die Betreiber-Bestätigung (P0) und P5.
-- Key Vault: Owner hat Secrets Officer; für jedes generierte
-  Passwort-Secret ist `az keyvault secret show --vault-name <kv> -n
-  <name> --query value -o tsv | grep -qx '[0-9a-f]\{48\}'` erfolgreich,
-  ohne Ausgabe. `acme-eab-kid` und `acme-eab-hmac` existieren bis
-  04.12. (Abfrage nur mit `-o none`).
+- Pull per Token: `roleAssignmentMode` der ACR ist
+  `LegacyRegistryPermissions` [Quelle: azure-cli 2.85.0
+  acr/custom.py:676-689], der Admin-Benutzer ist aus, `az acr
+  repository list` zeigt `curl` und `whoami`. Token `aks-pull` ist
+  `enabled`, Scope Map `_repositories_pull`, `password1` läuft am
+  2027-02-28T23:59:59Z ab (nach dem 20.02.2027, nicht im Freeze).
+  `sli/aks/.env.aks` hat Modus 600.
+  Secret `acr-pull` (Typ `kubernetes.io/dockerconfigjson`) liegt in
+  `default`; Pod `acr-pull` (arm64, Pull-Policy Always) erreicht
+  `Succeeded` ohne ErrImagePull, ImagePullBackOff oder exec format
+  error.
+- Egress: Der Egress-Pod meldet die AKS-verwaltete Outbound-IP (gleich
+  der Adresse aus `effectiveOutboundIPs`, Schritt 4b); der Owner hat
+  sie dem Betreiber gemeldet (Datum notiert, Adresse nur lokal), falls
+  er eine Allowlist hat oder noch nicht geantwortet hat; LiteLLM
+  antwortet aus dem Pod mit einem HTTP-Code (kein Timeout). Der
+  HTTP-Code belegt nur TCP/TLS; den Nachweis der Freischaltung bringen
+  die Betreiber-Bestätigung (P0) und P5.
+- Key Vault: `properties.enableRbacAuthorization` ist `false`; die
+  einzige Access Policy gehört dem Owner und enthält nur
+  Secret-Rechte; für jedes generierte Passwort-Secret ist
+  `az keyvault secret show --vault-name <kv> -n <name> --query value
+  -o tsv | grep -qx '[0-9a-f]\{48\}'` erfolgreich, ohne Ausgabe.
+  `acr-pull-token` existiert, `acme-eab-kid` und `acme-eab-hmac`
+  existieren bis 04.12. (Abfrage nur mit `-o none`).
 - Hygiene: `grep -rnE '([0-9]{1,3}\.){3}[0-9]{1,3}' sli/aks/` findet
-  nur die Plan-Netze (10.20.0.0/16, 10.20.0.0/22, 10.244.0.0/16,
-  10.0.0.0/16, 10.0.0.10), keine öffentliche IP; das IP-Register liegt
-  nur unter `~/.config/eurocis-aks/`.
+  nur die Plan-Netze (10.244.0.0/16, 10.0.0.0/16, 10.0.0.10), keine
+  öffentliche IP; IP-Register und Egress-Notiz liegen nur unter
+  `~/.config/eurocis-aks/`. Kein Tag-Wert, kein Username und keine ID
+  steht in `sli/aks/`.
+- xtrace: Die `set -x`-Mitschnitte aller P1-Läufe liegen nur unter
+  `~/.config/eurocis-aks/xtrace/` (chmod 700, per `BASH_XTRACEFD`).
+  Eine Zählabfrage ohne Ausgabe von Treffern ergibt 0: `cat
+  ~/.config/eurocis-aks/xtrace/* | grep -c -F -f <(...)`, wobei die
+  Prozess-Substitution die Werte aller Key-Vault-Secrets, die Secrets
+  aus `sli/aks/.env.aks`, `OWNER_OID`, den UPN aus `kaks auth whoami`
+  und die Tag-Werte `Owner` und `Created Date` liefert, wie in P7
+  Schritt 2 nie per argv.
 - Stop, mindestens 30 min Pause, Start fehlerfrei, Startdauer (ab
   `az aks start`) notiert; danach `aks-allow-me.sh --check` grün und
-  `kaks get --raw /readyz` ok; `nslookup <fqdn>` liefert vor und nach
-  dem Zyklus dieselbe IP.
-- Budget mit Drei-RG-Filter aktiv; Abend-Check einmal ausgelöst.
+  `kaks get --raw /readyz` ok; Ingress-IP und Egress-IP sind vor und
+  nach dem Zyklus gleich (oder die Abweichung ist gemeldet und im
+  Risikoregister), `nslookup <fqdn>` liefert dieselbe IP.
+- Budget mit Zwei-RG-Filter aktiv; Abend-Check einmal ausgelöst; die
+  Zugriffs- und Löschwächter sind vor dem Create angelegt (`az monitor
+  activity-log alert list -g gebit-showcase` listet alle Regeln aus
+  Schritt 8, `az resource list -g gebit-showcase-nodes` enthält keine
+  `Microsoft.Insights`-Ressource); der Alarm auf
+  `listClusterAdminCredential` hat beim eigenen Bootstrap (Schritt 6)
+  und der auf `managedClusters/write` beim Hotspot-Test
+  (`aks-allow-me.sh`) je einmal ausgelöst.
 
-**Abhängigkeiten:** P0; `pip-aks-ingress` mit Label aus P0 Schritt 5
-(sonst blockiert nur der Hairpin-Test, nicht der Cluster); EAB-Daten
-bis 04.12. (Prüfpunkt).
+**Abhängigkeiten:** P0; Azure CLI 2.93 oder neuer und kubelogin (P0
+Schritt 8); Tags auf `gebit-showcase`; Label `<p>` oder das
+Ersatz-Label aus P0 Schritt 5 (sonst blockiert nur `pip-aks-ingress`
+mit dem Hairpin-Test, nicht der Cluster); Owner-Entscheidung zum
+Bootstrap (Rotation oder Entra-Gruppe) vor dem Create; Antwort des
+LiteLLM-Betreibers vor dem LLM-Test (03.12.); EAB-Daten bis 04.12.
+(Prüfpunkt).
 
 ### P2 Plattform-Add-ons (3,0 PT, KW49-50)
 
@@ -1878,16 +2933,22 @@ Let's-Encrypt-Zertifikat per HTTP-01, Guardrails per
 ValidatingAdmissionPolicy und Monitoring in Lab-Versionen auf AKS;
 keine CA-Hierarchie, kein trust-manager, kein Kyverno, keine Registry,
 keine DNS-Zone, kein Workload Identity für cert-manager. Öffentlich ist
-nur der Traefik-Service, alles andere bleibt ClusterIP (AKS-E5).
-Prüfpunkt 11.12. zusammen mit P3.
+nur der Traefik-Service, alles andere bleibt ClusterIP (AKS-E5). Alles
+läuft ohne Rollenzuweisung (Owner 18.11.): Pods ziehen aus ACR über
+das Secret `acr-pull` ihres Namespace, die Ingress-IP liegt in der
+Node-RG. Prüfpunkt 11.12. zusammen mit P3.
 
 `<fqdn>` steht hier und in P3 für
 `<p>.germanywestcentral.cloudapp.azure.com`, das DNS-Label auf der
-statischen IP `pip-aks-ingress` (AKS-E4, Owner 17.11.). Es gibt nur
-diesen einen Namen, die Apps bekommen Pfade darauf. Bei gleichem Host
-gewinnt in Traefik die längste Regel [Quelle: Traefik-Doku v3.7
-"Rules and Priority", `doc.traefik.io`]. Zielbild nach P6, P2 legt nur
-die Grundlage:
+statischen IP `pip-aks-ingress` (AKS-E4, Owner 17.11.). Seit 18.11.
+liegt sie in der Node-RG `gebit-showcase-nodes` und entsteht in P1
+direkt nach dem Create; mit dem Cluster verschwinden IP und Label.
+Wählt der Owner `--dns-name-scope` (P1, offen), trägt `<fqdn>` einen
+Hash-Anteil; für P2 ändert sich dann nur der Wert von `AKS_FQDN`. Es
+gibt nur diesen einen Namen, die Apps bekommen Pfade darauf. Bei
+gleichem Host gewinnt in Traefik die längste Regel [Quelle:
+Traefik-Doku v3.7 "Rules and Priority", `doc.traefik.io`]. Zielbild
+nach P6, P2 legt nur die Grundlage:
 
 | Pfad auf `<fqdn>:443` | Ziel | Ingress, Phase |
 |---|---|---|
@@ -1904,39 +2965,116 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
 
 **Schritte:**
 
-1. Neuer Ordner `sli/aks/` (nur neue Dateien, Freigabe AKS-E15 (c)
-   liegt seit 17.11. vor): `versions.env` mit den Pins (Traefik-Chart
-   42.4.1, Image `traefik:v3.7.19` per Index-Digest, cert-manager
-   v1.21.3, Monitoring-Charts wie im Lab) und `AKS_FQDN`; `lib.sh` mit
+1. Ordner `sli/aks/` ausbauen (nur neue Dateien, Freigabe AKS-E15 (c)
+   liegt seit 17.11. vor; die Helfer aus P1 liegen schon dort):
+   `versions.env` mit den Pins (Traefik-Chart 42.4.1, Image
+   `traefik:v3.7.19` per Index-Digest, cert-manager v1.21.3,
+   Monitoring-Charts wie im Lab) und `AKS_FQDN`; `lib.sh` mit
    `kaks`/`haks` und `require_kube_context`; je Komponente
    `values-aks.yaml`; `setup-aks.sh <teil>`, das `lib.sh` lädt,
-   `require_kube_context aks-eurocis` aufruft und `AKS_FQDN` in die
-   Manifeste rendert. Lab-`setup.sh` bleibt unverändert, das Lab
-   behält ingress-nginx. Grundlage sind die Skizzen in
-   `gpd/spikes/aks/`; deren DNS-01-Issuer und interne LB-Werte sind
-   überholt. Vor jedem Arbeitsblock läuft `sli/aks/aks-allow-me.sh`
-   (P1), sonst lehnt der API-Server die Mac-IP ab.
-2. Vorbedingungen read-only prüfen (`CP_PID` wie in P1 Schritt 2):
+   `require_kube_context aks-eurocis` aufruft, `AKS_FQDN` in die
+   Manifeste rendert und vor jedem `haks` oder `kaks apply` Namespace
+   und Pull-Secret per `sli/aks/acr-pull.sh <ns>` (P1) anlegt.
+   `--create-namespace` allein reicht nicht mehr: Ohne Secret laufen
+   Pods mit ACR-Image in `ImagePullBackOff`, weil die
+   Kubelet-Identität ohne Rollenzuweisung kein AcrPull hat (Owner
+   18.11.). Lab-`setup.sh` bleibt unverändert, das Lab behält
+   ingress-nginx. Grundlage sind die Skizzen in `gpd/spikes/aks/`;
+   deren DNS-01-Issuer und interne LB-Werte sind überholt. Vor jedem
+   Arbeitsblock läuft `sli/aks/aks-allow-me.sh` (P1), sonst lehnt der
+   API-Server die Mac-IP ab; scheitert dessen `az aks update` mit
+   `RequestDisallowedByPolicy`, gilt die Regel aus P1 (Azure/AKS
+   #5856).
+
+   Pull-Secrets und Key Vault (Owner 18.11.):
+   - `acr-pull` ist ein Secret vom Typ `kubernetes.io/dockerconfigjson`
+     mit dem Pull-Token `aks-pull` (Scope-Map nur zum Lesen, P1); das
+     Passwort kommt per Pipe aus dem Key-Vault-Secret
+     `acr-pull-token`, nie in argv oder Ausgabe (P1).
+     Namespaces in P2: `traefik`, `monitoring`, `p2-test`; in P3:
+     `iam`. `cert-manager` braucht keins, alle Images kommen von
+     quay.io [Quelle: cert-manager v1.21.3
+     deploy/charts/cert-manager/values.yaml:6-13, 182].
+   - Der Chart-Wert unterscheidet sich je Chart (Liste von Strings
+     oder von Objekten):
+     - Traefik 42.4.1: `deployment.imagePullSecrets: [{name: acr-pull}]`
+       [Quelle: Traefik-Chart 42.4.1 values.yaml:18-19, 102-103,
+       910-911; templates/_podtemplate.tpl:28-31].
+     - kube-prometheus-stack 83.5.0: `grafana.image.pullSecrets:
+       [acr-pull]` (Strings); nur Grafana kommt aus ACR [Quelle:
+       kube-prometheus-stack 83.5.0 values.yaml:349-355;
+       charts/grafana/values.yaml:108-113;
+       charts/grafana/templates/_pod.tpl:594-597].
+     - loki 6.55.0: `imagePullSecrets: [{name: acr-pull}]` auf oberster
+       Ebene; gilt für das SingleBinary-StatefulSet samt
+       Rules-Sidecar [Quelle: loki 6.55.0 values.yaml:48-49;
+       templates/single-binary/statefulset.yaml:75-76].
+     - tempo 2.0.0: `tempo.pullSecrets: [acr-pull]` (Strings) [Quelle:
+       tempo 2.0.0 values.yaml:31-36; templates/statefulset.yaml:44-48].
+     - alloy 1.11.0: `image.pullSecrets: [{name: acr-pull}]`; der
+       config-reloader im selben Pod bekommt es mit [Quelle: alloy
+       1.11.0 values.yaml:18-19, 162-163;
+       templates/controllers/_pod.yaml:23-30].
+     - Keycloak und Postgres (P3): kustomize-Patch, weil die
+       Lab-Manifeste weder `imagePullSecrets` noch
+       `serviceAccountName` setzen.
+
+     `haks template` mit Lab- und aks-Values zeigt vor jedem Install
+     an jedem Pod mit ACR-Image `acr-pull`; das ersetzt den
+     AcrPull-Nachweis.
+   - Ad-hoc-Pods (`kaks run`) in `default` und `p2-test` bekommen das
+     Secret über einen Patch des default-ServiceAccounts. Der wirkt
+     nur auf Pods, die nach dem Patch entstehen und keine eigenen
+     `imagePullSecrets` tragen, also nie auf Chart-Pods mit eigenem
+     ServiceAccount [Quelle:
+     `kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin`;
+     `kubernetes.io/docs/tasks/configure-pod-container/configure-service-account`].
+   - Key Vault im Access-Policy-Modus (P1 Schritt 3): Die Skripte lesen
+     und schreiben mit dem `az login` des Owners über seine Access
+     Policy; der Cluster selbst hat keinen Zugriff auf den Key Vault
+     (kein CSI-Treiber, AKS-E17). K8s-Secrets aus dem Key Vault
+     entstehen per Pipe mit `--from-file=<key>=/dev/stdin`, nie per
+     `--from-literal` [A: `/dev/stdin` mit kubectl auf macOS, Test in
+     P1].
+2. Vorbedingungen read-only prüfen:
 
    ```bash
-   az network public-ip show -g rg-eurocis-base -n pip-aks-ingress \
+   az network public-ip show -g gebit-showcase-nodes -n pip-aks-ingress \
      --query "{ip:ipAddress,fqdn:dnsSettings.fqdn,sku:sku.name}" -o tsv
-   az lock list -g rg-eurocis-base --resource-name pip-aks-ingress \
-     --resource-type Microsoft.Network/publicIPAddresses \
-     --query "[].level" -o tsv                     # CanNotDelete
-   az role assignment list --assignee-object-id "$CP_PID" \
-     --scope "$(az group show -n rg-eurocis-base --query id -o tsv)" \
-     --query "[].roleDefinitionName" -o tsv        # Network Contributor
+   az network public-ip show -g gebit-showcase-nodes -n pip-aks-ingress \
+     --query 'tags."k8s-azure-service"' -o tsv     # leer
    dig +short <fqdn>                               # = ipAddress
+   kaks auth can-i '*' '*' -A                      # yes (Binding, P1)
    ```
 
-   Das Label hängt an der IP, nicht am Service. Kein Manifest setzt
-   `azure-dns-label-name`, also löscht auch ein gelöschter Service das
-   Label nicht; der Lock verhindert, dass eine gelöschte IP den Namen
-   für jeden freigibt. Liegt die IP außerhalb der
-   Node-Ressourcengruppe, braucht die Control-Plane-Identität Rechte
-   auf deren RG [Quelle: `learn.microsoft.com/azure/aks/static-ip`;
-   `cloud-provider-azure.sigs.k8s.io/topics/loadbalancer`].
+   Das Label hängt an der IP, nicht am Service. Der Cloud-Provider
+   gleicht DNS-Einstellungen nur ab, wenn ein Service
+   `azure-dns-label-name` trägt, ein leerer Wert löscht das Label;
+   kein Manifest setzt die Annotation, die VAP aus Schritt 3
+   verbietet sie [Quelle:
+   `cloud-provider-azure.sigs.k8s.io/topics/loadbalancer`;
+   cloud-provider-azure master
+   pkg/provider/azure_loadbalancer.go:1557-1566, 1626-1675]. Eine IP
+   ohne Tag `k8s-azure-service` gilt als nutzererstellt: Der
+   Cloud-Provider setzt dort keine Service-Tags und löscht sie nie,
+   auch nicht mit dem Service [Quelle: ebd. :3791-3802, 4401-4460;
+   A: CCM-Stand von AKS 1.36]. Rollen braucht niemand: Die
+   Control-Plane-Identität hat per AKS-Default Contributor auf der
+   Node-RG [Quelle: `learn.microsoft.com/azure/aks/static-ip`;
+   `learn.microsoft.com/azure/aks/managed-identity-overview`]. Einen
+   Lock gibt es nicht, weil der Rolle Contributor
+   `Microsoft.Authorization/locks/*` fehlt [Quelle:
+   `learn.microsoft.com/azure/azure-resource-manager/management/lock-resources`].
+   Die IP verschwindet deshalb mit jedem `az aks delete` (die Node-RG
+   wird samt Inhalt gelöscht [Quelle:
+   `learn.microsoft.com/azure/aks/faq`]) oder durch ein manuelles
+   Löschen; danach kann jeder das Label in der Region belegen
+   (Restrisiko, Abschnitt 7; Option in Schritt 10).
+   Fehlt die IP, legt der Cloud-Provider trotz `azure-pip-name` keine
+   neue an, der Service bleibt mit "PublicIP from annotation
+   azure-pip-name ... doesn't exist" ohne Adresse [Quelle: ebd.
+   :1359-1362, 1496-1498]; ein Neuaufbau legt sie deshalb vor
+   Traefik an (P1).
 3. PriorityClasses und Guardrails per `kaks apply -f`, vor Traefik,
    damit schon dessen Service die Regeln durchläuft:
    - `demo-critical` als `globalDefault` (der SAM-Chart kennt kein
@@ -1946,14 +3084,17 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      `az aks stop` nicht), ein Binding mit `validationActions: [Deny]`
      je Policy (AKS-E12):
      - Service: `type: LoadBalancer` nur für `traefik/traefik`, nur
-       mit `azure-pip-name: pip-aks-ingress` und
-       `azure-load-balancer-resource-group: rg-eurocis-base`, nie mit
-       `azure-dns-label-name`; `externalIPs` nirgends. Das fängt den
-       öffentlichen LB-Default des pubsubplus-Charts (P4), einen
-       zweiten LB-Service im Namespace `traefik` (weitere LB-Regeln
-       auf der öffentlichen IP) und einen Traefik-Service ohne
-       RG-Annotation (dann legte der Cloud-Provider eine neue IP in
-       der Node-RG an, und `<fqdn>` zeigte ins Leere, P1 Schritt 8).
+       mit `azure-pip-name: pip-aks-ingress`; die Annotation
+       `azure-load-balancer-resource-group` fehlt oder ist gleich
+       `gebit-showcase-nodes`; nie mit `azure-dns-label-name`;
+       `externalIPs` nirgends. Das fängt den öffentlichen LB-Default
+       des pubsubplus-Charts (P4), einen zweiten LB-Service im
+       Namespace `traefik` (weitere LB-Regeln auf der öffentlichen IP),
+       einen Traefik-Service ohne `azure-pip-name` (dann legte der
+       Cloud-Provider eine eigene IP in der Node-RG an, und `<fqdn>`
+       zeigte ins Leere) und eine RG-Annotation auf eine fremde
+       Ressourcengruppe (dort hat die Cluster-Identität keine Rechte,
+       und mit Contributor lassen sie sich nicht vergeben).
      - Ingress: `ingressClassName: nginx`; jeder Host gleich
        `<fqdn>`; keine Annotation `*-snippet` oder `mirror-*`; keine
        Annotation `cert-manager.io/*` (genau ein Zertifikat, Schritt
@@ -1985,7 +3126,7 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
             == optional.of('pip-aks-ingress') &&
           object.metadata.annotations[?
             'service.beta.kubernetes.io/azure-load-balancer-resource-group']
-            == optional.of('rg-eurocis-base') &&
+            .orValue('gebit-showcase-nodes') == 'gebit-showcase-nodes' &&
           !('service.beta.kubernetes.io/azure-dns-label-name' in
             object.metadata.annotations))
        message: "LoadBalancer nur traefik/traefik mit pip-aks-ingress"
@@ -2012,17 +3153,25 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
    `spikes/grpc-spike/gebitsim` bekommt der Pod als ConfigMap, das
    GEBIT-Descriptor-Set nur als Secret in `p2-test` und nur nach der
    Bestätigung aus AKS-E16.
-   `nginx-unprivileged` nur, falls das Loki-Gateway an ist. Grund: Alle
-   Node-Pulls gehen über `pip-aks-egress`, anonyme Docker-Hub-Limits
+   `nginx-unprivileged` nur, falls das Loki-Gateway an ist. Gründe:
+   Alle Node-Pulls gehen über die eine AKS-verwaltete Outbound-IP
+   (nach jedem Neuaufbau eine andere), anonyme Docker-Hub-Limits
    träfen sonst Drills. cert-manager kommt von quay.io (multi-arch).
+   `az acr import` ist eine ARM-Aktion und mit Contributor möglich.
+   Den Push per `az acr login` und `docker buildx imagetools create`
+   darf der Owner als Contributor nur, weil P1 die Registry im Modus
+   `rbac` anlegt; im Modus mit ABAC hätte Contributor keine Rechte auf
+   der Datenebene [Quelle:
+   `learn.microsoft.com/azure/container-registry/container-registry-rbac-built-in-roles-directory-reference`].
+   Aus ACR zieht der Node nur über `acr-pull` (Schritt 1).
 5. Traefik v3 mit NGINX-Provider (AKS-E6), eine Replika, ein
    LoadBalancer-Service:
 
    ```bash
+   sli/aks/acr-pull.sh traefik       # Namespace und Secret acr-pull
    haks upgrade --install traefik traefik \
      --repo https://traefik.github.io/charts --version 42.4.1 \
-     -n traefik --create-namespace \
-     -f sli/aks/traefik-values.yaml
+     -n traefik -f sli/aks/traefik-values.yaml
    ```
 
    ```yaml
@@ -2034,6 +3183,8 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      digest: <traefik-index-digest>   # sha256:aa942a00bce0...
    deployment:
      replicas: 1                      # kein HA (AKS-E3)
+     imagePullSecrets:
+       - name: acr-pull               # Token aks-pull (Schritt 1)
      tmpVolume:
        emptyDir:
          sizeLimit: 2Gi               # Request-Buffer (Lücke 7)
@@ -2077,8 +3228,9 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
            - traefik-hsts@kubernetescrd
    service:
      annotations:
+       # IP in der Node-RG, RG explizit wie im Learn-Manifest static-ip
        service.beta.kubernetes.io/azure-pip-name: pip-aks-ingress
-       service.beta.kubernetes.io/azure-load-balancer-resource-group: rg-eurocis-base
+       service.beta.kubernetes.io/azure-load-balancer-resource-group: gebit-showcase-nodes
        service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout: "30"
      spec:
        type: LoadBalancer
@@ -2112,16 +3264,28 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
            stsPreload: false
    ```
 
-   [Quelle: Traefik-Chart 42.4.1 values.yaml:130-134, 314-345,
-   424-505, 1086, 1126, 1175-1198, 1329]. Pins: Chart 42.4.1 (App
-   v3.7.19, kubeVersion ab 1.30), nie unter v3.7.18 (fünf GHSAs am
-   12.11. behoben), kein v3.8.0-rc [Quelle: GitHub-API Releases und
-   Security-Advisories, 17.11.]. Der Service öffnet nur 80 und 443
-   (Ports `traefik` und `metrics` sind nicht exponiert, HTTP/3 aus):
-   zwei LB-Regeln plus Outbound, also innerhalb der fünf im
-   Grundpreis enthaltenen Regeln. Mit `externalTrafficPolicy: Local`
-   probt Azure den `healthCheckNodePort` per HTTP; ein eigener
-   Probe-Pfad entfällt [Quelle:
+   [Quelle: Traefik-Chart 42.4.1 values.yaml:102-103, 130-134,
+   314-345, 424-505, 1086, 1126, 1175-1198, 1329]. Pins: Chart 42.4.1
+   (App v3.7.19, kubeVersion ab 1.30), nie unter v3.7.18 (fünf GHSAs
+   am 12.11. behoben), kein v3.8.0-rc [Quelle: GitHub-API Releases und
+   Security-Advisories, 17.11.]. `azure-load-balancer-resource-group:
+   gebit-showcase-nodes` steht explizit, wie im Manifest auf Learn,
+   dessen Troubleshooting sich auf genau diese Annotation bezieht
+   [Quelle: `learn.microsoft.com/azure/aks/static-ip`]. Ohne sie
+   suchte der Cloud-Provider die IP aus `azure-pip-name` in der
+   Ressourcengruppe seiner Cloud-Konfiguration, bei AKS der Node-RG;
+   das belegt nur der Code [Quelle: cloud-provider-azure master
+   pkg/provider/azure_loadbalancer.go:4298-4307; A: CCM-Stand von AKS
+   1.36], nicht Learn. Die VAP lässt beide Formen zu (Schritt 3).
+   Eine Annotation `azure-pip-resource-group` gibt es nicht; der
+   Name der RG-Annotation lautet `azure-load-balancer-resource-group`.
+   Der Service öffnet nur 80 und 443 (Ports `traefik` und `metrics`
+   sind nicht exponiert, HTTP/3 aus): zwei LB-Regeln plus die
+   Outbound-Regel der AKS-verwalteten Egress-IP, also innerhalb der
+   fünf im Grundpreis enthaltenen Regeln. Mit
+   `externalTrafficPolicy: Local` probt Azure den
+   `healthCheckNodePort` per HTTP; ein eigener Probe-Pfad entfällt
+   [Quelle:
    `learn.microsoft.com/azure/aks/configure-load-balancer-standard`].
    `forwardedHeaders` bleibt leer: Traefik ersetzt `X-Forwarded-*` aus
    dem Internet, Keycloak (`KC_PROXY_HEADERS=xforwarded`) und die
@@ -2144,8 +3308,9 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
       gpos-UI-Ingresses (P6), nie für `/api/events` und gRPC. HSTS
       kommt als Middleware am Entrypoint `websecure`, ohne
       `includeSubDomains` und ohne `preload`, weil die Elternzone
-      Azure gehört; 7 Tage statt 1 Jahr, weil der Name nach dem
-      Rückbau wieder frei wird [A].
+      Azure gehört; 7 Tage statt 1 Jahr, weil der Name mit jedem
+      Löschen des Clusters (Rückbau oder Neuaufbau) frei wird und dann
+      ein anderer Azure-Kunde ihn belegen kann [A].
    5. Kein Redirect auf Entrypoint-Ebene, sonst scheitert HTTP-01;
       `ssl-redirect` wirkt je Ingress mit `spec.tls` (308), der
       Solver-Ingress hat kein TLS und bekommt keinen Redirect [Quelle:
@@ -2209,7 +3374,8 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
    `http://<fqdn>/.well-known/acme-challenge/...` aus dem Cluster auf,
    läuft also über denselben Hairpin; ohne den Rückfall käme kein
    Certificate über den Selbsttest hinaus, auch nicht beim
-   EAB-Rückfall.
+   EAB-Rückfall. cert-manager braucht kein Pull-Secret (quay.io,
+   Schritt 1).
 
    ```bash
    haks upgrade --install cert-manager cert-manager \
@@ -2218,10 +3384,20 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      -f sli/pki/manifests/01-cert-manager-values.yaml \
      -f sli/aks/cert-manager-values.yaml   # Requests nach 3.2
    sli/aks/setup-aks.sh tls   # ClusterIssuer, Certificate, EAB-Secret
+   # darin, ohne gerenderte Datei:
+   envsubst '${EAB_KID} ${EAB_ACME_SERVER} ${TLS_ISSUER} ${AKS_FQDN}' \
+     < sli/aks/tls/issuers.tpl.yaml | kaks apply -f -
    ```
 
+   Die Vorlage bleibt im Repo mit den Platzhaltern; die Werte kommen
+   aus der Umgebung (`sli/aks/.env.aks`), nie aus argv, und eine
+   gerenderte Datei entsteht nicht, weil `*.yaml` unter `sli/aks/tls/`
+   nicht ignoriert ist. `envsubst` (gettext) liegt auf dem Owner-Mac
+   [Quelle: Befehl `which envsubst`, 18.11.]. Das HMAC-Secret läuft
+   per Pipe aus dem Key Vault (unten).
+
    ```yaml
-   # sli/aks/tls/ (Auszug, gerendert von setup-aks.sh)
+   # sli/aks/tls/issuers.tpl.yaml (Auszug, Vorlage im Repo)
    apiVersion: cert-manager.io/v1
    kind: ClusterIssuer
    metadata:
@@ -2289,6 +3465,10 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      Erstausstellung. Spätere Bestellungen für dieselbe Namensmenge
      gelten als Erneuerung und sind von diesem Topf ausgenommen,
      zählen aber gegen 5 je Namensmenge und Woche (ohne Override).
+     Geht `<p>` bei einem Neuaufbau verloren (Label inzwischen von
+     Dritten belegt), braucht der Ersatzname wieder eine
+     Erstausstellung aus dem geteilten Topf; deshalb bindet der
+     Neuaufbau das Label sofort neu (P1, P7).
    - Erst `TLS_ISSUER=letsencrypt-staging`; `openssl s_client
      -connect <fqdn>:443 -servername <fqdn>` zeigt einen Aussteller
      mit "(STAGING)". Dann sofort `letsencrypt-prod`, möglichst am
@@ -2297,11 +3477,11 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      Account Binding (ZeroSSL oder Google Trust Services). Der Owner
      legt das Konto an (P0 Schritt 6) und trägt die EAB-Daten selbst
      als `acme-eab-kid` und `acme-eab-hmac` in den Key Vault (P1
-     Schritt 3) sowie mit der Directory-URL in `sli/aks/.env.aks`
-     ein;
+     Schritt 3, über seine Access Policy) sowie mit der Directory-URL
+     in `sli/aks/.env.aks` ein;
      `setup-aks.sh` legt daraus das Secret `cert-manager/acme-eab-hmac`
-     an, ohne einen Wert auszugeben [A: Directory-URL und Limits der
-     gewählten CA beim Anlegen prüfen]. Der Issuer wird
+     per Pipe an, ohne einen Wert auszugeben [A: Directory-URL und
+     Limits der gewählten CA beim Anlegen prüfen]. Der Issuer wird
      angelegt und registriert, aber nicht benutzt. Ist bis 07.12.,
      12:00 kein Prod-Zertifikat Ready (Events `rateLimited` oder
      abgelehnte Orders), stellt `TLS_ISSUER=acme-eab-fallback` um; das
@@ -2313,10 +3493,12 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      das Secret als volles JSON samt cert-manager-Annotationen (ohne
      Cluster-Felder) als `tls-traefik-ingress-tls` im Key Vault, per
      Pipe ohne Zwischendatei und mit `-o none` (AKS-E17; Verfahren wie
-     P7 Schritt 2). Ein Neuaufbau
-     spielt es vor dem Certificate ein; cert-manager übernimmt ein
-     passendes Secret ohne neue Bestellung [A: Restore-Drill in P2,
-     belegt durch keine neue CertificateRequest].
+     P7 Schritt 2). Key Vault und Backup überleben ein `az aks delete`,
+     weil sie in `gebit-showcase` liegen, nicht in der Node-RG. Ein
+     Neuaufbau spielt das Backup vor dem Certificate ein, sofern `<p>`
+     wieder auf der neuen `pip-aks-ingress` liegt (P1); cert-manager
+     übernimmt ein passendes Secret ohne neue Bestellung [A:
+     Restore-Drill in P2, belegt durch keine neue CertificateRequest].
    - Erneuerung: cert-manager erneuert bei 2/3 der Laufzeit. Bei
      Ausstellung um den 03.-07.12. fiele das in die Sperre ab 27.01.;
      deshalb am 15.01. `cmctl renew -n traefik ingress-tls`, danach
@@ -2327,7 +3509,18 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      der Solver-Router ist länger und gewinnt, das belegt die
      Erneuerung am 15.01.
 7. Tests in einem Namespace `p2-test`, alle Ingresses auf `<fqdn>`
-   mit `spec.tls.hosts: [<fqdn>]` ohne `secretName`:
+   mit `spec.tls.hosts: [<fqdn>]` ohne `secretName`. Vor dem ersten
+   Pod legt `setup-aks.sh p2-test` Namespace und `acr-pull` an
+   (`acr-pull.sh p2-test`) und patcht den default-ServiceAccount für
+   die Ad-hoc-Pods (Schritt 1):
+
+   ```bash
+   kaks -n p2-test patch serviceaccount default \
+     -p '{"imagePullSecrets":[{"name":"acr-pull"}]}'
+   ```
+
+   Die Test-Manifeste in `sli/aks/p2-test/` tragen
+   `imagePullSecrets: [{name: acr-pull}]` zusätzlich selbst.
    - `p2-echo` (`/p2-echo/`, `<acr>.azurecr.io/whoami:v1.12.0`,
      `proxy-read-timeout: "900"`): vom Mac ohne `-k` 200; aus einem
      Pod (`<acr>.azurecr.io/curl:8.23.0`, System-Truststore) ebenso.
@@ -2391,9 +3584,10 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      `helm install` `traefik/ingress-tls` als `sam-tls` nach
      `sam-solace-lab` und nach der Erneuerung am 15.01. erneut.
    - Nach der P3-Abnahme: `kaks delete ns p2-test`; für Netz-Drills
-     per `setup-aks.sh p2-test` wieder anlegbar, ab P6 ohne `p2-grpc`
-     (keine Reflection-Pfade, sonst gäbe es zwei Ingresses mit
-     denselben Regeln wie `gpos-grpc-reflection`).
+     per `setup-aks.sh p2-test` wieder anlegbar (samt `acr-pull` und
+     Patch des default-ServiceAccounts), ab P6 ohne `p2-grpc` (keine
+     Reflection-Pfade, sonst gäbe es zwei Ingresses mit denselben
+     Regeln wie `gpos-grpc-reflection`).
 8. `public-guard` (Missbrauchsschutz ohne Login und ohne UI-Änderung,
    Owner 17.11.): Die NGINX-Ingresses können keine Traefik-Middleware
    referenzieren, der Provider liest keine `traefik.*`-Annotationen
@@ -2429,7 +3623,7 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
 9. Monitoring: kube-prometheus-stack 83.5.0 (Release
    `kube-prometheus` wie im Lab), loki 6.55.0, tempo 2.0.0 (Repo
    grafana-community), alloy 1.11.0, je `haks ... -f <Lab-Values> -f
-   <aks-Values>`. Overlay:
+   <aks-Values>`; vorher `sli/aks/acr-pull.sh monitoring`. Overlay:
    - Registry je Image, nicht global: kube-prometheus-stack
      `grafana.image.registry: <acr>.azurecr.io` (kein
      `global.imageRegistry`, sonst würden quay.io- und
@@ -2438,6 +3632,11 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      `tempo.registry`; alloy nur `image.registry` (der config-reloader
      bleibt auf quay.io). Tags bleiben Chart-Default, die Charts sind
      gepinnt.
+   - Pull-Secrets genau an diesen Pods, mit den Keys aus Schritt 1:
+     `grafana.image.pullSecrets: [acr-pull]`, loki
+     `imagePullSecrets: [{name: acr-pull}]`, `tempo.pullSecrets:
+     [acr-pull]`, alloy `image.pullSecrets: [{name: acr-pull}]`. Der
+     Render-Check aus Schritt 1 läuft vor jedem `haks upgrade`.
    - Grafana ohne Ingress und ohne Pfad auf `<fqdn>`; Zugriff per
      `kaks -n monitoring port-forward svc/kube-prometheus-grafana
      3000:80`; Admin aus Secret. Prometheus ebenso nur per
@@ -2447,9 +3646,18 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      derivedFields, tracesToLogs, tracesToMetrics) und "SAM Platform DB"
      mit denselben uids wie im Lab. Deren Passwort ist
      `$__env{GRAFANA_RO_PASSWORD}`, gespeist über `grafana.envValueFrom`
-     aus einem K8s-Secret `monitoring/grafana-ro`, das aus dem Key Vault
-     angelegt wird (wie `solace-admin` in P4). Ein Render-Check
-     vergleicht die uids mit den Lab-Values.
+     aus einem K8s-Secret `monitoring/grafana-ro`. Das Skript legt es
+     aus dem Key Vault per Pipe an, ohne den Wert in die argv zu legen:
+
+     ```bash
+     az keyvault secret show --vault-name <kv> -n grafana-ro \
+       --query value -o tsv | tr -d '\n' |
+       kaks -n monitoring create secret generic grafana-ro \
+         --from-file=password=/dev/stdin --dry-run=client -o yaml |
+       kaks -n monitoring apply -f -
+     ```
+
+     Ein Render-Check vergleicht die uids mit den Lab-Values.
    - Prometheus `storageSpec` 16Gi premium (Retention 7d/5GB und 3600 s
      Startfenster bleiben), Requests auf Ist-Werte (Prometheus 2Gi,
      Tempo 1Gi, Grafana/Loki 512Mi, Alloy 384Mi),
@@ -2462,12 +3670,49 @@ SAM-Chart 2.3.10 templates/ingress.yaml:27-41]
      `metrics.prometheus.serviceMonitor.enabled: true`, damit
      429-Zahlen der `public-guard`-Routen in Grafana sichtbar sind
      [A: Label-Selektor der Lab-Prometheus-Values].
-   - Ist Defender aktiv: Sensor-DaemonSet mit `kaks top pods -A`
-     messen (3.3). Traefik-Ist-Werte ebenso, dann 3.2 nachtragen.
+   - Defender for Cloud: Die Pläne für Container, Kubernetes und
+     Registry sind Free (Check vom 18.11.), es läuft kein
+     Defender-Sensor. Traefik-Ist-Werte mit `kaks top pods -A` messen,
+     dann 3.2 nachtragen.
+10. Option NRG-Lockdown als Ersatz für den Lock (Owner-Entscheidung
+    offen; nur nach Owner-Go und nach grünen Schritten 5 und 6):
 
-**Wer:** Claude Schritte 1-9 nach Freigabe je Schreibschritt; Owner
-legt das Konto bei der Rückfall-CA an und trägt die EAB-Werte selbst
-in Key Vault und `sli/aks/.env.aks` ein.
+    ```bash
+    az aks update -g gebit-showcase -n aks-eurocis \
+      --nrg-lockdown-restriction-level ReadOnly
+    az aks show -g gebit-showcase -n aks-eurocis \
+      --query nodeResourceGroupProfile.restrictionLevel -o tsv  # ReadOnly
+    ```
+
+    ReadOnly legt eine Deny Assignment auf `gebit-showcase-nodes`,
+    die Nutzern nur `*/read` lässt; ein versehentliches
+    `az network public-ip delete` oder ein Löschen der Node-RG
+    scheitert dann [Quelle:
+    `learn.microsoft.com/azure/aks/node-resource-group-lockdown`;
+    `learn.microsoft.com/azure/aks/faq`]. Kein Schutz gegen
+    `az aks delete`, das die Node-RG samt IP über den AKS-RP löscht.
+    Das Flag braucht nur `managedClusters/write`, keine
+    Rollenzuweisung [Quelle: azure-cli dev acs/_params.py:451, 773].
+    Tests [A]:
+    - Ein harmloser Schreibversuch des Owners,
+      `az network public-ip update -g gebit-showcase-nodes -n
+      pip-aks-ingress --set tags.lockdowntest=1`, wird abgelehnt.
+      Gelingt er doch, den Tag sofort entfernen und den Lockdown als
+      unwirksam vermerken. Nie mit einem Delete testen.
+    - Der Cloud-Provider darf weiter schreiben: Idle-Timeout-Annotation
+      des Traefik-Service per `haks upgrade` kurz auf "29" und zurück
+      auf "30"; beide Male kein Event `SyncLoadBalancerFailed`
+      (`kaks -n traefik get events --field-selector
+      involvedObject.name=traefik`), EXTERNAL-IP unverändert.
+
+    Muss `pip-aks-ingress` geändert werden (etwa das Label), vorher
+    `--nrg-lockdown-restriction-level Unrestricted`. Jeder
+    `az aks update` folgt der Policy-Regel aus P1 (Azure/AKS #5856).
+    Ohne Owner-Go bleibt das Restrisiko aus Abschnitt 7.
+
+**Wer:** Claude Schritte 1-9 nach Freigabe je Schreibschritt, Schritt
+10 nur nach Owner-Go; Owner legt das Konto bei der Rückfall-CA an und
+trägt die EAB-Werte selbst in Key Vault und `sli/aks/.env.aks` ein.
 
 **Abnahme:**
 
@@ -2483,14 +3728,18 @@ in Key Vault und `sli/aks/.env.aks` ein.
   `includeSubDomains`; whoami zeigt die echte Client-IP.
 - `kaks get svc -A`: genau ein Service vom Typ LoadBalancer,
   `traefik/traefik`, mit der IP von `pip-aks-ingress`;
-  `az network lb rule list -g rg-eurocis-nodes --lb-name kubernetes`
-  zeigt nur TCP 80 und 443; `nc -z -w 5 <fqdn>` auf 8080, 8443, 9000
-  und 9100 läuft in den Timeout.
+  `az network lb rule list -g gebit-showcase-nodes --lb-name
+  kubernetes` zeigt nur TCP 80 und 443; `nc -z -w 5 <fqdn>` auf 8080,
+  8443, 9000 und 9100 läuft in den Timeout.
+- `pip-aks-ingress` in `gebit-showcase-nodes`: `ipConfiguration.id`
+  zeigt auf den LB `kubernetes`, `dnsSettings.fqdn` ist `<fqdn>`, der
+  Tag `k8s-azure-service` fehlt (nutzererstellt, der Cloud-Provider
+  löscht die IP nie).
 - Negativ-Manifeste werden per VAP abgelehnt: LoadBalancer in einem
   anderen Namespace, ein zweiter LoadBalancer-Service im Namespace
-  `traefik`, der Traefik-Service ohne
-  `azure-load-balancer-resource-group`, LoadBalancer mit
-  `azure-dns-label-name`, Ingress
+  `traefik`, der Traefik-Service ohne `azure-pip-name`, der
+  Traefik-Service mit `azure-load-balancer-resource-group:
+  gebit-showcase`, LoadBalancer mit `azure-dns-label-name`, Ingress
   mit `server-snippet`, mit `mirror-target`, mit
   `cert-manager.io/cluster-issuer`, mit fremdem Host, Certificate mit
   fremdem Issuer oder Namen, IngressRoute auf `websecure`. Der
@@ -2518,21 +3767,40 @@ in Key Vault und `sli/aks/.env.aks` ein.
   jsonpath='{..image}'; done | tr ' ' '\n' | sort -u | grep -vE
   '^(<acr>\.azurecr\.io|quay\.io|registry\.k8s\.io|mcr\.microsoft\.com)/'
   | wc -l` ergibt 0.
+- Pull-Secrets: Kein Pod mit ACR-Image ohne `acr-pull`, kein
+  `ImagePullBackOff` (ab P3 je Phase wiederholt):
+
+  ```bash
+  kaks get pods -A -o json | jq -r '.items[]
+    | select([.spec.containers[]?, .spec.initContainers[]?]
+        | any(.image | startswith("<acr>.azurecr.io/")))
+    | select((.spec.imagePullSecrets // []) | map(.name)
+        | index("acr-pull") | not)
+    | .metadata.namespace + "/" + .metadata.name'      # leer
+  ```
+
 - Grafana, Prometheus und Traefik-Dashboard: kein Ingress, keine
   IngressRoute auf `websecure`, Zugriff nur per Port-Forward.
 - `kaks get pdb -A`: keine PDB mit 0 erlaubten Unterbrechungen auf
   einem Einzel-Pod, sonst blockiert sie den Drain beim
   Node-Image-Update (3.3).
-- CPU-Requests von System, Traefik, cert-manager, Monitoring und ggf.
-  Defender gemessen und in 3.2 eingetragen; liegen sie über 2044m,
-  installiert P4 den Broker als `dev` (Kriterium 3.2).
+- CPU-Requests von System, Traefik, cert-manager und Monitoring
+  gemessen und in 3.2 eingetragen, dazu als zeitweilige Reserve der
+  Run-Pod von `az aks command invoke` (200m CPU, 500Mi) [Quelle:
+  `learn.microsoft.com/azure/aks/access-private-cluster`]; liegen sie
+  über 2044m, installiert P4 den Broker als `dev` (Kriterium 3.2).
+  `kaks get ds -A | grep -ci defender` ergibt 0.
+- Option NRG-Lockdown entschieden; bei Ja: `restrictionLevel`
+  `ReadOnly`, beide Tests aus Schritt 10 grün.
 
-**Abhängigkeiten:** P1 (Cluster, `pip-aks-ingress` mit Label `<p>`
-und Lock, Network Contributor auf `rg-eurocis-base`,
-`aks-allow-me.sh`, Hairpin-Ergebnis aus P1 Schritt 8); EAB-Konto und
-EAB-Daten des Owners bis 04.12. (P0 Schritt 6), sonst nur Let's
-Encrypt mit dem Risiko aus Schritt 6; für `gebitsim` in Schritt 7 die
-schriftliche GEBIT-Bestätigung bis 09.12. (AKS-E16).
+**Abhängigkeiten:** P1 (Cluster mit ClusterRoleBinding des Owners,
+`pip-aks-ingress` mit Label `<p>` in `gebit-showcase-nodes`, Token
+`aks-pull` mit Passwort im Key Vault und `acr-pull.sh`, Registry im
+Modus `rbac`, `aks-allow-me.sh`, Hairpin-Ergebnis aus P1 Schritt 8);
+EAB-Konto und EAB-Daten des Owners bis 04.12. (P0 Schritt 6), sonst
+nur Let's Encrypt mit dem Risiko aus Schritt 6; für `gebitsim` in
+Schritt 7 die schriftliche GEBIT-Bestätigung bis 09.12. (AKS-E16);
+Owner-Entscheidung zu Schritt 10.
 
 ### P3 Keycloak (1,25 PT, KW50)
 
@@ -2548,6 +3816,16 @@ Ressourcenpfade, Admin-Oberfläche nur per Port-Forward (AKS-E10).
    `api.github.com/repos/keycloak/keycloak/releases`, 16.11.]; der
    Realm wird per Skript neu angelegt, es gibt also keine Migration.
    Das Lab bleibt auf 26.2 an der Wurzel von `auth.solace.lab`.
+   Beide Pods ziehen im Namespace `iam` aus ACR, also mit `acr-pull`
+   (P2 Schritt 1). Die Lab-Manifeste setzen weder `imagePullSecrets`
+   noch `serviceAccountName` [Quelle: sli
+   keycloak/manifests/02-postgres.yaml:31-54;
+   03-keycloak.yaml:119-141]; das Overlay patcht deshalb beide
+   Workloads (Schritt 2). Ein Patch des default-ServiceAccounts
+   reicht nicht: Er wirkt nur auf Pods, die nach ihm entstehen, und
+   liefe mit den ersten Pods eines frisch angelegten Namespace um die
+   Wette [Quelle:
+   `kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin`].
 2. Overlay `sli/aks/keycloak/` (ein Pfad, wie in 5.1). Lab
    `keycloak/manifests` hat keine `kustomization.yaml` [Quelle: Befehl
    `ls sli/keycloak/manifests`, 16.11.]; die aks-kustomization listet
@@ -2557,11 +3835,36 @@ Ressourcenpfade, Admin-Oberfläche nur per Port-Forward (AKS-E10).
 
    ```bash
    sli/aks/setup-aks.sh keycloak
-   # intern: require_kube_context aks-eurocis, Secrets aus Key Vault
+   # intern: require_kube_context aks-eurocis, acr-pull.sh iam
+   # (Namespace und Pull-Secret), Secrets aus Key Vault per Pipe
    # anlegen, dann
    # kubectl kustomize --load-restrictor LoadRestrictionsNone \
    #   sli/aks/keycloak | kaks apply -f -
    # und vor dem Readiness-Check von Keycloak auf postgres warten
+   ```
+
+   Images und Pull-Secret im Overlay (Auszug):
+
+   ```yaml
+   # sli/aks/keycloak/kustomization.yaml (Auszug)
+   images:
+     - name: quay.io/keycloak/keycloak
+       newName: <acr>.azurecr.io/keycloak/keycloak
+       digest: <keycloak-digest>
+     - name: postgres
+       newName: <acr>.azurecr.io/postgres
+       digest: <postgres-digest>
+   patches:
+     - target: {kind: Deployment, name: keycloak}
+       patch: |-
+         - op: add
+           path: /spec/template/spec/imagePullSecrets
+           value: [{name: acr-pull}]
+     - target: {kind: StatefulSet, name: postgres}
+       patch: |-
+         - op: add
+           path: /spec/template/spec/imagePullSecrets
+           value: [{name: acr-pull}]
    ```
 
    Env-Patch für den Container (Strategic Merge über `name`):
@@ -2675,8 +3978,9 @@ Ressourcenpfade, Admin-Oberfläche nur per Port-Forward (AKS-E10).
      dem Runbook-Schritt "Sperre aufheben". Die übrigen Realm-User aus
      dem öffentlichen Repo trifft dasselbe.
    - Secrets aus Key Vault (`keycloak-admin`, `keycloak-db`, je
-     Realm-User eines, P1 Schritt 3). Speicher 1Gi Request / 1,5Gi
-     Limit.
+     Realm-User eines, P1 Schritt 3), gelesen über die Access Policy
+     des Owners und per Pipe als K8s-Secrets angelegt (P2 Schritt 1).
+     Speicher 1Gi Request / 1,5Gi Limit.
    - Saubere Alternative mit eigener Freigabe (nicht von AKS-E15 (c)
      gedeckt, das nur neue Ordner umfasst): eine rein additive
      `sli/keycloak/manifests/kustomization.yaml` (Lab-`setup.sh` wendet
@@ -2757,6 +4061,11 @@ Ressourcenpfade, Admin-Oberfläche nur per Port-Forward (AKS-E10).
   `Path=/`.
 - Probes laufen auf `/health/*` an Port 9000, Pod Ready; der
   Start-Log zeigt den automatischen Build mit `/auth`.
+- Images: `kaks -n iam get deploy/keycloak sts/postgres -o
+  jsonpath='{..image} {..imagePullSecrets}'` zeigt beide Images aus
+  `<acr>.azurecr.io` per Digest und `acr-pull`; kein
+  `ImagePullBackOff`; die Pull-Secret-Prüfung aus der P2-Abnahme
+  bleibt leer.
 - Admin-Login über den Port-Forward funktioniert
   (`http://127.0.0.1:18081/auth/admin/`; Token-Request mit dem
   Key-Vault-Passwort liefert HTTP 200); Login mit dem
@@ -2779,8 +4088,9 @@ Ressourcenpfade, Admin-Oberfläche nur per Port-Forward (AKS-E10).
   `rancher-desktop` vor jedem Apply ab.
 
 **Abhängigkeiten:** P2 (Traefik, Prod-Zertifikat, IngressClass
-`nginx`, VAP), Key-Vault-Secrets aus P1, Profil-Änderungen der
-amd-Skripte (P0 Schritt 10, AKS-E15 (b), freigegeben 17.11.).
+`nginx`, VAP), Key-Vault-Secrets aus P1, Token `aks-pull` und
+`acr-pull.sh` aus P1, Profil-Änderungen der amd-Skripte (P0 Schritt
+10, AKS-E15 (b), freigegeben 17.11.).
 
 ### P4 Broker (2,25 PT, Lab KW48-49, AKS KW51)
 
@@ -2966,25 +4276,57 @@ außerhalb von Terraform (A1) und alle gespoolten Nachrichten.
 
    Der Index enthält amd64 und arm64 (arm64-Manifest
    `sha256:d89f0d9c2399...`) [Quelle: Docker-Hub-Tags-API, 17.11.].
-   [A: `az acr import` übernimmt die Manifestliste unverändert; weicht
-   der Digest ab, gilt der ACR-Digest, und `docker buildx imagetools
-   inspect` vergleicht das arm64-Manifest mit dem Lab.]
-2. Installation: zuerst der Namespace, dann das Secret, dann helm.
+   `az acr import` kopiert bei einer Manifestliste alle Plattformen
+   (höchstens 50 Manifeste) [Quelle: Learn-Seite
+   `container-registry-import-images`, ms.date 26.08.2026]. [A: Der
+   Index-Digest bleibt dabei unverändert; weicht er ab, gilt der
+   ACR-Digest, und `docker buildx imagetools inspect` vergleicht das
+   arm64-Manifest mit dem Lab.] Rechte: Der Import ist eine ARM-Aktion,
+   die Contributor deckt. `az acr repository show` liest dagegen über
+   die Datenebene; die hat Contributor nur im Registry-Modus `rbac`,
+   den P1 Schritt 3 beim Anlegen explizit setzt. Im Modus `rbac-abac`
+   hätte Contributor weder Pull noch Push [Quelle: Learn-Seite
+   `container-registry-rbac-built-in-roles-directory-reference`].
+2. Installation: zuerst der Namespace, dann die beiden Secrets
+   `solace-admin` und `acr-pull`, dann helm.
 
    ```bash
    kaks create namespace solace --dry-run=client -o yaml | kaks apply -f -
-   kaks -n solace create secret generic solace-admin \
-     --from-literal=username_admin_password="$(az keyvault secret show \
-       --vault-name <kv> -n solace-admin --query value -o tsv)" \
-     --dry-run=client -o yaml | kaks apply -f -
+   az keyvault secret show --vault-name <kv> -n solace-admin \
+     --query value -o tsv | tr -d '\n' |
+     kaks -n solace create secret generic solace-admin \
+       --from-file=username_admin_password=/dev/stdin \
+       --dry-run=client -o yaml | kaks apply -f -
+   sli/aks/acr-pull.sh solace     # Pull-Secret aus dem ACR-Token
+   kaks -n solace get secret solace-admin acr-pull -o name
    haks upgrade --install solace pubsubplus \
      --repo https://solaceproducts.github.io/pubsubplus-kubernetes-helm-quickstart/helm-charts \
      --version 3.10.0 -n solace -f emd/aks/pubsubplus-values.yaml
    ```
 
+   - Das Admin-Passwort läuft per stdin in das Secret, nie über die
+     argv von `kubectl`; das ist die Regel aus P1 Schritt 3 (die
+     Fassung vom 17.11. nutzte hier noch `--from-literal="$(...)"`).
+     `--from-file` mit `/dev/stdin` prüft P1 auf macOS [A]; Rückfall:
+     das Secret-Manifest per `jq` aus stdin bauen und per
+     `kaks apply -f -` anlegen. Gelesen wird über die Access Policy
+     des Owners im Key Vault (P1 Schritt 3).
+   - `acr-pull` (Typ `kubernetes.io/dockerconfigjson`) baut der Helfer
+     aus P1 Schritt 8 aus dem Token-Passwort im Key Vault
+     (`acr-pull-token`, P1 Schritt 3), ohne Passwort in der argv.
+     Einen Pull über die Kubelet-Identität gibt es nicht: `--attach-acr`
+     bräuchte eine Rollenzuweisung, und die schließt die
+     Owner-Entscheidung vom 18.11. aus. Das `pubsubplus`-Chart prüft
+     das Pull-Secret nicht beim Rendern; fehlt es, bleibt der Pod in
+     `ImagePullBackOff`. Ein Patch des default-ServiceAccounts hilft
+     nicht, weil das Chart ein eigenes ServiceAccount anlegt [Quelle:
+     pubsubplus 3.10.0 templates/solaceStatefulSet.yaml:42-45, 56;
+     Kubernetes-Doku "Configure Service Accounts for Pods", Abschnitt
+     "Add ImagePullSecrets to a service account"].
+
    `--create-namespace` allein reicht nicht: Das Chart prüft schon beim
-   Rendern per `lookup`, dass das Secret im Release-Namespace existiert
-   [Quelle: pubsubplus 3.10.0 templates/secret.yaml:1-7,
+   Rendern per `lookup`, dass das Admin-Secret im Release-Namespace
+   existiert [Quelle: pubsubplus 3.10.0 templates/secret.yaml:1-7,
    values.yaml:66-70]. Werte in `emd/aks/pubsubplus-values.yaml`:
    - `solace.redundancy: false`,
      `solace.usernameAdminPasswordSecretName: solace-admin`.
@@ -2994,6 +4336,8 @@ außerhalb von Terraform (A1) und alle gespoolten Nachrichten.
      die Versionsprüfung im Template liest daraus 10.26 [Quelle:
      pubsubplus 3.10.0 templates/solaceStatefulSet.yaml:60, 118].
      Chart-Default wäre `latest` [Quelle: values.yaml:113-117].
+   - `image.pullSecretName: acr-pull`: ein einzelner String, keine
+     Liste wie bei SAM [Quelle: pubsubplus 3.10.0 values.yaml:122-123].
    - `service.type: ClusterIP` mit 55555/8008/8080/5550. Chart-Default
      ist ein LoadBalancer, auf AKS also öffentlich [Quelle:
      values.yaml:157-159]; die VAP aus P2 lässt LoadBalancer ohnehin
@@ -3015,10 +4359,16 @@ außerhalb von Terraform (A1) und alle gespoolten Nachrichten.
      Verbindungen und beim RAM unter dem Lab-Verbrauch (OOM-Risiko);
      die Demo braucht rund 11 Verbindungen (3.2). Auf dem einen Node
      (AKS-E3) gilt das Kriterium aus 3.2: Liegen die nach P2
-     gemessenen CPU-Requests von System, Traefik, cert-manager,
-     Monitoring und Defender über 2044m, oder bleibt der Broker-Pod
-     Pending, dann `dev`. Vor dem ersten Install
-     entscheiden: Größe und
+     gemessenen CPU-Requests von System, Traefik, cert-manager und
+     Monitoring über 2044m, oder bleibt der Broker-Pod Pending, dann
+     `dev`. Ein Defender-Sensor fällt aus der Summe: Alle
+     Defender-Pläne der Subscription `azure-se` stehen auf Free
+     (Prüfung 18.11.), es läuft also kein Sensor-DaemonSet [A:
+     Re-Check vor G4]. Die Reserve unter der 92-%-Grenze (mindestens
+     626m) trägt auch kurzlebige Pods, etwa den Run-Pod von
+     `az aks command invoke` (Request 200m/500Mi) [Quelle:
+     `learn.microsoft.com/azure/aks/access-private-cluster`] und die
+     Debug-Pods aus P5. Vor dem ersten Install entscheiden: Größe und
      Spool wirken als Config-Keys nur beim ersten Boot, ein Wechsel
      heißt neues PVC [Quelle: `docs.solace.com`
      Docker-Upgrade-Current-Release; A: gleiches Verhalten im
@@ -3092,11 +4442,16 @@ außerhalb von Terraform (A1) und alle gespoolten Nachrichten.
 
 - Vor dem helm-Aufruf: `kaks -n solace get secret solace-admin -o
   jsonpath='{.data}' | jq 'has("username_admin_password")'` liefert
-  `true` (nur der Schlüssel, nie der Wert).
+  `true` (nur der Schlüssel, nie der Wert); `kaks -n solace get secret
+  acr-pull -o jsonpath='{.type}'` liefert
+  `kubernetes.io/dockerconfigjson`.
 - `kaks -n solace get sts solace-pubsubplus -o jsonpath='{..image}'`
-  endet auf `@sha256:c0020e53ed48...`; SEMP meldet 10.26.0.9219; ein
-  PVC 128Gi `managed-csi-premium` Bound; die gewählte Größe (`prod1k`
-  oder `dev`) ist mit Begründung notiert.
+  endet auf `@sha256:c0020e53ed48...`, und
+  `-o jsonpath='{.spec.template.spec.imagePullSecrets}'` nennt
+  `acr-pull`; die Events des Pods zeigen einen erfolgreichen Pull aus
+  `<acr>.azurecr.io`, kein `ImagePullBackOff`. SEMP meldet
+  10.26.0.9219; ein PVC 128Gi `managed-csi-premium` Bound; die
+  gewählte Größe (`prod1k` oder `dev`) ist mit Begründung notiert.
 - SEMP über 18080 zeigt VPN `sam` und `default`, User `sam` und `gpos`
   aktiv, `default` aus.
 - Kein Broker-Port öffentlich: `kaks get svc -A` zeigt als einziges
@@ -3112,8 +4467,11 @@ außerhalb von Terraform (A1) und alle gespoolten Nachrichten.
 - Lab-`solace-1` unverändert (Queue-Liste vorher/nachher gleich).
 
 **Abhängigkeiten:** Teil A: eigenes Owner-Go, Wartungsfenster,
-AKS-E15 (d). Teil B: Teil A grün; P2 (ACR-Spiegel, PriorityClasses,
-VAP); AKS-E15 (c) für `emd/aks/` und `emd/terraform-aks/`. Ist Teil A
+AKS-E15 (d). Teil B: Teil A grün; aus P1 ACR im Modus `rbac`, das
+ACR-Token mit Passwort im Key Vault (Ablauf nach dem 20.02.2027) und
+die Access Policy des Owners und der Helfer `sli/aks/acr-pull.sh`
+(P1 Schritt 8); P2 (ACR-Spiegel, PriorityClasses, VAP); AKS-E15 (c) für
+`emd/aks/` und `emd/terraform-aks/`. Ist Teil A
 am 04.12. nicht grün, entscheidet der Owner am Prüfpunkt: Teil A bis
 10.12. nachholen (Teil B beginnt erst danach) oder Rückfall
 "G2a-AKS-Abnahme nach G2b" (Abschnitt 6).
@@ -3149,6 +4507,22 @@ G0-11b.
    liegen dort). Nicht `load-images.sh`: Es lädt Tarballs in den
    dockerd, der zugleich die k3s-Runtime ist, und retaggt Bare-Namen
    [Quelle: amd scripts/load-images.sh:139, 185-186].
+   - Push mit der Entra-Identität des Owners (`az acr login`, Rolle
+     Contributor). Das geht nur, weil P1 Schritt 3 die Registry im
+     Modus `rbac` anlegt; im Modus `rbac-abac` hätte Contributor keine
+     Datenebene [Quelle: Learn-Seite
+     `container-registry-rbac-built-in-roles-directory-reference`].
+     Vorher `az acr show -n <acr> --query roleAssignmentMode -o tsv`,
+     erwartet `LegacyRegistryPermissions` [Quelle: azure-cli 2.85.0
+     acr/custom.py:676-689; azure-mgmt-containerregistry
+     models/_enums.py:356].
+   - Das Pull-Token aus P1 hängt an einer Scope-Map nur mit
+     Leserechten; mit ihm ist kein Push möglich, und der Cluster
+     braucht auch keinen.
+   - Danach `az acr show-usage -n <acr> -o table`: Basic enthält
+     10 GiB [Quelle: Learn-Seite `container-registry-skus`, ms.date
+     15.10.2026], und die SAM-Images sind die größten des Projekts
+     [A: Messung nach diesem Push].
 2. `amd/aks-values.yaml` als zweites `-f` (ohne Secret-Werte):
    - Host: `sam.dnsName: <fqdn>`, `ingress.host: <fqdn>`. Der Chart
      kennt keinen Basispfad und baut alle externen URLs (Frontend,
@@ -3198,9 +4572,33 @@ G0-11b.
      (Controller `k8s.io/ingress-nginx`) legt P2 für den NGINX-Provider
      von Traefik an; ohne sie bricht die Chart-Prüfung ab [Quelle:
      SAM-Chart 2.3.10 templates/_validations.tpl:185-206].
-   - `global.imagePullSecrets: []`; Registry `<acr>.azurecr.io` in
-     allen sechs Image-Blöcken; `broker.url:
-     ws://solace-pubsubplus.solace.svc.cluster.local:8008`,
+   - `global.imagePullSecrets: ["acr-pull"]`, eine Liste reiner
+     Strings wie im Lab (dort `registry-pull-secret` [Quelle: amd
+     local-k8s-values.yaml:144-150]). Helm ersetzt Listen beim
+     Zusammenführen der `-f`-Dateien, statt sie zu mischen; der
+     Lab-Eintrag verschwindet also [A: im Render-Diff aus P0
+     Schritt 13 sichtbar]. Die Liste gilt für gwe, awe, str, Postgres,
+     SeaweedFS und den Pre-Install-Hook `sam-doctor`, der das
+     gwe-Image zieht [Quelle: SAM-Chart 2.3.10
+     charts/sam-common/templates/_images.tpl:46-61,
+     templates/sam-doctor-hook.yaml:36-49]. Bei `helm upgrade
+     --install` prüft der Chart per `lookup`, dass jedes genannte
+     Secret im Release-Namespace liegt, und bricht sonst ab
+     (`validations.clusterResourceChecks`, Default `true`) [Quelle:
+     SAM-Chart 2.3.10 templates/_validations.tpl:97-126, 191-210;
+     values.yaml:89]. `helm template` überspringt diese Prüfung; der
+     Render-Diff beweist das Secret also nicht. Die Fassung vom 17.11.
+     setzte hier `[]`, weil der Kubelet per AcrPull zog; das entfällt
+     mit der Owner-Entscheidung vom 18.11. (keine Rollenzuweisungen).
+   - Nicht genutzt: `global.imagePullKey`. Damit legte der Chart das
+     Pull-Secret selbst an, und das Token-Passwort stünde in jeder
+     Helm-Revision; zudem schließt der Chart es neben
+     `global.imagePullSecrets` aus [Quelle: SAM-Chart 2.3.10
+     values.yaml:43-51, templates/_validations.tpl:26-29].
+     `samDeployment.imagePullSecret` bleibt leer, der Chart empfiehlt
+     die globale Liste [Quelle: values.yaml:474-476].
+   - Registry `<acr>.azurecr.io` in allen sechs Image-Blöcken;
+     `broker.url: ws://solace-pubsubplus.solace.svc.cluster.local:8008`,
      `broker.clientUsername: sam`, `broker.vpn: sam`;
      `persistence-layer.{postgresql,seaweedfs}.persistence.storageClassName:
      managed-csi-premium`; awe-Limit 3Gi, str-Limit 6Gi.
@@ -3209,10 +4607,15 @@ G0-11b.
    local-k8s-values.yaml:67-71]:
 
    ```bash
+   kaks create namespace sam-solace-lab --dry-run=client -o yaml |
+     kaks apply -f -
+   sli/aks/acr-pull.sh sam-solace-lab   # Secret acr-pull
    SAM_PROFILE=aks amd/scripts/start.sh
    # intern (KUBECONFIG aus .env.aks, wie haks): kein Certificate und
-   # kein NodeHosts-Eintrag; nur bei secretName aus P2 vorher das
-   # Secret sam-tls als Kopie des Default-Zertifikats anlegen, dann:
+   # kein NodeHosts-Eintrag; Abbruch, wenn das Secret acr-pull im
+   # Namespace fehlt (Hinweis auf den Helfer); nur bei secretName aus
+   # P2 vorher das Secret sam-tls als Kopie des Default-Zertifikats
+   # anlegen, dann:
    helm upgrade --install agent-mesh "$SAM_CHART_PATH" -n sam-solace-lab \
      --kube-context "$SAM_KUBE_CONTEXT" \
      -f local-k8s-values.yaml -f aks-values.yaml \
@@ -3238,6 +4641,18 @@ G0-11b.
    [Quelle: SAM-Chart 2.3.10 charts/persistence-layer/values.yaml:27].
    Ein späterer Wechsel braucht `ALTER ROLE postgres` plus denselben
    Helm-Wert.
+   - Pull-Secret: `start.sh` legt das Secret auf `aks` nicht selbst an
+     und ruft kein Skript aus sli auf; wie bei den Wrappern aus P1
+     Schritt 6 koppelt nichts die Repos. Auf `aks` prüft es nach dem
+     Anlegen des Namespace per `kaks -n sam-solace-lab get secret
+     acr-pull -o name` und bricht vor `helm` mit dem Hinweis auf
+     `sli/aks/acr-pull.sh sam-solace-lab` ab; so scheitert der
+     Lauf mit einer eigenen Meldung statt in der Chart-Validierung.
+     Weil `stop.sh` den Namespace löscht [Quelle: amd
+     scripts/stop.sh:113-115], verschwindet das Secret mit ihm; jeder
+     AKS-Zyklus (Abnahme unten, Neuaufbau in P7) ruft den Helfer vor
+     `start.sh` erneut auf. Im Lab bleibt alles beim Alten (Kyverno
+     synchronisiert `registry-pull-secret`).
    - Certificate und CoreDNS-NodeHosts sind Lab-Schritte und laufen auf
      `aks` nicht [Quelle: amd scripts/start.sh:120-147]. SAM ruft sich
      selbst und den Keycloak-Back-Channel über `<fqdn>` auf, also über
@@ -3297,7 +4712,17 @@ G0-11b.
      LiteLLM-Key aus `amd/.env.aks` (Messe-Key O5, sobald vorhanden)
      trägt rpm- und tpm-Limits, die der LiteLLM-Betreiber setzt
      (Missbrauchsschutz, Entscheidung 17.11.); der Wert erscheint in
-     keiner Ausgabe.
+     keiner Ausgabe. SAM erreicht LiteLLM über die von AKS verwaltete
+     Outbound-IP in `gebit-showcase-nodes`. Ihre Adresse steht erst
+     seit dem Create in P1 fest und ging direkt danach an den
+     Betreiber (AKS-E11); arbeitet er mit einer Allowlist, muss seine
+     Bestätigung für genau diese Adresse vorliegen. Vor `provision.sh`
+     vergleicht Claude die aktuelle Adresse mit der gemeldeten
+     (Abfrage wie in Schritt 6). Weicht sie ab (etwa nach einem
+     Neuaufbau zwischen P1 und P5), geht die neue Adresse sofort an
+     den Betreiber; bis zur Freischaltung scheitern Modell-Aufrufe
+     aus dem Cluster, und P5 wartet um die Vorlaufzeit des Betreibers
+     [A: Vorlaufzeit erfragen, AKS-E11].
    - Owner: einmal als `marktleitung` in der AKS-WebUI anmelden; der
      Grant wirkt erst nach der ersten Anmeldung [Quelle: PLAN 0.5,
      O2].
@@ -3355,11 +4780,54 @@ G0-11b.
      Hinweis auf `aks-allow-me.sh` ab. Das Skript ersetzt die ganze
      Liste per `az aks update`, die Änderung greift nach bis zu 2 min
      [Quelle: `learn.microsoft.com/azure/aks/api-server-authorized-ip-ranges`].
+   - Neu: Egress-Prüfung nach dem Start, nur lesend. Der Wrapper liest
+     die AKS-verwaltete Outbound-IP und die Adresse von
+     `pip-aks-ingress` und vergleicht beide mit dem lokalen Register
+     aus P1 (`~/.config/eurocis-aks/`, chmod 600, nie im Repo):
+
+     ```bash
+     EGRESS_ID=$(az aks show -g gebit-showcase -n aks-eurocis --query \
+       "networkProfile.loadBalancerProfile.effectiveOutboundIPs[].id" \
+       -o tsv)                              # erwartet: genau eine Zeile
+     az network public-ip show --ids "$EGRESS_ID" --query ipAddress -o tsv
+     az network public-ip show -g gebit-showcase-nodes -n pip-aks-ingress \
+       --query ipAddress -o tsv
+     ```
+
+     Weicht die Egress-IP ab, endet der Wrapper nach dem Start mit
+     einem Exit-Code ungleich 0 und dem Hinweis auf die
+     Betreiber-Meldung (AKS-E11); der Cluster bleibt gestartet, der
+     Preflight ist rot. Fehlt `pip-aks-ingress` oder trägt sie eine
+     andere Adresse, ist das ein Alarm: Ohne Lock kann jedes Mitglied
+     der Contributor-Gruppe sie löschen, und mit ihr wird das Label
+     `<p>` frei; dann sofort neu anlegen und das Label neu binden (P1,
+     Ablauf wie beim Neuaufbau in P7). Ob beide Adressen `az aks stop`/`start`
+     überstehen, sagt Learn nicht [A]: Die Outbound-IP verwaltet AKS
+     selbst, `pip-aks-ingress` liegt als eigene statische Ressource in
+     der Node-RG [Quelle: `learn.microsoft.com/azure/aks/start-stop-cluster`;
+     `learn.microsoft.com/azure/aks/configure-load-balancer-standard`].
+     P1 misst den ersten Zyklus, die Abnahme unten wiederholt die
+     Messung.
+   - Scheitert `az aks start` oder ein `aks-allow-me.sh`-Lauf mit
+     `RequestDisallowedByPolicy` (die Tag-Pflicht der Subscription trifft
+     einen Schreibzugriff auf `gebit-showcase-nodes`; einzelner
+     Community-Report Azure/AKS #5856, von Microsoft unbestätigt [A]),
+     wiederholt der Wrapper höchstens dreimal mit 60 s Pause. Bleibt
+     es dabei, meldet er `az aks update -g gebit-showcase -n
+     aks-eurocis` als Reconcile-Schritt an den Owner [Quelle:
+     `github.com/Azure/AKS/issues/5856`; Learn-Troubleshooting-Seite
+     `requestdisallowedbypolicy-error`]. Eine Policy-Ausnahme kann der
+     Owner als Contributor nicht anlegen.
    - Dann auf den Node, Broker und gwe warten, awe einmal neu starten
      (gwe/awe-Race [Quelle: amd README.md:511-513]), dann Preflight.
      Die 30-min-Sperre aus P1 bleibt.
    - kubectl erreicht den API-Server über dessen FQDN; eine neue
      API-Server-IP nach dem Start braucht keinen eigenen Schritt.
+   - Rechte: `az aks start`/`stop`, die Egress-Prüfung und
+     `aks-allow-me.sh` laufen mit der Azure-Identität des Aufrufers
+     (Contributor auf `azure-se`). Der Stellvertreter kann die Wrapper
+     nur nutzen, wenn er über eine Gruppe ebenfalls Contributor hat
+     (AKS-E20, offen); sonst bleiben Start und Stopp beim Owner.
 7. HITL-, Artefakt- und Vision-Test (G0-11b (1) und G0-11a nach
    AKS-E18, Owner-Bestätigung offen):
    - 7a: Approver-RBAC: `SAM_HOME=<aks-home> sam config apply -m
@@ -3376,7 +4844,9 @@ G0-11b.
      `default`, User `gpos` aus P4, Passwort aus Key Vault. Anwenden mit
      `--url $SAM_URL --no-dotenv`, nie `--prune`.
    - 7c: Claude publiziert ein Event auf `gpos/spike/hil/a/<seq>` aus
-     einem Debug-Pod im Cluster (kein Broker-LoadBalancer). Der Lauf
+     einem Debug-Pod im Cluster (kein Broker-LoadBalancer; Image aus
+     ACR, Pull-Secret per `--overrides` wie beim Hairpin-Pod in der
+     Abnahme). Der Lauf
      pausiert; Claude startet awe während der Pause einmal neu, wie
      G0-11b verlangt, und protokolliert das Ergebnis (laut
      spikes/g0/results/README Punkt 5 wird der Lauf scheitern). Ein
@@ -3412,8 +4882,9 @@ G0-11b.
    Gate-0-Tabelle) [A: Messgröße mit dem PLAN-Eigner abstimmen].
 
 **Wer:** Claude 1-4, 5 (Provisionierung, Grants), 6-8; Owner 5
-(Logins, Devtools-Befund) und die Freigabe in 7c; Stellvertreter sein
-Login.
+(Logins, Devtools-Befund), die Freigabe in 7c und, falls nötig, die
+Meldung einer geänderten Egress-IP an den LiteLLM-Betreiber
+(Kontakte sind Owner-Sache); Stellvertreter sein Login.
 
 **Abnahme (G2a):**
 
@@ -3428,7 +4899,17 @@ Login.
 - `curl -sI https://<fqdn>/` zeigt `strict-transport-security` ohne
   `includeSubDomains`; `http://<fqdn>/` antwortet mit 308 auf https.
 - Aliase `fast` und `planning` antworten aus dem Cluster (beweist
-  LiteLLM über die Egress-IP); die Vision-Probe ist grün.
+  LiteLLM über die AKS-verwaltete Outbound-IP; bei einer Allowlist ist
+  es die Adresse, die der Betreiber freigeschaltet hat, Vergleich aus
+  Schritt 6); die Vision-Probe ist grün.
+- Pull aus ACR per Token: `kaks -n sam-solace-lab get pods -o
+  jsonpath='{..image}' | tr ' ' '\n' | sort -u | grep -v
+  '^<acr>\.azurecr\.io/' | wc -l` ergibt 0; jedes Pod-Spec im
+  Namespace nennt `acr-pull` unter `imagePullSecrets`, ebenso der
+  `sam-doctor`-Hook (`haks get hooks agent-mesh -n sam-solace-lab`);
+  kein Pod in `ImagePullBackOff`. Die Restlaufzeit des
+  Token-Passworts (`az acr token show -r <acr> -n aks-pull --query
+  "credentials.passwords[].expiry"`) reicht über den 20.02.2027.
 - Body-Limit: Ein POST mit 12 MB an `https://<fqdn>/api/v1/x`
   (`curl --data-binary @<datei>`) endet mit 413 von Traefik.
 - Puffer-Last: 30 parallele, langsam gesendete POSTs mit je 9 MB von
@@ -3444,7 +4925,20 @@ Login.
   (`<acr>.azurecr.io/curl:8.23.0`) liefern `https://<fqdn>/health` und
   `https://<fqdn>/auth/realms/solace-lab/.well-known/openid-configuration`
   200 ohne `-k`; die gwe-Logs zeigen keinen Fehler bei der
-  OIDC-Discovery.
+  OIDC-Discovery. Der Debug-Pod bekommt das Pull-Secret explizit, weil
+  `kaks run` den default-ServiceAccount nutzt und dieser in
+  `sam-solace-lab` kein Pull-Secret trägt:
+
+  ```bash
+  kaks -n sam-solace-lab run hairpin --rm -i --restart=Never \
+    --image=<acr>.azurecr.io/curl:8.23.0 \
+    --overrides='{"apiVersion":"v1","spec":{"imagePullSecrets":[{"name":"acr-pull"}]}}' \
+    -- curl -sS -o /dev/null -w '%{http_code}\n' https://<fqdn>/health
+  ```
+
+  `--overrides` verlangt ein `apiVersion` im JSON [Quelle: `kubectl
+  run --help`, Client 1.36.3]; Rückfall: Pod-Manifest mit
+  `imagePullSecrets` per `kaks apply -f -`.
 - Spike-Workflow mit Artefakt-Speicherung läuft (SeaweedFS); eine
   HITL-Pause wird von `marktleitung` freigegeben; das Ergebnis des
   awe-Neustarts ist protokolliert; Spike-Reste entfernt.
@@ -3462,7 +4956,9 @@ Login.
   `grafana_ro`-Passwort nicht (Zählprüfung ohne Ausgabe); kein anonymer
   Zugang und keine Viewer-Konten mit Explore, keine offene
   Admin-Sitzung auf einem Stand-Bildschirm.
-- AKS-E19: Ein Testpod in `gpos-demo` bekommt auf 5432, 8333 und 9333
+- AKS-E19: Ein Testpod in `gpos-demo` (Namespace und `acr-pull` per
+  Helfer, solange P6 sie noch nicht angelegt hat; Pull-Secret per
+  `--overrides` wie beim Hairpin-Pod) bekommt auf 5432, 8333 und 9333
   nach `sam-solace-lab` einen Timeout; nach `kaks rollout restart` von
   gwe, awe und str laufen db-init und s3-init durch; ein Login als
   `postgres` mit "password" scheitert; PGPASSWORD im Secret
@@ -3472,11 +4968,17 @@ Login.
 - Metadatenabfrage dokumentiert, Ausschlussliste für P7 fest.
 - API-Server: `kaks get --raw /readyz` ok von einer freigegebenen IP.
   Ein Zyklus `aks-stop.sh`, mindestens 30 min Pause, `aks-start.sh`
-  endet mit geladenen Agents. Einmal vom Handy-Hotspot: `aks-start.sh`
-  bricht mit dem Hinweis auf `aks-allow-me.sh` ab, nach dessen Lauf
-  (bis 2 min) läuft er durch; die WebUI ist vom Hotspot auch ohne
-  Freigabe erreichbar.
-- Ein AKS-Zyklus `SAM_PROFILE=aks stop.sh`, dann `start.sh`,
+  endet mit geladenen Agents. Die AKS-Outbound-IP und die Adresse von
+  `pip-aks-ingress` sind vor und nach dem Zyklus gleich, `<fqdn>` löst
+  weiter auf `pip-aks-ingress` auf; das Ergebnis steht im Protokoll
+  (Messung zu [A] aus Schritt 6). Einmal vom Handy-Hotspot:
+  `aks-start.sh` bricht mit dem Hinweis auf `aks-allow-me.sh` ab,
+  nach dessen Lauf (bis 2 min) läuft er durch; die WebUI ist vom
+  Hotspot auch ohne Freigabe erreichbar.
+- Ein AKS-Zyklus `SAM_PROFILE=aks stop.sh`, dann ohne Helfer
+  `start.sh` (bricht vor `helm` mit dem Hinweis auf
+  `acr-pull.sh` ab, weil `stop.sh` den Namespace samt Secret
+  gelöscht hat), dann Namespace und Helfer, `start.sh`,
   `provision.sh` und Schritte 4-5 erneut: Lab-Keycloak-Client und -User
   bleiben unverändert (Diff leer), die Queue-Liste der Lab-VPN `sam`
   auf `solace-1` ist vorher und nachher gleich (SEMP-Identitätsprüfung
@@ -3489,9 +4991,16 @@ Login.
 
 **Abhängigkeiten:** P3; P4 Teil A und Teil B; amd-Working-Tree
 committet (cd08a17, AKS-E15 (a), erledigt); AKS-E19 entschieden
-17.11.; aus P1 der Hairpin-Test und `aks-allow-me.sh`; aus P2 die
-IngressClass `nginx`, das Default-Zertifikat für `<fqdn>` und die
-TLS-Variante (mit oder ohne `secretName`).
+17.11.; aus P1 der Hairpin-Test, `aks-allow-me.sh`, ACR im Modus
+`rbac`, das ACR-Token (Passwort im Key Vault, Ablauf nach dem
+20.02.2027), das Register mit Egress- und Ingress-IP und die
+Meldung der Egress-IP an den LiteLLM-Betreiber samt Bestätigung,
+falls er eine Allowlist führt (AKS-E11) sowie der Helfer
+`sli/aks/acr-pull.sh` (P1 Schritt 8); aus P2 die IngressClass
+`nginx`, das
+Default-Zertifikat für `<fqdn>` und die TLS-Variante (mit oder ohne
+`secretName`); in amd die `aks`-Prüfung auf `acr-pull` in `start.sh`
+(5.2).
 
 ### P6 GEBIT-Demo portieren (5,75 PT, Vorarbeit KW52-KW1 im Lab, AKS KW1-2, Gate G2b 15.01.)
 
@@ -3518,6 +5027,25 @@ POS-Transaktionen) sind für jeden aufrufbar, gebremst nur durch
 proto/de/showcase/wws/v1/service/wws_service.proto,
 proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
 
+**Images ohne Kubelet-Rechte (Owner-Entscheidung 18.11.2026):** Der
+Cluster hat kein AcrPull, weil `--attach-acr` eine Rollenzuweisung
+braucht [Quelle:
+`learn.microsoft.com/azure/aks/cluster-container-registry-integration`].
+Jeder Pod, der aus ACR zieht, braucht deshalb das Pull-Secret
+`acr-pull` (Typ `kubernetes.io/dockerconfigjson`, gebaut aus dem
+Pull-Token `aks-pull` aus P1 Schritt 3, Passwort nur im Key Vault als
+`acr-pull-token` und in `sli/aks/.env.aks`) in seinem Namespace und
+einen Verweis in `imagePullSecrets` [Quelle:
+`learn.microsoft.com/azure/container-registry/container-registry-auth-kubernetes`].
+Für gpos heißt das: `acr-pull` in `gpos-data` und `gpos-demo`, beide
+von `install.sh` angelegt (Schritte 6a und 8), und ein Verweis in
+jedem Deployment und im StatefulSet. Ein Patch des default-SA reicht
+nicht: Die Admission übernimmt die Pull-Secrets des SA nur, wenn der
+Pod-Spec keine eigenen trägt, und die sechs gpos-Deployments tragen
+`registry-pull-secret` [Quelle:
+`kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin`;
+gpd k8s/{pos,engine,wws,loyalty,gate,ui}.yaml:21-23].
+
 **Schritte:**
 
 1. Voraussetzung GEBIT (AKS-E16): Die schriftliche Freigabe liegt laut
@@ -3526,8 +5054,16 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
    K8s-Secret in Azure (Germany West Central), den Zugriff der
    Stellvertretung und die öffentliche Reflection abdeckt, ist die
    Planungsannahme [A]; der Status ist bewusst "offen", gehandelt wird
-   erst nach schriftlicher Bestätigung (AKS-E16). Fällig ist sie bis
-   27.11., spätestens 09.12., weil schon `gebitsim` in P2 Schritt 7
+   erst nach schriftlicher Bestätigung (AKS-E16). Neu seit 18.11.:
+   Technisch kommt nicht nur die Stellvertretung an das Secret,
+   sondern jedes Mitglied der Contributor-Gruppe von `azure-se`
+   (lokale Accounts einschalten, Admin-Credentials holen); sichtbar
+   ist das nur im Activity Log [Quelle:
+   `learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad`;
+   `learn.microsoft.com/azure/role-based-access-control/built-in-roles/privileged`].
+   Die Bestätigung muss diesen Kreis abdecken, oder der Owner klärt
+   den Mitgliederkreis der Gruppe [A]. Fällig ist sie bis 27.11.,
+   spätestens 09.12., weil schon `gebitsim` in P2 Schritt 7
    (G0-11b (3), 11.12.) das Descriptor-Set als Secret in Azure
    braucht. Ohne Bestätigung legt `install.sh k8s` auf AKS kein
    `gpos-gebit-descriptors` an, und die Demo läuft nur im Lab oder in
@@ -3538,12 +5074,16 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
    Images, ACR, Key Vault oder Backups.
 2. Lab-Vorarbeit (keine AKS-Abhängigkeit): `k8s/` in `base`,
    `overlays/lab` (rendert byte-identisch zur Baseline aus P0 Schritt
-   9), `overlays/aks`, später `overlays/l3`, dazu die kustomize-
-   Komponente `k8s/components/public-guard` (Schritt 3). Das
-   Certificate `gpos-demo` (4 dnsNames, Lab-CA) gehört ins Lab-Overlay,
-   nicht nach `base`. Das aks-Overlay:
-   - setzt das Image `<acr>.azurecr.io/gpos-demo/gpos-demo`, entfernt
-     `imagePullSecrets` per JSON-Patch und setzt
+   9, also weiter mit `registry-pull-secret`), `overlays/aks`, später
+   `overlays/l3`, dazu die kustomize-Komponente
+   `k8s/components/public-guard` (Schritt 3). Das Certificate
+   `gpos-demo` (4 dnsNames, Lab-CA) gehört ins Lab-Overlay, nicht nach
+   `base`. Das aks-Overlay:
+   - setzt das Image `<acr>.azurecr.io/gpos-demo/gpos-demo`, ersetzt
+     den Pull-Secret-Namen per JSON-Patch mit `target: {kind:
+     Deployment}` und `op: replace`, `path:
+     /spec/template/spec/imagePullSecrets/0/name`, `value: acr-pull`
+     (alle sechs Deployments tragen genau einen Eintrag) und setzt
      `SAM_URL=https://<fqdn>` (nur ein Link in der UI, kein
      Serveraufruf [Quelle: gpd app/gposdemo/ui/bff.py:188;
      common/config.py:212]);
@@ -3569,7 +5109,8 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
    Die Demo-DB liegt nicht im Overlay, sondern in einer eigenen
    kustomization `k8s/postgres-aks/`: Namespace `gpos-data`, headless
    Service `gpos-postgres`, StatefulSet `gpos-postgres` (Postgres 18 aus
-   ACR per Digest, 8Gi `managed-csi`, `POSTGRES_PASSWORD` aus Secret
+   ACR per Digest, `imagePullSecrets: [{name: acr-pull}]` direkt im
+   Manifest, 8Gi `managed-csi`, `POSTGRES_PASSWORD` aus Secret
    `gpos-postgres-admin`, Mount auf `/var/lib/postgresql` mit dem
    Image-Default-PGDATA [A: damit `lost+found` der Azure-Disk initdb
    nicht stört]). So berühren `install.sh k8s`/`uninstall.sh` und das
@@ -3578,8 +5119,11 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
    `gpos-data` erweitert. `scripts/tests/test_k8s.py` prüft Basis, alle
    Overlays, `public-guard` und `postgres-aks` [Quelle: heute pinnt der
    Test Lab-Hosts, gpd scripts/tests/test_k8s.py:95-120]. Neu prüft er
-   für das aks-Overlay gegen eine ausdrückliche Liste (Routenliste aus
-   `bff.py`) [A: Test neu]:
+   für das aks-Overlay und `postgres-aks`: Jedes Deployment und jedes
+   StatefulSet verweist auf `acr-pull` und nirgends auf
+   `registry-pull-secret`; im Lab-Overlay bleibt es umgekehrt. Dazu
+   gegen eine ausdrückliche Liste (Routenliste aus `bff.py`) [A: Test
+   neu]:
    - öffentlich: `/kasse`, `/monitor`, `/static/`, die lesenden
      `/api/...`-Pfade aus Schritt 3, `/api/pos/`, `/api/demo/`,
      `/api/events` und später `/kunde` (Kundenanzeige der Kasse);
@@ -3651,10 +5195,17 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
 5. Image:
 
    ```bash
+   az acr login -n <acr>
    docker buildx imagetools create \
      -t <acr>.azurecr.io/gpos-demo/gpos-demo:0.1.3 \
      registry.solace.lab/gpos-demo/gpos-demo:0.1.3
    ```
+
+   Den Push darf der Owner als Contributor nur, weil die Registry im
+   Modus `rbac` (API: `LegacyRegistryPermissions`) läuft (P1 Schritt
+   3); im Modus `rbac-abac` hätte Contributor keine Daten-Ebene
+   [Quelle:
+   `learn.microsoft.com/azure/container-registry/container-registry-rbac-built-in-roles-directory-reference`].
 
    Neues Arbeitspaket Image 0.1.4, gemeinsamer Reflection-Endpunkt
    [A: rund 0,5 PT], Lab-Vorarbeit KW52-53:
@@ -3693,10 +5244,32 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
    Namespace an, und `install.sh k8s` bricht ohne die db.env aus
    `install.sh db` ab [Quelle: gpd scripts/install.sh:117, 123].
    - 6a `TARGET=aks scripts/install.sh pg` (nur auf `aks`, im Lab ein
-     No-op): Namespace `gpos-data`, Secret `gpos-postgres-admin` vom Mac
-     an den API-Server (Wert aus Key Vault, Muster `apply_secret`),
-     `kaks apply -k k8s/postgres-aks`, `kaks -n gpos-data rollout status
-     sts/gpos-postgres --timeout=300s`, dann `pg_isready`.
+     No-op): Namespace `gpos-data`, dann Secret `acr-pull` (vor dem
+     StatefulSet, sonst bleibt `gpos-postgres-0` in ImagePullBackOff)
+     und Secret `gpos-postgres-admin` vom Mac an den API-Server (Werte
+     aus Key Vault, Muster `apply_secret`), `kaks apply -k
+     k8s/postgres-aks`, `kaks -n gpos-data rollout status
+     sts/gpos-postgres --timeout=300s`, dann `pg_isready`. Das
+     Pull-Secret baut eine neue Funktion `apply_pull_secret` in
+     `install.sh` nach demselben Verfahren wie `sli/aks/acr-pull.sh`
+     (P1), aber in gpd selbst, weil Skripte nicht über Repo-Grenzen
+     gesourct werden (P1 Schritt 6). Das Passwort läuft nur durch
+     Pipes, nie durch argv, Ausgabe oder eine Datei:
+
+     ```bash
+     az keyvault secret show --vault-name <kv> -n acr-pull-token \
+         --query value -o tsv |
+       jq -Rc --arg u "$ACR_PULL_USER" --arg s "<acr>.azurecr.io" \
+         '{auths: {($s): {username: $u, password: .,
+           auth: (($u + ":" + .) | @base64)}}}' |
+       apply_secret acr-pull --type=kubernetes.io/dockerconfigjson \
+         --from-file=.dockerconfigjson=/dev/stdin
+     ```
+
+     `apply_secret` ruft `kubectl create secret generic` mit
+     `--dry-run=client` und einem server-side apply auf [Quelle: gpd
+     scripts/install.sh:92-97] [A: `--from-file` mit `/dev/stdin` auf
+     macOS, Test in P1].
    - 6b `TARGET=aks scripts/install.sh db`: psql-Seam
      `PG_MODE=docker|kubectl`; auf AKS ist `psql_admin` =
      `kaks -n gpos-data exec -i gpos-postgres-0 -- psql -X -U postgres
@@ -3719,6 +5292,9 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
    - `E2E_BASE_URL=https://<fqdn>` (die BFF-Pfade sind ausgeschnitten,
      Schritt 3), `E2E_CA_FILE=system`,
      `GPOS_IMAGE=<acr>.azurecr.io/gpos-demo/gpos-demo`
+   - `ACR_PULL_USER=aks-pull` (Token-Name, kein Geheimnis); das
+     Token-Passwort liest `install.sh` bei jedem Aufruf aus dem Key
+     Vault (Schritt 6a), nie aus dieser Datei
    - `BROKER_SMF_URL=tcp://solace-pubsubplus.solace.svc.cluster.local:55555`,
      `BROKER_WS_URL=ws://...:8008`, `BROKER_VPN=default`,
      `BROKER_USERNAME=gpos` + `BROKER_PASSWORD` (statt der BSG-`.env`
@@ -3733,24 +5309,30 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
      scripts/install.sh:135-139]
    - `GPOS_DELIVERY=direct`
 
-   Kein LLM-Key und kein SEMP-Passwort in dieser Datei: `load_env`
-   exportiert sie, und `sam config apply` expandiert `${VAR}` aus der
-   Umgebung [Quelle: gpd scripts/lib.sh:4-6]. Das SEMP-Passwort schreibt
-   `scripts/broker.sh` bei `TARGET=aks` vor jedem `broker.py`-Aufruf
-   neu: `umask 077`, `mkdir -p mesh/.rendered/aks`, eine Zeile
-   `aks_admin_password = "<wert>"` aus `az keyvault secret show
-   --vault-name <kv> -n solace-admin --query value -o tsv`, `chmod 600`,
-   nie ausgegeben, nie unter `set -x`. Jeder Aufruf, damit auch ein
-   alleinstehendes `reset.sh` oder `uninstall.sh` die Datei findet und
-   ein rotiertes Secret ankommt; der hex-Wert enthält weder `"` noch
-   einen Zeilenumbruch. Die Fail-closed-Prüfung aus P0 Schritt 11 läuft
-   vor jedem Skript.
-8. `TARGET=aks scripts/install.sh k8s`: Secrets `gpos-broker` und
-   `gpos-db` direkt vom Mac an den API-Server, `gpos-gebit-descriptors`
-   nur mit der schriftlichen Bestätigung aus Schritt 1. Die
-   gRPC-Endpunkte sind öffentlich auf `<fqdn>:443`; das Overlay patcht
-   die drei Lab-Ingresses (Namen bleiben) und legt für Reflection ein
-   viertes an:
+   Kein LLM-Key, kein SEMP-Passwort und kein ACR-Token-Passwort in
+   dieser Datei: `load_env` exportiert sie, und `sam config apply`
+   expandiert `${VAR}` aus der Umgebung [Quelle: gpd scripts/lib.sh:4-6].
+   Das SEMP-Passwort schreibt `scripts/broker.sh` bei `TARGET=aks` vor
+   jedem `broker.py`-Aufruf neu: `umask 077`, `mkdir -p
+   mesh/.rendered/aks`, eine Zeile `aks_admin_password = "<wert>"` aus
+   `az keyvault secret show --vault-name <kv> -n solace-admin --query
+   value -o tsv`, `chmod 600`, nie ausgegeben, nie unter `set -x`.
+   Jeder Aufruf, damit auch ein alleinstehendes `reset.sh` oder
+   `uninstall.sh` die Datei findet und ein rotiertes Secret ankommt;
+   der hex-Wert enthält weder `"` noch einen Zeilenumbruch. Lesen
+   darf der Owner den Key Vault über seine Access Policy (P1 Schritt
+   3). Die Fail-closed-Prüfung aus P0 Schritt 11 läuft vor jedem
+   Skript.
+8. `TARGET=aks scripts/install.sh k8s`: Secrets `acr-pull` (wie 6a,
+   jetzt in `gpos-demo`), `gpos-broker` und `gpos-db` direkt vom Mac
+   an den API-Server, `gpos-gebit-descriptors` nur mit der
+   schriftlichen Bestätigung aus Schritt 1. Statt auf den
+   Kyverno-Klon von `registry-pull-secret` zu warten (install.sh:124-129)
+   legt `install_k8s` auf `aks` das Secret `acr-pull` selbst an; weil
+   `uninstall.sh` den Namespace `gpos-demo` löscht, entsteht es bei
+   jedem Install neu. Die gRPC-Endpunkte sind öffentlich auf
+   `<fqdn>:443`; das Overlay patcht die drei Lab-Ingresses (Namen
+   bleiben) und legt für Reflection ein viertes an:
    - `gpos-grpc` → gpos-pos: `/<purchase-svc-fqn>/`
      (Purchase-Service-FQN, siehe Lesehinweis).
    - `gpos-wws-grpc` → gpos-wws:
@@ -3793,8 +5375,8 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
      PurchaseTransactionService, mit 0.1.4 alle drei Dienste
      (Schritt 5).
 
-   `install.sh` überspringt auf `aks` das Warten auf Kyverno und den
-   Lab-CA-Export.
+   `install.sh` überspringt auf `aks` den Lab-CA-Export (das Warten
+   auf Kyverno ersetzt das eigene `acr-pull`, siehe oben).
 9. `make manifests`, `TARGET=aks make smoke`; die Anmeldung als
    `marktleitung` (P5 Schritt 5) nur noch prüfen.
 10. `TARGET=aks scripts/install.sh mesh`: RBAC, Manifest, hygiene
@@ -3820,7 +5402,9 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
       `<fqdn>` → Lab-MacBook auf dem Router an, ausgeschaltet (AP14b).
     - Owner (physischer Zugang): Kiosk-Start-URLs, Lesezeichen und
       QR-Codes auf `https://<fqdn>/kasse` und `https://<fqdn>/monitor`;
-      das Standpersonal tippt nichts.
+      das Standpersonal tippt nichts. Kiosk und QR-Codes zeigen nur auf
+      den Namen, nie auf eine IP: Ein Neuaufbau ändert die Ingress-IP
+      (P7 Schritt 3).
     - Kalibrierung von `public-guard`: e2e (27 Läufe) und 30 min
       Kioskbetrieb mit allen Leihgeräten hinter dem Router ohne 429;
       sonst Werte anheben [A]. Ebenso die `limit-rpm` der drei
@@ -3836,6 +5420,14 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
 
 - 6 Deployments 1/1; Image-Plattform-Digest gleich Lab (`docker buildx
   imagetools inspect` beider Refs), für 0.1.3 und, sobald gebaut, 0.1.4.
+- Pull-Secrets: `kaks -n gpos-demo get secret acr-pull` und
+  `kaks -n gpos-data get secret acr-pull` zeigen Typ
+  `kubernetes.io/dockerconfigjson`; alle gpos-Pods und
+  `gpos-postgres-0` tragen `imagePullSecrets` = `acr-pull`
+  (`kaks get pods -n gpos-demo -o
+  jsonpath='{..imagePullSecrets[*].name}'`); kein Event mit
+  ErrImagePull oder ImagePullBackOff in beiden Namespaces; kein
+  `registry-pull-secret` im aks-Render.
 - Vor `install.sh mesh`: `TARGET=aks scripts/broker.sh r1-show`
   liefert 200, nicht 401; ohne `SEMP_PASSWORD_FROM` bricht derselbe
   Aufruf mit der Guard-Meldung ab, ohne dass ein Request einen Broker
@@ -3848,10 +5440,11 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
   scripts/e2e.py:156-164].
 - TR3 auf AKS (falls im Lab grün): 5/5 Läufe korrekt, Werte auf dem
   Monitor p90 höchstens 5 s (AP10).
-- `uninstall.sh` ohne `--drop-db` lässt `gpos-postgres` und sein PVC
-  stehen; `TARGET=aks scripts/install.sh all` aus leerem Namespace in
-  höchstens 30 min inklusive voller Gate-Verifikation, Dauer
-  protokolliert [Quelle: PLAN 6 AP12].
+- `uninstall.sh` ohne `--drop-db` lässt `gpos-postgres`, sein PVC und
+  `gpos-data/acr-pull` stehen; `TARGET=aks scripts/install.sh all` aus
+  leerem Namespace in höchstens 30 min inklusive voller
+  Gate-Verifikation, Dauer protokolliert [Quelle: PLAN 6 AP12];
+  `acr-pull` in `gpos-demo` entsteht dabei neu.
 - Alle gpos-Pods Ready, keine DSN-, Port- oder `invalid integer
   value`-Fehler in den Logs von engine, wws, loyalty und pos.
 - Reset unter 15 s; A4 p50 höchstens 18 s, p90 höchstens 24 s.
@@ -3903,20 +5496,34 @@ proto/de/showcase/loyalty/v1/service/loyalty_service.proto].
   gpd app/Dockerfile:8-9, 19]); keine `.proto`-, `purchase-api*`-,
   `receipt-api*`- oder `simpleSale*`-Datei, keine LLM- oder
   Key-Variable in der Image-Umgebung, User 10001:10001. Gilt für 0.1.3
-  und 0.1.4.
+  und 0.1.4. Dazu: `grep -c` auf das Token-Passwort (aus dem Key
+  Vault, nie ausgegeben) über `gpd/.env.aks` und den aks-Render ergibt
+  0.
+- xtrace: Die `set -x`-Logs von `install.sh` liegen nur unter
+  `~/.config/eurocis-aks/xtrace/` (per `BASH_XTRACEFD`, 1.4). Das
+  Laden von `.env.aks` (`set -a` mit `.`) und jedes `db_password`
+  laufen ohne xtrace. Eine Zählabfrage ohne Ausgabe von Treffern über
+  diese Logs ergibt 0: `grep -c -F -f <(...)` mit den Werten des
+  Token-Passworts, aller Secrets aus `gpd/.env.aks` (darunter
+  `BROKER_PASSWORD`) und der gpos-DB-Passwörter, per
+  Prozess-Substitution wie in P7 Schritt 2, nie per argv.
 - `TARGET=aks scripts/uninstall.sh` mit einer `.env.aks` ohne `SAM_URL`
-  bricht vor dem ersten `api()`- oder kubectl-Aufruf ab (`set -x`-Log).
+  bricht vor dem ersten `api()`- oder kubectl-Aufruf ab (`set -x`-Log
+  unter `~/.config/eurocis-aks/xtrace/`).
 - In allen Namespaces kein Image mehr von Docker Hub (Prüfung wie P2
   mit `-A`).
 - Lab danach: Overlay-Render identisch zur Baseline (bis auf den
-  Tag-Commit 0.1.4), `make smoke` und S1 grün.
+  Tag-Commit 0.1.4), `make smoke` und S1 grün; das Lab-Overlay
+  verweist weiter auf `registry-pull-secret`.
 
-**Abhängigkeiten:** P5; P2 (Traefik mit IngressClass `nginx`,
-`externalTrafficPolicy: Local`, Default-Zertifikat, Access-Log); P3
-(Keycloak unter `/auth`); schriftliche Owner-Bestätigung zur
-Azure-Abdeckung der GEBIT-Freigabe (AKS-E16, Status offen; ohne sie
-läuft die Demo nur im Lab oder in L3); Owner-Antwort zu Frage 23 für
-`/freigabe`, `/foto`, `/op`, `/etikett`; Leih-Router (11.12.);
+**Abhängigkeiten:** P5; P1 (ACR im Modus `rbac`, Pull-Token `aks-pull`
+mit `acr-pull-token` im Key Vault, Access Policy des Owners); P2
+(Traefik mit IngressClass `nginx`, `externalTrafficPolicy: Local`,
+Default-Zertifikat, Access-Log); P3 (Keycloak unter `/auth`);
+schriftliche Owner-Bestätigung zur Azure-Abdeckung der GEBIT-Freigabe
+(AKS-E16, Status offen, inklusive Contributor-Kreis aus Schritt 1;
+ohne sie läuft die Demo nur im Lab oder in L3); Owner-Antwort zu Frage
+23 für `/freigabe`, `/foto`, `/op`, `/etikett`; Leih-Router (11.12.);
 TR3-Stand im Lab.
 
 ### P7 Härtung und Betrieb (4,25 PT, KW3-KW7, Gates G3 und G4)
@@ -3925,13 +5532,24 @@ TR3-Stand im Lab.
 und Stellvertreter einsatzbereit, Freeze ohne Überraschungen. Ein Node
 ohne HA (Owner-Entscheidung 17.11.2026): Es gibt keinen N-1-Drill mehr;
 jeder Node-Vorgang ist ein Ausfall von einigen Minuten, den
-Wartungssperre, Refresh-Termin und L3 abfangen.
+Wartungssperre, Refresh-Termin und L3 abfangen. Seit der
+Owner-Entscheidung vom 18.11.2026 (nur Contributor, keine
+Rollenzuweisungen, kein Lock) gilt zusätzlich: `pip-aks-ingress` und
+die Egress-IP leben in der Node-RG `gebit-showcase-nodes` und
+verschwinden mit dem Cluster [Quelle:
+`learn.microsoft.com/azure/aks/faq`]. Der Neuaufbau-Drill bindet
+deshalb das Label `<p>` neu und meldet eine neue Egress-IP; der
+Rückbau hat keinen Lock mehr zu entfernen.
 
 **Schritte:**
 
 1. Requests mit einer Woche AKS-Prometheus-Daten nachziehen; die Summe
    der Requests bleibt bei höchstens 92 % CPU und 75 % RAM des einen
-   Nodes (Allocatable aus P1, Grenzen wie in 3.2).
+   Nodes (Allocatable aus P1, Grenzen wie in 3.2). Frei bleiben muss
+   zusätzlich der Run-Pod von `az aks command invoke` (Requests 200m
+   CPU und 500Mi RAM, 60 s Scheduling-Timeout), sonst bleibt der
+   Break-glass-Weg Pending [Quelle:
+   `learn.microsoft.com/azure/aks/access-private-cluster`].
 2. Backups vor G3, jeweils im Pod erzeugt; nur der fertige Dump geht
    auf den Mac:
    - Vollständig: Keycloak-DB, SAM-WebUI-DB, gpos-DB
@@ -3946,7 +5564,7 @@ Wartungssperre, Refresh-Termin und L3 abfangen.
      kein Descriptor-Set, es kommt nur aus dem Secret-Mount.
      `pos.receipt.receipt_b64` enthält Demo-Belege im Format der
      GEBIT-Receipt-API; ob das GEBIT-Material ist, entscheidet der Owner
-     (Abschnitt 9); im Zweifel `--exclude-table-data=pos.receipt`.
+     (Frage 21); im Zweifel `--exclude-table-data=pos.receipt`.
    - Zählprüfung je Dump, ohne Ausgabe von Treffern:
      `pg_restore -l <dump> | grep -cE 'TABLE DATA [^ ]+
      (model_configurations|gateway_deployments) '` ergibt 0;
@@ -3962,6 +5580,15 @@ Wartungssperre, Refresh-Termin und L3 abfangen.
      `model_configurations` sind ungetestet [A]; scheitert
      `pg_restore` daran, Reihenfolge dokumentieren (ohne Constraints
      restoren, provision, Constraints anlegen).
+   - Ad-hoc-Pods (Scratch-Pod, Lastgenerator in Schritt 3, Debug-Pods)
+     ziehen ihr Image aus ACR. Sie laufen nur in einem Namespace mit
+     `acr-pull` (`sli/aks/acr-pull.sh <ns>`, P1) und tragen
+     `imagePullSecrets: [{name: acr-pull}]` im eigenen Pod-Spec; ein
+     Patch des default-SA erreicht nur Pods, die danach entstehen
+     [Quelle:
+     `kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin`].
+     Ein eigener Namespace (z. B. `restore-test`) wird nach dem Test
+     samt Secret gelöscht.
    - Ablage: chmod 600, außerhalb aller Repos und Cloud-Sync-Ordner,
      verschlüsselt (z. B. `age`) empfohlen; nie nach Key Vault, ACR oder
      Blob; Löschung in Schritt 8.
@@ -3983,7 +5610,9 @@ Wartungssperre, Refresh-Termin und L3 abfangen.
      Per Pipe, ohne Zwischendatei: Das JSON enthält `tls.key`,
      `tls-backup.sh` läuft aus `sli/aks/`, und der Owner committet
      direkt auf master (Muster wie `newsecret` in P1 Schritt 3).
-     Braucht ein Werkzeug doch eine
+     Schreiben darf der Owner über seine Access Policy im Key Vault
+     (P1 Schritt 3); ein Stellvertreter mit `get list` kann das Backup
+     lesen, aber nicht schreiben. Braucht ein Werkzeug doch eine
      Datei, dann nur mit `umask 077; f=$(mktemp); trap 'rm -f "$f"'
      EXIT`. Nicht `az keyvault certificate import`: Es verwirft die
      Annotationen, und cert-manager stellte dann wegen IncorrectIssuer
@@ -3992,35 +5621,159 @@ Wartungssperre, Refresh-Termin und L3 abfangen.
    - Keine CSI-VolumeSnapshots: `pg_dump` mit Restore-Test ist der
      einzige Backup-Pfad; das SAM-Postgres-PVC würde den Key enthalten.
 3. Drills vor G3 [Quelle: PLAN 0.3 G3; PLAN 8.6]:
-   - Neuaufbau: `az group delete -n rg-eurocis-aks` (nimmt
-     `rg-eurocis-nodes` mit), dann alles aus Skripten inklusive der
-     Wartungskonfigurationen mit beiden Sperrbereichen und der
-     API-Server-Allowlist aus der Liste von `aks-allow-me.sh` (P1);
-     Rollen des Stellvertreters neu (neue `<aks-id>`); Federated
-     Credentials nur, falls noch eine Workload Identity besteht [A: mit
-     HTTP-01 braucht cert-manager keine]. `pip-aks-ingress` (Label,
-     Lock `CanNotDelete`) und die Rolle Network Contributor der
-     Control-Plane-Identität auf `rg-eurocis-base` bleiben; `<fqdn>`,
-     Ingress-IP, Kiosk-URLs und QR-Codes ändern sich nicht.
-     TLS: das Secret direkt nach dem Anlegen des Namespace `traefik`
-     einspielen, vor dem Certificate-Objekt, vor Traefik mit
-     Default-TLSStore und vor dem SAM-Install; sonst den Drill nur gegen
-     den LE-Staging-Issuer. Jeder Drill ohne wirksames Backup verbraucht
-     eine von 5 Ausstellungen für das Namensset `<fqdn>` in 7 Tagen
-     (aufgefüllt um eine je 34 h). Als Erneuerung desselben Sets zählt
-     sie nicht gegen das Limit von 50 je Woche, das sich alle
-     Azure-Kunden für `azure.com` teilen (`cloudapp.azure.com` fehlt auf
-     der Public Suffix List) [Quelle: `letsencrypt.org/docs/rate-limits`;
-     `publicsuffix.org/list/public_suffix_list.dat`, 17.11.]. Scheitert
-     LE trotzdem, stellt der vorbereitete Rückfall-Issuer mit EAB aus
-     (P2). `export-le-certs.sh` stellt nichts aus.
+   - Neuaufbau. Der Cluster nimmt beim Löschen die Node-RG
+     `gebit-showcase-nodes` mit allen Ressourcen mit, auch die dort
+     selbst angelegte `pip-aks-ingress` und die AKS-verwaltete
+     Outbound-IP [Quelle: `learn.microsoft.com/azure/aks/faq`]. Damit
+     ist das Label `<p>` von der Löschung bis zur Neuanlage frei, und
+     beide Adressen sind danach neu [Quelle:
+     `learn.microsoft.com/azure/virtual-network/ip-services/public-ip-addresses`,
+     "IP address assignment" und "Domain Name Label Scope"]. Ablauf:
+     - Vorher: TLS-Backup `tls-traefik-ingress-tls` im Key Vault mit
+       `notAfter` des laufenden Zertifikats, Dumps aus Schritt 2,
+       aktuelle Liste von `aks-allow-me.sh`, Drill-Termin dem
+       LiteLLM-Betreiber angekündigt (falls Allowlist, AKS-E11).
+     - Gelöscht wird nur über `sli/aks/aks-rebuild.sh delete` (5.1);
+       ein nacktes `az aks delete` verbietet der Lint in `sli/aks/`.
+       Das Skript verlangt den eingetippten Clusternamen, verweigert
+       vom 27.01. bis 20.02.2027 ohne `--freeze-override` und prüft
+       vorher, dass `tls-traefik-ingress-tls` im Key Vault dasselbe
+       `notAfter` wie das laufende Zertifikat hat, dass Dumps vom
+       selben Tag existieren (Schritt 2) und dass `foundation.sh post`
+       bereitsteht.
+     - Löschen und sofort neu anlegen, ohne Pause zwischen den
+       Befehlen; der Create läuft wie in P1 Schritt 4 aus demselben
+       Skript, mit `--node-resource-group gebit-showcase-nodes` und
+       denselben vier Tags (`Owner` und `Created Date` mit den Werten
+       von `gebit-showcase`, `purpose`, `deleteAfter`), denn ohne sie
+       verweigert die Tag-Pflicht die Node-RG [Quelle:
+       `learn.microsoft.com/azure/aks/use-tags`]:
+
+       ```bash
+       sli/aks/aks-rebuild.sh delete   # fragt den Namen ab, blockiert
+       az group exists -n gebit-showcase-nodes   # false, sonst warten
+       # Create wie P1 Schritt 4 (gleiches Skript, gleiche Tags)
+       az network public-ip create -g gebit-showcase-nodes \
+         -n pip-aks-ingress -l germanywestcentral --sku Standard \
+         --allocation-method Static --version IPv4 --dns-name <p> \
+         --tags purpose=eurocis2027 deleteAfter=2027-02-28 -o none
+       az group show -n gebit-showcase-nodes --query "keys(tags)" -o tsv
+       # 4 Schlüssel; Werte nur per stillem Vergleich (P1-Abnahme)
+       ```
+
+       Nie `az group delete -n gebit-showcase`: Die RG gehört dem Owner
+       und hält ACR und Key Vault, die den Neuaufbau überleben. Die
+       Node-RG darf beim Create nicht existieren [Quelle:
+       `learn.microsoft.com/azure/aks/faq`]. `pip-aks-ingress` entsteht
+       als erste Ressource nach dem Create, vor jedem Workload; die
+       Cluster-Identität braucht dafür keine Rollenzuweisung [Quelle:
+       `learn.microsoft.com/azure/aks/static-ip`]. Scheitert der Create
+       mit RequestDisallowedByPolicy, fehlt ein Tag; eine
+       Policy-Ausnahme kann nur ein Subscription-Owner anlegen.
+     - Label belegt: Scheitert `public-ip create`, weil ein Fremder
+       `<p>` in der Region übernommen hat [A: Fehlertext beim Drill
+       notieren], ist `<fqdn>` verloren. Dann L3 und Owner-Entscheidung
+       über ein neues Präfix; das heißt neues Zertifikat (geteilter
+       LE-Topf, sonst EAB-Rückfall), `KC_HOSTNAME`, SAM `dnsName`,
+       `redirectUris`, `E2E_BASE_URL`, Kiosk-URLs und QR-Codes neu
+       [A: rund 0,5-1 PT]. Das TLS-Backup hilft dann nicht. Das
+       Zeitfenster ist die Dauer von Delete und Create [A: rund
+       20-30 min, im Drill messen]. Gegenmittel bleiben das neutrale
+       Präfix und die sofortige Neuanlage. Optionen für den Owner
+       (Frage 7): `--dns-name-scope SubscriptionReuse` (Preview
+       ohne SLA, FQDN mit Hash-Anteil, gleiches FQDN bei jedem
+       Neuaufbau in `azure-se`; muss schon beim ersten Anlegen in P1
+       gesetzt sein, weil der Hash `<fqdn>` ändert) oder vor dem
+       Delete die IP per `az resource move` nach `gebit-showcase` und
+       nach dem Create zurück [A: ungeprüft, ob das Label den Move
+       übersteht und ob ein Move in die AKS-Node-RG geht; vorher mit
+       einer Wegwerf-IP und eigenem Test-Label belegen; Quelle:
+       `learn.microsoft.com/azure/azure-resource-manager/management/move-limitations/networking-move-limitations`].
+     - Bootstrap wie P1 Schritt 6 mit `bootstrap-rbac.sh`: Admin-kubeconfig nur
+       im per `trap` gelöschten Temp-Verzeichnis (`set -euo pipefail`, `umask
+       077`, nie nach `~/.kube`), ClusterRoleBinding des Owners (Username aus
+       `kaks auth whoami`, bei Mitgliedern des Tenants der UPN), `kaks auth
+       can-i '*' '*' -A` mit der Entra-kubeconfig, dann `aks_update
+       --disable-local-accounts` mit demselben Nachweis wie in P1
+       (`disableLocalAccounts` gleich `true`, danach scheitert `--admin` im
+       Negativtest) [Quelle:
+       `learn.microsoft.com/azure/aks/kubernetes-rbac-entra-id`]. Im selben Zug
+       die Break-glass-Probe aus Schritt 7: einmal `--enable-local-accounts`,
+       `get-credentials --admin` nach demselben Muster, Binding prüfen, wieder
+       `--disable-local-accounts` mit Nachweis. Erst danach `az aks
+       rotate-certs`, vor dem ersten Workload (bis 30 min, erneuert Nodes, VMSS
+       und Disks), weil ausgegebene Admin-Zertifikate sonst gültig bleiben
+       [Quelle:
+       `learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad`;
+       `learn.microsoft.com/azure/aks/rotate-certificates`] [A:
+       Owner-Entscheidung; entfällt, wenn eine Entra-Gruppe per
+       `--aad-admin-group-object-ids` den Bootstrap ohne Admin-Zertifikat
+       erlaubt]. Dann Entra-kubeconfig neu (`az aks get-credentials --file
+       ~/.kube/aks-eurocis.yaml --context aks-eurocis --overwrite-existing`,
+       `kubelogin convert-kubeconfig -l azurecli --kubeconfig
+       ~/.kube/aks-eurocis.yaml --context aks-eurocis`): Der neue Cluster hat
+       einen neuen API-Server-FQDN. Jedes `az aks update` im Drill, das an
+       RequestDisallowedByPolicy scheitert, wird begrenzt wiederholt; bei
+       Failed-State `az aks update -g gebit-showcase -n aks-eurocis` zum
+       Reconcile [Quelle: `github.com/Azure/AKS/issues/5856`;
+       `learn.microsoft.com/troubleshoot/azure/azure-kubernetes/error-codes/requestdisallowedbypolicy-error`].
+     - Danach alles aus Skripten: Wartungskonfigurationen mit beiden
+       Sperrbereichen, API-Server-Allowlist aus der Liste von
+       `aks-allow-me.sh` (P1), `acr-pull` in jedem Namespace vor dessen
+       Installation (`traefik`, `monitoring`, `iam`, `solace`,
+       `sam-solace-lab`; `gpos-data` und `gpos-demo` legt `install.sh`
+       an), dann P2 bis P6. Keine Workload Identity, keine UAMI und
+       keine Federated Credentials (AKS-E21); der OIDC-Issuer bleibt
+       aus. ACR mit Images und Token, Key Vault mit allen Secrets
+       und Access Policies, Budget-Filter (fester Name der Node-RG) und
+       die Keycloak-, SAM- und gpos-Inhalte aus Skripten und Seed
+       bleiben bzw. entstehen gleich. Die Activity-Log- und
+       Resource-Health-Alarme zeigen auf dieselbe Ressourcen-ID [A:
+       nach dem Drill je einmal auslösen bzw. prüfen].
+     - Neu sind Ingress-IP, Egress-IP, API-Server-FQDN und
+       Cluster-RBAC. Die Egress-IP liest das Skript aus
+       `networkProfile.loadBalancerProfile.effectiveOutboundIPs[].id`
+       und `az network public-ip show --ids <id> --query ipAddress -o
+       tsv` [Quelle:
+       `learn.microsoft.com/azure/aks/configure-load-balancer-standard`];
+       sie geht nur in das lokale Register, nie in dieses Dokument. Gibt
+       es eine LiteLLM-Allowlist, meldet der Owner die neue IP sofort
+       und lässt die alte austragen (Azure vergibt eine freigegebene
+       Adresse neu). Die Freischaltung muss in das 4-h-Fenster passen;
+       die Vorlaufzeit des Betreibers steht im Rebuild-Runbook. Das
+       Binding des Stellvertreters entsteht neu (Schritt 7), seine
+       Key-Vault-Policy bleibt; Owner und Stellvertreter holen ihre
+       kubeconfig neu.
+     - `<fqdn>`, Kiosk-URLs und QR-Codes bleiben gleich, solange das
+       Label neu gebunden ist; `nslookup <fqdn>` liefert die neue
+       Ingress-IP. Der Traefik-Service bindet sie per `azure-pip-name`
+       ohne RG-Annotation (P2 Schritt 5), nie per
+       `azure-dns-label-name`.
+     - TLS: das Secret direkt nach dem Anlegen des Namespace `traefik`
+       einspielen, vor dem Certificate-Objekt, vor Traefik mit
+       Default-TLSStore und vor dem SAM-Install; sonst den Drill nur
+       gegen den LE-Staging-Issuer. Jeder Drill ohne wirksames Backup
+       verbraucht eine von 5 Ausstellungen für das Namensset `<fqdn>`
+       in 7 Tagen (aufgefüllt um eine je 34 h). Als Erneuerung
+       desselben Sets zählt sie nicht gegen das Limit von 50 je Woche,
+       das sich alle Azure-Kunden für `azure.com` teilen
+       (`cloudapp.azure.com` fehlt auf der Public Suffix List) [Quelle:
+       `letsencrypt.org/docs/rate-limits`;
+       `publicsuffix.org/list/public_suffix_list.dat`, 17.11.].
+       Scheitert LE trotzdem, stellt der vorbereitete Rückfall-Issuer
+       mit EAB aus (P2). `export-le-certs.sh` stellt nichts aus.
    - 24-h-Lauf mit 450 Läufen/h von Mo 18.01. 12:00 bis Di 19.01.
      12:00, also nicht über das Mittwochsfenster (der 20.01. ist
      zusätzlich gesperrt); danach Neustart von awe allein, der Lauf geht
      weiter [Quelle: PLAN 8.6]. Der Lastgenerator läuft clusterintern
-     oder über den Port-Forward auf gpos-ui, damit `public-guard` ihn
-     nicht drosselt [A]. 3 Stop/Start-Zyklen mit je mindestens 30 min
-     Pause (zusammen rund 2,5-3 h [A]). Kein N-1-Drain (ein Node).
+     (mit `acr-pull`, Schritt 2) oder über den Port-Forward auf
+     gpos-ui, damit `public-guard` ihn nicht drosselt [A]. 3
+     Stop/Start-Zyklen mit je mindestens 30 min Pause (zusammen rund
+     2,5-3 h [A]); vor und nach jedem Zyklus Egress-IP und
+     `pip-aks-ingress` protokollieren, weil Learn zum Verhalten der
+     IPs in der Node-RG bei Stop und Start nichts sagt [A: Erwartung
+     unverändert; Quelle: `learn.microsoft.com/azure/aks/start-stop-cluster`].
+     Kein N-1-Drain (ein Node).
    - 10-h-Kiosklauf (AP11) parallel zum 24-h-Lauf: `/monitor`,
      `/kasse` und `/kunde` im Kiosk-Browser der Messe-Hardware über den
      öffentlichen Ingress (Leih-Router, Kabel-Uplink) gegen AKS
@@ -4037,7 +5790,13 @@ Wartungssperre, Refresh-Termin und L3 abfangen.
      `aks-allow-me.sh` (Ausbreitung bis 2 min) und einmal ohne
      Allowlist-Eintrag per `az aks command invoke` [Quelle:
      `learn.microsoft.com/azure/aks/api-server-authorized-ip-ranges`;
-     `learn.microsoft.com/azure/aks/access-private-cluster`]. Die
+     `learn.microsoft.com/azure/aks/access-private-cluster`]. `command
+     invoke` läuft über ARM, aber mit dem Entra-Token des Aufrufers und
+     damit unter Kubernetes-RBAC: Es hilft gegen die IP-Sperre, nicht
+     gegen ein fehlendes Binding [Quelle: azure-cli acs/custom.py,
+     Kommentar "current user identity", 2.93.0 Z. 3284-3286]. Scheitert
+     `aks-allow-me.sh` an RequestDisallowedByPolicy (Azure/AKS #5856),
+     begrenzt wiederholen und bis dahin `command invoke` nutzen. Die
      Negativtests aus P6 von außen wiederholen.
    - Missbrauchs- und Kostentest (neu):
      - Rate-Limits: Skript-Schleifen von einer IP auf `POST /api/pos/`,
@@ -4074,24 +5833,63 @@ Wartungssperre, Refresh-Termin und L3 abfangen.
    AKS-E16 geroutet), Zertifikat
    (Ablauf, Aussteller LE oder Rückfall), Broker-Spool, SAM-Health,
    Modellprobe, Inbox-Token, gRPC-Health (clusterintern), Node Ready und
-   Node-Image. Erster Schritt für jeden Betreiber morgens: eigene IP mit
-   `aks-allow-me.sh` in die Allowlist, dann ein nicht-interaktiver
+   Node-Image. Neu seit 18.11. (alles read-only):
+   - `pip-aks-ingress` existiert in `gebit-showcase-nodes`,
+     `nslookup <fqdn>` liefert ihre Adresse;
+   - die Egress-IP aus `effectiveOutboundIPs` ist die beim
+     LiteLLM-Betreiber gemeldete (nur bei Allowlist; Vergleich gegen
+     das lokale Register);
+   - `acr-pull` existiert in jedem Namespace, der aus ACR zieht, und
+     das Passwort von `aks-pull` läuft nach dem 20.02.2027 ab (`az acr
+     token show -r <acr> -n aks-pull --query
+     "credentials.passwords[].expiry"`); ein abgelaufenes Passwort fällt
+     erst beim nächsten Pull auf, etwa auf dem Surge-Node am 26.01.;
+   - `disableLocalAccounts` ist `true`, und das Activity Log der
+     letzten 24 h zeigt keine `listClusterAdminCredential`-Aktion,
+     kein `vaults/accessPolicies/write` und kein
+     `registries/tokens/write` außer dokumentierten eigenen (die
+     Alarme aus P1 melden sie zusätzlich).
+
+   Erster Schritt für jeden Betreiber morgens: eigene IP mit
+   `aks-allow-me.sh` in die Allowlist (ohne eigenes Azure-Recht trägt
+   der Owner sie ein, Schritt 7), dann ein nicht-interaktiver
    Aufruf über kubelogin: `kaks auth can-i get pods -n gpos-demo`;
    scheitert er, meldet sich die Person selbst mit `az login` an, vor
-   Standöffnung. Runbook-Regeln: Start frühestens 30 min nach Stop;
+   Standöffnung; ohne Subscription-Zugriff mit `az login --tenant
+   <tenant> --allow-no-subscriptions` (sonst "No subscriptions found",
+   Schritt 7). Runbook-Regeln: Start frühestens 30 min nach Stop;
    Umfang des Stellvertreters (Schritt 7); bei Missbrauch die
    betroffene Route sperren (Limit senken oder Pfad-Ingress löschen,
-   Freeze-Ausnahme), bei 429 vom Messe-Key L1 [Quelle: PLAN 9 R24].
-   Keycloak-Admin ist seit P3 nicht über den Ingress erreichbar; P7
-   prüft das nur noch.
+   Freeze-Ausnahme), bei 429 vom Messe-Key L1 [Quelle: PLAN 9 R24];
+   nie `az group delete -n gebit-showcase`, den Cluster nur per
+   `sli/aks/aks-rebuild.sh` und nur mit Owner-Go; meldet der Alarm ein
+   Löschen des Key Vault, stellt `az keyvault recover -n <kv>` ihn
+   binnen 7 Tagen wieder her (Soft-Delete ohne Purge-Schutz, AKS-E17);
+   nach einem Purge ist diese Kopie endgültig weg, dann entscheidet
+   sofort der Owner; `az aks update --tags` nur mit allen
+   vier Tags, weil der Aufruf das ganze Tag-Set ersetzt [Quelle:
+   `learn.microsoft.com/azure/aks/use-tags`]; scheitert ein `az aks
+   update` an RequestDisallowedByPolicy, begrenzt wiederholen, dann
+   Reconcile (Schritt 3). Keycloak-Admin ist seit P3 nicht über den
+   Ingress erreichbar; P7 prüft das nur noch.
 5. Di 26.01., nach Ende eines eventuell laufenden Auto-Vorgangs:
-   `az aks nodepool upgrade --node-image-only` als letztes Node-Image
-   vor der Sperre (ab 27.01.). Mit einem Node ersetzt AKS ihn per Surge
-   (8 vCPU Quota für den Surge-Node, 3.5) und zieht alle Pods samt
-   Disks um: einige Minuten Ausfall [A: Dauer messen, ins Runbook];
-   deshalb an keinem Probetag und während keines Laufs. Danach `az aks
-   nodepool show --query nodeImageVersion` und Name, Label
-   `kubernetes.azure.com/node-image-version` und `bootID` notieren:
+   `az aks nodepool upgrade -g gebit-showcase --cluster-name aks-eurocis
+   -n main --node-image-only` als letztes Node-Image vor der Sperre (ab
+   27.01.). Mit einem Node ersetzt AKS ihn per Surge und zieht alle Pods
+   samt Disks um: einige Minuten Ausfall [A: Dauer messen, ins
+   Runbook]; deshalb an keinem Probetag und während keines Laufs. Die
+   Quota für den Surge-Node war am 18.11. vorhanden (Total Regional 150
+   von 350 frei); weil die Subscription geteilt ist, am Vortag `az vm
+   list-usage -l germanywestcentral` erneut prüfen (3.5). Vorher den
+   Preflight laufen lassen: Der Surge-Node hat einen leeren
+   Image-Cache und zieht jedes Image neu, also müssen `acr-pull` in
+   allen Namespaces und ein gültiges Token-Passwort da sein. Egress-IP
+   und `pip-aks-ingress` vorher und nachher protokollieren [A:
+   unverändert erwartet]. Scheitert der Vorgang an
+   RequestDisallowedByPolicy, Reconcile wie in Schritt 3, noch am
+   26.01. Danach `az aks nodepool show --query nodeImageVersion` und
+   Name, Label `kubernetes.azure.com/node-image-version` und `bootID`
+   notieren:
 
    ```bash
    COLS='NAME:.metadata.name,BOOT:.status.nodeInfo.bootID'
@@ -4120,45 +5918,120 @@ Wartungssperre, Refresh-Termin und L3 abfangen.
    oder als Datei mit chmod 600 außerhalb aller Repos und
    Sync-Ordner; Löschung in Schritt 8.
 7. Betrieb mit Betreiber und Stellvertreter (AKS-E20,
-   Owner-Bestätigung offen):
-   - Bis G3 bekommt der Stellvertreter: "Azure Kubernetes Service RBAC
-     Cluster Admin" auf `<aks-id>` (enthält
-     `listClusterUserCredential`); eine eigene Rolle mit
-     `Microsoft.ContainerService/managedClusters/read`,
-     `.../runcommand/action`, `.../commandResults/read`,
-     `.../start/action` für `az aks start` und Break-glass sowie
-     `.../write` für `aks-allow-me.sh` (`az aks update` ersetzt die
-     ganze Liste), ohne `delete`, `stop/action`, Agent-Pool-Rechte und
-     `listClusterAdminCredential` [A: `az aks update
-     --api-server-authorized-ip-ranges` braucht nur `write`]. Die
-     AKS-Contributor-Rolle ginge auch, erlaubt aber zusätzlich stop und
-     delete. Dazu "Key Vault Secrets User" auf `<kv>`, ein eigener
-     Allowlist-Eintrag, eigener Keycloak-User und eigenes `SAM_HOME`
-     (P5). Er meldet sich selbst an; Owner und Claude geben nie seine
-     Passwörter ein.
-   - Direkt nach der Zuweisung, vor G3: Der Stellvertreter ruft
-     `aks-allow-me.sh` mit seinem eigenen Konto auf. `az aks update`
-     schickt das ganze Cluster-Objekt, das auf `id-aks-cp`, das
-     BYO-Subnetz und `pip-aks-egress` in `rg-eurocis-base` verweist;
-     eine Rolle nur mit `managedClusters/write` kann deshalb mit
-     `LinkedAuthorizationFailed` scheitern [A]. Dann kommen
-     `Microsoft.ManagedIdentity/userAssignedIdentities/assign/action`
-     auf `id-aks-cp` sowie
-     `Microsoft.Network/virtualNetworks/subnets/join/action` und
-     `Microsoft.Network/publicIPAddresses/join/action` auf
-     `rg-eurocis-base` dazu [A]. Der Lauf an Probetag 1 ist nur noch
-     Wiederholung.
-   - GEBIT: Jede schreibende AKS-RBAC-Rolle liest Secrets, also auch
-     `gpos-gebit-descriptors`. Deckt die GEBIT-Freigabe den
-     Stellvertreter nicht ab [A, P6 Schritt 1], bekommt er seine
-     Datenrolle nur je Namespace ohne `gpos-demo` (oder "RBAC Reader");
-     ein Fehler in `gpos-demo` heißt dann L3, und nur der Owner stellt
-     das Descriptor-Secret wieder her.
-   - Umfang des Stellvertreters: Preflight, `aks-allow-me.sh`,
-     `aks-start.sh`, Pod- und awe-Neustarts, Backups, Umschaltung auf L3
-     oder L4. Kein Neuaufbau und kein SAM-Helm-Upgrade
-     (Descriptor-Secret nur vom Owner-Mac, LiteLLM-Key nur in dessen
-     `amd/.env.aks`).
+   Owner-Bestätigung offen). Rollenzuweisungen gibt es nicht
+   (Owner-Entscheidung 18.11.2026), also auch keine eigene
+   Stellvertreter-Rolle und kein "AKS RBAC Cluster Admin". Der Zugang
+   hat zwei Teile; was hier für den Stellvertreter steht, gilt ebenso
+   für einen Betreiber, der nicht der Owner ist:
+   - Kubernetes (ohne Azure-Recht): Der Stellvertreter braucht ein
+     Konto im Tenant von `azure-se` und meldet sich selbst an. Ohne
+     Subscription-Zugriff scheitert ein einfaches `az login` mit "No
+     subscriptions found" [Quelle: azure-cli 2.85.0
+     core/_profile.py:206-207]; er nimmt deshalb `az login --tenant
+     <tenant> --allow-no-subscriptions` (bei einem Gast liefert erst
+     `--tenant` ein Token des richtigen Tenants) [Quelle: `az login
+     --help`, 2.85.0], danach `kaks auth whoami` und `az ad
+     signed-in-user show --query id -o tsv`. Ohne Azure CLI konvertiert
+     er die weitergegebene kubeconfig mit `kubelogin convert-kubeconfig
+     -l interactive` (oder `-l devicecode`) `--kubeconfig
+     ~/.kube/aks-eurocis.yaml --context aks-eurocis` statt `-l
+     azurecli`. `kaks auth whoami` mit seiner Entra-kubeconfig zeigt
+     seinen Username (bei Mitgliedern des Tenants der UPN, bei Konten
+     aus einem anderen Tenant laut Learn die objectId) [Quelle:
+     `learn.microsoft.com/azure/aks/kubernetes-rbac-entra-id`;
+     `learn.microsoft.com/azure/aks/control-kubeconfig-access`]; der
+     Wert steht nur im lokalen Register
+     `~/.config/eurocis-aks/subjects` (chmod 600), nie im Repo. Der
+     Owner legt mit seiner eigenen Entra-Identität das Binding an,
+     ohne Admin-Zertifikat:
+
+     ```bash
+     DEPUTY_USER=$(sed -n 's/^deputy=//p' ~/.config/eurocis-aks/subjects)
+     kaks create clusterrolebinding eurocis-deputy \
+       --clusterrole=cluster-admin --user="$DEPUTY_USER" \
+       --dry-run=client -o yaml | kaks apply -f -
+     kaks auth can-i get pods -n gpos-demo --as="$DEPUTY_USER"  # yes
+     ```
+
+     Die kubeconfig bekommt er vom Owner als Datei
+     `~/.kube/aks-eurocis.yaml` oder, mit eigenem Azure-Recht, per `az
+     aks get-credentials -g gebit-showcase -n aks-eurocis --file
+     ~/.kube/aks-eurocis.yaml --context aks-eurocis`; ohne `--file`
+     mergte `az` in seine `~/.kube/config` und stellte seinen aktuellen
+     Kontext auf AKS um (P1 Schritt 6). Auf seinem Mac gelten dieselben
+     Wrapper `kaks`/`haks` wie in P1 Schritt 6. Die
+     Entra-User-kubeconfig enthält kein Geheimnis [Quelle:
+     `learn.microsoft.com/azure/aks/control-kubeconfig-access`] [A:
+     Test unten, vor G3]. Dazu ein eigener Allowlist-Eintrag, eigener
+     Keycloak-User und eigenes `SAM_HOME` (P5). Er meldet sich selbst
+     an; Owner und Claude geben nie seine Passwörter ein.
+   - Azure (für `aks-allow-me.sh` = `managedClusters/write`,
+     `aks-start.sh` und `aks-stop.sh`, `az aks command invoke` =
+     `runCommand/action` und `commandResults/read`, `get-credentials`
+     = `listClusterUserCredential/action`): Ohne Rollenzuweisung geht
+     das nur, wenn der Stellvertreter schon über eine Gruppe
+     Contributor (oder eine Rolle mit diesen Aktionen) auf `azure-se`
+     hat [Quelle:
+     `learn.microsoft.com/azure/role-based-access-control/built-in-roles/privileged`].
+     Ob er das hat, ist offen (AKS-E20, Owner bis 27.11.). Fehlt es,
+     bleiben diese Schritte beim Owner: Er trägt die IP des
+     Stellvertreters mit `aks-allow-me.sh --add <ip>` ein [A: neue
+     Option des Helfers, P1 Schritt 7], startet und stoppt den Cluster
+     selbst, und Break-glass ohne Allowlist gibt es dann nur über ihn.
+     Mit Contributor hat der Stellvertreter auch `stop` und `delete`;
+     die Grenze zieht das Runbook, nicht das Recht.
+   - Key Vault (Access-Policy-Modus, P1 Schritt 3): `az keyvault
+     set-policy -n <kv> -g gebit-showcase --object-id <deputy-objectId>
+     --secret-permissions get list -o none`; die objectId nennt der
+     Stellvertreter selbst (`az ad signed-in-user show --query id -o
+     tsv`), sie steht nur im lokalen Register [Quelle:
+     `learn.microsoft.com/azure/key-vault/general/assign-access-policy`].
+     Contributor reicht dafür, eine Rollenzuweisung nicht.
+   - Direkt nach dem Einrichten, vor G3: Der Stellvertreter ruft mit
+     seinem eigenen Konto `kaks auth whoami`, `kaks auth can-i '*' '*'
+     -A` und, falls er Contributor hat, `aks-allow-me.sh` auf. Hat er
+     kein Azure-Recht, läuft der Test ausdrücklich mit einem Konto ohne
+     Subscription-Zugriff, über `az login --tenant <tenant>
+     --allow-no-subscriptions` bzw. `-l interactive`. Auf seinem Mac
+     ist `kubectl config current-context` danach unverändert, und
+     `~/.kube/config` enthält kein `aks-eurocis`. Das
+     frühere Risiko `LinkedAuthorizationFailed` entfällt: Der Cluster
+     verweist auf keine BYO-Identität, kein BYO-Subnetz und keine
+     BYO-IP mehr. Der Lauf an Probetag 1 ist nur noch Wiederholung.
+   - GEBIT: Mit Kubernetes-RBAC lässt sich der Stellvertreter enger
+     binden als mit "AKS RBAC Cluster Admin". Deckt die GEBIT-Freigabe
+     ihn nicht ab [A, P6 Schritt 1], bekommt er statt `cluster-admin`
+     je Namespace die ClusterRole `admin` per RoleBinding, nur in
+     `gpos-demo` eine Role ohne `secrets` und ohne `pods/exec` (Pods,
+     Logs, Events lesen; `rollout restart` per `patch` auf
+     Deployments), dazu Lesen von `nodes` für den Preflight; ein
+     Fehler, der das Descriptor-Secret braucht, heißt dann L3, und nur
+     der Owner stellt es wieder her. Technisch bleibt
+     die Grenze organisatorisch: Wer Contributor auf `azure-se` hat,
+     kann lokale Accounts einschalten, Admin-Credentials holen oder
+     sich eine Key-Vault-Policy setzen [Quelle:
+     `learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad`;
+     `learn.microsoft.com/azure/key-vault/general/assign-access-policy`];
+     die Activity-Log-Alarme aus P1 und der Preflight (Schritt 4)
+     zeigen das, verhindern es aber nicht.
+   - Break-glass bei RBAC-Lockout (nur Owner oder ein Contributor):
+     `aks_update --enable-local-accounts`, `az aks get-credentials
+     --admin --file <tmp>` nur nach dem Muster aus P1 Schritt 6 (`set
+     -euo pipefail`, `umask 077`, `mktemp -d` mit `trap`), Binding
+     reparieren, wieder `--disable-local-accounts` mit Nachweis
+     (`disableLocalAccounts` gleich `true`, Negativtest), danach `az aks
+     rotate-certs` (bis 30 min Ausfall) [Quelle:
+     `learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad`;
+     `learn.microsoft.com/azure/aks/rotate-certificates`]. Im Freeze
+     verschiebt das Runbook die Rotation auf nach Standschluss [A:
+     Owner-Entscheidung]. `az aks command invoke` ist kein Weg am
+     RBAC vorbei (Schritt 3).
+   - Umfang des Stellvertreters: Preflight, Pod- und awe-Neustarts,
+     Backups, Umschaltung auf L3 oder L4; `aks-allow-me.sh`,
+     `aks-start.sh` und Break-glass nur mit eigenem Azure-Recht (siehe
+     oben). Kein Neuaufbau, kein `aks-rebuild.sh` bzw. `az aks
+     delete` und kein SAM-Helm-Upgrade (Descriptor-Secret nur vom
+     Owner-Mac, LiteLLM-Key nur in dessen `amd/.env.aks`).
    - Laufzeiten bis G4: nachts stoppen mit `aks-stop.sh`/`aks-start.sh`
      (Start frühestens 30 min nach Stop, Start 60 min vor Bedarf),
      Abend-Check (P1) bis 05.02.; am 18./19.01. kein Stopp (24-h-Lauf).
@@ -4173,10 +6046,12 @@ Wartungssperre, Refresh-Termin und L3 abfangen.
      [Quelle: PLAN 0.3 Messe]. Im Freeze sind nur erlaubt:
      `aks-allow-me.sh` (ändert nur die IP-Liste, bis 2 min), das Sperren
      einer Route bei Missbrauch und ein Traefik-Sicherheitspatch nach
-     Owner-Freigabe (nie unter v3.7.18) [A]. Am Morgen des 14.02. melden
-     sich Owner und Stellvertreter frisch an (bei kurzer
-     Conditional-Access-Frequenz täglich) und tragen die IP des
-     Stand-Uplinks ein.
+     Owner-Freigabe (nie unter v3.7.18) [A]. Ein Neuaufbau im Freeze
+     ist kein Routinefall: Er ändert Ingress- und Egress-IP und
+     riskiert das Label (Schritt 3); zuerst L3, dann Owner-Go. Am
+     Morgen des 14.02. melden sich Owner und Stellvertreter frisch an
+     (bei kurzer Conditional-Access-Frequenz täglich) und tragen die IP
+     des Stand-Uplinks ein.
    - Tägliche Backups wie Schritt 2, inklusive gpos-DB, nach jedem
      Messetag nach Standschluss und vor `reset.sh --scope day` (damit
      auch der 18.02. gesichert ist).
@@ -4194,95 +6069,163 @@ Wartungssperre, Refresh-Termin und L3 abfangen.
      `kaks -n gpos-demo delete secret gpos-gebit-descriptors`; oder den
      Namespace `gpos-demo` löschen (die Demo-DB in `gpos-data` bleibt).
      Zeit und Befehlsausgabe protokollieren (AKS-E16).
-   - (3) `az aks stop`; Disks und PVCs bleiben.
+   - (3) `az aks stop -g gebit-showcase -n aks-eurocis`; Disks, PVCs
+     und beide IPs bleiben (der Cluster existiert weiter).
    - (4) `gpos-data` nur mit der Rückbau-Entscheidung oder der
      GEBIT-Übergabe löschen.
-   - (5) Owner entscheidet Rückbau oder GEBIT-Übergabe. Rückbau: zuerst
-     das Zertifikat für `<fqdn>` per ACME widerrufen (etwa `certbot
-     revoke --cert-path <crt> --key-path <key> --server <directory>`
-     mit einer Temp-Datei nach dem Muster aus Schritt 2; cert-manager
-     widerruft nicht selbst [A: Werkzeug]), denn nach dem Rückbau ist
-     das Label für jeden frei, das Zertifikat aber bis rund Mitte April
-     gültig (Schritt 6). Dann den Lock `CanNotDelete` auf
-     `pip-aks-ingress` entfernen (`az lock delete`), sonst scheitert
-     die Löschung von `rg-eurocis-base` [Quelle:
-     `learn.microsoft.com/azure/azure-resource-manager/management/lock-resources`];
-     mit der IP wird das DNS-Label für jeden frei. Dann `az group
-     delete` von `rg-eurocis-aks` und `rg-eurocis-base`
-     (`rg-eurocis-nodes` geht mit dem Cluster). Ohne Übergabe danach
-     `az keyvault list-deleted --query "[?name=='<kv>']" -o table` und
-     `az keyvault purge -n <kv> -l germanywestcentral` (eigene Freigabe
-     des Owners, nicht umkehrbar, braucht Purge-Recht; gibt den global
-     reservierten Namen frei). Den EAB-Zugang beim Rückfall-Anbieter
-     schließt der Owner; den Messe-Key deaktiviert der
-     LiteLLM-Betreiber (O5) und bestätigt das schriftlich. Alle Dumps,
-     Scratch-DBs und die L3- und Backup-Kopien des Zertifikats löschen;
-     dazu die lokalen Dateien mit Secrets: `amd/.env.aks`
-     (LiteLLM-Key, OIDC-Client-Secret, PG- und Broker-Passwörter),
-     `gpd/.env.aks`, `sli/aks/.env.aks` (EAB),
-     `gpd/mesh/.rendered/aks/semp.tfvars`, `gpd/.rendered-aks/`, den
-     State unter `emd/terraform-aks/` (Client-Passwörter im Klartext),
-     `~/.kube/aks-eurocis.yaml` und das AKS-`SAM_HOME` mit
-     Token-Cache. Widerruf, Löschungen und Key-Deaktivierung
-     protokollieren; Budget, Abend-Check und die lokale Liste von
-     `aks-allow-me.sh` entfernen.
+   - (5) Owner entscheidet Rückbau oder GEBIT-Übergabe. Bei der
+     Übergabe bleiben alle Ressourcen; ein Wechsel des Token-Passworts
+     geht ohne Ausfall über `password2`, und `az aks update --tags`
+     nur mit allen vier Tags. Rückbau mit Azure CLI 2.93 oder neuer
+     (die Key-Vault-API von 2.85 endet am 27.02.2027 [Quelle:
+     `learn.microsoft.com/azure/key-vault/general/access-control-default`]),
+     in dieser Reihenfolge:
+     - Zuerst das Zertifikat für `<fqdn>` per ACME widerrufen (etwa
+       `certbot revoke --cert-path <crt> --key-path <key> --server
+       <directory>` mit einer Temp-Datei nach dem Muster aus Schritt
+       2; cert-manager widerruft nicht selbst [A: Werkzeug]). Grund:
+       `az aks delete` löscht mit der Node-RG auch `pip-aks-ingress`,
+       danach ist das Label für jeden frei, das Zertifikat aber bis
+       rund Mitte April gültig (Schritt 6).
+     - `sli/aks/aks-rebuild.sh teardown` (eingetippter Clustername,
+       erst ab 19.02. und erst nach (1) bis (3) und dem Widerruf; ruft
+       intern `az aks delete -g gebit-showcase -n aks-eurocis --yes`):
+       Es nimmt `gebit-showcase-nodes` mit VM, Disks samt allen PVCs,
+       LB, AKS-VNet, `pip-aks-ingress` und Outbound-IP mit [Quelle:
+       `learn.microsoft.com/azure/aks/faq`]. Einen Lock gibt es nicht,
+       also auch nichts zu entfernen. Danach ist `az group exists -n
+       gebit-showcase-nodes` gleich `false`.
+     - Der LiteLLM-Betreiber trägt die Egress-IP aus seiner Allowlist
+       aus (falls es eine gibt; Azure vergibt die Adresse neu) und
+       deaktiviert den Messe-Key (O5); beides bestätigt er schriftlich.
+     - `az acr delete -n <acr> --yes` (nimmt Images, Scope-Map und
+       Token `aks-pull` mit).
+     - `az keyvault delete -n <kv>` (die Access Policies gehen mit dem
+       Vault), dann `az keyvault list-deleted --query
+       "[?name=='<kv>']" -o table` und `az keyvault purge -n <kv> -l
+       germanywestcentral` (eigene Freigabe des Owners, nicht
+       umkehrbar; gibt den global reservierten Namen frei; Contributor
+       enthält die Purge-Aktion [Quelle:
+       `learn.microsoft.com/azure/role-based-access-control/built-in-roles/privileged`]).
+     - Budget per `az rest --method delete` auf denselben Pfad wie in
+       P1 (Contributor darf eigene Budgets löschen [Quelle:
+       `learn.microsoft.com/azure/cost-management-billing/costs/tutorial-acm-create-budgets`]),
+       dazu Activity-Log-Alarme, Resource-Health-Alarm und ihre Action
+       Group.
+     - `gebit-showcase` selbst löscht nur der Owner, der sie angelegt
+       hat, und nur, wenn sie danach leer ist; nie `az group delete
+       -n gebit-showcase`, solange etwas anderes darin liegt.
+     - Den EAB-Zugang beim Rückfall-Anbieter schließt der Owner. Alle
+       Dumps, Scratch-DBs und die L3- und Backup-Kopien des
+       Zertifikats löschen; dazu die lokalen Dateien mit Secrets:
+       `amd/.env.aks` (LiteLLM-Key, OIDC-Client-Secret, PG- und
+       Broker-Passwörter), `gpd/.env.aks`, `sli/aks/.env.aks` (EAB,
+       Kopie des ACR-Token-Passworts),
+       `gpd/mesh/.rendered/aks/semp.tfvars`, `gpd/.rendered-aks/`, den
+       State unter `emd/terraform-aks/` (Client-Passwörter im
+       Klartext), `~/.kube/aks-eurocis.yaml`, das AKS-`SAM_HOME` mit
+       Token-Cache und die Register unter `~/.config/eurocis-aks/`
+       (IPs, Subjekte) samt `~/.config/eurocis-aks/xtrace/`
+       (Mitschnitte). Der Stellvertreter löscht seine kubeconfig und
+       sein `SAM_HOME` selbst. Widerruf, Löschungen und
+       Key-Deaktivierung protokollieren; Abend-Check entfernen.
 9. Doku: AKS-Abschnitte in README und RUNBOOK, Drift korrigieren (siehe
    Abschnitt 8), markdownlint.
 
 **Wer:** Claude 1-6, 9; Betreiber und Stellvertreter (AKS-E20) 7 und
 die Probetage; Owner Freigaben, Bestätigung der Key-Limits beim
-LiteLLM-Betreiber, Drill-Teilnahme, 8.
+LiteLLM-Betreiber, Drill-Teilnahme mit dem Bootstrap im Neuaufbau
+(Admin-Zugang, Bindings, `rotate-certs`) und der Meldung der neuen
+Egress-IP, Bindings und Key-Vault-Policy des Stellvertreters (7),
+Rückbau (8).
 
 **Abnahme:**
 
 - G3: Neuaufbau bis Preflight READY in höchstens 4 h [Quelle: PLAN 6
-  AP13]; `<fqdn>` und Ingress-IP danach unverändert; nach dem
-  TLS-Restore zeigt `kaks get certificaterequest -A` keine neuen
-  Requests, das Certificate ist Ready, `notAfter` gleich dem Backup
-  (`openssl x509 -noout -enddate`); 24-h-Lauf ohne OOMKilled und ohne
-  NotReady; 10-h-Kiosklauf über den öffentlichen Ingress mit 0
+  AP13], inklusive Bootstrap mit `rotate-certs` und, falls es eine
+  Allowlist gibt, Freischaltung der neuen Egress-IP; Dauer je
+  Abschnitt protokolliert. Danach: `<fqdn>` unverändert (Label `<p>`
+  neu gebunden, `az network public-ip show -g gebit-showcase-nodes -n
+  pip-aks-ingress --query dnsSettings.fqdn` gleich `<fqdn>`), Kiosk-URLs
+  und QR-Codes ohne Änderung; Ingress- und Egress-IP neu und nur im
+  lokalen Register notiert, die alte Egress-IP beim Betreiber
+  ausgetragen; `gebit-showcase-nodes` trägt die vier Tags;
+  `disableLocalAccounts true`, `aadProfile.enableAzureRbac false`,
+  `get-credentials --admin` scheitert mit "Getting static credential
+  isn't allowed"; Bindings von Owner und Stellvertreter wirken
+  (`kaks auth can-i`), die Break-glass-Probe ist protokolliert; kein
+  Event mit ErrImagePull oder ImagePullBackOff, `acr-pull` in allen
+  Namespaces, die aus ACR ziehen. Nach dem TLS-Restore zeigt `kaks get
+  certificaterequest -A` keine neuen Requests, das Certificate ist
+  Ready, `notAfter` gleich dem Backup (`openssl x509 -noout
+  -enddate`). Das Kriterium "Ingress-IP unverändert" (P7-Abnahme der
+  Fassung vom 17.11., sda-Commit 9f66efd) gilt ohne Move-Variante
+  nicht mehr; Vorschlag: "`<fqdn>` unverändert" (Owner-Bestätigung
+  offen, Frage 31). 24-h-Lauf ohne
+  OOMKilled und ohne NotReady; Egress-IP und `pip-aks-ingress` über
+  alle 3 Stop/Start-Zyklen gleich, sonst prüft der Wrapper
+  `aks-start.sh` künftig die Egress-IP und das Runbook meldet sie dem
+  Betreiber [A]; 10-h-Kiosklauf über den öffentlichen Ingress mit 0
   manuellen Reloads, Browser-Speicher stabil (±20 %), Attract-Loop
   läuft; aus gestopptem Cluster bis READY in höchstens 30 min, gemessen
   ab `az aks start` [A: Zielwert]; L3-Drill höchstens 3 min [Quelle:
   PLAN 6 AP14b]; Restore-Test aller Dumps grün, Zählprüfungen 0;
   Missbrauchs- und Kostentest grün (429 auf allen geschützten HTTP-
   und gRPC-Routen, Kiosk unbeeinflusst, Key-Limits bestätigt,
-  L1-Rückfall gesehen); Rollen, Allowlist-Eintrag und Keycloak-User
-  des Stellvertreters bereit, `aks-allow-me.sh` mit seinem Konto
-  einmal grün. Fehlt TR3 aus P6, folgt es hier.
+  L1-Rückfall gesehen); Binding, Key-Vault-Policy, Allowlist-Eintrag
+  und Keycloak-User des Stellvertreters bereit, `kaks auth whoami` und
+  `kaks auth can-i` mit seinem Konto grün (ohne Azure-Recht mit einem
+  Konto ohne Subscription-Zugriff, Schritt 7); auf seinem Mac ist
+  `kubectl config current-context` unverändert, und `~/.kube/config`
+  enthält kein `aks-eurocis`; mit eigenem Azure-Recht
+  zusätzlich `aks-allow-me.sh` mit seinem Konto einmal grün, sonst
+  ist dokumentiert, dass der Owner diese Schritte übernimmt. Fehlt TR3
+  aus P6, folgt es hier.
 - Probetag 1 (28.01.): Runbook-Durchlauf des Stellvertreters mit
   eigenem Konto, inklusive `aks-allow-me.sh` aus seinem Netz
-  (Wiederholung); vor G4 (z. B. 03.02.) einmal Break-glass mit
-  `az aks command invoke` mit eigenem Konto.
+  (Wiederholung; ohne Azure-Recht durch den Owner mit `--add`); vor
+  G4 (z. B. 03.02.) einmal `az aks command invoke` mit eigenem Konto,
+  falls er das Azure-Recht hat, sonst durch den Owner.
 - G4: 100 Läufe mindestens 98 % ohne Rückfall [Quelle: PLAN 0.3 G4];
   das Certificate hat `notAfter` nach dem 10.04.2027 und
-  `status.renewalTime` nach dem 20.02.2027; `az aks
+  `status.renewalTime` nach dem 20.02.2027; das Passwort von
+  `aks-pull` läuft nach dem 20.02.2027 ab; `az aks
   maintenanceconfiguration show` zeigt beide Sperrbereiche auf allen
   drei Konfigurationen; Node-Image (`nodeImageVersion` und Label
   `kubernetes.azure.com/node-image-version`) am 28.01., 03.02. und
   05.02. gleich dem Stand nach dem Refresh am 26.01.; `bootID` nur
   innerhalb eines Laufs ohne Stopp vergleichen, weil jeder
   Nachtstopp die Node-VM neu bootet (ab 05.02., 24/7: 05.02. gegen
-  16.02.); das
-  Activity Log (`az monitor activity-log list` auf die
+  16.02.); das Activity Log (`az monitor activity-log list` auf die
   Cluster-Ressource) zeigt zwischen 27.01. und 05.02. keinen
-  automatischen Node-OS- oder Upgrade-Vorgang; nach dem letzten Start
-  vor dem 05.02. funktioniert kubectl vom 5G-Netz nach
+  automatischen Node-OS- oder Upgrade-Vorgang und seit dem
+  Neuaufbau-Drill keine `listClusterAdminCredential`-Aktion außer
+  dokumentiertem Break-glass; `disableLocalAccounts true`; nach dem
+  letzten Start vor dem 05.02. funktioniert kubectl vom 5G-Netz nach
   `aks-allow-me.sh`; Preflight READY in unter 15 min aus kalt [Quelle:
   PLAN 6 AP14].
 - Messe: Node-Image-Vergleich am 16.02. wie bei G4, dazu `bootID`
   gleich dem Wert vom 05.02. (seitdem kein Stopp); die Allowlist
-  enthält nur aktuelle Einträge.
+  enthält nur aktuelle Einträge; die Egress-IP ist die beim Betreiber
+  gemeldete (falls Allowlist).
 - Löschung des Descriptor-Secrets bis 20.02.2027 protokolliert; Dumps,
   Zertifikatskopien und lokale Secret-Dateien nach der Messe gelöscht,
-  das Zertifikat vor der Freigabe des Labels widerrufen, der Messe-Key
-  deaktiviert; alles protokolliert.
+  das Zertifikat vor `az aks delete` widerrufen, der Messe-Key
+  deaktiviert; beim Rückbau außerdem `gebit-showcase-nodes`, ACR und
+  Key Vault (purged) weg, Budget und Alarme gelöscht, Egress-IP beim
+  Betreiber ausgetragen; alles protokolliert.
 
 **Abhängigkeiten:** P6; Netzparameter des Stands (Uplink mit
 ausgehendem HTTPS, 5G-Option, fällig 18.12. [Quelle: PLAN 6.5]);
-Kiosk-Hardware und `/monitor` live (G2b); `aks-allow-me.sh` (P1);
-Bestätigung der Key-Limits durch den LiteLLM-Betreiber; AKS-E20
-(Owner-Bestätigung offen).
+Kiosk-Hardware und `/monitor` live (G2b); aus P1 `aks-allow-me.sh`
+(mit `--add`), das Bootstrap-Verfahren, `acr-pull.sh`, die
+Activity-Log-Alarme und das IP-Register; Bestätigung der Key-Limits
+und der Vorlaufzeit für Allowlist-Änderungen durch den
+LiteLLM-Betreiber; AKS-E20 (Owner-Bestätigung offen, inklusive der
+Frage, ob Betreiber und Stellvertreter über eine Gruppe Contributor
+auf `azure-se` haben); Owner-Entscheidungen zu `rotate-certs` bzw.
+Admin-Gruppe, zu `--dns-name-scope` oder Move-Variante und zum neuen
+G3-Kriterium "`<fqdn>` unverändert".
 
 ## 5. Notwendige Änderungen je Repo
 
@@ -4295,37 +6238,225 @@ A, 1,0 PT); es braucht ein eigenes Go des Owners und ein
 Wartungsfenster. `<fqdn>` steht in diesem Plan für
 `<p>.germanywestcentral.cloudapp.azure.com`.
 
+Seit der Owner-Entscheidung vom 18.11.2026 kommt jedes AKS-Skript mit
+der Rolle Contributor aus. Kein Skript ruft `az role assignment
+create` oder `az lock create` auf oder braucht eine Policy-Ausnahme,
+und keines nutzt einen Schalter, der eine Rollenzuweisung auslöst
+(`--attach-acr`, `--enable-azure-rbac`, `--vnet-subnet-id`,
+`--assign-identity`) [Quelle: azure-cli dev
+acs/managed_cluster_decorator.py und acs/_roleassignments.py, 18.11.].
+Cluster, ACR und Key Vault liegen in `gebit-showcase` (vom Owner
+angelegt, Metadaten in westeurope) und tragen `-l
+germanywestcentral`; die Node-RG `gebit-showcase-nodes` legt AKS beim
+Create an (8.6).
+
 ### 5.1 solace-lab-infrastructure (geteilt, Freigabe AKS-E15 (c))
 
 - Neuer Ordner `aks/`, nur neue Dateien:
   - `versions.env` (Traefik-Chart 42.4.1, Image `traefik:v3.7.19` per
     Digest und nie unter v3.7.18, cert-manager v1.21.3, Monitoring in
     den Lab-Versionen), `lib.sh` (`kaks`/`haks`,
-    `require_kube_context` mit Prüfung der Server-URL).
-  - `foundation.sh`, idempotent show-or-create: RGs, VNet nur mit
-    `snet-aks`, `pip-aks-egress` und `pip-aks-ingress` (Standard,
-    statisch, DNS-Label `<p>`, Lock `CanNotDelete`), UAMI `id-aks-cp`
-    mit Network Contributor auf `rg-eurocis-base` (Subnetz und beide
-    IPs) über `--assignee-principal-type`, ACR mit curl und whoami, Key
-    Vault mit Secrets-Officer-Zuweisung (nur wenn sie fehlt),
-    Warteschleife und Secrets nach P1 Schritt 3 (create-if-missing,
-    hex, `-o none`). Eine gelöschte IP gibt das Label für jeden frei;
-    der Lock verhindert das [Quelle:
-    `learn.microsoft.com/azure/aks/static-ip`].
+    `require_kube_context` mit Prüfung der Server-URL). Neu in
+    `lib.sh` seit dem 18.11.:
+    - Namen an einer Stelle: `gebit-showcase`, `gebit-showcase-nodes`,
+      `aks-eurocis`, `germanywestcentral`. `az aks create`, `az acr
+      create`, `az keyvault create` und `az network public-ip create`
+      tragen `-l germanywestcentral`, weil die RG in westeurope liegt;
+      Activity-Log- und Resource-Health-Alarme, `az acr token create`
+      und das Budget per `az rest` haben keine Region, die Action Group
+      `-l Global` (1.4).
+    - xtrace nur per `BASH_XTRACEFD` nach
+      `~/.config/eurocis-aks/xtrace/` (chmod 700); Zuweisungen und
+      Aufrufe mit Secret, objectId, UPN, Tag-Wert oder IP (auch
+      `aks_tags`, das Laden von `.env.aks` und `az aks create --tags`)
+      laufen zwischen `{ set +x; } 2>/dev/null` und `set -x` (1.4).
+    - `aks_tags` liest `Owner` und `Created Date` zur Laufzeit aus
+      `az group show -n gebit-showcase --query tags` und ergänzt
+      `purpose=eurocis2027` und `deleteAfter=2027-02-28`. Es gilt für
+      `az aks create --tags` und `--nodepool-tags` und für jedes
+      `az aks update --tags`, das das ganze Tag-Set ersetzt [Quelle:
+      `learn.microsoft.com/azure/aks/use-tags`]. Die Werte stehen in
+      keiner Datei des Repos.
+    - `aks_update` ist der einzige Weg zu `az aks update` und
+      `az aks nodepool update`: bei `RequestDisallowedByPolicy`
+      begrenzt wiederholen (3 Versuche, je 60 s Pause [A]), bei einem
+      Failed-State `az aks update -g gebit-showcase -n aks-eurocis`
+      zum Reconcile [Quelle: `github.com/Azure/AKS/issues/5856`;
+      `learn.microsoft.com/troubleshoot/azure/azure-kubernetes/error-codes/requestdisallowedbypolicy-error`].
+    - `require_kube_context` lehnt einen kubeconfig-Nutzer mit
+      Client-Zertifikat (Admin-Zugang) ab; nur `bootstrap-rbac.sh`
+      arbeitet mit einer Admin-kubeconfig.
+    - Lint über `sli/aks/`: kein `az group delete`, kein `az role
+      assignment`, kein `az lock` und kein `az aks delete` außerhalb
+      von `aks-rebuild.sh`; `-l germanywestcentral` bei genau den vier
+      regionalen `create`-Befehlen; jedes `kubelogin
+      convert-kubeconfig` mit `--kubeconfig`, jedes `az aks
+      get-credentials` mit `--file`.
+  - `foundation.sh`, idempotent show-or-create, ohne Rollenzuweisung
+    und ohne Lock, in zwei Teilen:
+    - `foundation.sh pre` (P1, vor dem Create) bricht ab, wenn
+      `gebit-showcase` fehlt oder die Tags `Owner` und `Created Date`
+      nicht trägt; eine RG legt es nie an. Dann der Key Vault im
+      Access-Policy-Modus (`--enable-rbac-authorization false`,
+      `--retention-days 7`) mit einer Access Policy des Owners nach
+      P1 Schritt 3 (Empfehlung: nur Secret-Rechte, also
+      `--no-self-perms` und `az keyvault set-policy` mit get, list,
+      set, delete, recover; die objectId kommt zur Laufzeit aus `az
+      ad signed-in-user show`). Contributor darf das
+      (`vaults/accessPolicies/write`); die Rolle "Key Vault Secrets
+      Officer" und ihre Warteschleife entfallen [Quelle: azure-cli
+      2.85.0 keyvault/custom.py:419-426, 623-639;
+      `learn.microsoft.com/azure/key-vault/general/assign-access-policy`].
+      Secrets nach P1 Schritt 3 (create-if-missing, hex, `-o none`).
+      Am Ende von `pre`, noch vor `az aks create`: `alerts.sh access`
+      mit den Zugriffs- und Löschalarmen (P1 Schritt 8), damit sie
+      schon das Fenster mit aktiven lokalen Accounts abdecken.
+    - Danach ACR Basic mit `--admin-enabled false
+      --role-assignment-mode rbac` und Prüfung von
+      `roleAssignmentMode`: Im Modus `rbac-abac` hätte Contributor
+      weder Push noch Pull [Quelle:
+      `learn.microsoft.com/azure/container-registry/container-registry-rbac-built-in-roles-directory-reference`].
+      Test-Imports wie bisher mit curl und whoami. Pull-Token
+      `aks-pull` auf einer Scope-Map nur zum Lesen
+      (`_repositories_pull` oder eine eigene mit `content/read`,
+      Frage 30), angelegt mit `--no-passwords`; ohne das Flag stünden
+      zwei Passwörter ohne Ablauf in der Ausgabe. Das Passwort
+      entsteht per `az acr token credential generate --password1
+      --expiration <ablauf>` und geht per Pipe in den Key Vault
+      (`acr-pull-token`, `--file /dev/stdin -o none`), eine Kopie nur
+      in `sli/aks/.env.aks` (per `umask 077` nach `git check-ignore`,
+      chmod 600, P1 Schritt 3); `password2` bleibt Rotationsreserve
+      [Quelle:
+      `learn.microsoft.com/azure/container-registry/container-registry-token-based-repository-permissions`;
+      `az acr token create --help`, 2.85.0].
+    - `foundation.sh post` (direkt nach dem Create): Label-Prüfung per
+      `CheckDnsNameAvailability`, dann `pip-aks-ingress` in
+      `gebit-showcase-nodes` (Standard, statisch, IPv4, `--dns-name
+      <p>`); die Pflicht-Tags erbt sie [A]. Keine Rollenzuweisung: Die
+      Control-Plane-Identität hat in ihrer Node-RG per Default
+      Contributor [Quelle: `learn.microsoft.com/azure/aks/static-ip`;
+      `learn.microsoft.com/azure/aks/managed-identity-overview`]. Kein
+      Lock, weil Locks Owner oder User Access Administrator brauchen
+      [Quelle:
+      `learn.microsoft.com/azure/azure-resource-manager/management/lock-resources`];
+      ein Cluster-Delete löscht IP und Label mit [Quelle:
+      `learn.microsoft.com/azure/aks/faq`]. Dann liest `post` die
+      AKS-verwaltete Egress-IP aus
+      `networkProfile.loadBalancerProfile.effectiveOutboundIPs[].id`
+      und schreibt beide Adressen ins lokale Register
+      `~/.config/eurocis-aks/` (chmod 600, nie im Repo); die Egress-IP
+      geht sofort an den LiteLLM-Betreiber (AKS-E11). Owner-Option
+      `--dns-name-scope SubscriptionReuse`, nur beim ersten Anlegen
+      setzbar (Frage 7).
+  - `bootstrap-rbac.sh` (P1, direkt nach `foundation.sh post`; der
+    Owner führt es aus, weil seine Entra-Identität gebunden wird):
+    1. Entra-kubeconfig per `az aks get-credentials --file
+       ~/.kube/aks-eurocis.yaml --context aks-eurocis`, dann `kubelogin
+       convert-kubeconfig -l azurecli --kubeconfig
+       ~/.kube/aks-eurocis.yaml --context aks-eurocis`; ohne `--file`
+       bzw. `--kubeconfig` träfen beide `~/.kube/config`.
+    2. Benutzername per `kaks auth whoami` (jsonpath
+       `{.status.userInfo.username}`): bei Mitgliedern des Tenants der
+       UPN, bei Nutzern aus einem anderen Tenant laut Learn die
+       objectId [A: `whoami` zeigt die maßgebliche Form]. Der Wert
+       steht nur im lokalen Register, nie im Repo oder Log.
+    3. Admin-kubeconfig nach dem Muster aus P1 Schritt 6: `set -euo
+       pipefail`, `umask 077`, `ADM_DIR=$(mktemp -d)` außerhalb des
+       Repos, `trap 'rm -rf "$ADM_DIR"' EXIT` und `trap 'exit 1' INT
+       TERM HUP` (ein `trap` mit `rm` direkt auf INT ließe das Skript
+       nach Strg-C weiterlaufen), dann `az aks get-credentials --admin
+       --file "$ADM_DIR/admin.yaml"`; nie nach `~/.kube`.
+    4. ClusterRoleBinding `eurocis-owner-admin` (ClusterRole
+       `cluster-admin`, `kind: User`, `name: <owner-upn>`) per stdin
+       mit der Admin-kubeconfig, nach derselben Server-URL-Prüfung wie
+       `require_kube_context` [Quelle:
+       `learn.microsoft.com/azure/aks/kubernetes-rbac-entra-id`].
+    5. `kaks auth can-i '*' '*' -A` mit der Entra-kubeconfig ergibt
+       `yes`, sonst Abbruch vor Schritt 6.
+    6. `aks_update --disable-local-accounts`; dann muss `az aks show
+       --query disableLocalAccounts` `true` liefern, sonst Abbruch;
+       erst danach der Negativtest in einem per `trap` gelöschten
+       Temp-Verzeichnis: `az aks get-credentials --admin --file
+       "$D/x.yaml" 2>"$D/err"` muss scheitern (gelingt er, Abbruch mit
+       "FEHLER: Admin-Credential abrufbar"), und `$D/err` enthält
+       "Getting static credential isn't allowed" [Quelle: `az aks
+       get-credentials --help`, 2.85.0]. Erst dann Schritt 7.
+    7. Option `--rotate-certs` (Frage 28): `az aks rotate-certs` vor
+       dem ersten Workload (bis 30 min Ausfall), danach Schritt 1
+       erneut. Learn verlangt die Rotation, wenn vor dem Abschalten
+       lokale Accounts benutzt wurden [Quelle:
+       `learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad`;
+       `learn.microsoft.com/azure/aks/rotate-certificates`].
+    8. Option `--bind <username> --name eurocis-deputy` für den
+       Stellvertreter, später und mit der Entra-Identität des Owners,
+       ohne Admin-Zugang (Rolle nach P7 Schritt 7).
+
+    Notweg bei einem RBAC-Lockout: `aks_update
+    --enable-local-accounts`, Admin-kubeconfig wie in Schritt 3,
+    Binding reparieren, wieder `--disable-local-accounts` mit dem
+    Nachweis aus Schritt 6, rotieren.
+    `az aks command invoke` hilft dabei nicht, weil es mit dem
+    Entra-Token des Aufrufers unter Kubernetes RBAC läuft [Quelle:
+    azure-cli 2.85.0 acs/custom.py:2620-2626]. Ganz ohne
+    Admin-Zertifikat ginge der Bootstrap nur mit einer eigenen
+    Entra-Gruppe in `--aad-admin-group-object-ids` beim Create (Frage
+    28).
+  - `acr-pull.sh <ns>...` (nach `require_kube_context aks-eurocis`)
+    liest `acr-pull-token` aus dem Key Vault (Rückfall
+    `ACR_PULL_TOKEN` aus `sli/aks/.env.aks`, nur über die Umgebung),
+    baut die `.dockerconfigjson` mit `jq` aus stdin und legt das
+    Secret `acr-pull` idempotent an, per `kaks -n <ns> create secret
+    generic acr-pull --type=kubernetes.io/dockerconfigjson
+    --from-file=.dockerconfigjson=/dev/stdin --dry-run=client -o
+    yaml` und `kaks -n <ns> apply --server-side -f -` (keine
+    `last-applied-configuration` mit den Daten, wie P1 Schritt 8). Nie
+    `create secret docker-registry --docker-password`, das legte das
+    Passwort in die argv [A: `/dev/stdin` mit kubectl auf macOS in P1
+    testen; Rückfall: Manifest per `jq` und `kaks apply --server-side
+    -f -`].
+    - Namespaces: `default` und `p2-test` (P1, P2), `traefik` und
+      `monitoring` (P2), `iam` (P3), `solace` (P4), `sam-solace-lab`
+      (P5); `gpos-data` und `gpos-demo` bedient `install.sh` selbst
+      (5.4). Jede Phase legt Namespace und Secret vor helm bzw.
+      kustomize an; `--create-namespace` allein reicht nicht mehr.
+    - An die Pods kommt das Secret über Chart-Werte und Patches
+      (`setup-aks.sh`, `keycloak/`, 5.2 bis 5.4). `--patch-default-sa`
+      nur in Namespaces mit Ad-hoc-Pods (`default`, `p2-test`): Die
+      ServiceAccount-Admission übernimmt Pull-Secrets nur in neue Pods
+      dieses ServiceAccounts und nur, wenn der Pod-Spec keine nennt
+      [Quelle:
+      `kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin`].
+    - `--check` meldet das Ablaufdatum des Passworts (`az acr token
+      show --query "credentials.passwords[].expiry"`) für den
+      Preflight; rot ist ein Ablauf vor dem 21.02.2027.
   - `aks-allow-me.sh` mit Kontext-Guard: liest
     `apiServerAccessProfile.authorizedIpRanges`, ergänzt die aktuelle
-    öffentliche IP als /32 und schreibt die vollständige Liste mit
-    `az aks update --api-server-authorized-ip-ranges`. Der Aufruf
+    öffentliche IP als /32 und schreibt die vollständige Liste über
+    `aks_update --api-server-authorized-ip-ranges`. Der Aufruf
     ersetzt die ganze Liste und braucht bis 2 min [Quelle:
     `learn.microsoft.com/azure/aks/api-server-authorized-ip-ranges`];
     das Skript entfernt deshalb nie stillschweigend einen Eintrag (nur
     mit `--prune <ip>`, nie den letzten), wartet und prüft danach
     `kaks get --raw /readyz`; dazu `--print` und `--check` (P1
-    Schritt 7).
+    Schritt 7). Neu: `--add <ip>`, mit dem der Owner die IP eines
+    Stellvertreters ohne Azure-Recht einträgt (Frage 24). Das Skript
+    braucht `managedClusters/write`, also Contributor.
   - Wartungs-JSONs mit beiden Sperrbereichen (auch für den Neuaufbau).
   - `setup-aks.sh` mit Kontext-Guard; Values-Overlays für Traefik,
     cert-manager und Monitoring (Registry je Image, vollständige
-    `additionalDataSources`, Grafana ohne Ingress).
+    `additionalDataSources`, Grafana ohne Ingress). Vor jedem `haks`
+    legt es Namespace und Secret per `acr-pull.sh` an. Pull-Secret nur
+    für Pods mit Images aus ACR, je Chart mit eigenem Schlüssel
+    (Belege in P2 Schritt 1) [Quelle: Chart-Quellen, gelesen 18.11.]:
+    - Traefik 42.4.1: `deployment.imagePullSecrets: [{name:
+      acr-pull}]`.
+    - kube-prometheus-stack 83.5.0: `grafana.image.pullSecrets:
+      [acr-pull]` (Strings; nur Grafana kommt aus ACR).
+    - loki 6.55.0: `imagePullSecrets: [{name: acr-pull}]`
+      (SingleBinary samt Rules-Sidecar).
+    - tempo 2.0.0: `tempo.pullSecrets: [acr-pull]` (Strings).
+    - alloy 1.11.0: `image.pullSecrets: [{name: acr-pull}]`.
+    - cert-manager v1.21.3: keins, die Images kommen von quay.io.
   - Traefik-Values, mit den Lücken aus dem Annotations-Abgleich
     geschlossen [Quelle: Traefik v3.7.19
     `ingress-nginx.md`:265-502, `entrypoints.md`:128-130]:
@@ -4336,10 +6467,19 @@ Wartungsfenster. `<fqdn>` steht in diesem Plan für
       `_validations.tpl`; Traefik `nginx-to-traefik.md`:630-728].
     - Genau ein LoadBalancer-Service, Ports 80 und 443, Annotationen
       `service.beta.kubernetes.io/azure-pip-name: pip-aks-ingress`,
-      `azure-load-balancer-resource-group: rg-eurocis-base` und
-      `azure-load-balancer-tcp-idle-timeout: "30"`, nie
-      `azure-dns-label-name`; `externalTrafficPolicy: Local` für echte
-      Client-IPs [Quelle: `learn.microsoft.com/azure/aks/static-ip`;
+      `azure-load-balancer-resource-group: gebit-showcase-nodes`
+      (explizit wie im Learn-Manifest static-ip; der Default auf die
+      Node-RG ist nur durch cloud-provider-azure belegt, P2 Schritt 5)
+      und `azure-load-balancer-tcp-idle-timeout: "30"`. Nie
+      `azure-dns-label-name`: Fehlt diese Annotation, lässt der
+      Cloud-Provider das beim Anlegen gesetzte Label stehen, ein
+      leerer Wert löschte es. Eine fehlende `pip-aks-ingress` legt er
+      nicht an (der Service scheitert sichtbar), eine selbst angelegte
+      löscht er nie, auch nicht mit dem Service [Quelle:
+      `learn.microsoft.com/azure/aks/static-ip`; cloud-provider-azure
+      master pkg/provider/azure_loadbalancer.go:1359-1362, 1496-1498,
+      1557-1566, 3791-3802, 18.11.]. `externalTrafficPolicy: Local`
+      für echte Client-IPs [Quelle:
       `.../configure-load-balancer-standard`].
     - `ports.websecure.transport.respondingTimeouts.readTimeout:
       3600s`; der Default 60 s schneidet HTTP/1.1-SSE und MCP ab.
@@ -4355,19 +6495,24 @@ Wartungsfenster. `<fqdn>` steht in diesem Plan für
     (`solvers.http01.ingress.ingressClassName: nginx`); ein Certificate
     `ingress-tls` für `<fqdn>` in Namespace `traefik`, Default über
     `TLSStore default`. Rückfall-Issuer `acme-eab-fallback` (ZeroSSL
-    oder Google Trust Services) nur als Vorlage: `keyID` und HMAC
-    kommen beim Anwenden aus Key Vault (`acme-eab-kid`,
-    `acme-eab-hmac`) und `.env.aks`, nie aus Git.
+    oder Google Trust Services) nur als Vorlage
+    `sli/aks/tls/issuers.tpl.yaml`: `keyID` und HMAC kommen beim
+    Anwenden aus Key Vault (`acme-eab-kid`, `acme-eab-hmac`) und
+    `.env.aks`, nie aus Git. `setup-aks.sh tls` rendert per `envsubst
+    '${EAB_KID} ${EAB_ACME_SERVER} ${TLS_ISSUER} ${AKS_FQDN}' <
+    sli/aks/tls/issuers.tpl.yaml | kaks apply -f -`, ohne gerenderte
+    Datei (P2 Schritt 6).
   - `tls-backup.sh`: sichert `ingress-tls` nach jeder Ausstellung als
     volles Secret-JSON mit den cert-manager-Annotationen im Key Vault,
     per Pipe ohne Zwischendatei (`--file /dev/stdin -o none`, AKS-E17,
     P7 Schritt 2).
-  - `.gitignore` (P0 Schritt 10, erste Datei im Ordner): `.env.aks`,
-    `*.pem`, `*.key`, `*.json` mit Ausnahme `!maint-*.json`.
+  - `.gitignore` (P0 Schritt 10, erste Datei im Ordner): `.env.aks*`,
+    `*.swp`, `*~`, `*.log`, `*.pem`, `*.key`, `*.json` mit Ausnahme
+    `!maint-*.json`.
   - VAP nach P2 Schritt 3: Service `LoadBalancer` nur für
-    `traefik/traefik` mit `pip-aks-ingress` und
-    `azure-load-balancer-resource-group: rg-eurocis-base`, nie
-    `azure-dns-label-name`;
+    `traefik/traefik` mit `pip-aks-ingress`; die Annotation
+    `azure-load-balancer-resource-group` fehlt oder ist
+    `gebit-showcase-nodes`; nie `azure-dns-label-name`;
     Ingress nur mit Klasse `nginx` und Host `<fqdn>`, ohne
     `*-snippet`, `mirror-*` und `cert-manager.io/*`, mit `spec.tls`
     (Solver-Ingresses mit Label
@@ -4381,9 +6526,52 @@ Wartungsfenster. `<fqdn>` steht in diesem Plan für
     `/health/*` an Port 9000 bleiben; `KC_HOSTNAME_ADMIN` nur, wenn P3
     ihn braucht; Ingress nur für `/auth/realms/solace-lab/` und
     `/auth/resources/`) [Quelle: `www.keycloak.org/server/hostname`].
+    Dazu ein Patch `imagePullSecrets: [{name: acr-pull}]` auf
+    Deployment `keycloak` und StatefulSet `postgres`, weil die
+    Lab-Manifeste weder Pull-Secret noch ServiceAccount setzen
+    [Quelle: sli keycloak/manifests/02-postgres.yaml:31-54,
+    03-keycloak.yaml:119-141]; ein Patch des default-ServiceAccounts
+    liefe mit den ersten Pods um die Wette.
   - `aks-start.sh`, `aks-stop.sh` (30-min-Sperre; `aks-start.sh`
-    prüft die Allowlist mit `aks-allow-me.sh --check`).
-- Was gegenüber dem Stand vom 16.11. entfällt, steht in 8.5.
+    prüft die Allowlist mit `aks-allow-me.sh --check` und vergleicht
+    Ingress- und Egress-IP mit dem lokalen Register, P5 Schritt 6).
+  - `alerts.sh` in zwei Teilen; alle Regeln und die Action Group (Mail
+    an den Owner, Adresse nur lokal) liegen in `gebit-showcase` (`-g
+    gebit-showcase`), nie in der Node-RG, die mit jedem
+    Cluster-Delete verschwände und unter NRG-Lockdown nicht änderbar
+    wäre. Activity-Log- und Resource-Health-Alarme ohne `-l` (global),
+    die Action Group mit `-l Global`; Scopes per Ressourcen-ID bzw.
+    Subscription mit Bedingung auf `resourceGroup` (1.4). Das Recht
+    dazu folgt aus den Actions `*` von Contributor (P1 Schritt 8).
+    - `alerts.sh access` (aus `foundation.sh pre`, vor dem Create):
+      Activity-Log-Alarme auf `managedClusters/write`,
+      `managedClusters/delete`,
+      `managedClusters/listClusterAdminCredential/action`,
+      `vaults/accessPolicies/write`, `vaults/delete`,
+      `locations/deletedVaults/purge/action` (Subscription),
+      `registries/tokens/write`,
+      `registries/generateCredentials/action`, `registries/delete`,
+      `publicIPAddresses/delete` (Node-RG) und
+      `subscriptions/resourceGroups/delete` für `gebit-showcase` und
+      `gebit-showcase-nodes`.
+    - `alerts.sh cost` (nach dem Create): Budget per `az rest` (3.4),
+      Resource-Health-Alarm auf den Cluster, Activity-Log-Alarm auf
+      start/stop.
+    - Abnahme: `az monitor activity-log alert list -g gebit-showcase`
+      listet alle Regeln; `az resource list -g gebit-showcase-nodes`
+      enthält keine `Microsoft.Insights`-Ressource. Die Alarme melden,
+      verhindern aber nichts (Abschnitt 7).
+  - `aks-rebuild.sh delete|teardown`: der einzige Weg zu `az aks
+    delete` (Lint). Beide Modi verlangen den eingetippten
+    Clusternamen. `delete` (Neuaufbau-Drill, P7 Schritt 3) verweigert
+    vom 27.01. bis 20.02.2027 ohne `--freeze-override` und prüft
+    vorher, dass `tls-traefik-ingress-tls` im Key Vault dasselbe
+    `notAfter` wie das laufende Zertifikat hat, dass Dumps vom selben
+    Tag existieren (P7 Schritt 2) und dass `foundation.sh post`
+    bereitsteht. `teardown` (Rückbau, P7 Schritt 8) läuft erst ab
+    19.02.2027 und nach Export, Descriptor-Löschung und Widerruf.
+- Was gegenüber dem Stand vom 16.11. entfällt, steht in 8.5, was
+  gegenüber dem 17.11. entfällt, in 8.6.
 - Kein Eingriff in `ingress/`, `pki/`, `registry/` und die
   `keycloak/`-Lab-Skripte. Das Lab behält ingress-nginx; dieselben
   NGINX-Ingress-Manifeste laufen auf beiden Zielen. Traefik-eigene
@@ -4399,8 +6587,11 @@ Wartungsfenster. `<fqdn>` steht in diesem Plan für
   `grep -nE 'PRIVATE KEY|[A-Za-z0-9+/]{43}=|EAB_[A-Z_]+=.'` und
   `grep -noE '[A-Za-z0-9_-]{40,}' | grep -vE ':[0-9a-f]{64}$'` ohne
   Treffer; die zweite Prüfung fängt base64url-HMACs ohne Padding und
-  nimmt nur reine Hex-Digests der Images aus. EAB-Werte nur im Key
-  Vault und in `sli/aks/.env.aks`.
+  nimmt nur reine Hex-Digests der Images aus. Eine kurze EAB-Kennung
+  (rund 22 Zeichen) fängt sie nicht; deshalb zusätzlich `git ls-files
+  aks/ | xargs grep -n 'keyID:'` nur mit `${EAB_KID}` und beim
+  EAB-Issuer `server:` nur mit `${EAB_ACME_SERVER}`. EAB-Werte und das
+  Passwort des ACR-Tokens nur im Key Vault und in `sli/aks/.env.aks`.
 
 ### 5.2 agent-mesh-deployment (geteilt, Freigaben AKS-E15 (a) und (b))
 
@@ -4408,6 +6599,15 @@ Wartungsfenster. `<fqdn>` steht in diesem Plan für
   beide HIL-Flags, Sonnet 5 für `planning`, Preise für `fast`,
   `workflow` und `planning` [Quelle: amd
   scripts/models/set-pricing.sh:34-37].
+- `scripts/lib/common.sh` lädt beim Sourcen keine Env-Datei, wie
+  heute: Laden geht nur über `load_env DIR` [Quelle: amd
+  scripts/lib/common.sh:23-31], und das liest auf `aks` nur
+  `DIR/.env.aks`, sonst `DIR/.env`. Grund: gpd sourct `common.sh` und
+  ruft `load_env` mit dem eigenen Verzeichnis; läse `common.sh` die
+  amd-`.env.aks` selbst, stünden `LLM_SERVICE_API_KEY` und die übrigen
+  amd-Secrets in der Umgebung aller gpd-Prozesse, und `sam config
+  apply` expandiert `${VAR}` aus der Prozess-Umgebung [Quelle: gpd
+  scripts/lib.sh:3-6, 12-13]. Test in gpd 5.4.
 - `scripts/lib/common.sh`: `SAM_PROFILE`, `.env.aks`, `KUBECONFIG`,
   `SAM_KUBE_CONTEXT`, `require_kube_context`, `kaks`/`haks` auf `aks`,
   `SAM_HOME` je Profil, `sam_helm_args <profil>` (gibt die Liste mit
@@ -4442,6 +6642,18 @@ Wartungsfenster. `<fqdn>` steht in diesem Plan für
   SAM-VPN und auf `SAM_EXTRA_CLEANUP_VPNS` (Default `default`), und
   `<ns>` ist auf Lab und AKS gleich [Quelle: amd
   scripts/stop.sh:150-212, 224].
+- Pull-Secret auf `aks` (P5 Schritt 3): `start.sh` legt `acr-pull`
+  nicht selbst an und ruft kein sli-Skript auf; es prüft nach dem
+  Anlegen des Namespace `sam-solace-lab`, dass das Secret existiert,
+  und bricht sonst vor `helm` mit dem Hinweis auf `sli/aks/acr-pull.sh
+  sam-solace-lab` ab. Ohne das Secret bräche das Chart selbst ab: Es
+  prüft jedes Pull-Secret per `lookup`, auch für den Hook
+  `sam-doctor` [Quelle: SAM-Chart 2.3.10 `_validations.tpl`:97-101,
+  122-126; `templates/sam-doctor-hook.yaml`:36-49]. `stop.sh` löscht
+  den Namespace samt Secret; jeder AKS-Zyklus ruft den Helfer vor
+  `start.sh` erneut auf. `load-images.sh` pusht auf `aks` per `az acr
+  login`; als Contributor geht das nur im Registry-Modus `rbac`
+  (5.1).
 - TLS auf `aks`, entschieden per Test in P2. Der SAM-Chart prüft ein
   `secretName` im eigenen Release-Namespace [Quelle: SAM-Chart 2.3.10
   `_validations.tpl`:110-113]:
@@ -4488,9 +6700,10 @@ Wartungsfenster. `<fqdn>` steht in diesem Plan für
   Entscheidung in Abschnitt 9 (Default an wie im Lab); der Endpunkt
   wäre öffentlich, aber per OIDC geschützt.
 - Neu: `aks-values.yaml`, `manifests/aks/` (NetworkPolicies nach P5
-  Schritt 4), `.env.aks.example`; `.env.aks` in `.gitignore`, und zwar
+  Schritt 4), `.env.aks.example`; `.env.aks*` mit Ausnahme
+  `!.env.aks.example` sowie `*.swp` und `*~` in `.gitignore`, und zwar
   in P0 Schritt 10, bevor eine `.env.aks` existiert (heute ignoriert
-  amd nur `.env`); README-Abschnitt "AKS".
+  amd nur `.env`); `.env.aks` mit Modus 600; README-Abschnitt "AKS".
 - `aks-values.yaml` (ohne Secret-Werte): `sam.dnsName` und
   `ingress.host` = `<fqdn>`; SAM bekommt `/`, weil der Chart keinen
   Basispfad kennt und die WebUI fest an der Wurzel hängt [Quelle:
@@ -4500,8 +6713,13 @@ Wartungsfenster. `<fqdn>` steht in diesem Plan für
   `proxy-request-buffering: "on"` (sonst setzt Traefik das Limit nicht
   durch) sowie `limit-connections: "20"` [A] gegen volle
   Request-Puffer (P2 Schritt 5, Lücke 7); keine
-  `cert-manager.io`-Annotation; Registry, Broker und Persistenz wie in
-  P5 Schritt 2.
+  `cert-manager.io`-Annotation; `global.imagePullSecrets:
+  ["acr-pull"]` als Liste von Strings, gültig für gwe, awe, str,
+  postgresql, seaweedfs und `sam-doctor` [Quelle: SAM-Chart 2.3.10
+  `_images.tpl`:46-61; persistence-layer `statefulset.yaml`:34-46]
+  (das Lab behält `registry-pull-secret` [Quelle: amd
+  local-k8s-values.yaml:149-150]); Registry, Broker und Persistenz wie
+  in P5 Schritt 2.
 - Schlüssel in `.env.aks.example`:
   - Keycloak: `KEYCLOAK_URL=https://<fqdn>/auth`,
     `KEYCLOAK_ADMIN_URL=http://127.0.0.1:18081/auth` (Port-Forward),
@@ -4520,9 +6738,10 @@ Wartungsfenster. `<fqdn>` steht in diesem Plan für
     `SAM_KUBE_CONTEXT=aks-eurocis`, `SAM_HOME`,
     `SAM_DNS_NAME=<fqdn>`, `SAM_URL=https://<fqdn>`,
     `SAM_SEMP_URL=http://127.0.0.1:18080`.
-  - Nicht enthalten: die `SAM_*_IMAGE_TAR`-Schlüssel (Images über ACR)
-    und `GOOGLE_AI_STUDIO_API_KEY` (AKS stellt nur `fast` und
-    `planning` bereit).
+  - Nicht enthalten: die `SAM_*_IMAGE_TAR`-Schlüssel (Images über ACR),
+    `GOOGLE_AI_STUDIO_API_KEY` (AKS stellt nur `fast` und `planning`
+    bereit) und das Passwort des ACR-Tokens (nur Key Vault und
+    `sli/aks/.env.aks`).
 - Gate: Call-Log- und Render-Diff des Lab-Profils leer (P0 Schritt 13).
 
 ### 5.3 event-mesh-deployment (geteilt, Freigaben AKS-E15 (c) und (d))
@@ -4531,12 +6750,17 @@ AKS-Teil, nur neue Dateien:
 
 - `aks/pubsubplus-values.yaml`: Image aus ACR per Digest
   (`solace/solace-pubsub-standard:10.26.0.9219`, Index
-  `sha256:c0020e53ed48...`), `service.type: ClusterIP` explizit
-  (Chart-Default wäre ein öffentliches LoadBalancer mit `latest`),
+  `sha256:c0020e53ed48...`), `image.pullSecretName: acr-pull` (ein
+  String; das Chart legt einen eigenen ServiceAccount an, ein Patch
+  des default-ServiceAccounts erreichte den Broker nicht),
+  `service.type: ClusterIP` explizit (Chart-Default wäre ein
+  öffentliches LoadBalancer mit `latest`),
   `storage.useStorageGroup: true` ab dem ersten Install,
   `solace.usernameAdminPasswordSecretName: solace-admin`, Größe
   `prod1k` (Kriterium für `dev` in 3.2) [Quelle: pubsubplus
-  3.10.0 values.yaml:113-133].
+  3.10.0 values.yaml:113-133; templates/solaceStatefulSet.yaml:42-45,
+  56]. Vor `helm` legt P4 Teil B Schritt 2 die Secrets `solace-admin`
+  (per stdin) und `acr-pull` (`sli/aks/acr-pull.sh solace`) an.
 - `aks/lib.sh` (`kaks`), `aks/semp-aks.sh` (Port-Forward und
   Identitätsprüfung, schreibt kein Passwort). Die Prüfung akzeptiert
   `sempVersion` im neuen Format (Broker-Version) neben `2.x` [Quelle:
@@ -4554,7 +6778,7 @@ AKS-Teil, nur neue Dateien:
 Lab-Teil: P4 Teil A, Broker-Upgrade 10.25.0.208 → 10.26.0.9219
 (1,0 PT [A]; Freigabe AKS-E15 (d), dazu eigenes Owner-Go und ein
 Wartungsfenster des SAM-Labs; Ablauf A1-A8 in P4, Probe an solace-2 in
-KW48, solace-1 spätestens am 04.12.):
+KW48, solace-1 bis 04.12. (Prüfpunkt), spätestens 10.12.):
 
 - Warum dieselbe Version wie AKS: SAM 2.542.1 nennt keine
   Broker-Version, sein eingebetteter Default ist 10.25.0.193 [Quelle:
@@ -4636,6 +6860,17 @@ KW48, solace-1 spätestens am 04.12.):
   `SAM_URL` und eine mit `E2E_BASE_URL=https://gpos.solace.lab` ab; mit
   `TARGET=aks` liest `demo_env()` keine `.env` (Scratch-Baum mit
   abweichender `.env`); `TARGET=aks` mit `SAM_PROFILE=lab` bricht ab.
+  `scripts/install.sh` schreibt xtrace nur nach
+  `~/.config/eurocis-aks/xtrace/` (1.4) und lädt `.env.aks` (über
+  `load_env` mit `set -a`) sowie die `printf`-Zeilen mit
+  `$(db_password ...)` ohne xtrace [Quelle: gpd
+  scripts/install.sh:133-138; scripts/lib.sh:13].
+  Dazu ein Test gegen das Durchsickern der amd-Secrets: Mit einer
+  amd-`.env.aks` voller Dummy-Werte im Scratch-Baum sind nach
+  `TARGET=aks . scripts/lib.sh` `LLM_SERVICE_API_KEY`,
+  `KEYCLOAK_CLIENT_SECRET`, `SAM_PG_ADMIN_PASSWORD` und
+  `SAM_SESSION_SECRET_KEY` nicht gesetzt (`[ -z
+  "${LLM_SERVICE_API_KEY+x}" ]`).
 - Zustand je Ziel (`mesh/.rendered/<target>`, `build/<target>`) per
   Kopie; `KUBE_CONTEXT`-Wrapper mit `KUBECONFIG`.
 - sam-CLI-Seam nach P6 Schritt 4: Haupt-Manifeste an Ort und Stelle,
@@ -4646,6 +6881,12 @@ KW48, solace-1 spätestens am 04.12.):
   k8s, mesh (Lab unverändert); `k8s/postgres-aks/` im Namespace
   `gpos-data`; DSN mit URL-kodiertem Passwort auf `aks`; Guard bei
   install.sh:117 prüft die DB.
+- Pull-Secret auf `aks` (P6 Schritt 6): `install.sh` legt `acr-pull`
+  in `gpos-data` (Teil `pg`, vor dem StatefulSet) und `gpos-demo`
+  (Teil `k8s`) selbst an, mit einer Funktion `apply_pull_secret` nach
+  demselben Verfahren wie `sli/aks/acr-pull.sh`: Passwort aus dem
+  Key Vault nur durch Pipes, nie in argv, Ausgabe oder Datei; kein
+  Sourcing über Repo-Grenzen (P1 Schritt 6).
 - `broker.py`/`broker.sh`: Port-Forward und Identitätsprüfung;
   `broker.sh` schreibt bei `TARGET=aks` vor jedem Aufruf
   `mesh/.rendered/aks/semp.tfvars` aus dem Key Vault (P6 Schritt 7);
@@ -4657,7 +6898,25 @@ KW48, solace-1 spätestens am 04.12.):
   Namespace `gpos-demo` gelöscht, `gpos-data` nur mit `--drop-db`
   (vorher DB und Rollen über den Seam löschen und die aks-db.env
   entfernen).
+- `preflight.sh TARGET=aks` mit den read-only-Prüfungen aus P7 Schritt
+  4, neu seit 18.11.: `pip-aks-ingress` und `nslookup <fqdn>`,
+  Egress-IP gegen das lokale Register, `acr-pull` je Namespace und
+  Ablauf des Token-Passworts nach dem 20.02.2027,
+  `disableLocalAccounts true` und keine unerwarteten
+  `listClusterAdminCredential`-, `accessPolicies/write`- oder
+  `tokens/write`-Einträge im Activity Log.
 - `k8s/base` + `overlays/lab|aks|l3`. Das aks-Overlay:
+  - Pull-Secret: Ein JSON-Patch mit `target: {kind: Deployment}`
+    ersetzt in allen sechs Deployments den Namen
+    `registry-pull-secret` durch `acr-pull` (`op: replace`, `path:
+    /spec/template/spec/imagePullSecrets/0/name`), statt die Liste zu
+    entfernen; ohne `--attach-acr` bräche sonst jeder Pull aus ACR
+    [Quelle: gpd k8s/{pos,engine,wws,loyalty,gate,ui}.yaml:21-23].
+    `k8s/postgres-aks` trägt `imagePullSecrets: [{name: acr-pull}]`
+    direkt. Ein Patch des default-ServiceAccounts wirkte hier nicht,
+    weil die Pod-Specs eigene Pull-Secrets tragen [Quelle:
+    `kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin`].
+    `overlays/lab` bleibt byte-gleich mit `registry-pull-secret`.
   - gpos-ui-Ingress auf `<fqdn>` mit ausgeschnittenen Prefix-Pfaden
     `/kasse`, `/monitor`, `/static/`, `/api/catalog`, `/api/cards`,
     `/api/scenarios`, `/api/pos/`, `/api/state`, `/api/proposals/`,
@@ -4703,7 +6962,9 @@ KW48, solace-1 spätestens am 04.12.):
     Exposition offen (`/freigabe`, `/foto`, `/op`, `/etikett` samt
     API-Routen, Frage 23). Eine Route der zweiten Liste mit Pfad auf
     `<fqdn>` oder eine BFF-Route in keiner Liste lässt den Test
-    scheitern; ohne Pfad landet eine Seite bei SAM.
+    scheitern; ohne Pfad landet eine Seite bei SAM. Neu: Jeder
+    Pod-Spec im Overlay `aks` und in `postgres-aks` nennt `acr-pull`,
+    keiner `registry-pull-secret`.
   - `install.sh` überspringt auf `aks` die Kyverno-Wartezeit und den
     Lab-CA-Export.
 - Image 0.1.4 (neuer Arbeitspunkt in P6, rund 0,5 PT [A]): Ein
@@ -4730,7 +6991,9 @@ KW48, solace-1 spätestens am 04.12.):
   `/auth`.
 - Makefile-Ziel für die ACR-Kopie (arm64); amd64-Build nur bei einer
   GEBIT-Übergabe (`buildx` mit QEMU oder `az acr build --platform
-  linux/amd64`).
+  linux/amd64`). Push per `az acr login` und `docker buildx
+  imagetools create` als Contributor, nur im Registry-Modus `rbac`
+  (5.1).
 - Die Skizzen in `spikes/aks/` (ingress-nginx-Values,
   DNS-01-Issuer, `pubsubplus-values-aks.yaml` mit 10.25.0.208 und
   internem MQTT-LB) sind überholt und bekommen einen Vermerk;
@@ -4746,19 +7009,19 @@ KW nach ISO 8601; 2026 hat eine KW53. Gates nach PLAN 0.3.
 
 | KW | Daten | Arbeit | Gate/Meilenstein |
 |---|---|---|---|
-| KW47 | 16.-22.11. | P0 (Owner + Claude): Owner-Entscheidungen vom 17.11. eingetragen; Login, read-only-Checks, Quota-Antrag (DPSv6 und Standard-IPs; DPSv5 nur bei Restriction), Anfragen an den LiteLLM-Betreiber (Allowlist, Messe-Key mit `max_budget`, `rpm_limit`, `tpm_limit`), schriftliche Owner-Bestätigung zur GEBIT-Freigabe erbeten (Descriptor-Secret in Azure, öffentliche Reflection; fällig 27.11., spätestens 09.12.), Mac-Tools (Azure CLI 2.93+, kubelogin); ab 20.11. RG, `pip-aks-egress` und `pip-aks-ingress` mit DNS-Label und Lock | O9 bis 20.11. [Quelle: PLAN 0.5 O9]; AKS-E20 (Name) bis 20.11. |
-| KW48 | 23.-27.11. | P0 (C ab 23.11.): gpd-Baseline, Geländer, sam-CLI-Spike, Regressions-Gate; P4 Teil A: A1 Baseline (read-only), dann solace-2 (nach Owner-Go); Egress-IP an den Betreiber bis 25.11. | offene AKS-E (Abschnitt 2) bis 27.11.; Betreiber-Bestätigung 27.11.; Wartungsfenster für solace-1 festgelegt |
-| KW49 | 30.11.-04.12. | P1: Cluster (1 Node), CLI, `aks-allow-me.sh`, Hairpin- und PVC-Test, LiteLLM-Probe; P4 Teil A an solace-1 im Wartungsfenster, Lab-Flows (A7); P2 Beginn (ACR-Spiegel, PriorityClasses, VAP, Traefik, LE staging, dann prod am 03.12.); ACME-Rückfallkonto und EAB-Daten in Key Vault und `sli/aks/.env.aks` (Owner) | LiteLLM-Probe 03.12. als Frühindikator (AKS-E18); EAB-Daten bis 04.12.; **Prüfpunkt 04.12.** (P1, P4 Teil A) |
+| KW47 | 16.-22.11. | P0 (Owner + Claude): Owner-Entscheidungen vom 17.11. und 18.11. eingetragen; Login und read-only-Checks am 18.11. erledigt (Subscription `azure-se`, nur Contributor, Tag-Pflicht-Policies, Quota ohne Antrag, SKUs ohne Restriction, Defender Free); Anfragen an den LiteLLM-Betreiber (Allowlist mit dem Hinweis, dass die Egress-IP erst nach dem Create feststeht und sich bei jedem Neuaufbau ändert; Messe-Key mit `max_budget`, `rpm_limit`, `tpm_limit`), schriftliche Owner-Bestätigung zur GEBIT-Freigabe erbeten (Descriptor-Secret in Azure, öffentliche Reflection, Zugriffskreis der Contributor-Gruppe; fällig 27.11., spätestens 09.12.), Mac-Tools (Azure CLI 2.93+, kubelogin; freigegeben, noch nicht installiert); ab 20.11. nur die Label-Prüfung für `<p>`, keine Azure-Ressource vor P1 | O9 bis 20.11. [Quelle: PLAN 0.5 O9]; AKS-E20 (Name) bis 20.11. |
+| KW48 | 23.-27.11. | P0 (C ab 23.11.): gpd-Baseline, Geländer, sam-CLI-Spike, Regressions-Gate; P4 Teil A: A1 Baseline (read-only), dann solace-2 (nach Owner-Go) | offene AKS-E (Abschnitt 2) bis 27.11.; Betreiber-Antwort (Allowlist ja oder nein, Key-Limits, Vorlaufzeit) 27.11.; Azure-Rechte und Tenant-Status des Stellvertreters geklärt 27.11. (Frage 24); Wartungsfenster für solace-1 festgelegt |
+| KW49 | 30.11.-04.12. | P1: Re-Check von Label und Quota, Key Vault mit Access Policies, ACR mit Pull-Token, Cluster (1 Node, Pflicht-Tags, Node-RG `gebit-showcase-nodes`), `pip-aks-ingress` mit Label, Egress-IP sofort an den Betreiber, Bootstrap mit ClusterRoleBinding und abgeschalteten lokalen Accounts (`rotate-certs` nach Frage 28), CLI, `aks-allow-me.sh`, `acr-pull`, Budget und Alarme, Hairpin- und PVC-Test, LiteLLM-Probe; P4 Teil A an solace-1 im Wartungsfenster, Lab-Flows (A7); P2 Beginn (ACR-Spiegel, PriorityClasses, VAP, Traefik, LE staging, dann prod am 03.12.); ACME-Rückfallkonto und EAB-Daten in Key Vault und `sli/aks/.env.aks` (Owner) | Freischaltung der Egress-IP vor der LiteLLM-Probe (falls Allowlist); LiteLLM-Probe 03.12. als Frühindikator (AKS-E18); EAB-Daten bis 04.12.; **Prüfpunkt 04.12.** (P1, P4 Teil A) |
 | KW50 | 07.-11.12. | P2 Rest (cert-manager HTTP-01, TLSStore, Traefik-Lückentests, Monitoring), P3 Keycloak unter `/auth` | LE-prod-Zertifikat Ready bis 07.12., 12:00, sonst EAB-Rückfall; GEBIT-Bestätigung (Descriptor-Secret) liegt bis 09.12. vor, sonst G0-11b (3) ohne `gebitsim`; gRPC-Teil G0-11b (11.12.); **Prüfpunkt 11.12.** |
 | KW51 | 14.-18.12. | P4 Teil B Broker 10.26.0.9219 auf AKS, P5 SAM, HITL- und Vision-Test (G0-11a/b nach AKS-E18), HTTPS-RTT; Puffer | **G2a 18.12.** |
 | KW52-53 | 21.12.-03.01. | Feiertage; Lab-Vorarbeit P6 (Overlays mit Pfad-Ingresses, `public-guard`, Seams, `postgres-aks`, Image 0.1.4 mit gemeinsamem Reflection-Endpunkt); C: AP14 Preflight; Cluster gestoppt | - |
 | KW1 | 04.-10.01. | P6 auf AKS: pg, db, Image 0.1.4, k8s, mesh, Gate-Verifikation | ohne schriftliche GEBIT-Bestätigung kein `gpos-gebit-descriptors` auf AKS, Demo dann nur im Lab oder in L3 (AKS-E16) |
 | KW2 | 11.-15.01. | P6 e2e, TR1-Besuche über das öffentliche Internet (Leih-Router mit Kabel und 5G, Mobilfunk-Hotspot), TR3 (falls im Lab grün), `install.sh all` aus leerem Namespace; am 15.01. `cmctl renew -n traefik ingress-tls` und TLS-Backup | **G2b 15.01.** |
-| KW3 | 18.-22.01. | P7 Drills: Neuaufbau (TLS aus dem Backup), 24-h-Lauf (Mo 18.01. 12:00 bis Di 19.01. 12:00) mit 10-h-Kiosklauf über den öffentlichen Ingress, 3 Stop/Start-Zyklen mit je 30 min Pause, Netz (Kabel ziehen, 5G), Missbrauchstest `public-guard`, L3; Backups mit Restore-Test; Runbook; Rollen des Stellvertreters | **G3 22.01.**; Wartungssperre 20.01. |
-| KW4 | 25.-31.01. | Node-Image-Refresh Di 26.01. (Ausfallzeit messen); Runbook, Preflight, Fixes; Probetage 28.01. (Runbook-Durchlauf des Stellvertreters) und 29.01. | Wartungssperre ab 27.01. |
-| KW5 | 01.-05.02. | Probetag 3 am 03.02. (Break-glass-Test des Stellvertreters); Traefik-Patchstand prüfen | **G4 Freeze 05.02.** |
+| KW3 | 18.-22.01. | P7 Drills: Neuaufbau (`az aks delete`, Create mit Pflicht-Tags, Label `<p>` sofort neu gebunden, Bootstrap, neue Egress-IP an den Betreiber, TLS aus dem Backup), 24-h-Lauf (Mo 18.01. 12:00 bis Di 19.01. 12:00) mit 10-h-Kiosklauf über den öffentlichen Ingress, 3 Stop/Start-Zyklen mit je 30 min Pause (Ingress- und Egress-IP vor und nach jedem Zyklus), Netz (Kabel ziehen, 5G), Missbrauchstest `public-guard`, L3; Backups mit Restore-Test; Runbook; Binding und Key-Vault-Policy des Stellvertreters | **G3 22.01.**; Wartungssperre 20.01. |
+| KW4 | 25.-31.01. | Node-Image-Refresh Di 26.01. (vorher Quota-Re-Check und Ablauf des Token-Passworts prüfen; Ausfallzeit messen); Runbook, Preflight, Fixes; Probetage 28.01. (Runbook-Durchlauf des Stellvertreters) und 29.01. | Wartungssperre ab 27.01. |
+| KW5 | 01.-05.02. | Probetag 3 am 03.02. (Break-glass-Test des Stellvertreters mit eigenem Azure-Recht, sonst durch den Owner); Traefik-Patchstand und Defender-Pläne prüfen | **G4 Freeze 05.02.** |
 | KW6 | 08.-14.02. | 24/7, Preflight täglich; LE-64-Tage-Wechsel am 10.02. ohne Wirkung (das Zertifikat vom 15.01. gilt bis Mitte April) | Netztest 14.02. |
-| KW7 | 15.-21.02. | Messe 16.-18.02.; 19./20.02. Export, Descriptor-Secret löschen, stoppen | Rückbau-Entscheidung |
+| KW7 | 15.-21.02. | Messe 16.-18.02.; 19./20.02. Export, Descriptor-Secret löschen, stoppen; Rückbau nach Entscheidung (`az aks delete`, ACR samt Token, Key Vault mit Purge, Budget und Alarme) | Rückbau-Entscheidung |
 
 **O9 als Weiche (Stichtag 20.11.):**
 
@@ -4777,8 +7040,8 @@ KW nach ISO 8601; 2026 hat eine KW53. Gates nach PLAN 0.3.
 
 | KW | AKS-Plan | übrige PLAN-Pakete von C | Summe |
 |---|---|---|---|
-| 48 | P0-Rest 1,75 (0,75 tragen Owner und Claude in KW47); P4 Teil A an solace-2 0,5 | AP04a Container 0,5; AP07b Loyalty-Tools 0,75 (aus KW51 vorgezogen) | 3,5 |
-| 49 | P1 2,0; P4 Teil A an solace-1 0,5; P2 Beginn 0,75 | AP08 `install.sh mesh` 0,75 | 4,0 |
+| 48 | P0-Rest 1,75 (0,5 von 2,25 PT tragen Owner und Claude in KW47); P4 Teil A an solace-2 0,5 | AP04a Container 0,5; AP07b Loyalty-Tools 0,75 (aus KW51 vorgezogen) | 3,5 |
+| 49 | P1 2,25; P4 Teil A an solace-1 0,5; P2 Beginn 0,75 | AP08 `install.sh mesh` 0,75 | 4,25 |
 | 50 | P2 Rest 2,25; P3 1,25 | AP04a gRPC-Ingress Lab 0,75 | 4,25 |
 | 51 | P4 Teil B 1,25; P5 2,5; Puffer 0,5 | - (AP07b vorgezogen, AP14-Runbook geht in P7 Schritt 4 auf) | 4,25 |
 | 52-1 | P6 Lab-Vorarbeit 1,5 (darin Image 0.1.4) | AP14 1; AP13 `hitl_e2e.py` 0,5; AP14 Preflight 0,5 (aus KW50) | 3,5 |
@@ -4793,6 +7056,12 @@ die TR5-Abnahme an G2a vor dem 18.12. Vom Puffer (3,5 PT,
 (1,0 PT) liegt mit dem P7-Rest (1,25 PT) in
 KW4-5, wo C laut PLAN 7.3 3,5 bzw. 1,5 PT trägt.
 
+Die Prüfung vom 18.11. verschiebt Arbeit von P0 nach P1: Die
+Azure-Vorab-Anlage aus P0 (RG, beide IPs, Lock) entfällt, dafür
+bringt P1 Pull-Token, `acr-pull`, Bootstrap und die IP-Anlage nach
+dem Create (8.6). KW49 bleibt mit 4,25 PT nahe an den 4,3 PT
+netto; ein Überhang geht in den Puffer von KW51.
+
 KW1-2 ist für C überbucht (8,5 gegen 6,1 PT netto), weil P6
 die PLAN-Posten AP12 S7-S8 aus KW51 aufnimmt. Vorschlag [A], mit dem
 PLAN-Eigner zu klären:
@@ -4805,9 +7074,12 @@ PLAN-Eigner zu klären:
 **Prüfpunkte statt eines Rückfalls am 18.12.:**
 
 - 04.12.: P1-Abnahme und Abnahme P4 Teil A grün (Lab auf
-  10.26.0.9219, SAM- und GEBIT-Flows belegt). Ist Teil A rot,
-  entscheidet der Owner: Teil A bis 10.12. nachholen (Teil B beginnt
-  erst danach) oder Rückfall wie unten.
+  10.26.0.9219, SAM- und GEBIT-Flows belegt). Zur P1-Abnahme gehören
+  seit dem 18.11. die Pflicht-Tags auf `gebit-showcase-nodes`,
+  abgeschaltete lokale Accounts, `pip-aks-ingress` mit Label `<p>` und
+  die beim Betreiber gemeldete (und, falls Allowlist, freigeschaltete)
+  Egress-IP. Ist Teil A rot, entscheidet der Owner: Teil A bis 10.12.
+  nachholen (Teil B beginnt erst danach) oder Rückfall wie unten.
 - 07.12., 12:00: LE-prod-Zertifikat Ready, sonst stellt P2 auf
   `acme-eab-fallback` um.
 - 11.12., zusammen mit G1 und dem gRPC-Teil von G0-11b: P2- und
@@ -4821,10 +7093,16 @@ PLAN-Eigner zu klären:
 
 | Risiko | Gegenmaßnahme |
 |---|---|
-| Skript oder Ad-hoc-Befehl wirkt auf das falsche Ziel: kein Skript pinnt einen Kontext; `stop.sh` löscht Release, PVCs, Namespace und räumt Lab-Keycloak und Lab-Broker-Queues ab; ein `kubectl apply -k` ohne Kontext träfe den Lab-Keycloak in `iam` [Quelle: amd scripts/stop.sh:102-115, 161-162, 247-249; Befehl `grep -rnE -- '--context\|KUBECONFIG'`; Befehl `kubectl config current-context` = rancher-desktop, 16.11.] | P0 vor jeder AKS-Credential: eigene kubeconfig-Datei nur über `kaks`/`haks`, `require_kube_context` mit Server-URL, SEMP-Identitätsprüfung, Keycloak-Teardown-Guard, `SAM_HOME` je Ziel, Negativtests, Lint gegen nackte kubectl/helm-Aufrufe, Call-Log- und Render-Diff-Gate |
-| Azure ungeprüft: Token, Quota, SKU, Policy, Rollenrechte; Deny-Policies (etwa gegen Public IPs oder öffentliche Load Balancer) zeigen sich sonst erst beim Create als RequestDisallowedByPolicy | P0 sofort nach Login mit `atScope()`, `--all --include-groups` und effektiven Rechten; Quota-Antrag am 20.11. für DPSv6 16 vCPU (ein Node plus Surge-Node, 3.5), DPSv5 nur bei Restriction, und 2 Standard-IPs; Rückfall D8ps_v5 oder West Europe, amd64 nur als letzter Ausweg (AKS-E3) |
+| Skript oder Ad-hoc-Befehl wirkt auf das falsche Ziel: kein Skript pinnt einen Kontext; `stop.sh` löscht Release, PVCs, Namespace und räumt Lab-Keycloak und Lab-Broker-Queues ab; ein `kubectl apply -k` ohne Kontext träfe den Lab-Keycloak in `iam` [Quelle: amd scripts/stop.sh:102-115, 161-162, 247-249; Befehl `grep -rnE -- '--context\|KUBECONFIG'`; Befehl `kubectl config current-context` = rancher-desktop, 16.11.] | P0 vor jeder AKS-Credential: eigene kubeconfig-Datei nur über `kaks`/`haks`, `require_kube_context` mit Server-URL (lehnt auch Admin-kubeconfigs ab), SEMP-Identitätsprüfung, Keycloak-Teardown-Guard, `SAM_HOME` je Ziel, Negativtests, Lint gegen nackte kubectl/helm-Aufrufe, Call-Log- und Render-Diff-Gate |
+| Tag-Pflicht und Policies in `azure-se`: 2 x "Require a tag on resource groups" (deny) für `Owner` und `Created Date`, 2 x "Inherit a tag from the resource group" (modify). AKS legt die Node-RG selbst an; ohne `--tags` scheitert der Create. Laut einem Community-Report schreibt der Resource Provider die Node-RG bei späteren Updates zeitweise ohne die Cluster-Tags und scheitert mit RequestDisallowedByPolicy, auch Stunden nach dem Create (betrifft `--disable-local-accounts`, `aks-allow-me.sh`, Lockdown, eventuell Upgrades). Eine Policy-Ausnahme kann der Owner nicht anlegen; ob die Zuweisungen die Built-in-Definitionen nutzen, ist ungeprüft. Die RG-Metadaten liegen in westeurope; fällt die Region aus, leitet ARM Schreibzugriffe auf `gebit-showcase` in eine Backup-Region um [Quelle: Befehle `az` read-only, 18.11.; `learn.microsoft.com/azure/aks/use-tags`; `github.com/Azure/AKS/issues/5856`; `learn.microsoft.com/azure/azure-resource-manager/management/overview`] | `aks_tags` mit allen vier Tags bei Create (`--tags`, `--nodepool-tags`) und bei jedem `--tags`-Update, Werte von `Owner` und `Created Date` wie an `gebit-showcase`; nach dem Create `az group show -n gebit-showcase-nodes --query "keys(tags)" -o tsv` und ein stiller Wertvergleich (P1-Abnahme); `aks_update` wiederholt begrenzt und reconciled; Built-in-Check read-only in P0 (Frage 6); bleibt ein Update blockiert, braucht es eine Ausnahme durch einen Subscription-Admin (Frage 6), bis dahin L3 als Rückfall; die Lage in westeurope ist ein geringes Restrisiko [A] |
+| Kein Lock, Label an der Node-RG: Ein `az aks delete` (auch durch ein anderes Mitglied der Contributor-Gruppe oder im Neuaufbau) löscht `gebit-showcase-nodes` samt `pip-aks-ingress`; die IP ist nicht wiederherstellbar, das Label `<p>` kann danach jeder in der Region belegen, und Kiosk-URLs und QR-Codes zeigten auf einen fremden Host. `az group delete -n gebit-showcase` nähme zusätzlich ACR und Key Vault mit. Locks brauchen Owner oder User Access Administrator. Bis zum Create (ab 30.11.) ist das Label gar nicht reserviert [Quelle: `learn.microsoft.com/azure/aks/faq`; `learn.microsoft.com/azure/virtual-network/ip-services/public-ip-addresses`; `learn.microsoft.com/azure/azure-resource-manager/management/lock-resources`] | Runbook-Regel: Cluster nur über das Neuaufbau- bzw. Rückbau-Verfahren aus P7 löschen, und zwar nur per `sli/aks/aks-rebuild.sh` (`delete` bzw. `teardown`; eingetippter Clustername, Sperre 27.01.-20.02. ohne `--freeze-override`, Vorprüfung von TLS-Backup, Dumps und `foundation.sh post`); nie `az group delete -n gebit-showcase`; der Lint in `sli/aks/` verbietet beides und jedes nackte `az aks delete`; `foundation.sh post` bindet das Label direkt nach jedem Create, vorher `CheckDnsNameAvailability`; Activity-Log-Alarme schon vor dem Create auf `managedClusters/delete`, `publicIPAddresses/delete`, das Löschen von Key Vault, ACR und beiden RGs und auf den Vault-Purge (P1 Schritt 8), bei Vault-Delete binnen 7 Tagen `az keyvault recover`; TLS-Backup; neutrales Präfix; Owner-Optionen NRG-Lockdown `ReadOnly` nach P2 (verhindert Löschen und Ändern in der Node-RG durch Nutzer, nicht `az aks delete`; Frage 29) und Label-Scope `SubscriptionReuse` (Preview, FQDN mit Hash; Frage 7) [Quelle: `learn.microsoft.com/azure/aks/node-resource-group-lockdown`]; Nachweis in P1 und P2: `pip-aks-ingress` überlebt das Löschen eines Test-Service, der Tag `k8s-azure-service` fehlt |
+| Contributor-Gleichrang in `azure-se`: Kubernetes RBAC und Key-Vault-Access-Policies sind keine Grenze gegen andere Contributors. Jeder kann lokale Accounts wieder einschalten und Admin-Credentials holen, sich eine Key-Vault-Policy setzen oder ACR-Tokens anlegen und so Secrets, das GEBIT-Descriptor-Secret und (über die SAM-Datenbank) den LiteLLM-Key lesen [Quelle: `learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad`; `learn.microsoft.com/azure/key-vault/general/assign-access-policy`; `learn.microsoft.com/azure/role-based-access-control/built-in-roles/privileged`] | Owner-Entscheidung offen (Frage 27), auch gegen die GEBIT-Freigabe (AKS-E16, Frage 4); Activity-Log-Alarme auf `managedClusters/write`, `listClusterAdminCredential/action`, `vaults/accessPolicies/write`, `registries/tokens/write` und `registries/generateCredentials/action` (ein zweites Token-Passwort löst `tokens/write` nicht aus), angelegt vor dem Create (`alerts.sh access`; sie melden, verhindern aber nichts); Preflight prüft `disableLocalAccounts true` und das Activity Log der letzten 24 h; Descriptor-Secret wie bisher nur zur Laufzeit und bis 20.02. |
+| Bootstrap mit lokalem Admin: Zwischen Create und `--disable-local-accounts` gelten lokale Accounts, jeder Contributor kann Admin-Credentials holen; das Admin-Zertifikat aus dem Bootstrap bleibt bis zu einer Rotation gültig [A]. Ein falsches Binding-Subjekt (UPN bei Mitgliedern, objectId bei Nutzern anderer Tenants) sperrt den Owner nach dem Abschalten aus [Quelle: `learn.microsoft.com/azure/aks/kubernetes-rbac-entra-id`; `learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad`] | `bootstrap-rbac.sh` direkt nach dem Create in einem Zug: Subjekt aus `kaks auth whoami`, `can-i` vor dem Abschalten, Admin-kubeconfig nur in einem Temp-Verzeichnis mit `set -euo pipefail`, `umask 077` und `trap` (auch bei Abbruch gelöscht); `disableLocalAccounts true` geprüft, erst dann der Beweis, dass `get-credentials --admin` scheitert, und erst danach `rotate-certs`; Zugriffsalarme schon vor dem Create; `az aks rotate-certs` vor dem ersten Workload (bis 30 min) oder eine eigene Entra-Gruppe für `--aad-admin-group-object-ids` (Frage 28); Notweg `--enable-local-accounts`, reparieren, abschalten, rotieren; `az aks command invoke` ist kein Weg am RBAC vorbei |
+| ACR-Token: Ein abgelaufenes Passwort fällt erst beim nächsten Pull auf (Surge-Node am 26.01., Pod-Neustart auf neuem Node, Neuaufbau) und führt zu ImagePullBackOff. Ein geleaktes Passwort erlaubt jedem den Pull aller Repos (SAM-, gpos- und Plattform-Images, kein GEBIT-Material); das Secret `acr-pull` liest, wer im Namespace Secrets lesen darf [Quelle: `learn.microsoft.com/azure/container-registry/container-registry-token-based-repository-permissions`] | Ablauf 2027-02-28T23:59:59Z, also nach dem Rückbau am 20.02. und außerhalb des Freeze (Frage 30); `acr-pull.sh --check` im Preflight, rot bei Ablauf vor dem 21.02.2027; `password2` als Reserve für einen Wechsel ohne Ausfall; nur Pull, kein Push; Passwort nie in argv oder Ausgabe, nur Key Vault und `sli/aks/.env.aks` (chmod 600); Alarm auf `registries/generateCredentials/action`; Widerruf per `az acr token update --status disabled`; der Rückbau löscht die Registry samt Token |
+| Egress-IP wechselt: Die AKS-verwaltete Outbound-IP ist erst nach dem Create bekannt und nach jedem Neuaufbau neu; eine BYO-IP außerhalb der Node-RG bräuchte Rechte der Cluster-Identität. Mit einer Allowlist beim LiteLLM-Betreiber läuft SAM nach einem Neuaufbau ohne LLM, bis die neue IP freigeschaltet ist; das kann den 4-h-Drill in G3 sprengen. Ob die IP Stop/Start und den Node-Image-Refresh übersteht, ist nicht dokumentiert [Quelle: `learn.microsoft.com/azure/aks/configure-load-balancer-standard`] | Vorankündigung am 20.11., Meldung direkt nach dem Create (`foundation.sh post`), Freischaltung vor der Probe am 03.12.; Vorlaufzeit des Betreibers erfragen und ins Neuaufbau-Runbook übernehmen, Drill-Termin vorher ankündigen (Frage 26); G3-Kriterium neu fassen (Frage 31); `aks-start.sh` vergleicht die IPs nach jedem Start mit dem lokalen Register, P1 und P7 messen Stop/Start [A]; ohne Allowlist (Frage 5) entfällt das Risiko |
+| Azure CLI noch 2.85.0, kubelogin fehlt: 2.85.0 nutzt für Key Vault die API 2025-05-01, und alle Versionen vor 2026-02-01 enden am 27.02.2027; die Flags (`--role-assignment-mode`, `--dns-name-scope`, `--nrg-lockdown-restriction-level`) sind in 2.85.0 vorhanden, 2.93 bleibt Pflicht wegen der Key-Vault-API; `az aks create` kennt in 2.85.0 kein `--max-surge` (daher das Nodepool-Update) [Quelle: `--help`-Ausgaben 2.85.0, 18.11.; `learn.microsoft.com/azure/key-vault/general/access-control-default`; azure-cli 2.85.0 site-packages, 18.11.] | Upgrade auf 2.93 oder neuer und kubelogin (freigegeben, AKS-E15 (e)) vor dem ersten Azure-Schreibschritt in P1; danach die Flags per `--help` gegenprüfen; Rückbau nur mit der neuen CLI |
 | Ein Node ohne HA: Node-Ausfall, Host-Wartung, Node-Image-Update oder Neustart legt alle Dienste für einige Minuten still, die Disks hängen danach neu an. Learn verlangt für produktive System-Pools mindestens 2 Nodes (empfohlen 3), der AKS-Quickstart nutzt `--node-count 1` [Quelle: `learn.microsoft.com/azure/aks/use-system-pools`; AKS-Quickstart] [A] | vom Owner am 17.11. akzeptiert; der Create in P1 belegt die Zulässigkeit; manueller Refresh Di 26.01. mit gemessener Ausfallzeit, Sperre ab 27.01.; L3 warm an Probetagen und Messe, L4 über `/op`; Resource-Health-Alarm; Runbook-Schritt "Node NotReady"; aus gestopptem Cluster bis READY höchstens 30 min (G3) |
-| Requests auf einem Node knapp: mit Broker `prod1k` rund 91 % CPU- und 70 % RAM-Requests (3.2); ein zusätzlicher Pod (Defender-Sensor, Debug-Pod, Surge beim Rollout, Restore-Scratch-Pod) bleibt Pending; Keycloak-OOM und SeaweedFS-Hänger wie im Lab | Requests auf Ist-Werte, Keycloak 1,5Gi, SeaweedFS 2 CPU/2Gi (committet in `cd08a17`), Prometheus-PVC; Nachzug nach einer Woche AKS-Daten (P7 Schritt 1); Broker `dev` als Rückfall (78 % CPU, Kriterium in 3.2, nur vor dem ersten Install in P4); `maxSurge 0` für große Deployments, wo nötig [A] |
+| Requests auf einem Node knapp: mit Broker `prod1k` rund 91 % CPU- und 70 % RAM-Requests (3.2); ein zusätzlicher Pod (Debug-Pod, Run-Pod von `az aks command invoke` mit 200m CPU und 500Mi, Surge beim Rollout, Restore-Scratch-Pod) bleibt Pending; Keycloak-OOM und SeaweedFS-Hänger wie im Lab | Requests auf Ist-Werte, Keycloak 1,5Gi, SeaweedFS 2 CPU/2Gi (committet in `cd08a17`), Prometheus-PVC; Nachzug nach einer Woche AKS-Daten (P7 Schritt 1); Broker `dev` als Rückfall (78 % CPU, Kriterium in 3.2, nur vor dem ersten Install in P4); `maxSurge 0` für große Deployments, wo nötig [A]; kein Defender-Sensor (Pläne Free, 18.11.) |
 | Let's Encrypt, geteilter Bucket: `cloudapp.azure.com` steht nicht auf der Public Suffix List, alle Azure-Kunden teilen das Limit von 50 neuen Zertifikaten je Woche für `azure.com`; die Ausstellung kann tagelang scheitern [Quelle: PSL, abgerufen 17.11.; PSL-PR 1966; `letsencrypt.org/docs/rate-limits`; `community.letsencrypt.org/t/217855`] | ein Zertifikat (`ingress-tls`) für den einen FQDN, kein Certificate je Namespace; erst staging, dann prod am ersten P2-Tag; ist bis 07.12., 12:00 kein Prod-Zertifikat Ready, übernimmt der vorbereitete Rückfall-ClusterIssuer `acme-eab-fallback` mit EAB (ZeroSSL oder Google Trust Services, Konto vom Owner, EAB nur in Key Vault und `.env.aks`); Secret nach jeder Ausstellung sichern; Erneuerungen desselben Namenssets zählen nicht gegen das 50er-Limit |
 | LE-Limits bei Drills; eine automatische Erneuerung fiele um den 02.02. in die Sperre; LE wechselt am 10.02.2027 auf 64 Tage [Quelle: `letsencrypt.org/ca/upcoming-features`] | TLS-Backup als volles Secret mit cert-manager-Annotationen, vor Certificate und Ingresses eingespielt, sonst Drill gegen staging; `cmctl renew` um den 15.01., damit die nächste Erneuerung erst Mitte März fällt; danach Backup und `export-le-certs.sh` für L3 |
 | Traefik weicht vom Lab ab: Das Lab bleibt auf ingress-nginx; Traefik-eigene Teile (IngressClass, Middleware, TLSStore, Timeouts, Request-Buffering) und die AKS-Pfad-Ingresses (gpos, gRPC, Keycloak `/auth`) laufen nur auf AKS; Annotationen wirken anders (`proxy-body-size` nur mit `proxy-request-buffering: "on"`, Rate-Limits mit 429 statt 503); Sicherheits-Patches etwa wöchentlich [Quelle: Traefik v3.7.19 ingress-nginx.md:265-502; GitHub-Security-Advisories, 17.11.] | P2 beweist die Traefik-Konfiguration zuerst: HTTP-01, GRPC, SSE 20 min mit `curl --http1.1 -N`, ein 900-s-Halt, Default-Zertifikat, 413 über dem Body-Limit; Abweichungen nur im aks-Overlay, Render-Tests für alle Overlays; Image per Digest, nie unter v3.7.18; im Freeze nur Patch-Releases mit Smoke-Wiederholung (Owner-Frage, Abschnitt 9) |
@@ -4832,26 +7110,26 @@ PLAN-Eigner zu klären:
 | Ein öffentlicher Eingang mit einem Traefik-Pod: Request-Buffering für SAM und gpos-ui legt Bodies im emptyDir ab; viele parallele Uploads füllen es, das Kubelet verdrängt den Pod, und Kasse, Monitor, SAM, Keycloak und gRPC sind bis zum Neustart weg; `limit-rps` begrenzt nur die Rate [Quelle: Traefik-Chart 42.4.1 values.yaml:119-121; Recherche 17.11.] | `limit-connections` 20 je Client-IP am SAM-Ingress, SAM-Body-Limit 10m [A], `sizeLimit` 2Gi plus Request auf `ephemeral-storage` (P2 Schritt 5, P5 Schritt 2), Lasttest in P2 und P5; Restrisiko: verteilte Uploads aus vielen IPs können das emptyDir weiter füllen, dann die Route sperren (Runbook, Freeze-Ausnahme) |
 | Access-Log mit Tokens oder Besucher-IPs: Die SAM-WebUI hängt ihr Access-Token als Query-Parameter an SSE-Aufrufe; ein Access-Log mit vollem `RequestPath` brächte Tokens von sam_admin und `marktleitung` nach Loki, Grafana und in den Export [Quelle: SAM-WebUI-Bundle und ingress-nginx-Log aus dem Lab, 17.11.] | Traefik-Access-Log mit `queryParameters.defaultMode: drop` und ohne Header (P2 Schritt 5); Zählabfrage `[?&]token=` in Loki ergibt 0 (P2, P5); Loki-Export nach der Messe ohne Access-Logs und mit Zählprüfung (P7 Schritt 8); Besucher-IPs liegen 7 Tage in Loki [A] |
 | Geteilter Origin: gpos (öffentlich, ohne Login) liegt auf demselben Origin wie SAM, dessen Bearer-Tokens im localStorage liegen; ein XSS in gpos könnte sie lesen [Quelle: SAM-WebUI main.js, Befehl `curl` 17.11.] | Risiko niedrig, vom Owner akzeptiert: gpos setzt keine Cookies, nutzt keinen Web-Storage und baut das DOM nur mit `textContent` [Quelle: gpd app/gposdemo/ui/static/shared/common.js; kasse.js; monitor.js]; Hygiene-Test gegen `innerHTML` und `insertAdjacentHTML` in den gpos-UI-Dateien [A]; `redirectUris` exakt auf den Callback; HSTS ohne `includeSubDomains`; Rückfall nur mit neuer Owner-Entscheidung: ein zweites DNS-Label nur für gpos (dritte Public IP, rund 3,3 EUR/Monat; mit zwei weiteren Regeln 5 LB-Regeln, noch im Grundpreis) |
-| Admin-Oberflächen öffentlich erreichbar (Keycloak-Admin und Master-Realm, Grafana, Prometheus, Broker-SEMP, Traefik-Dashboard, NodePorts) | VAP erlaubt `LoadBalancer` nur für `traefik/traefik` mit `pip-aks-ingress` und RG-Annotation (zweiter LB-Service und fehlende RG-Annotation als Negativtests in P2); das Azure-LB hat nur Regeln für 80 und 443, die Nodes haben keine öffentliche IP; Keycloak-Ingress nur `/auth/realms/solace-lab/` und `/auth/resources/`; Grafana, Prometheus, SEMP und Traefik-Dashboard nur per Port-Forward. Negativtests aus dem Internet in P3, P6 und P7: `/auth/admin/` und `/auth/realms/master/` liefern keine Keycloak-Seite (sie fallen auf SAMs SPA-Fallback mit 200, geprüft wird das Fehlen von Keycloak-Inhalt, nicht ein 404) |
+| Admin-Oberflächen öffentlich erreichbar (Keycloak-Admin und Master-Realm, Grafana, Prometheus, Broker-SEMP, Traefik-Dashboard, NodePorts) | VAP erlaubt `LoadBalancer` nur für `traefik/traefik` mit `pip-aks-ingress`, RG-Annotation fehlend oder `gebit-showcase-nodes` (zweiter LB-Service, fehlendes `azure-pip-name` und eine fremde RG als Negativtests in P2); das Azure-LB hat nur Regeln für 80 und 443, die Nodes haben keine öffentliche IP; Keycloak-Ingress nur `/auth/realms/solace-lab/` und `/auth/resources/`; Grafana, Prometheus, SEMP und Traefik-Dashboard nur per Port-Forward. Negativtests aus dem Internet in P3, P6 und P7: `/auth/admin/` und `/auth/realms/master/` liefern keine Keycloak-Seite (sie fallen auf SAMs SPA-Fallback mit 200, geprüft wird das Fehlen von Keycloak-Inhalt, nicht ein 404) |
 | CT-Logs: Die Ausstellung veröffentlicht den FQDN, Scanner finden den Host binnen Minuten [A]. Offenes Risiko: Jeder kann den Approver `marktleitung@solace.lab` mit 5 Fehlversuchen wiederholt bis 900 s sperren; der Name steht in rund 35 Dateien des öffentlichen Repos, der Realm erlaubt Login per E-Mail [Quelle: sli keycloak/manifests/03-keycloak.yaml:30-47; Befehl `git grep -l` auf Commit 7a860c5, 17.11.] | neutrales Präfix `<p>` ohne Kunden- oder Produktnamen; keine Admin-Oberfläche öffentlich; Rate-Limits; Brute-Force-Schutz bleibt an; Entscheidung in P3: nicht erratbarer Approver-Username mit `loginWithEmailAllowed: false` in der AKS-Realm-Kopie (E-Mail und `SAM_RUN_IDENTITY` bleiben [A]) oder bewusst hinnehmen mit Runbook-Schritt "Sperre aufheben" über die Admin-Konsole per Port-Forward; `passwordPolicy` gegen kurze Passwörter |
-| API-Server: Die IP von Owner oder Betreiber wechselt (Heimnetz, 5G, Messe), kubectl scheitert; `az aks update --api-server-authorized-ip-ranges` ersetzt die ganze Liste [Quelle: `learn.microsoft.com/azure/aks/api-server-authorized-ip-ranges`] | `sli/aks/aks-allow-me.sh` ergänzt die aktuelle IP und schreibt die vollständige Liste; Break-glass ohne Allowlist mit `az aks command invoke` (die Rolle des Stellvertreters enthält runcommand) [Quelle: `learn.microsoft.com/azure/aks/access-private-cluster`]; im Freeze nur `aks-allow-me.sh`, das ergänzt und nichts entfernt [A: Owner bestätigt die Ausnahme] |
+| API-Server: Die IP von Owner oder Betreiber wechselt (Heimnetz, 5G, Messe), kubectl scheitert; `az aks update --api-server-authorized-ip-ranges` ersetzt die ganze Liste [Quelle: `learn.microsoft.com/azure/aks/api-server-authorized-ip-ranges`] | `sli/aks/aks-allow-me.sh` ergänzt die aktuelle IP und schreibt die vollständige Liste (mit `--add` auch für einen Stellvertreter ohne Azure-Recht); Break-glass ohne Allowlist mit `az aks command invoke`: läuft über ARM mit dem Entra-Token des Aufrufers, also nur mit eigenem ClusterRoleBinding, und braucht `runCommand/action` (in Contributor enthalten) [Quelle: `learn.microsoft.com/azure/aks/access-private-cluster`; azure-cli 2.85.0 acs/custom.py:2620-2626]; jeder Lauf von `aks-allow-me.sh` ist ein `az aks update` (Zeile zur Tag-Pflicht); im Freeze nur `aks-allow-me.sh`, das ergänzt und nichts entfernt [A: Owner bestätigt die Ausnahme] |
 | Hairpin: SAM-Selbstaufrufe und der Back-Channel von SAM zu Keycloak gehen an denselben öffentlichen FQDN; Pod → öffentliche LB-IP mit `externalTrafficPolicy: Local` ist auf Overlay mit Cilium ungeprüft [A] | Test in P1 (Curl-Pod gegen `https://<fqdn>/`, ab P3 gegen den Issuer); Rückfall `kube-system/coredns-custom` mit Rewrite des FQDN auf die Traefik-ClusterIP [Quelle: `learn.microsoft.com/azure/aks/coredns-custom`; amd scripts/start.sh:136-147] |
 | gRPC-Reflection bis Image 0.1.4: Reflection- und Health-Pfade sind auf allen drei Servern gleich, über einen Host erreichen `grpcurl list` und Postman nur einen Server [Quelle: gpd app/gposdemo/common/grpcutil.py:150-167] | bis 0.1.4 geht Reflection an `gpos-pos`; WWS und Loyalty per `-protoset` aus dem eigenen Showcase-Descriptor; 0.1.4 mit gemeinsamem Reflection-Endpunkt in der Lab-Vorarbeit KW52-53, Lab zuerst (`make test`, `make smoke`, S1-e2e); gRPC-Health bleibt clusterintern |
 | Neue BFF-Seiten: Das aks-Overlay routet gpos nur über ausgeschnittene Pfade; eine neue Seite ohne Pfad landet bei SAM (SPA-Fallback 200). Umgekehrt wären `/freigabe` (beantwortet SAM-HITL über die BFF), `/foto` (startet den Vision-Agenten), `/op` und `/etikett` mit Pfad öffentlich ohne Login: Jeder könnte Preise freigeben oder den Messe-Key leeren [Quelle: PLAN 1.4; PLAN 9 R24]; `/` und `/health` gehören SAM | Owner-Entscheidung offen (Frage 23, vor G2b), nicht akzeptiert; bis dahin kein Pfad. Test in `scripts/tests/test_k8s.py` mit zwei ausdrücklichen Listen (öffentlich, Exposition offen), der bei einer gerouteten offenen Route scheitert; LLM-auslösende Routen nur mit eigenem `public-guard`-Limit; Kollisionsprüfung gegen die SAM-Routen je SAM-Release [A]; Kiosk-URLs direkt auf `/kasse` und `/monitor` |
 | Lab-Broker-Upgrade (P4 Teil A) mit DBs im Container-Layer: solace-1 und solace-2 haben keine Mounts, die Compose-Hashes weichen ab; `start.sh` würde beide neu erzeugen und leeren, `stop.sh` löscht sie; 36 Queues und die iCargo-User liegen außerhalb von Terraform; ein Downgrade ist nicht unterstützt [Quelle: Befehle `docker inspect`, `docker compose config --hash` und SEMPv2-GETs, 17.11.; emd start.sh:4-6, stop.sh:2; `docs.solace.com` Upgrade-Selector] | Risiko mittel bis hoch; eigenes Owner-Go und Wartungsfenster; bis zur Anpassung der emd-Skripte (auch nach der Migration, weil `stop.sh` den Terraform-State löscht) im emd-Lab nur `docker start/stop` bzw. `docker compose stop/start`, kein `start.sh`, `stop.sh`, `compose up/pull/down`, kein Prune; README, `CLAUDE.md` und Memory-Notiz nennen den geltenden Zyklus; Schritte nach P4 A1-A8: SEMPv2-Baseline, `docker commit` als Rückfall, externes Volume, Tag plus Digest in `.env.example`, `compose up -d --no-deps` je Broker, solace-2 zuerst, `terraform plan` leer; SAM- und GEBIT-Flows im Lab belegt, bevor P4 Teil B und P5 beginnen (Prüfpunkt 04.12., spätestens 10.12.) |
-| LiteLLM aus Azure nicht erreichbar oder langsamer (rund +100 ms je Aufruf [A: RA 5.2]) | Egress-IP ab P0 (KW47/48), an den Betreiber bis 25.11., schriftliche Bestätigung 27.11.; Probe aus dem Pod in P1; A4-Vergleich in P6 |
-| LiteLLM-Key außerhalb von SAM lesbar: Klartext in `model_configurations` und `gateway_deployments`, Grafana-Grant auf alle Tabellen, pg_dumps, App-User mit Passwort = Username; die BFF ohne Login läuft im selben Cluster [Quelle: amd scripts/models/README.md:77-79; grant-grafana-platform-db.sh:72; SAM-Chart `_helpers.tpl`:359-397] | AKS-E19: eigenes Superuser-Passwort, NetworkPolicies für Postgres und SeaweedFS; `grafana_ro` nur mit expliziten Tabellen; Dumps ohne die Daten beider Tabellen, Zählprüfung je Dump, verschlüsselt, nach der Messe gelöscht; keine Snapshots |
-| GEBIT-Freigabe (vom Owner am 17.11. berichtet) deckt das Descriptor-Set als K8s-Secret in Azure oder die öffentliche Reflection nicht ab; die Reflection gibt die GEBIT-Descriptor-Dateien selbst heraus [A] | Status offen, harte Vorbedingung: Owner bestätigt beides schriftlich bis 27.11., spätestens 09.12. (vor `gebitsim` in P2 Schritt 7, G0-11b (3) am 11.12.); ohne Bestätigung kein GEBIT-Material in Azure, G0-11b (3) mit einem Testserver ohne GEBIT-Material (dokumentierte Abweichung von PLAN 7.1) oder nach G2b, `install.sh k8s` auf AKS ohne Descriptor-Secret, Demo nur im Lab oder in L3; ohne Bestätigung nur der Reflection kein `gpos-grpc-reflection`. P1-P5 ohne P2 Schritt 7 mit `gebitsim` und die Lab-Vorarbeit laufen unabhängig. Secret nur zur Laufzeit vom Owner-Mac, nie in Git, Images, ACR, Key Vault oder Backups; das `gebitsim`-Secret in `p2-test` direkt nach dem Test gelöscht; Löschung bis 20.02. protokolliert |
-| arm64 als System-Pool auf v6 oder Dpsv6-Kapazität nicht verfügbar [A] | der Create in P1 ist der Test; DPSv5-Quota bei Restriction im selben Antrag (P0 Schritt 4); Rückfall D8ps_v5, sonst amd64 (+1-1,5 PT, `crane` oder `az acr build`) |
+| LiteLLM aus Azure nicht erreichbar oder langsamer (rund +100 ms je Aufruf [A: RA 5.2]) | Vorankündigung an den Betreiber am 20.11., Egress-IP direkt nach dem Create (P1, ab 30.11.), schriftliche Antwort zu Allowlist und Limits bis 27.11.; Probe aus dem Pod in P1; A4-Vergleich in P6 |
+| LiteLLM-Key außerhalb von SAM lesbar: Klartext in `model_configurations` und `gateway_deployments`, Grafana-Grant auf alle Tabellen, pg_dumps, App-User mit Passwort = Username; die BFF ohne Login läuft im selben Cluster [Quelle: amd scripts/models/README.md:77-79; grant-grafana-platform-db.sh:72; SAM-Chart `_helpers.tpl`:359-397] | AKS-E19: eigenes Superuser-Passwort, NetworkPolicies für Postgres und SeaweedFS; `grafana_ro` nur mit expliziten Tabellen; Dumps ohne die Daten beider Tabellen, Zählprüfung je Dump, verschlüsselt, nach der Messe gelöscht; keine Snapshots; der Zugriff der Contributor-Gruppe steht in der eigenen Zeile oben |
+| GEBIT-Freigabe (vom Owner am 17.11. berichtet) deckt das Descriptor-Set als K8s-Secret in Azure oder die öffentliche Reflection nicht ab; die Reflection gibt die GEBIT-Descriptor-Dateien selbst heraus; technisch kommt jedes Mitglied der Contributor-Gruppe von `azure-se` an das Secret [A] | Status offen, harte Vorbedingung: Owner bestätigt beides schriftlich bis 27.11., spätestens 09.12. (vor `gebitsim` in P2 Schritt 7, G0-11b (3) am 11.12.), und die Bestätigung deckt den Zugriffskreis der Contributor-Gruppe (Frage 27); ohne Bestätigung kein GEBIT-Material in Azure, G0-11b (3) mit einem Testserver ohne GEBIT-Material (dokumentierte Abweichung von PLAN 7.1) oder nach G2b, `install.sh k8s` auf AKS ohne Descriptor-Secret, Demo nur im Lab oder in L3; ohne Bestätigung nur der Reflection kein `gpos-grpc-reflection`. P1-P5 ohne P2 Schritt 7 mit `gebitsim` und die Lab-Vorarbeit laufen unabhängig. Secret nur zur Laufzeit vom Owner-Mac, nie in Git, Images, ACR, Key Vault oder Backups; das `gebitsim`-Secret in `p2-test` direkt nach dem Test gelöscht; Löschung bis 20.02. protokolliert |
+| arm64 als System-Pool auf v6 oder Dpsv6-Kapazität beim Create nicht verfügbar [A]; am 18.11. ist `Standard_D8ps_v6` in den Zonen 1-3 ohne Restriction (ohne ephemeral OS-Disk), und die Quota reicht [Quelle: Befehle `az` read-only, 18.11.] | der Create in P1 ist der Test; Rückfall `Standard_D8ps_v5` (ebenfalls ohne Restriction, DPSv5 0 von 350), sonst amd64 `Standard_D8as_v6` (+1-1,5 PT, `crane` oder `az acr build`) |
 | sam CLI mit zwei Targets schreibt auf die falsche Plattform oder zieht die Lab-`.env` | Login je Home unter dem Manifest-Zielnamen `solace-lab`; `SAM_HOME` je Ziel; URL-Guard gegen den Cache; immer `--url` und `--no-dotenv`; nie `--prune`; Spike in P0 |
-| Stop/Start: Kapazität beim Start, gwe/awe-Race, Start zu früh nach dem Stop; die API-Server-IP kann wechseln [Quelle: `learn.microsoft.com/azure/aks/start-stop-cluster`] | kubectl nutzt den FQDN des API-Servers, ein IP-Wechsel braucht keinen Abgleich; die Ingress-IP bleibt (`pip-aks-ingress` in `rg-eurocis-base`); Start frühestens 30 min nach Stop (Sperre im Wrapper, RUNBOOK); Wartelogik und awe-Neustart; Start 60 min vor Bedarf; ab 05.02. kein Stopp |
+| Stop/Start: Kapazität beim Start, gwe/awe-Race, Start zu früh nach dem Stop; die API-Server-IP kann wechseln [Quelle: `learn.microsoft.com/azure/aks/start-stop-cluster`] | kubectl nutzt den FQDN des API-Servers, ein IP-Wechsel braucht keinen Abgleich; Ingress- und Egress-IP bleiben, solange der Cluster existiert [A: nicht dokumentiert; P1 und P7 protokollieren beide vor und nach jedem Zyklus, `aks-start.sh` vergleicht mit dem Register]; Start frühestens 30 min nach Stop (Sperre im Wrapper, RUNBOOK); Wartelogik und awe-Neustart; Start 60 min vor Bedarf; ab 05.02. kein Stopp |
 | Wartung trotz Sperre (reaktive Wartung kann `notAllowedDates` brechen); mit einem Node heißt jedes Node-Image-Update einige Minuten Ausfall [Quelle: `learn.microsoft.com/azure/aks/planned-maintenance`] | Refresh Di 26.01. mit gemessener Ausfallzeit, Sperre ab 27.01.; kein PDB, das den Drain blockiert; L3 warm; Preflight nach jedem Wartungsereignis |
 | Datenverlust im Cluster (gebündelte Persistenz, Neuaufbau löscht PVCs, Namespace-Löschung löscht die Demo-DB) | Inhalte per Skript und deterministischem Seed reproduzierbar; Demo-DB im eigenen Namespace `gpos-data`; `pg_dump` vor G3 und nach jedem Messetag vor dem Day-Reset, inklusive gpos-DB; Restore-Test; Export vor jeder Löschung (P7 Schritt 8) |
 | Zeitplan: 13,5 PT bis G2a neben der TR5/TR3-Laborarbeit, das Lab-Broker-Upgrade (P4 Teil A) schon in KW48/49, dann Feiertage; KW1-2 für C überbucht (Abschnitt 6); AKS-E18 und AKS-E20 ohne Owner-Bestätigung | O9 als Weiche am 20.11.; Last von C in KW48/49 vorgezogen; Prüfpunkte 04.12. und 11.12. mit Rückfall "G2a-AKS-Abnahme nach G2b"; Umverteilung in KW1-2 mit dem PLAN-Eigner |
-| Messebetrieb hängt an Konto und Mac des Owners; AKS-E20 ist ohne Owner-Bestätigung | AKS-E20: Stellvertreter mit eigenen Rollen, eigenem Keycloak-User, `aks-allow-me.sh` und Break-glass, Runbook-Durchlauf bis G3; wird bis G3 niemand benannt: L3 warm, L4 über `/op`, Preflight vor Standöffnung durch den Owner |
-| Defender oder andere Subscription-Vorgaben verursachen Kosten oder blockieren Ressourcen | P0 prüft Defender-Pläne und Policies; Kosten bedingt in 3.4; Klärung mit dem Subscription-Owner (AKS-E1) |
+| Messebetrieb hängt an Konto und Mac des Owners; AKS-E20 ist ohne Owner-Bestätigung. Eine eigene, eingeschränkte Azure-Rolle für den Stellvertreter gibt es ohne Rollenzuweisung nicht: Ohne Contributor über eine Gruppe kann er weder `aks-allow-me.sh` noch `az aks start/stop` noch `az aks command invoke` nutzen; mit Contributor darf er auch stoppen und löschen | Owner klärt bis 27.11. Gruppe und Tenant-Status (Frage 24); sonst gibt der Owner ihm die User-kubeconfig (ohne Geheimnis [A: Test vor G3 mit einem Konto ohne Subscription-Zugriff, P7 Schritt 7]); er meldet sich mit `az login --tenant <tenant> --allow-no-subscriptions` an (ein einfaches `az login` bricht ohne Subscription mit "No subscriptions found" ab) oder konvertiert die kubeconfig mit `kubelogin convert-kubeconfig -l interactive`; der Owner trägt seine IP per `aks-allow-me.sh --add` ein, Start/Stop und Break-glass bleiben beim Owner; ab 05.02. läuft der Cluster 24/7, ein Start ist an Messetagen nicht nötig; mit Contributor sind stop und delete ein Runbook-Verbot, die Alarme zeigen Verstöße; eigener Keycloak-User, ClusterRoleBinding und Key-Vault-Policy, Runbook-Durchlauf bis G3; wird bis G3 niemand benannt: L3 warm, L4 über `/op`, Preflight vor Standöffnung durch den Owner |
+| Geteilte Subscription ändert sich während des Projekts: neue Policies, eingeschaltete Defender-Pläne, andere Projekte belegen regionale vCPU (am 18.11. 200 von 350); ASC Default (Audit) meldet den Key Vault im Access-Policy-Modus vermutlich als Abweichung [A] | Stand 18.11.: alle relevanten Defender-Pläne Free, also 0 EUR (3.4); Re-Check von Defender-Plänen, Policy-Zuweisungen und Quota (`az vm list-usage`) vor dem Create, vor dem Refresh am 26.01. und vor G4 [A]; ASC-Hinweis im README vermerken (kosmetisch) |
 | gpd-Umbau ohne Rückweg | Baseline = sda-Commit vor dem Umbau, Commit je Schritt, Rückweg in KW48 geprobt (P0 Schritt 9) |
-| Kosten laufen weiter (vergessener Nachtstopp, nach der Messe); LLM-Kosten sieht das Azure-Budget nicht | Monatsbudget 250 EUR (neu skaliert, 3.4) auf drei RGs mit Forecast bis 31.03.; Abend-Check; Activity-Log-Alarm nur als Information; `deleteAfter`-Tag; datierter Rückbau-Schritt mit Key-Vault-Purge in P7; LLM-Limits am Messe-Key beim Betreiber |
+| Kosten laufen weiter (vergessener Nachtstopp, nach der Messe); LLM-Kosten sieht das Azure-Budget nicht | Monatsbudget 250 EUR (3.4) auf Subscription-Ebene mit Filter auf `gebit-showcase` und `gebit-showcase-nodes` (Contributor darf eigene Budgets anlegen [Quelle: `learn.microsoft.com/azure/cost-management-billing/costs/tutorial-acm-create-budgets`]), Forecast bis 31.03.; Annahme, dass `gebit-showcase` nur Showcase-Ressourcen hält [A]; Abend-Check; Activity-Log-Alarm nur als Information; `deleteAfter`-Tag; datierter Rückbau-Schritt mit Key-Vault-Purge in P7; LLM-Limits am Messe-Key beim Betreiber |
 
 ## 8. Abgleich mit dem früheren AKS-Konzept
 
@@ -4861,7 +7139,7 @@ Bezug: PLAN 5.2/5.3 [Quelle: PLAN 5.2, 5.3], RA vom 10.11.2026
 ### 8.1 Was bleibt
 
 - Germany West Central, Kubernetes 1.36, Azure CNI Overlay mit
-  Cilium, ACR ohne Pull-Secret.
+  Cilium, ACR als einzige Registry des Clusters.
 - NGINX-Ingress-Manifeste mit denselben Annotationen (Traefiks
   NGINX-Provider liest sie); gRPC mit h2c-Backend; SSE ohne Buffering,
   LB-Idle-Timeout 30 min.
@@ -4885,7 +7163,12 @@ Bezug: PLAN 5.2/5.3 [Quelle: PLAN 5.2, 5.3], RA vom 10.11.2026
 | Persistenz | PG Flexible B2ms + Blob [Quelle: PLAN 5.2] | alles im Cluster, gebündelt, mit eigenem Superuser-Passwort und NetworkPolicies; Demo-DB im Namespace `gpos-data` | nie getesteter Pfad, +1,5-2 PT, rund +108 EUR/Monat; Plan-Rückfall Nr. 11 [Quelle: PLAN 6.2] |
 | Tier | Standard ab Start | Free-Tier für das ganze Projekt | Owner-Entscheidung 17.11.; rund 65,6 EUR/Monat gespart, kein Uptime-SLA |
 | Wartung | außerhalb 12.-20.02., Node-OS `None` [Quelle: PLAN 5.2; RA:592] | `notAllowedDates` 20.01. und 27.01.-20.02. auf drei Konfigurationen, manueller Refresh 26.01., SecurityPatch bis zur Sperre | Probetage, G4 und Messe auf einem Image; ein Refresh heißt einige Minuten Ausfall |
-| Struktur | eine RG, Skripte in `gpd/infra/aks` [Quelle: PLAN 4] | drei RGs (Basis, Cluster, feste Node-RG), BYO-UAMI, versioniert in sli/emd | Neuaufbau behält ACR, Egress- und Ingress-IP samt DNS-Label und Key Vault; Budget-Filter mit festen Namen |
+| Rechte | implizit vorausgesetzt (AcrPull für den Cluster, Workload Identity mit DNS-Rechten) | nur Contributor auf `azure-se` über eine Gruppe; keine Rollenzuweisung, kein Lock, keine Policy-Ausnahme | geprüft 18.11.: Der Owner hat weder Owner noch User Access Administrator; Owner-Entscheidung 18.11. |
+| Struktur | eine RG, Skripte in `gpd/infra/aks` [Quelle: PLAN 4]; AKS-Plan 17.11.: drei RGs, BYO-VNet, UAMI | RG `gebit-showcase` (vom Owner angelegt, westeurope; Cluster, ACR und Key Vault in Germany West Central) und Node-RG `gebit-showcase-nodes` (von AKS, Pflicht-Tags per `--tags`); AKS-verwaltetes VNet, System-Identität; versioniert in sli/emd | BYO-Netz und UAMI bräuchten Rollenzuweisungen; Tag-Pflicht der Subscription; Neuaufbau behält ACR, Token und Key Vault, nicht IPs und Label; fester Name der Node-RG für den Budget-Filter |
+| Image-Pull | ACR an den Cluster gebunden, kein Pull-Secret [Quelle: PLAN 5.2] | Pull-Token `aks-pull` (nur Pull, mit Ablauf), Secret `acr-pull` je Namespace, Chart-Werte und Patches | `--attach-acr` braucht eine Rollenzuweisung und bricht ohne Owner-Recht erst nach dem Cluster-PUT ab [Quelle: azure-cli dev acs/_roleassignments.py:101-140] |
+| Cluster-Zugriff | AKS-Plan 17.11.: Entra ID mit Azure RBAC | Entra ID mit Kubernetes RBAC: Bootstrap mit Admin-Zertifikat, ClusterRoleBindings auf den UPN, dann lokale Accounts aus | Azure RBAC für Kubernetes braucht Rollenzuweisungen |
+| Secrets | AKS-Plan 17.11.: Key Vault im RBAC-Modus | Key Vault im Access-Policy-Modus, Policies für Owner und Stellvertreter | eine Datenrolle bräuchte eine Rollenzuweisung |
+| Egress | AKS-Plan 16./17.11.: statische `pip-aks-egress` | AKS-verwaltete Outbound-IP, nach dem Create gemeldet | eine BYO-IP bräuchte Rechte der Cluster-Identität; neu bei jedem Neuaufbau |
 | Sicherheitsgeländer | nicht vorgesehen | P0 vor jedem AKS-Kontakt, `kaks`/`haks`, Call-Log-Gate | kein Skript pinnt einen Kontext |
 | SAM-Profil | 0,5 PT [Quelle: PLAN 0.5 O6] | rund 2,5-3 PT | Guards, CLI-Seam, Keycloak-Writeback, TLS-Variante, Image-Pfad |
 | SAM-Broker | `tcp://...:55555` [Quelle: PLAN 5.2] | `ws://...:8008`, User `sam` | im Lab getesteter Transport |
@@ -4903,7 +7186,7 @@ Bezug: PLAN 5.2/5.3 [Quelle: PLAN 5.2, 5.3], RA vom 10.11.2026
 | Images SAM | amd64 per `gunzip` + `crane push` [Quelle: PLAN 5.2] | arm64 registry-zu-registry | kein Tarball-Load in den k3s-dockerd |
 | Topologie | k3s-Cloud-VM (DESIGN 4.8) | AKS | bereits durch PLAN-E8 ersetzt |
 | Aufwand | rund 14 PT [Quelle: RA:567]; PLAN: AKS-Anteil von C 21,5 PT plus 2,5 PT Puffer [Quelle: PLAN 7.3] | 23,5 PT (27,0 mit Puffer) | Geländer, SAM-Profil, Demo-Seams, Lab-Broker-Upgrade, Drills; Abgleich in 8.4 |
-| Kosten | rund 860 EUR/Monat [Quelle: RA:499] | rund 300-340 EUR/Monat bei 24/7 (Defender bedingt rund +49) | ein Node, Free-Tier, kein PG Flexible, kein WireGuard |
+| Kosten | rund 860 EUR/Monat [Quelle: RA:499] | rund 300-340 EUR/Monat bei 24/7; Defender Free (18.11.) | ein Node, Free-Tier, kein PG Flexible, kein WireGuard |
 
 ### 8.3 Korrekturen an Befunden
 
@@ -4913,18 +7196,18 @@ Bezug: PLAN 5.2/5.3 [Quelle: PLAN 5.2, 5.3], RA vom 10.11.2026
 - PLAN 6.2 erlaubt keine Abnahme "Plattform plus Tunnel", sondern
   verschiebt die G2a-AKS-Abnahme in Variante (b) nach G2b.
 - Quota muss den Surge-Node einrechnen (16 statt 8 vCPU bei einem
-  Node).
+  Node); am 18.11. reicht sie ohne Antrag (3.5).
 - SAM-Broker-Passwort heißt `broker.password`, nicht `clientPassword`.
 - Der Lab-SAM-Ingress hat keine `proxy-body-size` (NGINX-Default 1m);
   unter Traefik wirkt ein Limit nur mit `proxy-request-buffering:
   "on"`.
 - `az aks check-acr` taugt auf einem reinen arm64-Cluster nicht
-  (Prüf-Image nur amd64); P1 prüft AcrPull und einen echten
-  arm64-Pull.
-- Quota-Anträge werden meist in Minuten automatisch freigegeben; nur
-  bei Ablehnung folgt ein Support-Fall mit Tagen.
-- Ein Budget nur auf den beiden eigenen RGs sähe die Node-Kosten
-  nicht; dafür gibt es die feste Node-RG im Budget-Filter.
+  (Prüf-Image nur amd64) und prüft ohnehin die Kubelet-Identität, die
+  hier kein AcrPull hat; P1 prüft das Secret `acr-pull` und einen
+  echten arm64-Pull.
+- Ein Budget nur auf `gebit-showcase` sähe die Node-Kosten nicht
+  (höchstens rund 38 von 300-340 EUR); dafür steht die feste Node-RG
+  `gebit-showcase-nodes` im Filter.
 - Broker: `latest` und `lts` zeigen auf 10.26.0.9219 (LTS), nicht auf
   10.26.10; 10.26.10.14510 trägt die Tags `edge` und `rolling`
   [Quelle: Docker-Hub-Tags-API, 17.11.].
@@ -4945,6 +7228,50 @@ Bezug: PLAN 5.2/5.3 [Quelle: PLAN 5.2, 5.3], RA vom 10.11.2026
   kein 404 mehr, sondern SAMs SPA-Fallback (200); die Negativtests
   prüfen das Fehlen von Keycloak-Inhalt [Quelle: Befehl `curl` gegen
   den Lab-SAM, 17.11.].
+- Neu am 18.11.: `--attach-acr` ohne Owner-Recht scheitert nicht vor
+  dem Create. Die CLI legt den Cluster an, versucht die
+  AcrPull-Zuweisung danach rund 110 s lang und endet mit "Could not
+  create a role assignment for ACR" und einem Exit-Code ungleich 0;
+  der Cluster bleibt ohne AcrPull [Quelle: azure-cli dev
+  acs/_roleassignments.py:101-140; acs/managed_cluster_decorator.py:9204-9222;
+  `learn.microsoft.com/azure/aks/cluster-container-registry-integration`].
+- Neu am 18.11.: `--vnet-subnet-id` ohne Rollenrecht gibt nur eine
+  Warnung aus; der Create läuft durch, die Identität hat dann keine
+  Subnetzrechte [Quelle: azure-cli dev
+  acs/managed_cluster_decorator.py:7513-7627, 9085-9122].
+- Neu am 18.11.: Der Plan vom 17.11. wäre an der Tag-Pflicht
+  gescheitert: `az group create rg-eurocis-base` trug nur `purpose`
+  und `deleteAfter`, und `az group update -n rg-eurocis-nodes --tags`
+  ersetzt das ganze Tag-Set. `--tags` beim Create taggt auch die
+  Node-RG; der Hinweis auf `--nodepool-tags` aus einem FastTrack-Blog
+  von 2022/2023 ist überholt [Quelle:
+  `learn.microsoft.com/azure/aks/use-tags`].
+- Neu am 18.11.: Kubernetes-RBAC-Bindungen nennen für Nutzer desselben
+  Tenants den UPN, nicht die objectId; nur Nutzer anderer Tenants und
+  Gruppen gehen per objectId [Quelle:
+  `learn.microsoft.com/azure/aks/kubernetes-rbac-entra-id`].
+- Neu am 18.11.: `az aks command invoke` ist kein Weg am RBAC vorbei;
+  es reicht das Entra-Token des Aufrufers weiter. Break-glass bei
+  einem RBAC-Lockout ist `--enable-local-accounts` [Quelle: azure-cli
+  2.85.0 acs/custom.py:2620-2626].
+- Neu am 18.11.: Defender ist nicht "bedingt", sondern in allen
+  relevanten Plänen Free; nur Discovery und Foundational CSPM laufen
+  als Standard, ohne Kostenwirkung hier [Quelle: Befehle `az`
+  read-only, 18.11.].
+- Neu am 18.11.: Key Vault macht ab API 2026-02-01 RBAC zum Default
+  für neue Vaults; Access Policies bleiben unterstützt, brauchen dann
+  aber `enableRbacAuthorization=false` ausdrücklich. Azure CLI 2.85.0
+  nutzt noch API 2025-05-01; alle Versionen vor 2026-02-01 enden am
+  27.02.2027 [Quelle:
+  `learn.microsoft.com/azure/key-vault/general/access-control-default`].
+- Neu am 18.11.: Im ACR-Modus "RBAC Registry + ABAC Repository
+  Permissions" hat Contributor keine Daten-Ebene, und Learn kündigt
+  ihn als künftigen Default an; deshalb `--role-assignment-mode rbac`
+  ausdrücklich [Quelle:
+  `learn.microsoft.com/azure/container-registry/container-registry-rbac-abac-repository-permissions`].
+- Neu am 18.11.: Der Tag-Name `Owner` war nur für AKS-Legacy-Ressourcen
+  reserviert; für neue Cluster gilt die Einschränkung nicht [Quelle:
+  `learn.microsoft.com/azure/aks/faq`].
 
 ### 8.4 Abgleich mit Aufwand, Terminen und Kosten des PLAN
 
@@ -4953,17 +7280,17 @@ Die AKS-Posten des PLAN gegen die Phasen dieses Plans [Quelle: PLAN 6
 
 | PLAN-Posten | PT PLAN | Phasen hier | Bemerkung |
 |---|---|---|---|
-| AP12 S1-S3 (Subscription, Foundation, Add-ons) | 3,5 | P0 Schritt 5, P1, P2 | eine Woche später als PLAN 7.3 (KW49/50 statt KW48): O4 überfällig, `az login` blockiert |
+| AP12 S1-S3 (Subscription, Foundation, Add-ons) | 3,5 | P0 (Checks am 18.11. erledigt), P1, P2 | eine Woche später als PLAN 7.3 (KW49/50 statt KW48); O4 erst am 17. und 18.11. geklärt (`azure-se`, RG `gebit-showcase`, nur Contributor), die Azure-Ressourcen entstehen erst in P1 |
 | AP12 S4 Broker, S5 Keycloak | 2,0 | P4 Teil B, P3 | P4 Teil B erst nach der Abnahme von Teil A |
 | AP12 S6 SAM, darin O6 0,5 | 2,0 | P5 | SAM-Profil hier rund 2,5-3 PT |
 | AP12 S7-S8 (Overlay, gRPC-Ingresse, Demo) | 2,0 | P6 | plus Seams, `pg`-Teil, Env-Prüfung, Pfad-Ingresses, `public-guard`, Image 0.1.4 |
 | AP12 S9 öffentlicher Zugang, HTTPS-RTT, L3-Kopie | 1,5 | P1 (`aks-allow-me.sh`), P2 (öffentliches LB, VAP), P5 (HTTPS-RTT), P6 (TR1-Besuche) | früher WireGuard; netto rund 1,25 PT weniger [A] |
 | AP12 S10 Härtung | 1,5 | P7 | - |
 | G0-11a, G0-11b | 1,5 | P1 (Probe), P2 Schritt 7, P5 Schritt 7 | Termine nach AKS-E18 (Owner-Bestätigung offen) |
-| AP13 AKS-Anteil (24 h, Neuaufbau) | 2,0 | P7 Schritt 3 | ohne N-1-Drain |
+| AP13 AKS-Anteil (24 h, Neuaufbau) | 2,0 | P7 Schritt 3 | ohne N-1-Drain; Neuaufbau mit Neubindung des Labels und neuer Egress-IP |
 | AP14 Betrieb | 3,5 | P7 Schritte 4-7 | Kanarienlauf, Tagesroutine, Exporte und Freeze-Snapshots bleiben PLAN-Posten |
 | AP14b L3 | 2,0 | P7 nur der Drill | Aufbau des L3-Profils (Overlay `l3`, SAM-Values `l3`, Export) bleibt PLAN-Posten |
-| neu: Sicherheitsgeländer | - | P0 | 2,5 PT |
+| neu: Sicherheitsgeländer | - | P0 | 2,25 PT (ganz P0, seit 18.11. ohne Azure-Vorab-Anlage) |
 | neu: Lab-Broker-Upgrade | - | P4 Teil A | 1,0 PT |
 | **Summe** | **21,5** (+2,5 Puffer) | **23,5** (+3,5 Puffer) | |
 
@@ -4975,46 +7302,71 @@ Die AKS-Posten des PLAN gegen die Phasen dieses Plans [Quelle: PLAN 6
   PLAN 7.3]. P7 übernimmt davon nur das AP14-Runbook (0,5) und den
   L3-Drill zu G3 (0,5). Vergleichbar sind damit rund 28,0 PT gegen
   21,5 PT (Delta +6,5 PT) bzw. gegen 20,0 PT (+8,0 PT). Echte
-  Neuposten: Geländer (2,5 PT),
+  Neuposten: Geländer (P0, 2,25 PT),
   SAM-Profil (+2-2,5 PT gegen 0,5 PT O6), Lab-Broker-Upgrade
   (1,0 PT), Traefik (+0,5 PT), Image 0.1.4 (0,5 PT) und der
   Missbrauchsschutz (0,5 PT); der Wegfall von WireGuard spart netto
-  rund 1,25 PT.
+  rund 1,25 PT. Die Entscheidung vom 18.11. ändert die Summe nicht,
+  sie verschiebt nur Arbeit von P0 nach P1 (8.6) [A].
 - Variante (a): C hat 32,25 von 39,9 PT netto verplant [Quelle: PLAN
   0.4]; frei sind 7,65 PT. Das Delta von 6,5 PT passt rechnerisch
   hinein, lässt aber nur rund 1,15 PT frei. Nach Abschnitt 6 trägt C
-  39,5 PT (38,0 nach der Umverteilung von AP11 `/op`) gegen 39,9 PT
-  netto, und KW1-2 braucht die Umverteilung aus Abschnitt 6.
-  Variante (b): Das Delta vergrößert die Lücke von 6,4 bzw. 7,9 PT
-  [Quelle: PLAN 0.4, 6.2]. Das Muss von 118,75 PT steigt um das
-  Delta, sofern der Owner die Geländer und das Lab-Broker-Upgrade nicht
-  als Teil von AP12 verbucht.
+  39,75 PT (38,25 nach der Umverteilung von
+  AP11 `/op`) gegen 39,9 PT netto, und KW1-2 braucht die Umverteilung
+  aus Abschnitt 6. Variante (b): Das Delta vergrößert die Lücke von
+  6,4 bzw. 7,9 PT [Quelle: PLAN 0.4, 6.2]. Das Muss von 118,75 PT
+  steigt um das Delta, sofern der Owner die Geländer und das
+  Lab-Broker-Upgrade nicht als Teil von AP12 verbucht.
 - Termine: G0-11a und G0-11b nach AKS-E18 (Owner-Bestätigung offen);
   die Abhängigkeit "AP12 S6-S10 nach G0-11a" [Quelle: PLAN 6 (AP12),
   6.1] wird phasengerecht umgeschrieben; P0 in KW47 tragen Owner und
   Claude, bevor C am 23.11. beginnt; AP12 S1-S3 rutschen eine Woche
-  (O4 überfällig).
+  (O4 erst am 17. und 18.11. geklärt).
 - Kosten: Die AKS-Kosten in PLAN 0.4 ("etwa 2,0-3,0 Tsd. €") sinken auf
-  rund 470-600 EUR bis zum Rückbau am 20.02.2027 (mit aktivem Defender
-  for Containers rund 520-660 EUR) [A: Laufmuster 3.4; Quelle:
-  Retail-API 17.11.]; Ziel unter 1.500 EUR (AKS-E1), Monatsbudget
+  rund 460-590 EUR bis zum Rückbau am 20.02.2027; einen
+  Defender-Zuschlag gibt es nicht, alle relevanten Pläne sind Free
+  [A: Laufmuster 3.4; Quelle: Retail-API 17.11.; Befehle `az`
+  read-only, 18.11.]. Ziel unter 1.500 EUR (AKS-E1), Monatsbudget
   250 EUR. Gründe: ein Node, Free-Tier, kein WireGuard,
   gebündelte Persistenz, Nachtstopp bis G4, Cluster erst ab 30.11.
+- Am 18.11. im PLAN schon nachgezogen: der 0.2-Nachtrag (beide IPs in
+  der Node-RG, ohne Lock und ohne Rollenzuweisung, nur Contributor)
+  und der Hinweis auf den Stand vom 11.11. in 0.2 (erweitert um G0b,
+  5.3, AP12, Ressourcengruppe, VNet, Identitäten und die Pfade unter
+  `infra/aks/`), in 4 der Dateibaum (`infra/aks/` verweist auf
+  `sli/aks/`, `amd/aks-values.yaml` und `emd/terraform-aks/`) und die
+  Descriptor-Regel (Secret statt ConfigMap), in 5.2
+  die Zeilen Images (Pull-Weg), TLS/Name und LiteLLM sowie die
+  SAM-Values-Skizze (`imagePullSecrets: ["acr-pull"]`), in 5.3 Nr. 1
+  (Verweis auf `sli/aks/foundation.sh pre|post`, ohne RG-, VNet- und
+  Identitätsanlage) und Nr. 4 (Descriptor-Secret statt ConfigMap).
 - Nach Freigabe im PLAN nachziehen: 0.2 (E7 AKS-Persistenz im Cluster
   statt PG Flexible; E8 mit 1 x D8ps_v6 arm64, Free-Tier, Traefik,
   HTTP-01 mit Azure-DNS-Label, Broker 10.26.0.9219; der Zugang ist dort
-  schon nachgezogen), 0.3 (G0b ohne "externe Persistenz" und
-  "DSN-TLS"), 0.4 (Kosten), 0.5 (O4 Azure-DNS-Label statt delegierter
-  Zone, O6 mit 0,5 PT, AKS-E1 bis AKS-E20), 5.2 (Cluster, Images,
-  Ingress, Hosts, SAM-Persistenz, Broker), 6 (AP12-Zeile "SAM extern",
-  PT), 6.1 (kritischer Pfad), 6.4, 7.1 (G0-11a/b), 7.2, 7.3 und R5
-  (externe Persistenz, ingress-nginx); in 5.2 außerdem das
-  SAM-Body-Limit 10m statt 100m mit `limit-connections` (P5 Schritt 2).
+  schon nachgezogen; aus dem 18.11. noch RG `gebit-showcase`, Node-RG
+  mit Pflicht-Tags, ACR-Token, Kubernetes RBAC und Key Vault mit
+  Access Policies), 0.3 (G0b ohne "externe Persistenz" und
+  "DSN-TLS"), 0.4 (Kosten), 0.5 (O4 erledigt 17. und
+  18.11.: `azure-se`, RG `gebit-showcase`, nur Contributor, Quota
+  DPSv6 ohne Antrag, Abbau 20.02.2027, Kostenstelle offen [A]; O4
+  Azure-DNS-Label statt delegierter Zone, O6 mit 0,5 PT, AKS-E1 bis
+  AKS-E21), 2.1 (Architekturbild ohne PG Flexible und Blob), 5.2
+  (Zeilen Cluster, Images bis auf den Pull-Weg, Postgres,
+  SAM-Persistenz, Broker und Monitoring sowie der Persistenzteil der
+  SAM-Values-Skizze), 6 (AP12-Zeile "SAM extern", PT; AP13 mit
+  Neubindung des Labels und neuer Egress-IP), 6.1 (kritischer Pfad,
+  O4 erledigt), 6.4, 7.1 (G0-11a/b), 7.2, 7.3, 8.6 (Neuaufbau
+  höchstens 4 h inklusive Label und Egress-IP) und R5 (externe
+  Persistenz, ingress-nginx; Subscription-Richtlinien am 18.11.
+  geprüft); neues Risiko für das Label ohne Lock und den Zugriff der
+  Contributor-Gruppe; in 5.2 außerdem das SAM-Body-Limit 10m statt
+  100m mit `limit-connections` (P5 Schritt 2).
 
 ### 8.5 Änderungen durch die Owner-Entscheidungen vom 17.11.2026
 
 Gegenüber dem Stand vom 16.11. (Commit `7a860c5`); PT als Aufwand von
-C, EUR je Monat bei 24/7 [Quelle: Retail-API 17.11.]:
+C, EUR je Monat bei 24/7 [Quelle: Retail-API 17.11.]. Was die Prüfung
+und die Entscheidung vom 18.11. daran ändern, steht in 8.6.
 
 | Nr | Entscheidung | Stand 16.11. | Stand 17.11. | PT | EUR/Monat 24/7 |
 |---|---|---|---|---|---|
@@ -5037,8 +7389,11 @@ C, EUR je Monat bei 24/7 [Quelle: Retail-API 17.11.]:
   +1,0, P6 +0,75, P7 -0,25; P0 und P5 unverändert [A].
 - Kosten im Aufbau mit Nachtstopp (220 Laufstunden im Monat): rund
   145-185 statt 250-300 EUR/Monat. Projektsumme bis 20.02.2027: rund
-  470-600 statt 900-1.200 EUR, mit aktivem Defender for Containers
-  rund 520-660 statt 1.000-1.350 EUR [A: Laufmuster 3.4].
+  460-590 statt 900-1.200 EUR (die Fassung vom 17.11. nannte 470-600
+  bei 8 EUR im November; die Monatswerte ergeben 463-593, seit 18.11.
+  461-591). Der damals genannte Zusatz "mit aktivem
+  Defender for Containers rund 520-660 EUR" ist seit dem 18.11.
+  gegenstandslos (8.6) [A: Laufmuster 3.4].
 - Neue Arbeitspunkte: Lab-Broker-Upgrade (P4 Teil A, 5.3), Image 0.1.4
   (5.4), `aks-allow-me.sh`, Traefik-Values mit den Lückenschlüssen,
   EAB-Rückfall-Issuer, Pfad-Ingresses für gpos, gRPC und Keycloak,
@@ -5083,6 +7438,82 @@ Gateway for Containers (ab rund 125 EUR/Monat), das
 App-Routing-Add-on und eine gekaufte Domain (beide mit eigener
 DNS-Zone).
 
+### 8.6 Änderungen durch die Prüfung und Owner-Entscheidung vom 18.11.2026
+
+Gegenüber dem Stand vom 17.11. (sda-Commit `9f66efd`). Prüfung:
+read-only mit Azure CLI 2.85.0 nach dem `az login` des Owners.
+Entscheidung des Owners: keine Rollenzuweisungen, alles mit
+Contributor. PT als Aufwand von C (die P0-Anteile in KW47 tragen
+Owner und Claude), EUR je Monat bei 24/7 [Quelle: Retail-API 17.11.;
+Befehle `az` read-only, 18.11.]:
+
+| Nr | Thema | Stand 17.11. | Stand 18.11. | PT | EUR/Monat 24/7 |
+|---|---|---|---|---|---|
+| 1 | Rechte | P0 prüft die Rechte; der Plan setzt Rollenzuweisungen und einen Lock voraus | Owner ist Contributor auf `azure-se` über eine Gruppe, weder Owner noch User Access Administrator; keine Rollenzuweisung, kein Lock, keine Policy-Ausnahme | 0 | 0 |
+| 2 | Subscription, Policies | Default nach `az login`, Policies ungeprüft | `azure-se` (einzige, Default); Tag-Pflicht für `Owner` und `Created Date` auf RGs (deny), Vererbung beider Tags (modify), ASC Default (audit); Provider registriert, `Microsoft.Quota` nicht nötig | 0 | 0 |
+| 3 | Ressourcengruppen, Netz, Identität | `rg-eurocis-base`, `rg-eurocis-aks`, `rg-eurocis-nodes`; `vnet-eurocis` mit `snet-aks`; UAMI `id-aks-cp` mit Network Contributor | `gebit-showcase` (Owner, westeurope, Ressourcen in Germany West Central) und `gebit-showcase-nodes` (von AKS, `--tags` mit allen vier Tags); AKS-verwaltetes VNet in der Node-RG, System-Identität | P0 -0,25 (RG, IPs, Lock entfallen), P1 -0,25 (VNet, UAMI, Rolle entfallen) [A] | 0 |
+| 4 | Ingress-IP | `pip-aks-ingress` ab 20.11. in `rg-eurocis-base`, Lock `CanNotDelete`, Network Contributor | in `gebit-showcase-nodes` direkt nach dem Create, ohne Lock und ohne Rolle; ein Cluster-Delete gibt IP und Label frei | 0 (in P1 enthalten) | 0; Projekt rund -2 (keine IP im November) |
+| 5 | Egress | statische `pip-aks-egress` ab 20.11., Adresse an den Betreiber bis 25.11. | AKS-verwaltete Outbound-IP, Adresse erst nach dem Create, neu bei jedem Neuaufbau | 0 | 0 (weiter eine Standard-IP) |
+| 6 | Image-Pull | `--attach-acr` (AcrPull der Kubelet-Identität) | Pull-Token `aks-pull` (nur Pull, Ablauf), `acr-pull.sh`, Secret je Namespace, Chart-Werte und Patches | P1 +0,25; P2-P6 ohne eigene PT [A] | 0 |
+| 7 | Cluster-Zugriff | Entra ID mit Azure RBAC, Rolle "Azure Kubernetes Service RBAC Cluster Admin" | Entra ID mit Kubernetes RBAC, `bootstrap-rbac.sh`, lokale Accounts aus, `rotate-certs` nach Frage 28 | P1 +0,25 [A] | 0 |
+| 8 | Key Vault | RBAC-Modus, "Key Vault Secrets Officer", Warteschleife | Access-Policy-Modus, `set-policy` für Owner und Stellvertreter | 0 | 0 |
+| 9 | Quota, SKU | Antrag am 20.11., falls eine Lücke besteht | geprüft: DPSv6 0 von 350, DPSv5 0 von 350, Total Regional 200 von 350, Public IPs 7 von 1000, Standard-LBs 0 von 1000; `Standard_D8ps_v6` Arm64 in den Zonen 1-3 ohne Restriction; kein Antrag, nur Re-Checks | in Nr. 3 enthalten | 0 |
+| 10 | Defender | bedingt +49,1 (Containers), Servers [A] | alle relevanten Pläne Free; Discovery und Foundational CSPM ohne Kostenwirkung | 0 | bedingte +49,1 entfallen |
+| 11 | AKS-Version | 1.36.x | 1.36 ist Default in Germany West Central, Patch 1.36.5 (daneben 1.37.1 und 1.35.9) | 0 | 0 |
+| 12 | Stellvertreter | eigene Rolle mit `managedClusters/write`, dazu Join- und Assign-Rechte | Contributor über eine Gruppe (offen, Frage 24) oder nur kubectl; ClusterRoleBinding und Key-Vault-Policy | P7 -0,25 [A] | 0 |
+| 13 | Neuaufbau | IPs und Label bleiben (Lock) | `az aks delete`; Label sofort neu binden, Bootstrap erneut, neue Egress-IP an den Betreiber | P7 +0,25 [A] | 0 |
+| 14 | Budget, Alarme | Budget auf drei RGs | Budget auf Subscription-Ebene mit Filter auf zwei RGs (Contributor reicht); Activity-Log-Alarme (`alerts.sh`) | 0 [A] | 0 [A: Activity-Log-Alarme ohne Gebühr] |
+| | **Summe** | 23,5 PT; rund 300-340 EUR/Monat | 23,5 PT; rund 300-340 EUR/Monat | netto 0 [A] | 0; Projekt rund -2 |
+
+- Je Phase gegenüber dem 17.11.: P0 -0,25 (Anteil von Owner und
+  Claude in KW47), P1 +0,25, P7 0 (-0,25 und +0,25), P2 bis P6 0
+  [A]. Für C heißt das +0,25 PT in KW49 (Abschnitt 6).
+- Kosten: 24/7 unverändert rund 300-340 EUR/Monat, im Aufbau rund
+  145-185 EUR/Monat. Projektsumme rund 460-590 EUR (November rund 6
+  statt 8 EUR, Summe der Monate 461-591 EUR); der Zusatz "mit
+  Defender" entfällt (3.4).
+- Entfallen: `rg-eurocis-base`, `rg-eurocis-aks`, `rg-eurocis-nodes`,
+  `vnet-eurocis` und `snet-aks`, die UAMI `id-aks-cp` mit Network
+  Contributor, `pip-aks-egress`, der Lock `CanNotDelete`,
+  `--attach-acr` mit AcrPull, Azure RBAC für Kubernetes samt Rolle
+  "Azure Kubernetes Service RBAC Cluster Admin", "Key Vault Secrets
+  Officer" mit Warteschleife, die eigene Rolle des Stellvertreters
+  mit Join- und Assign-Rechten, der Quota-Antrag und die
+  Defender-Kostenzeilen.
+- Neu: `aks_tags`, `aks_update` und der Admin-kubeconfig-Guard in
+  `sli/aks/lib.sh`, `foundation.sh pre|post`, `bootstrap-rbac.sh`,
+  `acr-pull.sh`, `alerts.sh`, Pull-Token `aks-pull` mit
+  `acr-pull-token` im Key Vault, Secret `acr-pull` je Namespace samt
+  Chart-Werten und Patches, Pflicht-Tags beim Create,
+  `pip-aks-ingress` nach dem Create, Meldung der Egress-IP nach dem
+  Create, lokales IP-Register, Wiederholung bei
+  RequestDisallowedByPolicy; aus dem Review vom 18.11. ohne eigene PT
+  [A]: `aks-rebuild.sh` als einziger Weg zu `az aks delete`,
+  Zugriffs- und Löschalarme schon vor dem Create (auch für Key Vault,
+  ACR, Vault-Purge, `generateCredentials` und beide RGs),
+  Admin-kubeconfig nur im per `trap` gelöschten Temp-Verzeichnis,
+  geprüfter Nachweis vor `rotate-certs`, xtrace nur unter
+  `~/.config/eurocis-aks/xtrace/`, `az login
+  --allow-no-subscriptions` für einen Stellvertreter ohne
+  Subscription.
+- Owner-Optionen ohne Rollenzuweisung: NRG-Lockdown `ReadOnly` nach P2
+  (Frage 29), Label-Scope `SubscriptionReuse` (Frage 7),
+  `rotate-certs` oder eine eigene Entra-Gruppe für den Bootstrap
+  (Frage 28).
+- Verworfen, weil jede Variante eine Rollenzuweisung, einen Lock oder
+  eine Ausnahme braucht: BYO-VNet und -Subnetz (Network Contributor
+  für die Cluster-Identität; die CLI warnt nur, und der Cluster hätte
+  keine Subnetzrechte), `--attach-acr`, Azure RBAC für Kubernetes,
+  Key-Vault-Datenrolle im RBAC-Modus, BYO-Egress-IP außerhalb der
+  Node-RG, Lock auf `pip-aks-ingress` und eine Policy-Ausnahme für
+  die Node-RG.
+- Unverändert: ein Node `Standard_D8ps_v6` arm64, Free-Tier, Traefik
+  v3.7.19, Let's Encrypt HTTP-01 mit EAB-Rückfall, ein Name mit
+  Pfad-Routing, gebündelte SAM-Persistenz, Broker 10.26.0.9219 LTS,
+  Rate-Limits und LiteLLM-Key-Limits, gRPC öffentlich mit Reflection,
+  P0-Geländer, `kaks`/`haks`, Wartungssperre, Nachtstopp bis G4 und
+  L3 aus dem Lab.
+
 ## 9. Offene Fragen
 
 1. AKS-E18 (Owner-Bestätigung offen): G0-11a nach G2a (18.12., P5),
@@ -5090,14 +7521,16 @@ DNS-Zone).
 2. AKS-E20 (Owner-Bestätigung offen): Wer sind Betreiber und
    Stellvertreter an Probetagen und Messe? Vorschlag: C Betreiber,
    Entwickler A Stellvertreter (bei O9 = (b): A Betreiber, Owner
-   Stellvertreter).
+   Stellvertreter). Ihre Azure-Rechte klärt Frage 24.
 3. O9: Gibt es ab 23.11. eine dritte Person für den AKS-Track, oder
    läuft er neben TR5/TR3 (Stichtag 20.11.)?
 4. GEBIT (AKS-E16, Status offen, harte Vorbedingung): Deckt die am
    17.11. berichtete Freigabe das Descriptor-Set als K8s-Secret in
    Azure Germany West Central, den Zugriff des Stellvertreters und die
    öffentliche Reflection, die die GEBIT-Descriptor-Dateien selbst an
-   jeden ausliefert [A: ja als Planungsannahme]? Schriftlich bis 27.11.,
+   jeden ausliefert [A: ja als Planungsannahme]? Deckt sie auch, dass
+   jedes Mitglied der Contributor-Gruppe von `azure-se` technisch an
+   das Secret kommt (Frage 27)? Schriftlich bis 27.11.,
    spätestens 09.12. (vor `gebitsim` in P2 Schritt 7, G0-11b (3) am
    11.12.); sonst G0-11b (3) mit einem Testserver ohne GEBIT-Material
    als dokumentierte Abweichung von PLAN 7.1 oder nach G2b, und kein
@@ -5105,15 +7538,30 @@ DNS-Zone).
    (Uplink, 5G; fällig 18.12. [Quelle: PLAN 6.5])?
 5. LiteLLM: Gibt es eine Quell-IP-Allowlist (auch für `/v1/*`)? Kommt
    der Messe-Key (O5) mit `max_budget` 150 USD, und welche
-   `rpm_limit`- und `tpm_limit`-Werte setzt der Betreiber?
-6. Subscription: Darf der Owner Rollen zuweisen (Network Contributor
-   auf `rg-eurocis-base` für `id-aks-cp`, `--attach-acr`, AKS-RBAC, Key
-   Vault Secrets Officer) und ein Budget mit Filter anlegen? Gibt es
-   Policies gegen Public IPs oder öffentliche Load Balancer, eine
-   Tag-Pflicht, aktive Defender-Pläne und eine kurze
-   Conditional-Access-Anmeldehäufigkeit?
+   `rpm_limit`- und `tpm_limit`-Werte setzt der Betreiber? Zum
+   Zeitpunkt der Egress-IP siehe Frage 26.
+6. Subscription `azure-se` (am 18.11. geprüft; Rollenrechte, Quota,
+   Defender und Tag-Pflicht sind beantwortet, 8.6): Nutzen die
+   Policy-Zuweisungen die Built-in-Definitionen "Require a tag on
+   resource groups" und "Inherit a tag from the resource group"
+   (read-only: `az policy assignment list --query
+   "[].{n:displayName,d:policyDefinitionId}"`)? Ist Cost Management
+   mit Budgets für den Angebotstyp verfügbar (`az consumption budget
+   list` oder Portal)? Built-in oder Custom zeigt schon das Präfix der
+   `policyDefinitionId` (P0 Schritt 2); liegt eine Custom-Definition
+   auf Management-Group-Ebene, kann der Owner sie als Contributor
+   nicht lesen: Wie lauten dann ihre Regel und ihr Effekt (Frage an
+   den Subscription-Owner)? Wie kurz ist die Anmeldehäufigkeit per
+   Conditional Access (Frage an die IT)? Wer kann eine
+   Policy-Ausnahme für `gebit-showcase-nodes` anlegen, falls Updates
+   an der Tag-Pflicht scheitern (Azure/AKS #5856)?
 7. Welches neutrale Präfix `<p>` bekommt das DNS-Label (CT-Logs sind
-   öffentlich)? Die Verfügbarkeit in Germany West Central prüft P0.
+   öffentlich)? Die Verfügbarkeit in Germany West Central prüft P0 und
+   erneut direkt vor dem Create; die IP entsteht erst in P1, bis
+   dahin kann ein Fremder das Label belegen. Domain Name Label Scope
+   `SubscriptionReuse` (Preview ohne SLA, FQDN mit Hash-Anteil, bei
+   jedem Neuaufbau in `azure-se` dasselbe FQDN, nur beim ersten
+   Anlegen setzbar) ja oder nein?
 8. ACME-Rückfall: ZeroSSL oder Google Trust Services, und legt der
    Owner das EAB-Konto bis zum Prüfpunkt 04.12. an?
 9. API-Server: authorized IP ranges mit `aks-allow-me.sh` (Vorschlag)
@@ -5123,7 +7571,8 @@ DNS-Zone).
     Smoke-Wiederholung?
 11. Lab-Broker-Upgrade (P4 Teil A): Wann gibt der Owner das Go, und
     wann liegt das Wartungsfenster für solace-1 (Vorschlag: Probe an
-    solace-2 in KW48, solace-1 spätestens 04.12.)? Das Fenster trifft
+    solace-2 in KW48, solace-1 bis 04.12. (Prüfpunkt), spätestens
+    10.12.)? Das Fenster trifft
     alle Lab-Demos auf diesem Broker. Woher kommen die iCargo-User und
     die ACL `iCargo` (nicht in Terraform)?
 12. Bestätigt der sam-CLI-Spike (P0 Schritt 12) die Fragen (a) bis (d)?
@@ -5135,13 +7584,19 @@ DNS-Zone).
 14. `GPOS_DELIVERY=persistent` auf AKS testen (kein DMR-Rückstau dort)
     oder bei `direct` bleiben?
 15. Wird die Preiszeile "FreeTierInfrastructureCost Uptime SLA"
-    abgerechnet, und laufen LB-Regeln und IPs im Stopp weiter?
+    abgerechnet, und laufen LB-Regeln und IPs im Stopp weiter? Bleiben
+    die AKS-verwaltete Egress-IP und `pip-aks-ingress` über Stop/Start
+    und den Node-Image-Refresh gleich (Messung in P1, P7 und am
+    26.01.)?
 16. developer-mcp auf AKS bereitstellen? UC1 braucht ihn nicht, der
     Endpunkt wäre öffentlich (per OIDC geschützt).
 17. L3 (AP14b) behalten? Streichliste Nr. 4 würde 3 PT sparen
     [Quelle: PLAN 6.2], nimmt aber den Notbetrieb.
 18. Nach der Messe: Rückbau (mit Key-Vault-Purge) oder GEBIT-Übergabe
-    (dann amd64-Pool und Multi-Arch-Build)?
+    (dann amd64-Pool und Multi-Arch-Build)? Wird `gebit-showcase`
+    danach gelöscht, oder behält der Owner die RG? Der Rückbau läuft
+    mit Azure CLI 2.93 oder neuer, weil die Key-Vault-API von 2.85.0
+    am 27.02.2027 endet.
 19. Nachfolger für ingress-nginx im Lab nach der Messe: Traefik wie auf
     AKS (dieselben Manifeste) oder Gateway API?
 20. Lab-Chart-Versionen in sli pinnen?
@@ -5163,3 +7618,56 @@ DNS-Zone).
     `<fqdn>`; der Routentest aus P6 Schritt 2 scheitert, wenn einer
     geroutet ist. Der 10-h-Kiosklauf in P7 nimmt `/freigabe` nur nach
     der Antwort über den gewählten Weg mit.
+24. Stellvertreter (AKS-E20, bis 27.11.): Ist er über eine Gruppe
+    Contributor auf `azure-se` (oder hat er eine Rolle mit
+    `listClusterUserCredential`, `runCommand/action` und
+    `managedClusters/write`)? Ist er Mitglied oder Gast im Tenant, also
+    Bindung per UPN oder per objectId? Ohne Azure-Recht bekommt er vom
+    Owner die User-kubeconfig (ohne Geheimnis [A: Test vor G3 mit
+    einem Konto ohne Subscription-Zugriff, P7 Schritt 7]) und meldet
+    sich mit `az login --tenant <tenant> --allow-no-subscriptions` an
+    (ein einfaches `az login` endet ohne Subscription mit "No
+    subscriptions found") oder konvertiert sie mit `kubelogin
+    convert-kubeconfig -l interactive`; seine IP trägt der Owner per
+    `aks-allow-me.sh --add` ein, und `az aks
+    start/stop`, `aks-allow-me.sh` und `az aks command invoke` bleiben
+    beim Owner. Eine Zuweisung könnte nur ein Subscription-Owner
+    vornehmen.
+25. Entschieden 18.11. (Owner): `Owner` ist immer der Owner selbst,
+    `Created Date` im Format dd.mm.yyyy; beide Werte übernimmt
+    `aks_tags` aus `gebit-showcase` (Rückfall `OWNER_TAG` aus
+    `.env.aks`). Die Werte stehen nie im Repo.
+26. LiteLLM-Allowlist nach dem Create: Reicht die Vorankündigung am
+    20.11. ohne IP, und schaltet der Betreiber die IP binnen eines
+    Arbeitstags nach der Meldung frei (Create am 30.11. oder 01.12.,
+    Probe am 03.12.)? Welche Vorlaufzeit braucht er bei einem
+    Neuaufbau (Drill in KW3, Probetage, Messe), und zählt die
+    Wartezeit in die 4 h aus G3?
+27. Contributor-Gleichrang: Jedes Mitglied der Contributor-Gruppe von
+    `azure-se` kann lokale Accounts einschalten und Admin-Credentials
+    holen, sich eine Key-Vault-Policy setzen und ACR-Tokens anlegen,
+    also an Secrets, das GEBIT-Descriptor-Secret und den LiteLLM-Key
+    kommen. Akzeptiert der Owner das, wer gehört zur Gruppe, und deckt
+    es die GEBIT-Freigabe (Frage 4)? Die Activity-Log-Alarme melden
+    solche Aktionen nur.
+28. Bootstrap ohne Restzertifikat: `az aks rotate-certs` nach dem
+    Bootstrap (bis 30 min Ausfall, nur vor dem ersten Workload
+    sinnvoll, beim Neuaufbau erneut), eine eigene Entra-Sicherheitsgruppe
+    für `--aad-admin-group-object-ids` (geht nur, wenn der Tenant
+    Nutzern das Anlegen erlaubt; die Contributor-Gruppe kommt dafür
+    nicht in Frage) oder das Admin-Zertifikat bewusst hinnehmen?
+29. NRG-Lockdown `ReadOnly` nach dem LB-Nachweis in P2 (P2 Schritt 10)
+    als Ersatz für den Lock: ja oder nein? Er verhindert, dass Nutzer
+    `pip-aks-ingress` löschen oder ändern, nicht aber `az aks delete`;
+    für Änderungen an der IP muss er kurz auf `Unrestricted`.
+30. ACR-Token: System-Scope-Map `_repositories_pull` (alle Repos,
+    keine Pflege) oder eine eigene Scope-Map mit Repo-Liste? Ablauf
+    des Passworts 2027-02-28T23:59:59Z (gleich `deleteAfter`) und
+    Rotation über `password2`?
+31. G3-Kriterium "Ingress-IP unverändert" (P7-Abnahme der Fassung vom
+    17.11., sda-Commit 9f66efd; im PLAN steht es nicht): Ohne
+    Lock und mit der IP in der Node-RG ist es nach einem Neuaufbau
+    nicht erreichbar. Gilt künftig "`<fqdn>` unverändert, Label neu
+    gebunden, neue Egress-IP gemeldet"? Die Move-Variante (IP vor dem
+    Delete per `az resource move` nach `gebit-showcase`, danach
+    zurück) ist ungeprüft [A].

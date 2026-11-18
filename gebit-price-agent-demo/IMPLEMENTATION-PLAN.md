@@ -141,7 +141,10 @@ Nachtrag 17.11.2026: AKS-Zugang öffentlich ohne WireGuard
 AKS bekommt einen Azure-Namen
 `<p>.germanywestcentral.cloudapp.azure.com` (kurz `<fqdn>`) an genau
 einer öffentlichen Ingress-IP (`pip-aks-ingress`, LB-Regeln nur für 80
-und 443); dazu kommt die Egress-IP `pip-aks-egress`. Eigene Domain,
+und 443); ausgehend nutzt der Cluster die AKS-verwaltete Egress-IP
+(Nachtrag 18.11.2026: beide IPs in der Node-Ressourcengruppe, ohne
+Lock und ohne Rollenzuweisung, weil der Owner nur Contributor ist;
+Einzelheiten in `AKS-MIGRATION-PLAN.md`, AKS-E21). Eigene Domain,
 Azure-DNS-Zone und DNS-01 entfallen; TLS kommt per Let's Encrypt
 HTTP-01. Auf 443 routet der Ingress nach Pfaden: SAM auf `/`,
 Keycloak unter `/auth`, Kasse unter `https://<fqdn>/kasse`, Monitor
@@ -159,8 +162,14 @@ nachgezogen (R24 und R25 neu). Die weiteren AKS-Entscheidungen vom
 SAM-Persistenz gebündelt im Cluster, Broker 10.26.0.9219, Projektziel
 unter 1.500 €) stehen nur in `AKS-MIGRATION-PLAN.md`; Angaben zu
 Cluster, VM-Größe, Persistenz, Broker und Kosten an anderen Stellen
-(etwa E7, O4, 0.4, 2.1, 2.2 und 5.2) geben noch den Stand vom 11.11.
-wieder.
+(etwa E7, O4, G0b in 0.3, 0.4, 2.1, 2.2, 5.2 und AP12 in 6) geben
+noch den Stand vom 11.11. wieder. Ebenso überholt sind seit dem
+18.11.2026 (nur Contributor, AKS-E21) alle Stellen mit eigener
+Ressourcengruppe, VNet, PG Flexible, Blob per Workload Identity,
+Identitäten oder Rollenzuweisungen; die Pfade unter `infra/aks/`
+(Abschnitt 4, 5.2, 5.3) ersetzt `AKS-MIGRATION-PLAN.md` 5 durch
+`sli/aks/` (solace-lab-infrastructure), `amd/aks-values.yaml` und
+`emd/terraform-aks/`.
 
 ### 0.3 Meilensteine
 
@@ -2304,9 +2313,12 @@ gebit-price-agent-demo/
     components/ingress/       BFF, gpos-grpc, gpos-loyalty-grpc (Lab: Host je App)
     overlays/lab/  overlays/aks/ (ein Name, Pfad-Ingresse)  overlays/l3/ (AP14b, wie aks)
     overlays/gebit-lab/
-  infra/aks/                  az-foundation.sh, addons.sh, sam-values-aks.yaml,
+  infra/aks/                  Stand 11.11.: az-foundation.sh, addons.sh, sam-values-aks.yaml,
                               broker/ (Terraform mit event-mesh-deployment-Modulen),
-                              start.sh, stop.sh
+                              start.sh, stop.sh; ersetzt laut AKS-MIGRATION-PLAN.md 5
+                              durch sli/aks/ (foundation.sh pre|post, setup-aks.sh,
+                              aks-start.sh, aks-stop.sh), amd/aks-values.yaml und
+                              emd/terraform-aks/
   infra/l3/                   sam-values-l3.yaml, export-le-certs.sh (AP14b)
   mesh/                       manifest.yaml, connectors/, agents/, workflows/,
                               entrypoints/*.template, .rendered/ (ignoriert),
@@ -2321,8 +2333,8 @@ gebit-price-agent-demo/
   props/                      Druckvorlagen: Kundenkarten, Prospekt, Steuerkarten
   scripts/                    lib.sh install.sh uninstall.sh reset.sh preflight.sh
                               dry_fire.py gen_connector_manifest.py smoke_tools.py
-                              hitl_e2e.py load_gen.py descriptors-configmap.sh
-                              check_hygiene.sh
+                              hitl_e2e.py load_gen.py check_hygiene.sh
+                              (Descriptor-Secret legt install.sh k8s an)
   slides/                     genau ein Deck (AP16)
   messe/                      Talk-Track, Briefing (AP16); L4-Film außerhalb des Repos
   firmware/esl-esp32/         Soll S2
@@ -2333,9 +2345,10 @@ Regeln:
 - GEBIT-Descriptor-Sets (`purchase-api-2.50.0.pb`,
   `receipt-api-2.13.0.pb`) sind Herstellermaterial: nie im Repo, nie
   im Image, nie aus dem Download-Ordner ausgeführt.
-  `descriptors-configmap.sh` erzeugt zur Installationszeit eine
-  ConfigMap (`binaryData`, etwa 425 KB base64) aus
-  `GEBIT_DESCRIPTOR_DIR` in `.env` [V: RG].
+  `scripts/install.sh k8s` legt zur Installationszeit das Secret
+  `gpos-gebit-descriptors` (etwa 425 KB) aus `GEBIT_DESCRIPTOR_DIR`
+  (`.env` bzw. `.env.aks`) an, nie eine ConfigMap [V:
+  `scripts/install.sh`:118, 141; RG].
 - GEBIT hat schriftlich zugestimmt (vom Owner am 17.11.2026
   bestätigt): API-Details in eigenen Dokumenten und eigenem Code
   dürfen veröffentlicht werden. GEBIT-Dateien (Deskriptor-Sets,
@@ -2411,23 +2424,26 @@ Regeln:
 Stand 17.11.2026: Zugang (öffentlich ohne WireGuard), Name, Ingress,
 gRPC, TLS und OIDC-Pfade sind hier nachgezogen (Owner-Entscheidungen
 vom 17.11.2026; Einzelheiten und Pins in `AKS-MIGRATION-PLAN.md`).
-Die Zeilen Cluster, Images, Postgres, SAM-Persistenz, Broker
-(Version) und Monitoring geben den Stand vom 11.11. wieder; dafür
-gilt `AKS-MIGRATION-PLAN.md`.
+Am 18.11.2026 nachgezogen: Pull-Weg der Images (auch in der
+SAM-Values-Skizze unten), Lage der IPs und 5.3 Nr. 1 und 4
+(Owner-Entscheidung: nur Contributor, keine Rollenzuweisungen und
+keine Locks). Die Zeilen Cluster, Images (bis auf den Pull-Weg),
+Postgres, SAM-Persistenz, Broker (Version) und Monitoring geben den
+Stand vom 11.11. wieder; dafür gilt `AKS-MIGRATION-PLAN.md`.
 
 | Baustein | AKS | Quelle |
 |---|---|---|
 | Cluster | Standard-Tier, Kubernetes 1.36, Germany West Central, Pool 2 × `Standard_D8as_v6` in einer Zone, Azure CNI Overlay mit Cilium, Auto-Upgrade aus, Wartungsfenster außerhalb 12.–20.02.2027 | [V: RA 0, 7] |
-| Images | ACR Basic, an den Cluster gebunden (kein Pull-Secret); SAM-Images amd64 aus dem Offline-Paket per `gunzip` + `crane push`; Broker-Image gepinnt | [V: RA 3.1] |
+| Images | ACR Basic, Pull über ein Pull-only-Token mit Secret `acr-pull` je Namespace (keine Bindung an den Cluster, die eine Rollenzuweisung bräuchte; Owner-Entscheidung 18.11.2026); SAM-Images amd64 aus dem Offline-Paket per `gunzip` + `crane push`; Broker-Image gepinnt | [V: RA 3.1] |
 | Ingress | Traefik v3 mit ingress-nginx-Provider statt ingress-nginx (Pins in `AKS-MIGRATION-PLAN.md`); ein Deployment hinter genau einem LoadBalancer-Service mit der statischen IP `pip-aks-ingress` (`azure-pip-name`, nie `azure-dns-label-name`; LB-Regeln nur 80 und 443; `externalTrafficPolicy: Local`); ein Name `<fqdn>`, Pfad-Routing auf 443, die längste Regel gewinnt: SAM `/`; Keycloak nur `/auth/realms/solace-lab/` und `/auth/resources/`; `gpos-ui` auf `/kasse`, `/monitor`, `/static/`, `/api/catalog`, `/api/cards`, `/api/scenarios`, `/api/pos/`, `/api/state`, `/api/proposals/`, `/api/demo/`, `/api/events` (`/` und `/health` bleiben bei SAM); jede neue BFF-Seite oder -Route (etwa `/kunde`, `/freigabe`, `/foto`, `/op`, `/etikett`) braucht einen eigenen Pfad, sonst antwortet SAM; kein Pfad für Grafana (nur Port-Forward) | Owner-Entscheidung 17.11.2026; Pfade und Vorrang [V: Recherche 17.11.2026 in `AKS-MIGRATION-PLAN.md`] |
 | gRPC am Ingress | dieselbe IP und derselbe Name `<fqdn>:443`; Routing nach voll qualifiziertem Dienstpfad: Purchase-Dienst `PurchaseTransactionService` (voller Name aus GEBITs Deskriptor), `/de.showcase.wws.v1.service.MerchandiseService/`, `/de.showcase.loyalty.v1.service.LoyaltyService/`; jeder weitere Dienst (etwa `PriceActionService` v0) braucht einen eigenen Pfad; `backend-protocol: GRPC`, TLS am Ingress, Backend h2c (`appProtocol: kubernetes.io/h2c`), Lese-Timeout 3600 s; Reflection (`/grpc.reflection.v1.ServerReflection/`, `/grpc.reflection.v1alpha.ServerReflection/`) ab Image 0.1.4 an einen kombinierten Endpunkt, bis dahin `-protoset` für Loyalty und Warenwirtschaft (2.3); gRPC-Health nur clusterintern (`grpc:`-Probes) | Owner-Entscheidung 17.11.2026; [A: RA 4.2 Skizze], [G0-11b] |
 | BFF, SSE | `proxy-request-buffering: on` für SAM und `gpos-ui`, sonst greift `proxy-body-size` nicht, aber nie auf der SSE-Route `/api/events`; dort `proxy-buffering: off`; Heartbeat 15–20 s; Lese-Timeout am EntryPoint 3600 s; LB-Idle-Timeout 30 min per Annotation; HSTS ohne `includeSubDomains` | [V/A: RA 4.3]; Traefik-Lücken nach `AKS-MIGRATION-PLAN.md` |
-| TLS, Name | keine eigene Domain, keine Azure-DNS-Zone, kein DNS-01: `<fqdn>` = `<p>.germanywestcentral.cloudapp.azure.com` als DNS-Label der statischen IP `pip-aks-ingress` in `rg-eurocis-base` (Lock `CanNotDelete`; die Control-Plane-Identität von AKS braucht dort Network Contributor); cert-manager mit Let's Encrypt HTTP-01, ein Zertifikat für den einen Namen als Default-`TLSStore` von Traefik; kein Redirect auf EntryPoint-Ebene, damit HTTP-01 durchkommt; ob App-Ingresses ohne `secretName` auskommen oder `sam-tls` vor `helm install` im SAM-Namespace liegt, entscheidet ein Test in P2; erst LE-Staging, dann Prod früh in P2, Secret sichern, Erneuerung um den 15.01. (vor dem Freeze); Rückfall-ClusterIssuer mit EAB (R25); keine Lab-CA auf iPads | Owner-Entscheidung 17.11.2026; LE-Grenzen und PSL [V: letsencrypt.org rate-limits, publicsuffix.org 17.11.2026] |
+| TLS, Name | keine eigene Domain, keine Azure-DNS-Zone, kein DNS-01: `<fqdn>` = `<p>.germanywestcentral.cloudapp.azure.com` als DNS-Label der statischen IP `pip-aks-ingress` in der Node-Ressourcengruppe `gebit-showcase-nodes`, direkt nach dem Create angelegt, ohne Lock und ohne Rollenzuweisung (Owner-Entscheidung 18.11.2026; ein Cluster-Delete gibt IP und Label frei); cert-manager mit Let's Encrypt HTTP-01, ein Zertifikat für den einen Namen als Default-`TLSStore` von Traefik; kein Redirect auf EntryPoint-Ebene, damit HTTP-01 durchkommt; ob App-Ingresses ohne `secretName` auskommen oder `sam-tls` vor `helm install` im SAM-Namespace liegt, entscheidet ein Test in P2; erst LE-Staging, dann Prod früh in P2, Secret sichern, Erneuerung um den 15.01. (vor dem Freeze); Rückfall-ClusterIssuer mit EAB (R25); keine Lab-CA auf iPads | Owner-Entscheidung 17.11.2026; LE-Grenzen und PSL [V: letsencrypt.org rate-limits, publicsuffix.org 17.11.2026] |
 | Postgres | Azure Database for PostgreSQL Flexible Server 18, B2ms, VNet-integriert: `gpos`, Keycloak, SAM-DBs; `sslmode=require` | [V: RA 1.3] |
 | SAM-Persistenz | extern (PG Flexible + Azure Blob); `applicationPassword` nach Erstinstallation unveränderlich | [V: RA 2.3], [G0-11a] |
 | Broker | PubSub+ Standard 10.25.0.208 per Helm, `ClusterIP`, kein eigenes LB, SEMP nur per Port-Forward; MQTT vom Stand für Soll S2 (ESP32) hat keinen Weg (kein Tunnel, LB-Regeln nur 80 und 443) [A]; VPNs per Terraform-Modulen aus `event-mesh-deployment`; alle Lab-Standardpasswörter ersetzt | [V: RA 5.3] |
 | OIDC | Keycloak 26 im Cluster unter `/auth` auf `<fqdn>` (`KC_HTTP_RELATIVE_PATH=/auth`, `KC_HOSTNAME=https://<fqdn>/auth`, `KC_HTTP_MANAGEMENT_RELATIVE_PATH=/`, Probes bleiben `/health/*` auf 9000); Issuer `https://<fqdn>/auth/realms/solace-lab`; SAM-Callback `https://<fqdn>/api/v1/auth/callback`; Admin-Skripte nehmen `KEYCLOAK_URL` mit `/auth`; Admin-Konsole nur per Port-Forward (ob `KC_HOSTNAME_ADMIN` nötig ist, klärt P3); gleicher Realm, Identitäten `*@solace.lab` unverändert | [V: RA 1.3]; Pfade: Owner-Entscheidung 17.11.2026 |
-| LiteLLM | ausgehend über die Egress-IP `pip-aks-egress`; etwa 100 ms zusätzlich pro Aufruf; Messe-Key nur in der SAM-Modellkonfiguration (O5) | [A: RA 5.2], [G0-11a] |
+| LiteLLM | ausgehend über die AKS-verwaltete Egress-IP (Adresse erst nach dem Create bekannt, neu bei jedem Neuaufbau); etwa 100 ms zusätzlich pro Aufruf; Messe-Key nur in der SAM-Modellkonfiguration (O5) | [A: RA 5.2], [G0-11a] |
 | Stand-Zugang | öffentlich über HTTPS (TCP 443) auf `<fqdn>`, ohne WireGuard; Kabel-Uplink, Rückfall 5G; Kasse und Monitor ohne Login; Rate-Limits je Client-IP (Komponente `public-guard`, `externalTrafficPolicy: Local`) auf `/api/pos`, `/api/demo/reset`, `/api/events`, dazu rpm/tpm-Limits am Messe-Key; drei gRPC-Dienste öffentlich mit Reflection (nach Dienstpfad, siehe gRPC-Zeile); API-Server nur von freigegebenen IPs (`sli/aks/aks-allow-me.sh`) [A]; öffentlich sind nur LoadBalancer-Services von Traefik (VAP); Grafana, Prometheus, Broker-SEMP, Keycloak-Admin-Konsole und Traefik-Dashboard nur per Port-Forward | Owner-Entscheidung 17.11.2026 (`AKS-MIGRATION-PLAN.md`), Abnahme AP12 |
 | Monitoring | schlankes kube-prometheus-stack + Loki + Alloy, SAM-Dashboards aus `agent-mesh-deployment` | [V: RA 1.3] |
 
@@ -2457,12 +2473,17 @@ Schema [V: RA 2.2]):
 
 ```yaml
 # infra/aks/sam-values-aks.yaml (Auszug; Name und TLS nach 17.11.2026,
-# Persistenz noch Stand 11.11., siehe AKS-MIGRATION-PLAN.md)
+# Pull-Secret nach 18.11.2026, Persistenz noch Stand 11.11., siehe
+# AKS-MIGRATION-PLAN.md; Ablage dort: amd/aks-values.yaml)
 sam:
   dnsName: __FQDN__            # ein Name, SAM auf "/" (5.2)
 global:
   persistence: {enabled: false, namespaceId: sam-solace-lab}
-  imagePullSecrets: []
+  # Pull-Token aks-pull, Owner-Entscheidung 18.11.2026 (kein AcrPull am
+  # Kubelet); Secret acr-pull vor helm install per
+  # sli/aks/acr-pull.sh sam-solace-lab anlegen, weil der Chart jedes
+  # genannte Secret per lookup prüft (AKS-MIGRATION-PLAN.md P5 Schritt 2)
+  imagePullSecrets: ["acr-pull"]
 environmentVariables:
   SAM_OBSERVABILITY_ENABLED: "true"
   SAM_FEATURE_WORKFLOW_HIL_PAUSE_RESUME: "true"
@@ -2480,11 +2501,25 @@ ingress:
 
 ### 5.3 Deployment-Skripte und Ablauf
 
-1. `infra/aks/az-foundation.sh` (Ressourcengruppe, VNet, AKS, ACR,
-   PG Flexible, Storage, Identitäten, Budget-Alarm; statische
-   Ingress-IP `pip-aks-ingress` mit dem Azure-Namen `<fqdn>` und Lock;
-   API-Server nur für freigegebene IPs, eigene IP per
-   `sli/aks/aks-allow-me.sh`).
+1. `infra/aks/az-foundation.sh` (Stand 11.11.; ersetzt durch die
+   Skripte in `sli/aks/` nach `AKS-MIGRATION-PLAN.md` 5.1, AKS-E21,
+   alle nur mit Contributor):
+   - `foundation.sh pre|post`: Key Vault im Access-Policy-Modus und
+     ACR Basic (`--role-assignment-mode rbac`) mit Pull-Token
+     `aks-pull` in der vom Owner angelegten RG `gebit-showcase`; AKS
+     ohne BYO-VNet und ohne UAMI, mit System-Identität, Pflicht-Tags
+     und Node-RG `gebit-showcase-nodes` (`--node-resource-group`);
+     statische Ingress-IP `pip-aks-ingress` mit dem Azure-Namen
+     `<fqdn>` in der Node-RG, ohne Lock und ohne Rollenzuweisung;
+   - `bootstrap-rbac.sh` (Entra ID mit Kubernetes-RBAC, lokale
+     Accounts danach aus), `acr-pull.sh` (Secret `acr-pull` je
+     Namespace), `alerts.sh` (Budget, Activity-Log-Alarme);
+   - API-Server nur für freigegebene IPs, eigene IP per
+     `sli/aks/aks-allow-me.sh`.
+
+   Es gibt keine RG-, VNet- oder Identitätsanlage, kein PG Flexible,
+   kein Storage-Konto mit Workload Identity, keine Rollenzuweisung und
+   keinen Lock; SAM-Persistenz gebündelt im Cluster (AKS-E7).
 2. `infra/aks/addons.sh` (Traefik v3 statt ingress-nginx, cert-manager
    mit HTTP-01-Issuern für LE-Staging, LE-Prod und den EAB-Rückfall,
    PriorityClasses, PubSub+, Keycloak, Monitoring).
@@ -2498,8 +2533,10 @@ ingress:
    - `db`: SQL-Dateien idempotent (Basis `spikes/g0/g0-13/sql/`), Seed,
      Rollen.
    - `k8s`: Secrets aus `.env.<target>` (ohne LLM-Key),
-     Descriptor-ConfigMap, `kubectl apply -k k8s/overlays/<target>`,
-     Rollout-Status.
+     Descriptor-Secret `gpos-gebit-descriptors` aus
+     `GEBIT_DESCRIPTOR_DIR` (nie als ConfigMap) [V:
+     `scripts/install.sh`:118, 141], `kubectl apply -k
+     k8s/overlays/<target>`, Rollout-Status.
    - `mesh`: wartet auf `gpos-engine`, legt die R1-Queue per SEMP an
      (3.2), `sam config apply` (Connectoren, Agents, Workflows; nie
      `--prune`), dann gerenderter Entrypoint, Logzeile, `txFlows` der
