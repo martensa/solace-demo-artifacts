@@ -9,7 +9,8 @@
                                         workflow tools only
 
 Runs on the Mac before every mesh apply (scripts/install.sh mesh); exit 1 on any
-difference, with the connector and tool named.
+difference, with the connector and tool named. TARGET=aks: .env.aks and kubectl
+with the AKS kubeconfig and context (scripts/opslib.py).
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 from gen_connector_manifest import (CONNECTORS, CTL_NAMES, ConnectorSpec, build_entries,
@@ -50,8 +52,8 @@ def diff_entries(spec: ConnectorSpec, stored: list[dict], live: list[dict]) -> l
     return errors
 
 
-def live_tools(service: str) -> list[dict]:
-    proc = kubectl_ui(demo_env(), ["-m", "gposdemo.ui.ctl", "tools-list", CTL_NAMES[service]])
+def live_tools(env: Mapping[str, str], service: str) -> list[dict]:
+    proc = kubectl_ui(env, ["-m", "gposdemo.ui.ctl", "tools-list", CTL_NAMES[service]])
     if proc.returncode != 0:
         raise OpsError(f"ui.ctl tools-list {CTL_NAMES[service]} failed: "
                        f"{' '.join(proc.stderr.split())[-240:]}")
@@ -67,9 +69,10 @@ def main(argv: list[str] | None = None) -> int:
     if not errors and not args.static:
         cache: dict[str, list[dict]] = {}
         try:
+            env = demo_env()
             for spec in CONNECTORS:
                 if spec.service not in cache:
-                    cache[spec.service] = build_entries(live_tools(spec.service))
+                    cache[spec.service] = build_entries(live_tools(env, spec.service))
                 errors += diff_entries(spec, manifest_entries(DEMO_DIR / spec.path),
                                        cache[spec.service])
         except (OpsError, ValueError) as exc:

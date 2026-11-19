@@ -1,0 +1,10 @@
+# Namespace of the demo (both targets). The pull secret comes from the overlay's
+# target: lab = registry-pull-secret, cloned by Kyverno (G0-07); aks = acr-pull,
+# created by scripts/install.sh from the Key Vault. The Secrets gpos-broker, gpos-db
+# and gpos-gebit-descriptors come from scripts/install.sh.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpos-demo
+  labels:
+    app.kubernetes.io/part-of: gpos-demo

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from conftest import ROOT
 
+import opslib
 from opslib import parse_dotenv
 
 ENV_KEYS = [
@@ -38,6 +39,41 @@ def test_bash_reads_env_example_like_python() -> None:
     from_bash = dict(line.split("=", 1) for line in proc.stdout.splitlines() if "=" in line)
     parsed = parse_dotenv(ROOT / ".env.example", base={"HOME": "/home/x"})
     assert {k: from_bash[k] for k in parsed} == parsed
+
+
+# the .env.aks keys of the AKS runbook (1.3; template infra/aks/env.aks.example)
+AKS_ENV_KEYS = [
+    "AKS_ACR", "AKS_KV", "GPOS_NS", "GPOS_IMAGE", "GPOS_VERSION", "SAM_URL",
+    "SAM_RUN_IDENTITY", "SAM_HOME", "AKS_KUBECONFIG", "KUBE_CONTEXT", "BROKER_SMF_URL",
+    "BROKER_WS_URL", "BROKER_VPN", "BROKER_USERNAME", "BROKER_PASSWORD_KV", "SEMP_URL",
+    "SEMP_USER", "SEMP_PASSWORD_KV", "R1_MODE", "R1_QUEUE", "GPOS_DELIVERY", "PG_MODE",
+    "PG_NS", "PG_POD", "PG_HOST_FROM_PODS", "PG_PORT", "PG_DB", "GEBIT_DESCRIPTOR_DIR",
+    "GPOS_DEMO_DATE", "GPOS_BOOTH_LOCATION", "GPOS_TEST_LOCATION", "GPOS_PROBE_LOCATION",
+    "GATE_MIN_DELAY_S", "GATE_GUARD", "E2E_BASE_URL", "E2E_CA_FILE", "AWE_NS",
+    "AWE_DEPLOY"]
+
+
+def test_env_aks_example_passes_the_aks_guard() -> None:
+    """The template of .env.aks carries every key the Python side needs on aks, no
+    password and no lab value: scripts/opslib.py accepts it as it is (only AKS_ACR
+    and AKS_KV are filled in by the owner)."""
+    path = ROOT / "infra" / "aks" / "env.aks.example"
+    if not path.is_file():
+        pytest.skip("infra/aks/env.aks.example not written yet")
+    values = parse_dotenv(path, base={"HOME": "/home/x"})
+    assert [k for k in AKS_ENV_KEYS if k not in values] == []
+    assert (values["AKS_ACR"], values["AKS_KV"]) == ("", "")
+    assert not [k for k in values if "PASSWORD" in k and not k.endswith("_KV")]
+    assert (values["SEMP_URL"], values["E2E_CA_FILE"], values["PG_MODE"]) == (
+        "http://127.0.0.1:18080", "system", "kubectl")
+    assert (values["BROKER_PASSWORD_KV"], values["SEMP_PASSWORD_KV"]) == (
+        "solace-gpos", "solace-admin")
+    assert values["SAM_HOME"] == "/home/x/.config/eurocis-aks/sam"
+    assert {k: values[k] for k in ("GPOS_BOOTH_LOCATION", "GPOS_TEST_LOCATION",
+                                   "GPOS_PROBE_LOCATION")} == {
+        k: v for k, v in parse_dotenv(ROOT / ".env.example", base={"HOME": "/home/x"}).items()
+        if k.endswith("_LOCATION")}
+    opslib.check_aks_env({**values, "TARGET": "aks"})
 
 
 @pytest.fixture
@@ -69,6 +105,8 @@ def test_clean_tree_passes(tree: Path) -> None:
     (".env", "LLM_SERVICE_" + "API_KEY=x\n"),
     ("DESIGN.md", "LiteLLM über `lite-" + "llm.example.net`\n"),       # LLM endpoint
     ("mesh/models.yaml", "base: https://Lite" + "LLM.example.org/v1\n"),
+    ("infra/aks/x-values.yaml", "llm:\n  api_" + "key: x\n"),           # AKS platform files
+    ("infra/aks/aks.sh", "export LLM_SERVICE_" + "API_KEY=x\n"),
 ])
 def test_forbidden_content_fails(tree: Path, rel: str, content: str) -> None:
     target = tree / rel

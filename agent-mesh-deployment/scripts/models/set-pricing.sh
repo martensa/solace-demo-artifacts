@@ -20,6 +20,9 @@ set -euo pipefail
 #
 # Auth: sam CLI login cache (sam auth login solace-lab ...), the
 # token is exported as SAM_AUTH_TOKEN by scripts/lib/common.sh.
+#
+# Optional environment (unset = the local lab): SAM_ENV_FILE,
+# SAM_HOME, SAM_URL -- see scripts/lib/common.sh.
 # =============================================================
 
 usage() {
@@ -49,7 +52,8 @@ esac
 
 # shellcheck source=../lib/common.sh
 . "$PROJECT_DIR/scripts/lib/common.sh"
-load_env "$PROJECT_DIR"
+load_env "$PROJECT_DIR" "${SAM_ENV_FILE:-$PROJECT_DIR/.env}"
+sam_target_check "$PROJECT_DIR" || exit 1
 resolve_sam_cli
 sam_auth_token
 
@@ -60,7 +64,7 @@ import sys
 print(''.join(l for l in sys.stdin if l.lstrip().startswith(('{','['))))"
 }
 
-MODELS_JSON=$("$SAM_CLI" api /api/v1/platform/models 2>/dev/null | json_only \
+MODELS_JSON=$(sam_cli_api /api/v1/platform/models 2>/dev/null | json_only \
   | python3 -c "
 import sys, json
 d = json.loads(sys.stdin.read())
@@ -70,7 +74,7 @@ if not isinstance(rows, list) or (isinstance(d, dict) and d.get('errorType')):
 print(json.dumps(rows))" 2>/dev/null || true)
 [ -n "$MODELS_JSON" ] || {
   echo "ERROR: could not list the platform models (token expired?" >&2
-  echo "Re-run: $SAM_CLI auth login solace-lab --url https://sam.solace.lab)" >&2
+  echo "Re-run: $(sam_login_cmd))" >&2
   exit 1; }
 
 FAILED=0
@@ -91,7 +95,7 @@ a = sys.argv[1:]
 print(json.dumps({'pricing': {'input': a[0], 'output': a[1],
                               'cacheRead': a[2], 'cacheWrite': a[3]}}))" \
     "$IN" "$OUT" "$CR" "$CW")
-  CURRENT=$("$SAM_CLI" api "/api/v2/platform/models/$MODEL_ID" 2>/dev/null | json_only \
+  CURRENT=$(sam_cli_api "/api/v2/platform/models/$MODEL_ID" 2>/dev/null | json_only \
     | python3 -c "
 import sys, json
 d = json.loads(sys.stdin.read()); d = d.get('data', d)
@@ -115,7 +119,7 @@ print(json.dumps({k: format(Decimal(v).normalize(), 'f') for k, v in (p or {}).i
   echo "  intended:        $WANT"
   [ "$DRY_RUN" -eq 1 ] && continue
   APPLIED=$(printf '%s' "$BODY" \
-    | "$SAM_CLI" api -X PATCH "/api/v2/platform/models/$MODEL_ID" --input - 2>/dev/null \
+    | sam_cli_api -X PATCH "/api/v2/platform/models/$MODEL_ID" --input - 2>/dev/null \
     | json_only | python3 -c "
 import sys, json
 from decimal import Decimal

@@ -1,0 +1,21 @@
+# Only the demo pods (namespace gpos-demo) reach the demo DB over TCP 5432. The
+# scripts use `kubectl exec` (local socket) and the probes run in the container, so
+# neither needs a network path; SAM never talks to this DB (MCP via gpos-engine).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gpos-postgres
+spec:
+  podSelector:
+    matchLabels:
+      app: gpos-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gpos-demo
+      ports:
+        - protocol: TCP
+          port: 5432

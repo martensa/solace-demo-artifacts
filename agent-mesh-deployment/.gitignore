@@ -1,5 +1,8 @@
 # Secrets
 .env
+# AKS env file (EuroCIS showcase; written by amd_env_aks in
+# gebit-price-agent-demo/infra/aks/aks.sh, holds the LLM key)
+.env.aks
 
 # Local caches and CLI working dirs (never commit)
 scripts/rbac/.cache/

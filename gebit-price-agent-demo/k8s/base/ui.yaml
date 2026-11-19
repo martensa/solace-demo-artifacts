@@ -1,26 +1,24 @@
-# gpos-gate: Gate: MCP gpos-price-gate on 8766, the only price-changing tool (apply_price).
-# Same DB role as the engine (gpos_engine); no relay, the engine publishes.
+# gpos-ui: BFF: /kasse, /monitor, POS facade, SSE on 8090 (Service port 80). One replica:
+# the SSE fan-out is in-process. ui.ctl (probes, reset, tools-list) runs here.
 # Shape of bsg-trading-desk-demo/k8s and G0-07, hardened (spec 12.4).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gpos-gate
+  name: gpos-ui
   labels:
-    app: gpos-gate
+    app: gpos-ui
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gpos-gate
+      app: gpos-ui
   template:
     metadata:
       labels:
-        app: gpos-gate
+        app: gpos-ui
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
-      imagePullSecrets:
-        - name: registry-pull-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -28,18 +26,13 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: gate
+        - name: ui
           image: gpos-demo
           imagePullPolicy: Always
-          command: ["python", "-m", "gposdemo.engine.gate"]
+          command: ["python", "-m", "gposdemo.ui"]
           env:
-            - name: MCP_PORT
-              value: "8766"
-            - name: GPOS_DSN
-              valueFrom:
-                secretKeyRef:
-                  name: gpos-db
-                  key: DSN_ENGINE
+            - name: HTTP_PORT
+              value: "8090"
           envFrom:
             - configMapRef:
                 name: gpos-config
@@ -47,7 +40,7 @@ spec:
                 name: gpos-broker
           ports:
             - name: http
-              containerPort: 8766
+              containerPort: 8090
           readinessProbe:
             httpGet:
               path: /health
@@ -73,21 +66,27 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: descriptors
+              mountPath: /descriptors
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 50Mi
+        - name: descriptors
+          secret:
+            secretName: gpos-gebit-descriptors
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: gpos-gate
+  name: gpos-ui
   labels:
-    app: gpos-gate
+    app: gpos-ui
 spec:
   selector:
-    app: gpos-gate
+    app: gpos-ui
   ports:
     - name: http
-      port: 8766
+      port: 80
       targetPort: http

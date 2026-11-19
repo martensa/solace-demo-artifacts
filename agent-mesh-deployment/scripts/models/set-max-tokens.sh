@@ -32,6 +32,13 @@ Usage:
 Optional env:
   MODEL_ALIAS     (one alias instead of the seeded three)
   SAM_NAMESPACE   (default sam-solace-lab)
+  SAM_ENV_FILE, SAM_HOME, SAM_URL  (target another platform, e.g.
+                  AKS via aks_sam; see scripts/lib/common.sh. The
+                  awe restart then runs only when KUBECONFIG names
+                  one kubeconfig file whose current context is not
+                  rancher-desktop and has an Ingress in
+                  SAM_NAMESPACE for the SAM_URL host; otherwise it
+                  is skipped with exit 2)
 USAGE
 }
 
@@ -71,7 +78,8 @@ command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 not found." >&2; ex
 # --- Shared helpers (env, sam CLI, auth token) ----------------------
 # shellcheck source=../lib/common.sh
 . "$PROJECT_DIR/scripts/lib/common.sh"
-load_env "$PROJECT_DIR"
+load_env "$PROJECT_DIR" "${SAM_ENV_FILE:-$PROJECT_DIR/.env}"
+sam_target_check "$PROJECT_DIR" || exit 1
 resolve_sam_cli
 sam_auth_token
 
@@ -84,7 +92,7 @@ sam_auth_token
 # An auth failure also comes back as JSON on stdout ({"message":
 # ..., "errorType": "invalid_token"}) -- only a body that carries
 # a model list counts, anything else leaves MODELS_JSON empty.
-MODELS_JSON=$("$SAM_CLI" api /api/v1/platform/models 2>/dev/null \
+MODELS_JSON=$(sam_cli_api /api/v1/platform/models 2>/dev/null \
   | python3 -c "
 import sys, json
 raw = ''.join(l for l in sys.stdin if l.lstrip().startswith(('{','[')))
@@ -95,7 +103,7 @@ if not isinstance(rows, list) or (isinstance(d, dict) and d.get('errorType')):
 print(json.dumps(rows))" 2>/dev/null || true)
 [ -n "$MODELS_JSON" ] || {
   echo "ERROR: could not list the platform models (token expired?" >&2
-  echo "Re-run: $SAM_CLI auth login solace-lab --url https://sam.solace.lab)" >&2
+  echo "Re-run: $(sam_login_cmd))" >&2
   exit 1; }
 
 # --- Resolve every alias first -------------------------------------
@@ -142,7 +150,7 @@ print(json.dumps({'modelParams': p}))")
 
   # --- PATCH (merge; authConfig untouched) --------------------------
   APPLIED=$(printf '%s' "$NEW_PARAMS" \
-    | "$SAM_CLI" api -X PATCH "/api/v1/platform/models/$MODEL_ID" --input - 2>/dev/null \
+    | sam_cli_api -X PATCH "/api/v1/platform/models/$MODEL_ID" --input - 2>/dev/null \
     | python3 -c "
 import sys, json
 raw = ''.join(l for l in sys.stdin if l.lstrip().startswith(('{','[')))
@@ -179,18 +187,75 @@ fi
 # Agents (and workflows) run in the awe deployment and read the
 # model configuration at startup via the model bootstrap queues.
 RESTART_CMD="kubectl rollout restart deployment -n $SAM_NAMESPACE -l app.kubernetes.io/component=awe"
+if [ -n "${SAM_URL:-}" ]; then
+  # Remote platform (SAM_URL; e.g. AKS via aks_sam): a bare kubectl
+  # in a message would hit whatever context is current in the shell
+  # it is pasted into -- often the lab. Name the target instead.
+  SAM_HOST="${SAM_URL#*://}"; SAM_HOST="${SAM_HOST%%/*}"; SAM_HOST="${SAM_HOST%%:*}"
+  RESTART_CMD="kubectl --kubeconfig <kubeconfig of $SAM_HOST> --context <its context> rollout restart deployment -n $SAM_NAMESPACE -l app.kubernetes.io/component=awe
+  (AKS: kaks -n $SAM_NAMESPACE rollout restart deployment -l app.kubernetes.io/component=awe)"
+fi
 if [ "$RESTART" -eq 0 ]; then
   echo "Skipped restart (--no-restart). Apply it later with:"
   echo "  $RESTART_CMD"
   exit "$PATCH_FAILED"
 fi
-if ! command -v kubectl >/dev/null 2>&1 || ! kubectl get ns "$SAM_NAMESPACE" >/dev/null 2>&1; then
-  echo "kubectl/namespace not reachable - restart the agents manually:"
-  echo "  $RESTART_CMD"
+
+if [ -z "${SAM_URL:-}" ]; then
+  # --- Lab: the current kubectl context, as always -------------------
+  if ! command -v kubectl >/dev/null 2>&1 || ! kubectl get ns "$SAM_NAMESPACE" >/dev/null 2>&1; then
+    echo "kubectl/namespace not reachable - restart the agents manually:"
+    echo "  $RESTART_CMD"
+    exit "$PATCH_FAILED"
+  fi
+  echo "Restarting the Agent-Workflow Executor ..."
+  kubectl rollout restart deployment -n "$SAM_NAMESPACE" -l app.kubernetes.io/component=awe
+  kubectl rollout status deployment -n "$SAM_NAMESPACE" -l app.kubernetes.io/component=awe --timeout=300s || true
+  echo "Done - agents re-read the model config on startup."
   exit "$PATCH_FAILED"
 fi
-echo "Restarting the Agent-Workflow Executor ..."
-kubectl rollout restart deployment -n "$SAM_NAMESPACE" -l app.kubernetes.io/component=awe
-kubectl rollout status deployment -n "$SAM_NAMESPACE" -l app.kubernetes.io/component=awe --timeout=300s || true
+
+# --- Remote platform: restart only on a cluster PROVEN to serve it ---
+# Fail closed: KUBECONFIG must name exactly one kubeconfig file (aks_sam
+# sets the AKS file), its current context must not be the lab, and an
+# Ingress in SAM_NAMESPACE of that cluster must serve the SAM_URL host.
+# Every kubectl call is then pinned to that file and context. This
+# restart happens once, and only when a max_tokens PATCH changed
+# something -- on a remote platform that is the first provision.sh
+# after an install or rebuild (runbook A17 / 4.7), never a re-run.
+remote_kube_target() {
+  local hosts
+  case "${KUBECONFIG:-}" in
+    "")  echo "  KUBECONFIG is not set (it must name the target cluster's kubeconfig file)."; return 1 ;;
+    *:*) echo "  KUBECONFIG lists several files (it must name exactly one)."; return 1 ;;
+  esac
+  [ -f "$KUBECONFIG" ] || { echo "  kubeconfig $KUBECONFIG not found."; return 1; }
+  command -v kubectl >/dev/null 2>&1 || { echo "  kubectl not found."; return 1; }
+  KCTX=$(kubectl --kubeconfig "$KUBECONFIG" config current-context 2>/dev/null) || KCTX=""
+  case "$KCTX" in
+    "")              echo "  no current context in $KUBECONFIG."; return 1 ;;
+    rancher-desktop) echo "  the current context of $KUBECONFIG is the lab (rancher-desktop)."; return 1 ;;
+  esac
+  hosts=$(kubectl --kubeconfig "$KUBECONFIG" --context "$KCTX" -n "$SAM_NAMESPACE" \
+    get ingress -o jsonpath='{.items[*].spec.rules[*].host}' 2>/dev/null) || hosts=""
+  case " $hosts " in
+    *" $SAM_HOST "*) return 0 ;;
+  esac
+  echo "  no Ingress in $SAM_NAMESPACE on context $KCTX serves $SAM_HOST."
+  return 1
+}
+KCTX=""
+if ! remote_kube_target; then
+  echo "Not restarting the agents: the kubectl target is not proven to"
+  echo "serve $SAM_URL. Restart awe on the cluster that serves it:"
+  echo "  $RESTART_CMD"
+  [ "$PATCH_FAILED" -eq 1 ] && exit 1
+  exit 2   # provision.sh reports WARN
+fi
+echo "Restarting the Agent-Workflow Executor on context $KCTX ($SAM_HOST) ..."
+kubectl --kubeconfig "$KUBECONFIG" --context "$KCTX" rollout restart deployment \
+  -n "$SAM_NAMESPACE" -l app.kubernetes.io/component=awe
+kubectl --kubeconfig "$KUBECONFIG" --context "$KCTX" rollout status deployment \
+  -n "$SAM_NAMESPACE" -l app.kubernetes.io/component=awe --timeout=300s || true
 echo "Done - agents re-read the model config on startup."
 exit "$PATCH_FAILED"

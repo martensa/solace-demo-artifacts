@@ -54,6 +54,11 @@ SAM's internal tools itself, :data:`PLANNER_WARNINGS`; lines written after the l
 read are missed, so a lower bound). The summary and build/gate-verified add
 ``planner_retried_runs`` and ``planner_internal_tool_calls``. Neither fails a run: a
 retried run that ends correct stays ok.
+
+TARGET=aks (AKS-MIGRATION-PLAN A19, A21): .env.aks only, the BFF on the public name
+(E2E_CA_FILE=system), kubectl with the AKS kubeconfig and context, the awe log of
+AWE_NS/AWE_DEPLOY, records in build/aks/ (gate-verified with target=aks, e2e/,
+sam_inbox.lock); the lab's build/gate-verified never counts for AKS.
 """
 
 from __future__ import annotations
@@ -74,10 +79,10 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from opslib import (APPROVER_AGENTS, DEMO_DIR, GATE_FILE, GATE_MODES, GATE_MODES_TEXT,
-                    RUN_IDENTITY_DEFAULT, Bff, Inbox, InboxItem, OpsError, SamApi, decide,
-                    demo_env, demo_path, exclusive_lock, gate_hash, gate_verified, kubectl_ui,
-                    with_ref)
+from opslib import (APPROVER_AGENTS, BUILD, DEMO_DIR, GATE_FILE, GATE_MODES, GATE_MODES_TEXT,
+                    RUN_IDENTITY_DEFAULT, Bff, Inbox, InboxItem, OpsError, SamApi,
+                    current_target, decide, demo_env, exclusive_lock, gate_hash,
+                    gate_verified, kubectl_base, kubectl_ui, target_of, with_ref)
 
 TILLS = {"01": "", "98": "?till=98"}
 INBOX_POLL_S = 0.3
@@ -113,7 +118,8 @@ TEXT_MAX = 200
 REVIEW_END = ("proposed", "no_action", "no_candidates", "only_blocked", "deferred", "blocked",
               "failed", "superseded")
 PROPOSAL_END = ("approved", "rejected", "expired", "failed", "superseded", "blocked")
-AWE = ("sam-solace-lab", "deploy/agent-mesh-solace-agent-mesh-awe", "awe")
+# awe of the lab (namespace, Deployment, container); AWE_NS/AWE_DEPLOY override them
+AWE = ("sam-solace-lab", "agent-mesh-solace-agent-mesh-awe", "awe")
 # planner robustness (UC1-30): node recommend of gpos-basket-review, RECOMMEND_TIMEOUT_S
 # per attempt and RECOMMEND_RETRIES = retry_strategy.limit (test_e2e_helpers compares
 # them with the workflow file); REVIEW_TOOL marks the traces of gpos-basket-review (its
@@ -833,9 +839,10 @@ class E2E:
         """Tool executions of our agents in the awe log (read-only kubectl logs) and the
         planner's robustness in the traces started since ``since`` (wall clock);
         raises ``OpsError`` when the log cannot be read."""
-        proc = subprocess.run(["kubectl", "-n", AWE[0], "logs", AWE[1], "-c", AWE[2],
-                               f"--since={int(seconds) + 30}s"], capture_output=True,
-                              text=True, timeout=60, check=False)
+        ns, deploy = self.env.get("AWE_NS") or AWE[0], self.env.get("AWE_DEPLOY") or AWE[1]
+        cmd = kubectl_base(self.env) + ["-n", ns, "logs", f"deploy/{deploy}", "-c", AWE[2],
+                                        f"--since={int(seconds) + 30}s"]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
         if proc.returncode != 0:
             raise OpsError(f"awe log unreadable (kubectl rc {proc.returncode})")
         return parse_awe(proc.stdout.splitlines(), self.agent_ids, since=since)
@@ -1002,7 +1009,9 @@ def gate_verify(env: Mapping[str, str], base: argparse.Namespace, out: Path,
         "/199/" in str(r.data.get("price_change_topic", "/199/")) for r in results)
     awe_json = json.dumps({k: sorted(v) for k, v in sorted(tools.items())},
                           ensure_ascii=False)
+    install = target_of(env)
     lines = [f"result={'PASS' if passed else 'FAIL'}",
+             *([] if install == "lab" else [f"target={install}"]),
              f"hash={verified_hash}",
              f"modes={GATE_MODES_TEXT}",
              f"fallback_f2={'yes' if fallback_f2 else 'no'}",
@@ -1015,7 +1024,8 @@ def gate_verify(env: Mapping[str, str], base: argparse.Namespace, out: Path,
     GATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     GATE_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(json.dumps(summary(results), ensure_ascii=False))
-    print(f"gate verification: {'PASS' if passed else 'FAIL'} -> build/gate-verified")
+    shown = GATE_FILE.relative_to(DEMO_DIR) if GATE_FILE.is_relative_to(DEMO_DIR) else GATE_FILE
+    print(f"gate verification: {'PASS' if passed else 'FAIL'} -> {shown}")
     return passed
 
 
@@ -1033,12 +1043,13 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--gate-verify", action="store_true", help="make gate-verify (9.9)")
     group.add_argument("--gate-status", action="store_true", help="exit 0 if verified")
     args = ap.parse_args(argv)
-    if args.gate_status:
-        return 0 if gate_verified(fallback_f2=args.fallback_f2) else 1
-    env = demo_env()
-    out = demo_path("build/e2e") / f"e2e-{time.strftime('%Y%m%d-%H%M%S')}.jsonl"
-    out.parent.mkdir(parents=True, exist_ok=True)
     try:
+        if args.gate_status:
+            current_target()
+            return 0 if gate_verified(fallback_f2=args.fallback_f2) else 1
+        env = demo_env()
+        out = BUILD / "e2e" / f"e2e-{time.strftime('%Y%m%d-%H%M%S')}.jsonl"
+        out.parent.mkdir(parents=True, exist_ok=True)
         with exclusive_lock("e2e.py"):
             if args.gate_verify:
                 return 0 if gate_verify(env, args, out, args.fallback_f2) else 1

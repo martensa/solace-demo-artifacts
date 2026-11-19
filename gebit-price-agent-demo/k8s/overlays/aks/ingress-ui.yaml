@@ -1,0 +1,169 @@
+# gpos-ui (BFF) on the one public name, path table AKS-MIGRATION-PLAN 0.2. SAM owns
+# "/" on the same host; the longest path wins, so only these BFF paths reach gpos-ui
+# (the BFF's own "/" and "/health" stay with SAM). /freigabe, /foto, /op and /etikett
+# get no path until the owner decides (plan 7.1); scripts/tests/test_k8s.py
+# classifies every BFF route as public or open.
+# Controller: Traefik's ingress-nginx provider (IngressClass nginx). tls carries hosts
+# only: Traefik serves its default certificate (ingress-tls) and redirects http with
+# 308. proxy-body-size only takes effect with proxy-request-buffering "on" under
+# Traefik. Limits count per client IP (429), limit-burst-multiplier "1" = no extra
+# burst; calibrated in A21 (all booth devices share one NAT IP).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-ui
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "on"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /kasse
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http
+          - path: /monitor
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http
+          - path: /static/
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http
+          - path: /api/catalog
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http
+          - path: /api/cards
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http
+          - path: /api/scenarios
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http
+          - path: /api/state
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http
+          - path: /api/proposals/
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http
+---
+# POST /api/pos/{method}: the POS facade of /kasse; 120 requests per minute and IP.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-ui-pos
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "on"
+    nginx.ingress.kubernetes.io/limit-rpm: "120"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "1"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /api/pos/
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http
+---
+# POST /api/demo/reset (reset button of /kasse): 2 requests per minute and IP.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-ui-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "4m"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "on"
+    nginx.ingress.kubernetes.io/limit-rpm: "2"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "1"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /api/demo/
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http
+---
+# GET /api/events (SSE, spec 10.2): never buffered in either direction, long reads
+# (heartbeat every 15 s), 10 concurrent connections per IP.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-ui-events
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/limit-connections: "10"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /api/events
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-ui
+                port:
+                  name: http

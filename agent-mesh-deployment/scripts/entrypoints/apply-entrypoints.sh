@@ -17,6 +17,10 @@ set -euo pipefail
 # Auth: needs a sam CLI login (browser flow):
 #   sam auth login solace-lab --url https://sam.solace.lab
 #
+# Optional environment (unset = the local lab): SAM_ENV_FILE,
+# SAM_HOME, SAM_URL (also the probe target) -- see
+# scripts/lib/common.sh.
+#
 #   ./apply-entrypoints.sh           # apply + probe /gw/dev
 #   ./apply-entrypoints.sh --probe-only
 # =============================================================
@@ -35,17 +39,18 @@ esac
 # --- Shared helpers (env, sam CLI) ---------------------------------
 # shellcheck source=../lib/common.sh
 . "$PROJECT_DIR/scripts/lib/common.sh"
-load_env "$PROJECT_DIR"
+load_env "$PROJECT_DIR" "${SAM_ENV_FILE:-$PROJECT_DIR/.env}"
+sam_target_check "$PROJECT_DIR" || exit 1
 
 if [ "$PROBE_ONLY" -eq 0 ]; then
   resolve_sam_cli
   echo "Applying platform entrypoints (developer-mcp) ..."
-  (cd "$SCRIPT_DIR" && "$SAM_CLI" config apply)
+  (cd "$SCRIPT_DIR" && sam_cli_config apply)
 fi
 
 # --- Probe: /gw/dev must answer (401 = up, auth challenge) ----------
 CODE=$(curl -sk -m 10 -o /dev/null -w "%{http_code}" \
-  https://sam.solace.lab/gw/dev/ || true)
+  "$(sam_base_url)/gw/dev/" || true)
 case "$CODE" in
   401|200|405|406)
     echo "developer-mcp endpoint up (HTTP $CODE at /gw/dev/)." ;;

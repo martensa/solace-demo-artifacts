@@ -1,0 +1,26 @@
+# The one public certificate (runbook A11, 4.3): Secret ingress-tls in
+# namespace traefik is Traefik's default certificate (TLSStore default),
+# so every Ingress only lists tls.hosts. Back it up with tls_backup after
+# every issuance; after a restore, applying this file again must not
+# trigger a new order (same dnsNames, issuer annotations in the Secret).
+# ZeroSSL fallback (4.3): zerossl_on patches the live Certificate to
+# issuer zerossl; then also set issuerRef.name below to zerossl, or the
+# next apply of this file switches back and orders from Let's Encrypt.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ingress-tls
+  namespace: traefik
+spec:
+  secretName: ingress-tls
+  dnsNames:
+    - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  # RSA 2048 chains to ISRG Root X1, the widest client support.
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: letsencrypt-prod

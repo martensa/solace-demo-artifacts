@@ -16,7 +16,7 @@ Static part (no marker, runs in ``make test``):
   subscriptions (booth and probe), the ``successOutput``/``errorOutput`` topics against
   the BFF, every producer topic against the ``gpos-ui`` subscriptions.
 * Config (2.2, 3.1): the variables ``load_settings`` reads against ConfigMap, Secrets and
-  Deployments in ``k8s/``; ports of connectors, ConfigMap and Deployments.
+  Deployments in ``k8s/base/``; ports of connectors, ConfigMap and Deployments.
 
 Flow part (markers ``integration``, ``db``, ``gebit``): wws, loyalty, pos, engine and gate
 run in this process on their own scratch DB (``create(settings, bus, db)``, real gRPC on
@@ -542,8 +542,12 @@ def test_every_producer_topic_reaches_the_bff_as_its_sse_event() -> None:
 
 # ============================================================================ 3.1, 12.4
 def k8s_docs() -> list[dict[str, Any]]:
-    return [d for p in sorted((ROOT / "k8s").glob("*.yaml"))
+    """The target-neutral manifests in ``k8s/base`` (the overlays add only ingresses,
+    certificates, pull secrets and the image)."""
+    docs = [d for p in sorted((ROOT / "k8s" / "base").glob("*.yaml"))
             for d in yaml.safe_load_all(p.read_text(encoding="utf-8")) if d]
+    assert any(d["kind"] == "Service" for d in docs), "no Service in k8s/base"
+    return docs
 
 
 def test_every_setting_comes_from_configmap_secret_or_deployment() -> None:

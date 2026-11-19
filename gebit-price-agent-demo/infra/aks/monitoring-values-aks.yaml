@@ -1,0 +1,92 @@
+# kube-prometheus-stack 83.5.0: AKS overlay (runbook A8).
+#
+# Second -f after the lab values
+# (solace-lab-infrastructure/pki/manifests/05-monitoring-values.yaml).
+# Neutralises every lab-only setting of that file for the AKS showcase:
+# no Ingress (Grafana only via port-forward), no lab CA issuer, no lab
+# host name, no lab SAM DB datasource with its demo password,
+# Grafana admin from the existing Secret grafana-admin (created in A8
+# from Key Vault), Prometheus on a managed-csi-premium PVC.
+# Contains no secrets.
+
+# Managed control plane: etcd, controller-manager and scheduler are not
+# reachable from the cluster, and Azure CNI powered by Cilium runs
+# without kube-proxy. Their scrapers would only produce down targets and
+# firing *Down alerts; disabling them also drops their rule groups. The
+# lab file disables the last three already (k3s); restated here so the
+# overlay stays correct if the lab file changes.
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+defaultRules:
+  disabled:
+    KubeControllerManagerDown: true
+    KubeSchedulerDown: true
+    KubeProxyDown: true
+    # The lab disables this alert because the Rancher Desktop VM has no
+    # NTP; AKS nodes sync time, so the alert is meaningful again.
+    NodeClockNotSynchronising: false
+
+prometheus:
+  prometheusSpec:
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: managed-csi-premium
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 16Gi
+
+grafana:
+  # Keys admin-user and admin-password; the chart then creates no admin
+  # Secret of its own and ignores the lab adminPassword.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  ingress:
+    enabled: false
+  # Replaces the lab list (lists are not merged): only Loki and Tempo.
+  # The built-in Prometheus and Alertmanager datasources of the chart
+  # stay; dashboards and tracesToMetrics need them.
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      access: proxy
+      isDefault: false
+      editable: true
+      jsonData:
+        maxLines: 1000
+        derivedFields:
+          - name: traceID
+            matcherRegex: '"traceID":"([0-9a-f-]+)"'
+            url: "$${__value.raw}"
+            datasourceUid: tempo
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      url: http://tempo.monitoring.svc.cluster.local:3200
+      access: proxy
+      isDefault: false
+      editable: true
+      jsonData:
+        nodeGraph:
+          enabled: true
+        tracesToLogs:
+          datasourceUid: loki
+          tags:
+            - job
+            - instance
+            - pod
+            - namespace
+        tracesToMetrics:
+          datasourceUid: prometheus

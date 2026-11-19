@@ -5,6 +5,9 @@
 # namespace gpos-demo, the rendered files. The database gpos and its roles only
 # with --drop-db. Left in place on purpose: role gpos_marktleitung and claim
 # mapping keycloak-group-marktleitung (shared with Gate 0, spec 9.7).
+# TARGET=aks (scripts/lib.sh): the same against AKS; namespace gpos-data (the
+# demo DB's Postgres and its volume) stays unless --drop-db, which drops the DB
+# and roles via kubectl exec first and then deletes gpos-data.
 set -uo pipefail
 . "$(dirname "$0")/lib.sh"
 
@@ -14,6 +17,16 @@ case "${1:-}" in
   "") ;;
   *) die "usage: $0 [--drop-db]" ;;
 esac
+
+gpos_ns_or_die() {  # only the demo's own gpos-* namespaces are ever deleted (spec 12.6)
+  case "$1" in
+    gpos-*) ;;
+    *) die "refusing to delete namespace '$1': uninstall removes only gpos-* namespaces" ;;
+  esac
+}
+# checked before anything is deleted
+gpos_ns_or_die "$NS"
+if [ "$TARGET" = aks ] && [ "$DROP_DB" = 1 ]; then gpos_ns_or_die "$PG_NS"; fi
 
 step "SAM resources"
 if sam_login; then
@@ -35,7 +48,8 @@ else
   echo "   WARNING: no sam login -- SAM resources left in place"
 fi
 
-step "broker (solace-1, VPN ${BROKER_VPN:-default})"
+if [ "$TARGET" = aks ]; then BROKER_LABEL="AKS broker"; else BROKER_LABEL=solace-1; fi
+step "broker ($BROKER_LABEL, VPN ${BROKER_VPN:-default})"
 "$DEMO_DIR/scripts/broker.sh" r1-delete || echo "   WARNING: r1-delete failed"
 "$DEMO_DIR/scripts/broker.sh" orphans || echo "   WARNING: orphaned queues left (hard rule 4)"
 
@@ -49,6 +63,12 @@ if [ "$DROP_DB" = 1 ]; then
     psql_admin -q -d postgres -c "drop role if exists gpos_$r"
   done
   rm -f "$RENDERED/db.env"
+  if [ "$TARGET" = aks ]; then
+    step "namespace $PG_NS (Postgres of the demo DB, incl. its volume)"
+    kubectl delete ns "$PG_NS" --ignore-not-found --wait=true
+  fi
+elif [ "$TARGET" = aks ]; then
+  echo "   namespace $PG_NS and DB $PG_DB kept (scripts/uninstall.sh --drop-db removes them)"
 fi
 rm -rf "$RENDERED/entrypoints" "$RENDERED/manifest-booth.yaml" \
        "$RENDERED/manifest-probe.yaml" "$RENDERED/r1_mode" "$BUILD_DIR/gate-verified"

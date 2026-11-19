@@ -1,0 +1,471 @@
+# =============================================================
+# Keycloak 26.8.2 + PostgreSQL 17 for the EuroCIS showcase on AKS
+# =============================================================
+#
+# Derived from solace-lab-infrastructure/keycloak/manifests 01, 02,
+# 03 and 05 (AKS-MIGRATION-PLAN.md table 1.4, A14). Differences to
+# the lab:
+#   - images by multi-arch index digest, pulled upstream (no pull
+#     secret in namespace iam)
+#   - bootstrap admin from Secret keycloak-credentials via
+#     KC_BOOTSTRAP_ADMIN_* (replaces the deprecated KEYCLOAK_ADMIN*)
+#   - served under /auth on the shared public name; only
+#     /auth/realms/solace-lab/ and /auth/resources/ are routed
+#     (keycloak/ingress.yaml, applied in A15)
+#   - realm solace-lab without users and roles (scripts create
+#     groups and users), self-service password reset off,
+#     brute-force protection as in the lab
+#   - PVC on managed-csi-premium, memory limit 1536Mi
+#
+# Hostnames (Keycloak hostname v2):
+#   - The server hostname is the admin port-forward
+#       kaks -n iam port-forward svc/keycloak 18081:8080
+#     so the master realm (admin console, admin tokens) lives on
+#     http://127.0.0.1:18081/auth. The admin console logs in through
+#     the master realm's frontend URL; on the public name the master
+#     realm is not routed, so it must be the port-forward.
+#   - The public realm solace-lab pins its own frontend URL
+#     (realm attribute frontendUrl) to https://<FQDN>/auth. Its
+#     issuer is therefore https://<FQDN>/auth/realms/solace-lab for
+#     every caller, including requests through the port-forward.
+#   - Tokens are checked against the frontend URL of their realm,
+#     independent of the request host: a master token fetched via
+#     127.0.0.1:18081 is accepted by the admin REST API on the same
+#     port-forward. KC_HOSTNAME_BACKCHANNEL_DYNAMIC is not needed.
+#
+# Secrets (created from Key Vault before this file is applied, A14):
+#   postgres-credentials  keys username, password
+#   keycloak-credentials  keys admin-user, admin-password
+#
+# Apply:  kaks apply -f "$AKS_DIR/keycloak/keycloak.yaml"
+# The first start builds Keycloak for the /auth path (start without
+# --optimized); the startup probe allows about 215 s.
+# =============================================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: iam
+
+---
+
+# -------------------------------------------------------------
+# PostgreSQL for Keycloak (cluster-internal:
+# postgres.iam.svc.cluster.local:5432)
+# -------------------------------------------------------------
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: iam
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: managed-csi-premium
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: iam
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: keycloak
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: keycloak
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:17-alpine@sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+              name: postgres
+              protocol: TCP
+          env:
+            - name: POSTGRES_DB
+              value: keycloak
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - keycloak
+                - -d
+                - keycloak
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - keycloak
+                - -d
+                - keycloak
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: iam
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: keycloak
+spec:
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+      protocol: TCP
+  clusterIP: None
+
+---
+
+# -------------------------------------------------------------
+# Realm import (only when the realm does not exist yet)
+# -------------------------------------------------------------
+# No users, no realm roles: setup-keycloak-client.sh,
+# setup-keycloak-users.sh and keycloak-marktleitung.sh create the
+# client, groups and users (A15); kc_set_passwords sets the
+# passwords from Key Vault. This copy may drift from the lab realm.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm
+  namespace: iam
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: identity-provider
+data:
+  solace-lab-realm.json: |
+    {
+      "realm": "solace-lab",
+      "displayName": "Solace Lab",
+      "enabled": true,
+      "sslRequired": "external",
+      "registrationAllowed": false,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "resetPasswordAllowed": false,
+      "editUsernameAllowed": false,
+      "bruteForceProtected": true,
+      "permanentLockout": false,
+      "maxFailureWaitSeconds": 900,
+      "minimumQuickLoginWaitSeconds": 60,
+      "waitIncrementSeconds": 60,
+      "quickLoginCheckMilliSeconds": 1000,
+      "maxDeltaTimeSeconds": 43200,
+      "failureFactor": 5,
+      "defaultSignatureAlgorithm": "ES256",
+      "attributes": {
+        "frontendUrl": "https://eurocis-showcase.germanywestcentral.cloudapp.azure.com/auth"
+      },
+      "scopeMappings": [],
+      "clients": [],
+      "internationalizationEnabled": false
+    }
+
+---
+
+# -------------------------------------------------------------
+# Keycloak
+# -------------------------------------------------------------
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: iam
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: identity-provider
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+        app.kubernetes.io/component: identity-provider
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.8.2@sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3
+          imagePullPolicy: IfNotPresent
+          args:
+            - start
+            - --import-realm
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+            - containerPort: 9000
+              name: management
+              protocol: TCP
+          env:
+            # --- Bootstrap admin (master realm, only on an empty DB) ---
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-credentials
+                  key: admin-user
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-credentials
+                  key: admin-password
+            # --- Database ---
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL_HOST
+              value: postgres.iam.svc.cluster.local
+            - name: KC_DB_URL_PORT
+              value: "5432"
+            - name: KC_DB_URL_DATABASE
+              value: keycloak
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: password
+            # --- Proxy / hostname v2 (see header) ---
+            # Traefik terminates TLS and sets X-Forwarded-*.
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HTTP_RELATIVE_PATH
+              value: /auth
+            # Server and admin console base URL = admin port-forward.
+            # The public realm overrides it with its frontendUrl.
+            - name: KC_HOSTNAME
+              value: http://127.0.0.1:18081/auth
+            - name: KC_HOSTNAME_ADMIN
+              value: http://127.0.0.1:18081/auth
+            # Management interface (port 9000) stays at "/", so the
+            # probes and /metrics keep their lab paths.
+            - name: KC_HTTP_MANAGEMENT_RELATIVE_PATH
+              value: /
+            # --- Health / Metrics ---
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+          volumeMounts:
+            - name: realm-config
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1Gi
+            limits:
+              memory: 1536Mi
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 9000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: 9000
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 40
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: realm-config
+          configMap:
+            name: keycloak-realm
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: iam
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: identity-provider
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+      protocol: TCP
+    - port: 9000
+      targetPort: 9000
+      name: management
+      protocol: TCP
+
+---
+
+# -------------------------------------------------------------
+# Monitoring (kube-prometheus-stack from A8; selectors pick up
+# every ServiceMonitor and PrometheusRule)
+# -------------------------------------------------------------
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: keycloak
+  namespace: iam
+  labels:
+    app.kubernetes.io/name: keycloak
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  endpoints:
+    - port: management
+      path: /metrics
+      interval: 30s
+
+---
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: keycloak-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: keycloak.alerts
+      interval: 30s
+      rules:
+        - alert: KeycloakAbsent
+          expr: |
+            absent(kube_deployment_status_replicas_available{namespace="iam", deployment="keycloak"} > 0)
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Keycloak is not available"
+            description: >-
+              The identity provider (iam/keycloak) has had no
+              available replicas for 5 minutes. OIDC login for SAM
+              is not possible.
+        - alert: KeycloakPostgresAbsent
+          expr: |
+            absent(kube_statefulset_status_replicas_ready{namespace="iam", statefulset="postgres"} > 0)
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Keycloak PostgreSQL is not available"
+            description: >-
+              The Keycloak database (iam/postgres) has had no ready
+              replicas for 5 minutes. Keycloak cannot work without it.
+        - alert: KeycloakPostgresStorageHigh
+          expr: |
+            (
+              kubelet_volume_stats_used_bytes{namespace="iam", persistentvolumeclaim="postgres-data"}
+              /
+              kubelet_volume_stats_capacity_bytes{namespace="iam", persistentvolumeclaim="postgres-data"}
+            ) > 0.8
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Keycloak DB storage above 80 percent"
+            description: >-
+              The PersistentVolumeClaim postgres-data in namespace iam
+              is more than 80 percent full.

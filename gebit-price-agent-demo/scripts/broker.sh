@@ -4,7 +4,9 @@
 #   scripts/broker.sh txflows QUEUE | ready gpos-booth-events|gpos-probe-events
 # SEMP v2 on SEMP_URL; the admin password is read at runtime from
 # SEMP_PASSWORD_FROM by scripts/broker.py and never printed. Pattern:
-# spikes/g0/g0-10/queue.sh.
+# spikes/g0/g0-10/queue.sh. TARGET=aks (scripts/lib.sh, .env.aks): password
+# from the Key Vault (SEMP_PASSWORD_KV), SEMP only via 127.0.0.1:18080 after
+# the lab-broker check; broker.py opens the port-forward itself if none runs.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 exec "$PY" "$DEMO_DIR/scripts/broker.py" "$@"

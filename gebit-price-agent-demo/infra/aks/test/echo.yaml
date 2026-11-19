@@ -1,0 +1,161 @@
+# Echo test for the Traefik entry point (runbook A11). Temporary: applied
+# for the acceptance tests and deleted again with
+#   kaks delete -f "$AKS_DIR/test/echo.yaml"
+# whoami (upstream, multi-arch index digest of v1.12.0, linux/arm64
+# included) answers every path below /aks-test/ with the request it
+# received, including X-Real-Ip; ?wait=300s delays the answer.
+#
+# Ingresses (class nginx, served by Traefik's ingress-nginx provider;
+# tls.hosts only, so Traefik uses its default certificate ingress-tls):
+#   echo     /aks-test/echo     proxy-read-timeout 900 s (300 s hold test)
+#   body     /aks-test/body     request buffering on, body limit 1m (413)
+#   limited  /aks-test/limited  10 requests per minute, burst 10 (429)
+# http:// answers 308 (ssl-redirect); HSTS comes from the websecure
+# entry point middleware traefik-hsts.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aks-test
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo
+  namespace: aks-test
+  labels:
+    app.kubernetes.io/name: echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: echo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: echo
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: whoami
+          image: docker.io/traefik/whoami@sha256:c4717a8d1f0134a7444e24f881160e033991f23027c6c5a9a3f8fd22e70d1d44
+          args: ["--port", "8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo
+  namespace: aks-test
+  labels:
+    app.kubernetes.io/name: echo
+spec:
+  selector:
+    app.kubernetes.io/name: echo
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo
+  namespace: aks-test
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /aks-test/echo
+            pathType: Prefix
+            backend:
+              service:
+                name: echo
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: body
+  namespace: aks-test
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "on"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /aks-test/body
+            pathType: Prefix
+            backend:
+              service:
+                name: echo
+                port:
+                  name: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: limited
+  namespace: aks-test
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-rpm: "10"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "1"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /aks-test/limited
+            pathType: Prefix
+            backend:
+              service:
+                name: echo
+                port:
+                  name: http

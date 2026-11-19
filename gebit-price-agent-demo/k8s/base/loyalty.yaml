@@ -1,25 +1,23 @@
-# gpos-wws: Merchandise management (showcase.wws.v1, gRPC 50053) and MCP gpos-wws-api on 8773.
+# gpos-loyalty: Loyalty (showcase.loyalty.v1, gRPC 50052) and MCP gpos-loyalty-api on 8772.
 # Shape of bsg-trading-desk-demo/k8s and G0-07, hardened (spec 12.4).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gpos-wws
+  name: gpos-loyalty
   labels:
-    app: gpos-wws
+    app: gpos-loyalty
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gpos-wws
+      app: gpos-loyalty
   template:
     metadata:
       labels:
-        app: gpos-wws
+        app: gpos-loyalty
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
-      imagePullSecrets:
-        - name: registry-pull-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -27,20 +25,20 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: wws
+        - name: loyalty
           image: gpos-demo
           imagePullPolicy: Always
-          command: ["python", "-m", "gposdemo.wws"]
+          command: ["python", "-m", "gposdemo.loyalty"]
           env:
             - name: GRPC_PORT
-              value: "50053"
+              value: "50052"
             - name: MCP_PORT
-              value: "8773"
+              value: "8772"
             - name: GPOS_DSN
               valueFrom:
                 secretKeyRef:
                   name: gpos-db
-                  key: DSN_WWS
+                  key: DSN_LOYALTY
           envFrom:
             - configMapRef:
                 name: gpos-config
@@ -48,9 +46,9 @@ spec:
                 name: gpos-broker
           ports:
             - name: grpc
-              containerPort: 50053
+              containerPort: 50052
             - name: http
-              containerPort: 8773
+              containerPort: 8772
           readinessProbe:
             httpGet:
               path: /health
@@ -84,17 +82,17 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: gpos-wws
+  name: gpos-loyalty
   labels:
-    app: gpos-wws
+    app: gpos-loyalty
 spec:
   selector:
-    app: gpos-wws
+    app: gpos-loyalty
   ports:
     - name: grpc
-      port: 50053
+      port: 50052
       targetPort: grpc
       appProtocol: kubernetes.io/h2c
     - name: http
-      port: 8773
+      port: 8772
       targetPort: http

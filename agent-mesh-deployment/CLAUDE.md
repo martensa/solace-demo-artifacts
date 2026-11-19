@@ -170,6 +170,46 @@ re-provisioning order.
 - Non-sensitive demo-only values (session key, broker default
   password, DNS name, pull secret name) are kept in
   `local-k8s-values.yaml` for reproducibility.
+- AKS (EuroCIS showcase): `.env.aks` (gitignored, mode 600, written
+  by `amd_env_aks` in `../gebit-price-agent-demo/infra/aks/aks.sh`,
+  plus the client secret from `setup-keycloak-client.sh`) holds the
+  Keycloak values, the client secret, the LLM key and the chart and
+  CLI paths. The session key, the broker password and the Postgres
+  superuser password come from the Key Vault through `sam_helm`
+  (with the client secret and LLM key: one values document on helm's
+  stdin), never from a values file; `aks-values.yaml` blanks the lab
+  values. On the remote path the Keycloak scripts and the
+  apply-models probes put no secret into an argv (stdin or a curl
+  config on a file descriptor).
+
+## Remote target (AKS showcase)
+
+The scripts take optional variables, all unset in the lab (README
+"Remote target"): `SAM_ENV_FILE` (env file instead of `.env`),
+`SAM_URL` (`--url` on every `sam config` / `sam api` call),
+`SAM_HOME`, `SAM_DNS_NAME` and `SAM_REDIRECT_URI` (Keycloak
+client). `aks_sam` / `aks_kc` in the gpd `infra/aks/aks.sh` set
+them; the procedure is `../gebit-price-agent-demo/AKS-MIGRATION-PLAN.md`.
+
+- `SAM_ENV_FILE`, `SAM_URL` and `SAM_HOME` go together:
+  `sam_target_check` stops provision.sh and the rbac, models and
+  entrypoints scripts on a partial set, a relative `SAM_HOME`, the
+  real HOME, the lab sam home or the lab `.env`.
+- Login cache: sam 2.542.1 keeps it in
+  `$HOME/Library/Application Support/sam/auth/<target>.json` and
+  IGNORES `SAM_HOME` / `--sam-home` for it (`sam auth status
+  --format json` shows the path). Only another HOME separates the
+  AKS login from the lab login, so `sam_cli_run` runs the CLI with
+  `HOME=$SAM_HOME` (and without `SAM_PLATFORM_TOKEN`; on a remote
+  target `sam_target_check` also unsets `SAM_AUTH_TOKEN` of the
+  shell), and `sam_auth_cache_path` is
+  `${SAM_HOME:-$HOME}/Library/Application Support/sam/auth/solace-lab.json`.
+  The AKS browser login is the user's:
+  `aks_sam sam auth login solace-lab --url https://<FQDN>`.
+- Never run start.sh, stop.sh or the Keycloak teardown scripts
+  inside `aks_sam` / `aks_kc` (both refuse them): they read only
+  `.env` and act on the current kubectl context. AKS installs go
+  through `sam_helm` (`-f local-k8s-values.yaml -f aks-values.yaml`).
 
 ## v2 Chart Gotchas
 
@@ -393,7 +433,15 @@ reference DB-managed roles, never the YAML `sam_admin`.
 
 - `local-k8s-values.yaml` -- Non-sensitive Helm values
   (safe to commit)
+- `aks-values.yaml` -- AKS overlay, always the SECOND `-f` after
+  `local-k8s-values.yaml`, only through `sam_helm` (gpd
+  `infra/aks/aks.sh`), never with start.sh or against the lab. No
+  secrets, no ACR name: it blanks the lab session key, broker and
+  Postgres passwords and sets the registries to an `.invalid`
+  placeholder, so a missing `sam_helm` value fails loudly
 - `.env.example` -- Template for secrets and artifact paths
+- `.env.aks` -- AKS env file (gitignored, written by `amd_env_aks`;
+  see "Secrets Handling")
 - `manifests/sam-tls-certificate.yaml` -- cert-manager
   Certificate for the ingress TLS secret
 - `scripts/load-images.sh` -- Loads the four offline image
@@ -489,7 +537,13 @@ reference DB-managed roles, never the YAML `sam_admin`.
   steps continue and report WARN/FAIL)
 - `scripts/setup-keycloak-client.sh` -- creates the OIDC client
   and writes its secret into `.env` itself (re-run against an
-  existing client re-syncs `.env`)
+  existing client re-syncs `.env`). Remote mode (`SAM_ENV_FILE`
+  set): needs `KEYCLOAK_URL`, `KEYCLOAK_ADMIN_PASSWORD`,
+  `SAM_DNS_NAME` and `SAM_REDIRECT_URI`, registers exactly that
+  redirect URI (plus `post.logout.redirect.uris`), writes the
+  secret into `SAM_ENV_FILE`, and exits 1 without a secret when an
+  existing client has other `redirectUris` (delete it, re-run). In
+  the lab `SAM_DNS_NAME` and `SAM_REDIRECT_URI` are ignored
 - `scripts/stop.sh` -- Full teardown. Beyond the release and the
   namespace it removes what lives OUTSIDE the namespace and would
   otherwise survive: the `sam-alerts` PrometheusRule and the
@@ -515,10 +569,15 @@ reference DB-managed roles, never the YAML `sam_admin`.
   exactly that) -- and the override
   `SAM_SEMP_URL=http://<broker host>:8080` (used:
   `http://192.168.205.1:8080`).
-- `scripts/lib/common.sh` -- shared helpers (.env loading, sam
-  CLI resolution, SAM_AUTH_TOKEN export) sourced by the rbac,
+- `scripts/lib/common.sh` -- shared helpers sourced by the rbac,
   models and entrypoints scripts and the demo install/uninstall
-  scripts
+  scripts: `load_env DIR [FILE]` (explicit FILE must exist; only
+  the amd scripts pass `SAM_ENV_FILE`, the demos never),
+  `resolve_sam_cli`, `sam_auth_cache_path` (call time, honours
+  `SAM_HOME`), `sam_auth_token`, `sam_base_url`, `sam_cli_run`
+  (`HOME=$SAM_HOME` when set), `sam_login_cmd` (hint text),
+  `sam_cli_config` / `sam_cli_api` (`--url "$SAM_URL"` when set)
+  and `sam_target_check` (see "Remote target")
 - `scripts/rbac/` -- Declarative RBAC (manifest + roles + claim
   mappings + `apply-rbac.sh`; default roles via one REST call)
 - `scripts/setup-keycloak-client.sh` / `setup-keycloak-users.sh`
@@ -541,7 +600,11 @@ reference DB-managed roles, never the YAML `sam_admin`.
   `modelParams.max_tokens` via `sam api` (SAM_AUTH_TOKEN from the
   CLI login cache) on general/planning/report_gen (or one
   `--model-alias`), skips aliases already at the value, and
-  restarts awe once only if something changed. `set-pricing.sh`
+  restarts awe once only if something changed. With `SAM_URL` set
+  it restarts only on a cluster proven to serve that host
+  (`KUBECONFIG` one file, context not `rancher-desktop`, an Ingress
+  in `sam-solace-lab` for the `SAM_URL` host), else exit 2 (WARN
+  in provision.sh) and the command to run by hand. `set-pricing.sh`
   (provision.sh step "Pricing", `--dry-run`) PATCHes per-1M-token
   rates on fast (Haiku 4.5), workflow and planning (Sonnet 5) via
   `sam api` and skips aliases already at the rates; token

@@ -3,6 +3,7 @@ against an in-memory SEMP v2 double (no broker)."""
 
 from __future__ import annotations
 
+import base64
 import urllib.parse
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ from typing import Any
 import pytest
 
 import broker
+import opslib
 from opslib import OpsError
 
 TOPICS = [f"gebit/rp/purchase/v2/{e}/DE/999/101/01/>" for e in (
@@ -17,6 +19,14 @@ TOPICS = [f"gebit/rp/purchase/v2/{e}/DE/999/101/01/>" for e in (
     "purchase_transaction/PurchaseTransactionClosed",
     "purchase_transaction/PurchaseTransactionCancelled")]
 NOT_FOUND = (400, {"meta": {"error": {"status": "NOT_FOUND"}}})
+
+
+@pytest.fixture(autouse=True)
+def lab_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests pin the lab: a TARGET exported by the caller's shell (or `TARGET=aks
+    make test`) must not leak in, also not through the paths fixed at import."""
+    monkeypatch.delenv("TARGET", raising=False)
+    monkeypatch.setattr(opslib, "TARGET", "lab")
 
 
 class FakeSemp(broker.Semp):
@@ -136,3 +146,23 @@ def test_semp_password_is_read_not_echoed(tmp_path: Path) -> None:
     assert broker.read_semp_password(tfvars, "solace_1_password") == "tf-se cret"
     with pytest.raises(OpsError, match="solace_2_password not found"):
         broker.read_semp_password(tfvars, "solace_2_password")
+
+
+def test_lab_session_reads_the_tfvars_and_never_probes(tmp_path: Path,
+                                                       monkeypatch: pytest.MonkeyPatch) -> None:
+    """TARGET unset = lab: SEMP_PASSWORD_FROM as before, no port probe, no forward,
+    no Key Vault (AKS-MIGRATION-PLAN 1.4)."""
+    tfvars = tmp_path / "terraform.tfvars"
+    tfvars.write_text('solace_1_password = "tf-pw"\n')
+    for key in ("TARGET", "SEMP_URL", "SEMP_USER", "BROKER_VPN"):
+        monkeypatch.delenv(key, raising=False)
+
+    def forbidden(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError("no AKS preflight in the lab")
+
+    monkeypatch.setattr(broker, "listening", forbidden)
+    monkeypatch.setattr(broker, "kv_secret", forbidden)
+    monkeypatch.setattr(broker, "port_forward", forbidden)
+    with broker.semp_session({"SEMP_PASSWORD_FROM": str(tfvars)}) as semp:
+        assert (semp.base, semp.vpn) == ("http://localhost:8080", "default")
+        assert semp.auth == "Basic " + base64.b64encode(b"admin:tf-pw").decode()

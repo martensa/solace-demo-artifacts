@@ -1,0 +1,26 @@
+# ZeroSSL fallback ClusterIssuer (runbook 4.3), template only: used when
+# Let's Encrypt answers rateLimited. zerossl_on (aks.sh) replaces the
+# keyID placeholder below (the only occurrence in this file) with
+# ACME_EAB_KID from gebit-price-agent-demo/.env.aks and pipes the result
+# into kubectl apply; the rendered file is never written. The EAB HMAC
+# key (ACME_EAB_HMAC) goes only into the Secret zerossl-eab, key
+# "secret", in namespace cert-manager (the cluster resource namespace
+# that ClusterIssuers read Secrets from).
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: zerossl
+spec:
+  acme:
+    server: https://acme.zerossl.com/v2/DV90
+    externalAccountBinding:
+      keyID: __EAB_KID__
+      keySecretRef:
+        name: zerossl-eab
+        key: secret
+    privateKeySecretRef:
+      name: zerossl-account
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx

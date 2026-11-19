@@ -1,0 +1,147 @@
+# AKS overlay for the Solace Agent Mesh chart (EuroCIS showcase,
+# gebit-price-agent-demo/AKS-MIGRATION-PLAN.md, step A16).
+#
+# Always the SECOND values file, after local-k8s-values.yaml; never
+# used alone and never against the lab cluster:
+#
+#   helm upgrade --install agent-mesh "$SAM_CHART_PATH" -n sam-solace-lab \
+#     -f local-k8s-values.yaml -f aks-values.yaml -f -   (JSON on stdin)
+#
+# (sam_helm in gebit-price-agent-demo/infra/aks/aks.sh runs exactly
+# this against the AKS kubeconfig and context).
+#
+# No secrets and no ACR name in this file. sam_helm passes them at
+# install time in one JSON values document on helm's stdin (-f -,
+# third after the two files, so it wins like --set), never with
+# --set, so no secret is in helm's argv:
+#   sam.oauthProvider.oidc.clientSecret    (.env.aks)
+#   llmService.llmServiceApiKey            (.env.aks)
+#   broker.password                        (Key Vault solace-sam)
+#   sam.sessionSecretKey                   (Key Vault sam-session-secret)
+#   persistence-layer.postgresql.password  (Key Vault sam-pg-admin)
+#   <image>.registry of the six images     (<acr>.azurecr.io):
+#     samDeployment.gwe.image.registry     (awe inherits gwe)
+#     samDeployment.str.image.registry
+#     samDeployment.s3Init.image.registry
+#     samDeployment.dbInit.image.registry
+#     persistence-layer.postgresql.image.registry
+#     persistence-layer.seaweedfs.image.registry
+#
+# Every lab-only value of local-k8s-values.yaml that would break or
+# leak on AKS is overridden below. Where the real value comes from
+# sam_helm's stdin document, this file blanks or invalidates the lab
+# value instead, so a missing key there fails loudly (render error,
+# ImagePullBackOff or a Postgres that refuses to start) rather than
+# shipping a lab default.
+#
+# Not on AKS (nothing to override, documented for the reader):
+#   - Kyverno: neither the lab CA env injection nor the registry pull
+#     secret sync exist; the public Let's Encrypt certificate needs no
+#     custom CA (samDeployment.customCA stays off).
+#   - cert-manager ingress-shim: the single Traefik default
+#     certificate serves every host, so SAM gets no Certificate.
+
+sam:
+  # External host for every computed URL: frontend, platform service,
+  # OIDC callback https://<dnsName>/api/v1/auth/callback (the exact
+  # redirect URI registered in Keycloak by setup-keycloak-client.sh
+  # with SAM_REDIRECT_URI), MCP issuer.
+  dnsName: "eurocis-showcase.germanywestcentral.cloudapp.azure.com"
+
+  # The lab session key is checked in; never reuse it. sam_helm sets
+  # the Key Vault value; without it the chart would generate a
+  # random key once and keep it across upgrades.
+  sessionSecretKey: ""
+
+  # Non-secret OIDC settings of the AKS Keycloak (namespace iam, base
+  # path /auth). sam_helm sets the same values from .env.aks plus the
+  # client secret; these only keep a lab issuer out if that value is
+  # missing.
+  oauthProvider:
+    oidc:
+      issuer: "https://eurocis-showcase.germanywestcentral.cloudapp.azure.com/auth/realms/solace-lab"
+      clientId: "solace-agent-mesh"
+
+  # sam.authenticationRbac.users is inherited: the bootstrap admin
+  # identity sam_admin@solace.lab is the e-mail of the Keycloak demo
+  # user sam_admin, which setup-keycloak-users.sh creates in the AKS
+  # realm as well.
+
+# In-cluster PubSub+ (Helm release solace in namespace solace), VPN
+# sam, client username sam. The password is required by the chart
+# when the broker is external: blank here, so the render fails
+# without broker.password from sam_helm's stdin document.
+broker:
+  url: "ws://solace-pubsubplus.solace.svc.cluster.local:8008"
+  clientUsername: "sam"
+  password: ""
+  vpn: "sam"
+
+# Traefik serves IngressClass nginx through its ingress-nginx
+# provider. The lab annotations (ssl-redirect, backend-protocol,
+# limit-rps, proxy buffers and timeouts) are inherited; maps merge,
+# so only the AKS additions and overrides are listed.
+ingress:
+  annotations:
+    # Path table "/": request body up to 10m, buffered.
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "on"
+    # Empty overrides the lab CA issuer: ingress-shim then never
+    # creates a Certificate. Never null -- Helm would render the
+    # literal null into the annotation.
+    cert-manager.io/cluster-issuer: ""
+  host: "eurocis-showcase.germanywestcentral.cloudapp.azure.com"
+  # hosts only, no secretName: Traefik's default TLS store certificate
+  # (Secret ingress-tls in namespace traefik) answers for the host.
+  # The tls entry itself is still needed: it switches the chart to
+  # https:// URLs. Lists replace the lab list (sam-tls) entirely.
+  # Fallback (runbook A16): add "secretName: sam-tls" plus
+  # sam_tls_copy.
+  tls:
+    - hosts:
+        - "eurocis-showcase.germanywestcentral.cloudapp.azure.com"
+
+global:
+  # Replaces the lab Kyverno-synced registry-pull-secret. acr_pull
+  # creates it in sam-solace-lab before sam_helm (the chart checks it
+  # exists at install time).
+  imagePullSecrets:
+    - acr-pull
+
+# Image registries: the lab registry.solace.lab does not exist on
+# AKS. The real registry (<acr>.azurecr.io) comes from sam_helm's
+# stdin document; the .invalid placeholder (RFC 2606, never resolves)
+# makes a missing registry an obvious ImagePullBackOff instead of a
+# silent pull from Docker Hub. Repositories and tags stay as in the
+# lab file.
+samDeployment:
+  gwe:
+    image:
+      registry: "acr-set-by-sam-helm.invalid"
+  str:
+    image:
+      registry: "acr-set-by-sam-helm.invalid"
+  s3Init:
+    image:
+      registry: "acr-set-by-sam-helm.invalid"
+  dbInit:
+    image:
+      registry: "acr-set-by-sam-helm.invalid"
+
+persistence-layer:
+  postgresql:
+    # Superuser password of the bundled Postgres. Fixed after the
+    # first install (chart note): sam_helm always sets it, never
+    # --reuse-values. Blank here, so a missing value leaves Postgres
+    # uninitialised (it refuses to start) instead of falling back to
+    # the chart default.
+    password: ""
+    image:
+      registry: "acr-set-by-sam-helm.invalid"
+    persistence:
+      storageClassName: managed-csi-premium
+  seaweedfs:
+    image:
+      registry: "acr-set-by-sam-helm.invalid"
+    persistence:
+      storageClassName: managed-csi-premium

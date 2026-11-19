@@ -1,0 +1,20 @@
+# Throw-away order against Let's Encrypt staging (runbook A10 and A17):
+# proves HTTP-01 through Traefik without touching the production rate
+# limits. Delete it and its Secret staging-probe right after Ready.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staging-probe
+  namespace: traefik
+spec:
+  secretName: staging-probe
+  dnsNames:
+    - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: letsencrypt-staging

@@ -1,26 +1,24 @@
-# gpos-engine: Engine: MCP gpos-booth-tools and the HTTP API /api on 8765, outbox relay and
-# watchdog. SAM's str reaches it as http://gpos-engine.gpos-demo.svc:8765/mcp.
+# gpos-pos: GEBIT Purchase API 2.50.0 simulator (gRPC 50051, runtime descriptor sets from the
+# Secret gpos-gebit-descriptors) and MCP gpos-pos-api / admin API on 8771.
 # Shape of bsg-trading-desk-demo/k8s and G0-07, hardened (spec 12.4).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gpos-engine
+  name: gpos-pos
   labels:
-    app: gpos-engine
+    app: gpos-pos
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gpos-engine
+      app: gpos-pos
   template:
     metadata:
       labels:
-        app: gpos-engine
+        app: gpos-pos
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
-      imagePullSecrets:
-        - name: registry-pull-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -28,26 +26,30 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: engine
+        - name: pos
           image: gpos-demo
           imagePullPolicy: Always
-          command: ["python", "-m", "gposdemo.engine"]
+          command: ["python", "-m", "gposdemo.pos"]
           env:
+            - name: GRPC_PORT
+              value: "50051"
             - name: MCP_PORT
-              value: "8765"
+              value: "8771"
             - name: GPOS_DSN
               valueFrom:
                 secretKeyRef:
                   name: gpos-db
-                  key: DSN_ENGINE
+                  key: DSN_POS
           envFrom:
             - configMapRef:
                 name: gpos-config
             - secretRef:
                 name: gpos-broker
           ports:
+            - name: grpc
+              containerPort: 50051
             - name: http
-              containerPort: 8765
+              containerPort: 8771
           readinessProbe:
             httpGet:
               path: /health
@@ -73,21 +75,31 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: descriptors
+              mountPath: /descriptors
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 50Mi
+        - name: descriptors
+          secret:
+            secretName: gpos-gebit-descriptors
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: gpos-engine
+  name: gpos-pos
   labels:
-    app: gpos-engine
+    app: gpos-pos
 spec:
   selector:
-    app: gpos-engine
+    app: gpos-pos
   ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+      appProtocol: kubernetes.io/h2c
     - name: http
-      port: 8765
+      port: 8771
       targetPort: http

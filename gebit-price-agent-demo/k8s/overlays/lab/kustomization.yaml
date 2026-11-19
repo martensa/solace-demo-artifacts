@@ -1,0 +1,30 @@
+# Lab overlay (Rancher Desktop, TARGET=lab or unset): base plus everything lab-only --
+# the lab-CA Certificate, the four host Ingresses on *.solace.lab (G0-07, Kyverno
+# rules), Kyverno's registry-pull-secret in every Deployment and the image from
+# registry.solace.lab. Renders byte-identical to the former `kubectl kustomize k8s`;
+# expected-render.yaml pins that render (scripts/tests/test_k8s.py).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: gpos-demo
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: gpos-demo
+    includeSelectors: false
+    includeTemplates: true
+resources:
+  - ../../base
+  - certificate.yaml
+  - ingress-ui.yaml
+  - ingress-grpc.yaml
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+          - name: registry-pull-secret
+images:
+  - name: gpos-demo
+    newName: registry.solace.lab/gpos-demo/gpos-demo
+    newTag: "0.1.3"

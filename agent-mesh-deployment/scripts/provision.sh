@@ -31,11 +31,16 @@ set -uo pipefail
 #
 # start.sh calls this after the pods are ready (--login when it
 # runs in a terminal).
+#
+# Optional environment (unset = the local lab): SAM_ENV_FILE (env
+# file instead of ../.env), SAM_HOME (sam CLI home and login cache),
+# SAM_URL (platform URL; every sam config/api call of the steps
+# targets it). See scripts/lib/common.sh. For AKS, aks_sam in
+# gebit-price-agent-demo/infra/aks/aks.sh sets all three.
 # =============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SAM_URL="https://sam.solace.lab"
 
 LOGIN=0
 case "${1:-}" in
@@ -47,19 +52,23 @@ esac
 
 # shellcheck source=lib/common.sh
 . "$PROJECT_DIR/scripts/lib/common.sh"
-load_env "$PROJECT_DIR"
+load_env "$PROJECT_DIR" "${SAM_ENV_FILE:-$PROJECT_DIR/.env}" || exit 1
+sam_target_check "$PROJECT_DIR" || exit 1
 resolve_sam_cli || exit 1
+# Login URL and messages only; the steps read SAM_URL from the
+# environment themselves (unset in the lab).
+PLATFORM_URL="$(sam_base_url)"
 
 # --- Login ----------------------------------------------------------
-if [ ! -f "$SAM_AUTH_CACHE" ]; then
+if [ ! -f "$(sam_auth_cache_path)" ]; then
   if [ "$LOGIN" -eq 1 ]; then
     echo "No sam CLI login yet. Opening the browser -- log in as"
     echo "Keycloak user sam_admin ..."
-    "$SAM_CLI" auth login solace-lab --url "$SAM_URL" || {
+    sam_cli_run auth login solace-lab --url "$PLATFORM_URL" || {
       echo "ERROR: sam auth login failed." >&2; exit 1; }
   else
     echo "ERROR: no sam CLI login. Either run" >&2
-    echo "  $SAM_CLI auth login solace-lab --url $SAM_URL" >&2
+    echo "  $(sam_login_cmd)" >&2
     echo "(as sam_admin) and re-run, or run: $0 --login" >&2
     exit 1
   fi
@@ -83,7 +92,7 @@ run_step() { # <label> <fatal:0|1> <command...>
          echo "" >&2
          echo "ERROR: $label failed -- stopping. If this is an auth" >&2
          echo "error, re-login and re-run:" >&2
-         echo "  $SAM_CLI auth login solace-lab --url $SAM_URL" >&2
+         echo "  $(sam_login_cmd)" >&2
          printf '%s\n' "${RESULTS[@]}"
          exit 1
        fi ;;

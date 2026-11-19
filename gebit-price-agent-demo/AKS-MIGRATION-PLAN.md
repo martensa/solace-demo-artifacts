@@ -100,9 +100,9 @@ Budget.
   `(cd "$GPD" && ...)` steht davor.
 - Claude legt die Dateien aus 1.4 an und prüft sie; der Owner liest den Diff,
   führt aus und committet auf master.
-- Secrets nur per Pipe aus dem Key Vault (`kv`) in K8s-Secrets oder `--set`; nie
-  als argv an `az`, nie auf den Bildschirm; `secret set` mit `-o none`,
-  K8s-Secrets mit `apply --server-side`.
+- Secrets nur per Pipe aus dem Key Vault (`kv`) in K8s-Secrets oder in
+  Helm-Values über stdin (`sam_helm`); nie als argv, nie auf den Bildschirm;
+  `secret set` mit `-o none`, K8s-Secrets mit `apply --server-side`.
 - Nie Flags, die Rollenzuweisungen oder Locks brauchen (`--attach-acr`,
   `--enable-azure-rbac`, `--assign-identity`, `--vnet-subnet-id`), nie
   `az group delete -n gebit-showcase`.
@@ -139,6 +139,10 @@ Zwei lokale Dateien, gitignored, Modus 600, nie in git, Chats oder Backups:
   trägt nur `AKS_ACR` und `AKS_KV` ein (global eindeutig; nur diese übernimmt
   aks.sh in die Shell); `OWNER_TAG`, `CREATED_DATE` nur, falls `gebit-showcase`
   keine Tags liefert, `ACME_EAB_*` nur im ZeroSSL-Rückfall (4.3).
+  `SAM_HOME=$HOME/.config/eurocis-aks/sam` ist das HOME, mit dem der sam CLI
+  für AKS läuft (absolut, nie `$HOME` oder `~/Library/Application Support/sam`,
+  1.6); der AKS-Login liegt darunter in
+  `Library/Application Support/sam/auth/solace-lab.json`.
 - `agent-mesh-deployment/.env.aks` (ignoriert ab der neuen Zeile in
   `agent-mesh-deployment/.gitignore`), entsteht in A15: Keycloak-Werte,
   Client-Secret, Lab-LiteLLM-Key, Chart- und CLI-Pfad.
@@ -170,7 +174,7 @@ Pfade ohne Ordner liegen unter `gebit-price-agent-demo/infra/aks/`.
 | `env.aks.example` | Vorlage für `gebit-price-agent-demo/.env.aks` (ohne Punkt, sonst greift `.env.*`) | 1.3 |
 | `agent-mesh-deployment/.gitignore` | Zeile `.env.aks` | 1.3 |
 | `maint-window.json` | Wartungsfenster und Sperrtermine (Inhalt in A7) | A7 |
-| `monitoring-values-aks.yaml` | Overlay zu den Lab-Values: etcd aus, Prometheus-PVC 16Gi `managed-csi-premium`, Grafana-Admin aus Secret `grafana-admin`, kein Ingress, nur Datasources Loki und Tempo | A8 |
+| `monitoring-values-aks.yaml` | Overlay zu den Lab-Values: etcd, Controller-Manager, Scheduler und kube-proxy aus (verwaltete Control Plane, Cilium ohne kube-proxy), `NodeClockNotSynchronising` wieder an; Prometheus-PVC 16Gi `managed-csi-premium`, Grafana-Admin aus Secret `grafana-admin`, kein Ingress; zusätzliche Datasources nur Loki und Tempo (ohne SAM Platform DB), die Chart-Datasources Prometheus und Alertmanager bleiben | A8 |
 | `loki-values-aks.yaml` | `lokiCanary` und `test` aus | A8 |
 | `traefik-values.yaml` | Image `traefik` per Digest mit `versionOverride: v3.7.19`, `checkNewVersion: false`; Provider `kubernetesIngressNGINX` an (`ingressClass: nginx`, `controllerClass: k8s.io/ingress-nginx`, keine Snippets, `publishService` an), `kubernetesCRD` an, `kubernetesIngress` und eigene IngressClass aus; `extraObjects`: IngressClass `nginx` (Controller `k8s.io/ingress-nginx`, verlangt das SAM-Chart) und Middleware `traefik/hsts` (`stsSeconds: 604800`, ohne `includeSubDomains` und Preload); `websecure`: `readTimeout: 3600s`, Middleware `traefik-hsts@kubernetescrd`; `web` ohne Redirect (HTTP-01); Service `LoadBalancer`, `externalTrafficPolicy: Local`, Annotationen `azure-pip-name: pip-aks-ingress`, `azure-load-balancer-resource-group: gebit-showcase-nodes`, `azure-load-balancer-tcp-idle-timeout: "30"`, nie `azure-dns-label-name`; `tlsStore.default.defaultCertificate.secretName: ingress-tls`; Access-Log JSON, Header und Query-Parameter `drop`; `/tmp` emptyDir 2Gi; Requests 100m/256Mi, Limit 512Mi; Dashboard nur intern; ServiceMonitor an | A9 |
 | `tls/issuers.yaml` | ClusterIssuer `letsencrypt-staging` und `letsencrypt-prod`, HTTP-01 mit Klasse `nginx`, ohne Kontakt-Mail | A10 |
@@ -178,16 +182,16 @@ Pfade ohne Ordner liegen unter `gebit-price-agent-demo/infra/aks/`.
 | `tls/certificate.yaml` | Certificate `ingress-tls` in `traefik`, Issuer prod | A11 |
 | `tls/zerossl-issuer.tpl.yaml` | ClusterIssuer `zerossl` (`acme.zerossl.com/v2/DV90`, EAB mit Platzhalter `__EAB_KID__`, Secret `zerossl-eab`) | 4.3 |
 | `test/echo.yaml` | whoami per Digest in `aks-test`; Ingresses (Klasse `nginx`, `tls` nur `hosts`, `ssl-redirect`) `echo` (read-timeout 900), `body` (Puffer an, 1m), `limited` (10 rpm, Multiplikator 1) | A11 |
-| `broker/pubsubplus-values.yaml` | `redundancy: false`, `size: prod1k`, `usernameAdminPasswordSecretName: solace-admin`, `extraEnvVars` `messagespool_maxspoolusage: "20000"`; Image `solace/solace-pubsub-standard`, Tag `10.26.0.9219@sha256:...`; `service.type: ClusterIP`; Storage `managed-csi-premium` 64Gi, `useStorageGroup: true`; kein Pull-Secret | A12 |
-| `broker/main.tf` | Provider `solaceproducts/solacebroker` `= 1.3.0` nur gegen `http://127.0.0.1:18080`; Module `vpn` und `client` aus `../../../../event-mesh-deployment/terraform/modules`; VPN `default` (Dienste und SEMP-over-Msgbus an) und `sam` (aus), beide `dmr_enabled = false`; Clients `sam` (VPN sam), `gpos` (VPN default), `default` in beiden aus; Passwörter nur als `sensitive` Variablen | A13 |
-| `keycloak/keycloak.yaml` | Lab-Manifeste 01, 02, 03, 05 aus `solace-lab-infrastructure/keycloak/manifests` mit: Images per Digest (`quay.io/keycloak/keycloak:26.8.2`, `postgres:17-alpine`); `KC_BOOTSTRAP_ADMIN_*` aus `keycloak-credentials` statt `KEYCLOAK_ADMIN*`; `KC_HOSTNAME=https://eurocis-showcase.germanywestcentral.cloudapp.azure.com/auth`, `KC_HTTP_RELATIVE_PATH=/auth`, `KC_HTTP_MANAGEMENT_RELATIVE_PATH=/` (Probes `/health/*` auf 9000); Limit 1536Mi; Realm `solace-lab` ohne Users und Roles, `resetPasswordAllowed: false`, Brute-Force-Schutz wie im Lab; `KC_HOSTNAME_ADMIN=http://127.0.0.1:18081/auth` für die Admin-Konsole per Port-Forward | A14 |
+| `broker/pubsubplus-values.yaml` | `redundancy: false`, `size: prod1k`, `usernameAdminPasswordSecretName: solace-admin`, `extraEnvVars` `messagespool_maxspoolusage: "20000"` und `system_scaling_maxkafkabrokerconnectioncount: "300"` (das `vpn`-Modul setzt 300 je VPN, System-Default 0); Image `solace/solace-pubsub-standard`, Tag `10.26.0.9219@sha256:...`; `service.type: ClusterIP`; Storage `managed-csi-premium` 64Gi, `useStorageGroup: true`; kein Pull-Secret | A12 |
+| `broker/main.tf` | Provider `solaceproducts/solacebroker` `= 1.3.0` nur gegen `http://127.0.0.1:18080`; Module `vpn` und `client` aus `../../../../event-mesh-deployment/terraform/modules`; VPN `default` (Dienste an, SEMP-over-Msgbus aus) und `sam` (aus), beide `dmr_enabled = false`; Clients `sam` (VPN sam), `gpos` (VPN default), `default` in beiden aus; Passwörter nur als `sensitive` Variablen; keine Import-Blöcke (Provider 1.3.0 legt per SEMP PUT an und übernimmt VPN `default` und die `default`-Clients wie im Lab) | A13 |
+| `keycloak/keycloak.yaml` | Lab-Manifeste 01, 02, 03, 05 aus `solace-lab-infrastructure/keycloak/manifests` mit: Images per Digest (`quay.io/keycloak/keycloak:26.8.2`, `postgres:17-alpine`); `KC_BOOTSTRAP_ADMIN_*` aus `keycloak-credentials` statt `KEYCLOAK_ADMIN*`; `KC_HOSTNAME` und `KC_HOSTNAME_ADMIN` = `http://127.0.0.1:18081/auth` (Master-Realm und Admin-Konsole nur per Port-Forward), `KC_HTTP_RELATIVE_PATH=/auth`, `KC_HTTP_MANAGEMENT_RELATIVE_PATH=/` (Probes `/health/*` auf 9000); Limit 1536Mi; PVC `postgres-data` auf `managed-csi-premium`; Realm `solace-lab` ohne Users und Roles, `resetPasswordAllowed: false`, Brute-Force-Schutz wie im Lab, Attribut `frontendUrl=https://eurocis-showcase.germanywestcentral.cloudapp.azure.com/auth` (Issuer für alle Aufrufer, auch über 18081); kein `KC_HOSTNAME_BACKCHANNEL_DYNAMIC` | A14 |
 | `keycloak/ingress.yaml` | Ingress `keycloak` in `iam`, Klasse `nginx`, `ssl-redirect`, `tls` nur `hosts`, Prefix-Pfade `/auth/realms/solace-lab/` und `/auth/resources/` auf `keycloak:8080` | A15 |
 | `sam/networkpolicies.yaml` | zwei Ingress-Policies in `sam-solace-lab`: Postgres (`app.kubernetes.io/name: postgresql`, Port 5432) und SeaweedFS nur von Pods desselben Namespace | A16 |
-| `agent-mesh-deployment/aks-values.yaml` | zweites `-f` nach `local-k8s-values.yaml`, ohne Secrets und ACR-Namen: `sam.dnsName` und `ingress.host` = FQDN; `ingress.tls` nur `hosts` (kein `secretName`); Annotationen `proxy-body-size: "10m"`, `proxy-request-buffering: "on"`; Broker `ws://solace-pubsubplus.solace.svc.cluster.local:8008`, User und VPN `sam`; `global.imagePullSecrets: ["acr-pull"]`; StorageClass `managed-csi-premium` für Postgres und SeaweedFS. Annotation `cert-manager.io/cluster-issuer: ""` (leer überschreibt den Lab-Issuer; ingress-shim legt dann nie ein Certificate an; nie `null`, Helm rendert es wörtlich) | A16 |
-| amd-Skripte | ohne gesetzte Variablen wie heute: `SAM_ENV_FILE` statt `.env`, `SAM_HOME` (Token-Cache), `SAM_URL` (mit `--url "$SAM_URL" --no-dotenv` an jedem `sam config plan/apply`), `SAM_DNS_NAME` und `SAM_REDIRECT_URI` in `scripts/lib/common.sh`, `provision.sh`, rbac-, models- und entrypoints-Apply, beiden `setup-keycloak-*.sh` und gpd `spikes/g0/keycloak-marktleitung.sh`; Lab-Regression: `lab_guard`, dann im Lab `setup-keycloak-client.sh` ("already exists") und `provision.sh` (OK), Lab-`.env` unverändert | A15 |
-| gpd-Skripte | `scripts/lib.sh` und `opslib.py` mit `TARGET=lab/aks` (Default lab; aks: `.env.aks`, AKS-kubeconfig und -Kontext, Abbruch bei Lab-URLs wie `solace.lab`, `host.docker.internal`, `localhost`, `:8080`, Ausgaben `build/aks` und `mesh/.rendered/aks`); `install.sh` mit Teilen `pg/db/k8s/mesh/all`, psql per `kubectl exec`, `acr-pull` in `gpos-demo`, ohne Kyverno, Certificate und Lab-CA; `broker.sh/.py` prüfen bei aks erst `127.0.0.1:18080` (SEMP `about/api` und VPN-Prüfung) und nutzen einen offenen Port-Forward, sonst öffnen sie ihn selbst; Abbruch, wenn ein nur im Lab vorhandenes VPN existiert (Lab-Broker) | A18 |
-| gpd `k8s/` | `base/`, `overlays/lab` (Render byte-gleich wie heute), `overlays/aks` (`acr-pull`, die acht Ingresses aus 0.2, gRPC je Dienst mit `pathType: Prefix`, `GPOS_GRPC_REFLECTION_SCOPE: all`); `k8s/postgres-aks/` (StatefulSet `gpos-postgres`, Postgres 18 per Digest, UID 999, PVC 8Gi `managed-csi` an `/var/lib/postgresql`) | A18 |
-| gpd `scripts/aks-check.sh` | nur lesend gegen öffentliche Endpunkte: SAM `/` 200; `/kasse`, `/monitor` mit Titel; `/api/state` 200; kein Cookie auf `/kasse`; `http://` 308; OIDC-Issuer; `/auth/admin/`, `/auth/realms/master/`, Grafana zu (Inhalt prüfen, SAM antwortet sonst 200); HSTS ohne `includeSubDomains`; Zertifikat; `grpcurl list`; `grpc.health.v1.Health/Check` von außen scheitert; Exit 0 nur bei allen OK | A18 |
+| `agent-mesh-deployment/aks-values.yaml` | zweites `-f` nach `local-k8s-values.yaml`, ohne Secrets und ACR-Namen: `sam.dnsName` und `ingress.host` = FQDN; `ingress.tls` nur `hosts` (kein `secretName`); Annotationen `proxy-body-size: "10m"`, `proxy-request-buffering: "on"`; Broker `ws://solace-pubsubplus.solace.svc.cluster.local:8008`, User und VPN `sam`; `global.imagePullSecrets: ["acr-pull"]`; StorageClass `managed-csi-premium` für Postgres und SeaweedFS; AKS-Issuer und `clientId`; Session-Key, Broker- und PG-Passwort leer, die sechs Registries `acr-set-by-sam-helm.invalid` (beides setzt `sam_helm`). Annotation `cert-manager.io/cluster-issuer: ""` (leer überschreibt den Lab-Issuer; ingress-shim legt dann nie ein Certificate an; nie `null`, Helm rendert es wörtlich) | A16 |
+| amd-Skripte | ohne gesetzte Variablen wie heute: `SAM_ENV_FILE` statt `.env`, `SAM_HOME` (HOME des sam CLI, Login-Cache darunter), `SAM_URL` (mit `--url "$SAM_URL" --no-dotenv` an jedem `sam config plan/apply` und `--url "$SAM_URL"` an jedem `sam api`), `SAM_DNS_NAME` und `SAM_REDIRECT_URI` in `scripts/lib/common.sh`, `provision.sh`, rbac-, models- und entrypoints-Apply, beiden `setup-keycloak-*.sh` und gpd `spikes/g0/keycloak-marktleitung.sh`; `SAM_ENV_FILE`, `SAM_URL`, `SAM_HOME` nur alle drei (`aks_sam`) oder keine, sonst Exit 1 vor jedem Aufruf, ebenso bei fehlender `SAM_ENV_FILE`, Lab-`.env` als `SAM_ENV_FILE` oder `SAM_HOME` relativ, gleich `$HOME` oder Lab-sam-Home; mit `SAM_ENV_FILE` verlangen die Keycloak-Skripte `KEYCLOAK_URL` und `KEYCLOAK_ADMIN_PASSWORD` (`setup-keycloak-client.sh` auch `SAM_DNS_NAME`, `SAM_REDIRECT_URI`), kein Lab-Rückfall; Lab-Regression: `lab_guard`, dann im Lab `setup-keycloak-client.sh` ("already exists") und `provision.sh` (OK), Lab-`.env` unverändert | A15 |
+| gpd-Skripte | `scripts/lib.sh` und `opslib.py` mit `TARGET=lab/aks` (Default lab; aks: `.env.aks`, AKS-kubeconfig und -Kontext, Abbruch bei Lab-URLs wie `solace.lab`, `host.docker.internal`, `localhost`, `:8080`, Ausgaben `build/aks` und `mesh/.rendered/aks`); `install.sh` mit Teilen `pg/db/k8s/mesh/all`, psql per `kubectl exec`, `acr-pull` in `gpos-demo`, ohne Kyverno, Certificate und Lab-CA (`k8s` startet die sechs gpos-Deployments neu); `Makefile`: `build`, `push`, `k8s-up`, `manifests`, `demo-up` verweigern `TARGET=aks` (ACR-Push per A20), `status`, `logs`, `urls` folgen `TARGET`; `broker.sh/.py` prüfen bei aks erst `127.0.0.1:18080` (SEMP `about/api` und VPN-Prüfung) und nutzen einen offenen Port-Forward, sonst öffnen sie ihn selbst; Abbruch, wenn ein nur im Lab vorhandenes VPN existiert (Lab-Broker) | A18 |
+| gpd `k8s/` | `base/` (Namespace, ConfigMap `gpos-config`, sechs Deployments und Services); `overlays/lab/` (`certificate.yaml`, `ingress-ui.yaml`, `ingress-grpc.yaml`, Kyverno-Pull-Secret, Image-Tag; Render byte-gleich wie heute, gepinnt in `expected-render.yaml`; `k8s/kustomization.yaml` verweist darauf); `overlays/aks/` (`ingress-ui.yaml` und `ingress-grpc.yaml` mit den acht Ingresses aus 0.2, gRPC je Dienst mit `pathType: Prefix`; `configmap-patch.yaml` mit `SAM_URL` und `GPOS_GRPC_REFLECTION_SCOPE: all`; Patch `acr-pull`, kein Image); `k8s/postgres-aks/` (`namespace.yaml`; `postgres.yaml`: StatefulSet und Service `gpos-postgres`, Postgres 18 per Digest, UID 999, PVC 8Gi `managed-csi` an `/var/lib/postgresql`; `networkpolicy.yaml`: 5432 nur aus `gpos-demo`) | A18 |
+| gpd `scripts/aks-check.sh` | nur lesend gegen öffentliche Endpunkte, 21 Prüfungen (optional anderer FQDN als Argument; curl mit `-q`, ignoriert `~/.curlrc`): Zertifikat (FEHLER unter 14 Tagen Restlaufzeit); SAM `/` 200; `/kasse`, `/monitor` mit Titel; `/api/state` 200; kein Cookie auf `/kasse`, `/monitor`, `/api/state`; `http://` 308; HSTS ohne `includeSubDomains`; SSE `/api/events` (ungepuffertes hello); OIDC-Issuer; `/auth/admin/`, `/auth/realms/master/`, Grafana, Prometheus, Traefik-Dashboard und -API, SEMP zu (Inhalt prüfen, SAM antwortet sonst 200; Basic/Digest-Login-Abfrage oder SEMP-JSON-Fehler gilt als offen); `grpcurl list`; je gRPC-Dienst eine Route (unbekannte Methode, Antwort vom gRPC-Server); `grpc.health.v1.Health/Check` von außen scheitert; Exit 0 nur bei allen OK | A18 |
 | gpd `scripts/tests/test_k8s.py` | Routentest: jede Route aus `app/gposdemo/ui/bff.py` genau einmal "öffentlich" oder "offen"; jede gpos-ui-Route außer `/api/events` hat `proxy-body-size` und `proxy-request-buffering: "on"`; jeder der drei gRPC-Dienste hat genau einen öffentlichen `Prefix`-Pfad; Abnahme `make test` grün, Lab-Render-Diff leer, Lab-Smoke READY | A18 |
 
 ### 1.5 aks.sh: Wrapper und Helfer
@@ -206,7 +210,7 @@ AKS_KUBECONFIG=$HOME/.kube/aks-eurocis.yaml
 AKS_CONTEXT=aks-eurocis-admin        # az hängt bei --admin immer -admin an
 AKS_STATE=$HOME/.config/eurocis-aks AKS_SAM_HOME=$HOME/.config/eurocis-aks/sam
 CURL_IMG=docker.io/curlimages/curl@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
-_aks_env() { sed -n "s/^$1=//p" "$GPD/.env.aks" 2>/dev/null | tail -1; }
+_aks_env() { sed -n "s/^$1=//p" "$GPD/.env.aks" 2>/dev/null | tail -1; }   # dazu: ohne " # ..." und Anführungszeichen, nicht expandiert
 AKS_ACR=$(_aks_env AKS_ACR) AKS_KV=$(_aks_env AKS_KV)
 kaks() { KUBECONFIG="$AKS_KUBECONFIG" kubectl --context "$AKS_CONTEXT" "$@"; }
 haks() { KUBECONFIG="$AKS_KUBECONFIG" helm --kube-context "$AKS_CONTEXT" "$@"; }
@@ -214,22 +218,22 @@ haks() { KUBECONFIG="$AKS_KUBECONFIG" helm --kube-context "$AKS_CONTEXT" "$@"; }
 
 | Funktion | Zweck |
 |---|---|
-| `aks_guard` | vor jedem Schritt gegen AKS: Abbruch, wenn `$AKS_KUBECONFIG` fehlt oder sein Server nicht `https://aks-eurocis-*.hcp.germanywestcentral.azmk8s.io:443` ist |
-| `lab_guard` | vor jedem Lab-Skript (amd, gpd, emd): Abbruch, wenn `KUBECONFIG` gesetzt ist, der Kontext nicht `rancher-desktop` heißt oder `aks-eurocis` in `~/.kube/config` steht |
+| `aks_guard` | vor jedem Schritt gegen AKS: Abbruch, wenn `$AKS_KUBECONFIG` fehlt oder sein Server nicht `https://aks-eurocis-*.hcp.germanywestcentral.azmk8s.io:443` ist; Warnung bei Modus ungleich 600 |
+| `lab_guard` | vor jedem Lab-Skript (amd, gpd, emd): Abbruch, wenn `KUBECONFIG` gesetzt ist, der Kontext nicht `rancher-desktop` heißt, `aks-eurocis` in `~/.kube/config` steht oder `TARGET` nicht `lab` ist bzw. `SAM_ENV_FILE`, `SAM_URL`, `SAM_HOME`, `SAM_DNS_NAME`, `SAM_REDIRECT_URI` oder `SAM_PLATFORM_TOKEN` gesetzt ist |
 | `aks_tags` | Pflicht-Tags aus `gebit-showcase` (Rückfall `.env.aks`) in das Array `TAGS`, ohne Ausgabe |
-| `kv NAME`, `kv_new NAME [BYTES]` | Secret-Wert ohne Zeilenumbruch auf stdout (nur für Pipes); hex-Passwort (Standard 24 Bytes) per `--file /dev/stdin` anlegen, nur wenn es fehlt |
+| `kv NAME`, `kv_new NAME [BYTES]` | Secret-Wert ohne Zeilenumbruch auf stdout (nur für Pipes: verweigert wie `kc_token` ein Terminal als stdout; alle Secret-Helfer verweigern `set -x`); hex-Passwort (Standard 24 Bytes) per `--file /dev/stdin` anlegen, nur bei `SecretNotFound`; jeder andere Fehler (z. B. Forbidden direkt nach `set-policy`) bricht ohne Anlegen ab; Ausgabe `kv_new: NAME angelegt` bzw. `vorhanden` |
 | `acr_pull NS` | Namespace anlegen, Secret `acr-pull` (dockerconfigjson aus `acr-pull-token`) per Server-Side-Apply |
-| `aks_ips` | Ingress- und Egress-IP gegen das Register in `$AKS_STATE` prüfen, jede Änderung melden |
-| `aks_stop`, `aks_start` | Stopp verweigert 05.-18.02. (`AKS_FORCE=1` übersteuert), schreibt `last-stop`; Start frühestens 30 min danach, wartet auf den Node, `aks_ips`, startet awe nach gwe-Ready einmal neu, listet Pods außer Running |
-| `aks_sam CMD`, `aks_kc CMD` | Subshell gegen AKS: `KUBECONFIG` nur AKS-Datei (Kontext geprüft), `SAM_ENV_FILE=$AMD/.env.aks`, `SAM_HOME=$AKS_SAM_HOME`, `SAM_URL`, `SAM_DNS_NAME`, `SAM_REDIRECT_URI=https://$FQDN/api/v1/auth/callback`; `aks_kc` zusätzlich `KEYCLOAK_ADMIN_PASSWORD` |
-| `amd_env_aks` | bricht ab, wenn `git -C "$AMD" check-ignore -q .env.aks` scheitert; schreibt `$AMD/.env.aks` (umask 077): `KEYCLOAK_URL=http://127.0.0.1:18081/auth`, `KEYCLOAK_REALM=solace-lab`, `KEYCLOAK_ADMIN_USER=admin`, `KEYCLOAK_CLIENT_ID=solace-agent-mesh`, `KEYCLOAK_ISSUER=https://eurocis-showcase.germanywestcentral.cloudapp.azure.com/auth/realms/solace-lab`; kopiert `LLM_SERVICE_API_KEY`, `SAM_CHART_PATH`, `SAM_CLI_PATH` per grep ohne Anzeige aus der Lab-`.env` |
+| `aks_ips` | Ingress- und Egress-IP gegen das Register in `$AKS_STATE` prüfen (`egress-ip: registriert` bzw. `unverändert`); bei Änderung `ACHTUNG <name> geändert: alt -> neu`, Exit 1, das Register übernimmt den neuen Wert, Verlauf in `$AKS_STATE/ip-history` |
+| `aks_stop`, `aks_start` | Stopp verweigert 05.-18.02. (`AKS_FORCE=1` übersteuert), bereits Stopped: Exit 0; schreibt `last-stop`; Start frühestens 30 min danach, wartet auf den Node, `aks_ips`, startet awe einmal neu, sobald gwe nach dem Start Ready wird (max. 20 min); läuft der Cluster schon: kein Start, kein awe-Neustart; listet Pods, die nicht Running oder nicht ready sind (ohne Completed) |
+| `aks_sam CMD`, `aks_kc CMD` | Subshell gegen AKS: `KUBECONFIG` nur AKS-Datei (Kontext geprüft), `SAM_ENV_FILE=$AMD/.env.aks` (muss existieren), `SAM_HOME=$AKS_SAM_HOME`, `SAM_URL`, `SAM_DNS_NAME`, `SAM_REDIRECT_URI=https://$FQDN/api/v1/auth/callback`, ohne Tokens und Secrets der Shell (auch ohne `GOOGLE_AI_STUDIO_API_KEY`); läuft nur, wenn `SAM_HOME` und `SAM_URL` in `gebit-price-agent-demo/.env.aks` gleich `$AKS_SAM_HOME` und `https://$FQDN` sind; verweigert die Lab-Skripte `start.sh`, `stop.sh`, `teardown-keycloak-*.sh`, `load-images.sh`, `purge-images.sh`, `upgrade-preflight.sh` und `desktop/*.sh`; `sam` läuft darin mit `HOME=$AKS_SAM_HOME` (CLI aus `SAM_CLI_PATH` der `.env.aks`, sonst PATH); `aks_kc` prüft zusätzlich den Port-Forward 18081 (Issuer) und setzt `KEYCLOAK_ADMIN_PASSWORD` |
+| `amd_env_aks` | bricht ab, wenn `git -C "$AMD" check-ignore -q .env.aks` scheitert; schreibt `$AMD/.env.aks` (umask 077): `KEYCLOAK_URL=http://127.0.0.1:18081/auth`, `KEYCLOAK_REALM=solace-lab`, `KEYCLOAK_ADMIN_USER=admin`, `KEYCLOAK_CLIENT_ID=solace-agent-mesh`, `KEYCLOAK_ISSUER=https://eurocis-showcase.germanywestcentral.cloudapp.azure.com/auth/realms/solace-lab`; kopiert `LLM_SERVICE_API_KEY`, `SAM_CHART_PATH`, `SAM_CLI_PATH` per grep ohne Anzeige aus der Lab-`.env` (verweigert einen Platzhalter-Key `changeme`); behält ein vorhandenes `KEYCLOAK_CLIENT_SECRET` |
 | `kc_token`, `kc_set_passwords`, `kc_unlock USER` | über den Port-Forward 18081: Admin-Token (60 s gültig, je User neu); Passwort der Keycloak-User sam_admin, sam_user, sam_manager, power_user, data_engineer, viewer, marktleitung aus `kc-user-${u//_/-}` (Vault-Namen sam-admin, sam-user, sam-manager, power-user, data-engineer, viewer, marktleitung) per `reset-password` setzen (Wert per Pipe, Ausgabe Name und HTTP-Code); Exit 0 nur bei siebenmal 204; Brute-Force-Sperre eines Users aufheben |
-| `semp PFAD`, `tfa ARGS` | SEMP-GET über den Port-Forward 18080; `terraform -chdir=$AKS_DIR/broker` mit `TF_VAR_*` aus dem Key Vault |
-| `sam_helm [ARGS]` | Subshell lädt `$AMD/.env.aks`; `haks upgrade --install agent-mesh "$SAM_CHART_PATH" -n sam-solace-lab -f "$AMD/local-k8s-values.yaml" -f "$AMD/aks-values.yaml"` mit `--set` für OIDC `issuer`, `clientId`, `clientSecret`, `llmService.llmServiceApiKey`, `broker.password` (`solace-sam`), `sam.sessionSecretKey` (`sam-session-secret`), `persistence-layer.postgresql.password` (`sam-pg-admin`) und `image.registry` der sechs Images (gwe, str, s3Init, dbInit, postgresql, seaweedfs) = `$AKS_ACR.azurecr.io` |
-| `tls_backup`, `tls_restore`, `sam_tls_copy` | Secret `ingress-tls` ohne uid, resourceVersion, managedFields als JSON per Pipe in den Key Vault (`tls-traefik-ingress-tls`, `-o none`), dann Ablage prüfen (`tls.crt` im Vault gleich Cluster, sonst Exit 1) und notAfter anzeigen; zurück per `kaks create`; `sam_tls_copy` (nur im Rückfall A16): nur `type` und `data` als `sam-tls` nach `sam-solace-lab`, ohne Annotationen |
+| `semp PFAD`, `tfa ARGS` | SEMP-GET über den Port-Forward 18080; `terraform -chdir=$AKS_DIR/broker` mit `TF_VAR_semp_password`, `_sam_`, `_gpos_` und `_default_password` aus dem Key Vault; `init`, `fmt`, `validate`, `version`, `providers`, `show`, `output`, `state`, `graph`, `workspace` und die Hilfe- und Versions-Flags ohne Key Vault; alle anderen prüfen erst die VPN-Liste auf 127.0.0.1:18080 und brechen bei `amartens-test` (Lab-Broker) oder ohne Port-Forward ab; `TF_LOG*` ignoriert; verweigert `-json`, `-out`, `state pull` und `console` (zeigen oder speichern die Passwörter im Klartext); läuft mit `umask 077` und setzt vorhandene `terraform.tfstate*` auf Modus 600 |
+| `sam_helm [ARGS]` | Subshell lädt `$AMD/.env.aks` (Issuer muss der AKS-Issuer sein); `haks upgrade --install agent-mesh "$SAM_CHART_PATH" -n sam-solace-lab -f "$AMD/local-k8s-values.yaml" -f "$AMD/aks-values.yaml" -f -`: ein JSON-Values-Dokument über stdin (nach den beiden Dateien, gewinnt wie `--set`; kein Secret in argv) mit `sam.oauthProvider.oidc.issuer`, `.clientId`, `.clientSecret`, `llmService.llmServiceApiKey`, `broker.password` (`solace-sam`), `sam.sessionSecretKey` (`sam-session-secret`), `persistence-layer.postgresql.password` (`sam-pg-admin`) sowie `samDeployment.{gwe,str,s3Init,dbInit}.image.registry` und `persistence-layer.{postgresql,seaweedfs}.image.registry` = `$AKS_ACR.azurecr.io`; verweigert `--reuse-values`, `--reset-then-reuse-values`, `--debug`, `-o`/`--output` und jedes `--dry-run` (zeigen Secrets; ein Dry-Run zeigt das Hook-Secret `sam-doctor` mit LLM-Key und Broker-Passwort auch mit `--hide-secret`), ignoriert `HELM_DEBUG` |
+| `tls_backup`, `tls_restore`, `sam_tls_copy` | Secret `ingress-tls` ohne uid, resourceVersion, managedFields als JSON per Pipe in den Key Vault (`tls-traefik-ingress-tls`, `-o none`), dann Ablage prüfen (`tls.crt` im Vault gleich Cluster, sonst Exit 1) und notAfter anzeigen; zurück per `kaks create`; `tls_restore` verweigert, solange Certificate `traefik/ingress-tls` existiert (erst Certificate löschen, nach dem Restore `certificate.yaml` anwenden); `sam_tls_copy` (nur im Rückfall A16): nur `type` und `data` als `sam-tls` nach `sam-solace-lab`, ohne Annotationen |
 | `zerossl_on` | Secret `zerossl-eab` aus `ACME_EAB_HMAC` (Pipe), Issuer aus der Vorlage mit `ACME_EAB_KID`, Certificate `ingress-tls` auf Issuer `zerossl` patchen, auf Ready warten, `tls_backup` |
-| `net_check` | `nc` auf 8080, 9000, 8008, 55555 und den Traefik-NodePort der Ingress-IP (Ausgabe `OFFEN` je offenem Port); 200 HTTPS-Abrufe von `/api/state` über eine Verbindung, p50 und p95 in ms |
-| `sam_netpol_check` | aus `gpos-demo/deploy/gpos-ui` per Python-Socket (3 s) jeden Port aller Services `*postgresql*` und `*seaweedfs*` in `sam-solace-lab` (S3, Filer, Master, Volume); Ausgabe je Ziel `zu` oder `OFFEN`, Exit 0 nur ohne `OFFEN` |
+| `net_check` | `nc` auf 8080, 9000, 8008, 55555 und die NodePorts des Traefik-Service (web, websecure, `healthCheckNodePort`) der Ingress-IP, je Port `<IP>:<Port> zu` oder `OFFEN`; 200 HTTPS-Abrufe von `/api/state` über eine Verbindung: `HTTPS https://$FQDN/api/state: N von 200 mit 200, M Verbindung(en), p50 X ms, p95 Y ms`; Exit 0 nur ohne `OFFEN` und mit 200 von 200 |
+| `sam_netpol_check` | aus `gpos-demo/deploy/gpos-ui` (Container `ui`) per Python-Socket (3 s): jeden Port der Services `*postgresql*` und `*seaweedfs*` in `sam-solace-lab` per Service-Name, jeden Container-Port ihrer Pods per Pod-IP, bei SeaweedFS dazu alle Standard-Listener von `weed server -s3` 4.48, die der Service nicht listet (Volume 8080/18080, Filer 8888/18888, Master 9333/19333, S3 8333/18333, Iceberg 8181, Lance 9101); je Ziel `<ziel>:<port> zu (Grund)`, `OFFEN` oder `FEHLER (DNS)`; Exit 0 nur, wenn jede Zeile `zu` ist |
 
 ### 1.6 Lab-Schutzregeln
 
@@ -239,13 +243,22 @@ haks() { KUBECONFIG="$AKS_KUBECONFIG" helm --kube-context "$AKS_CONTEXT" "$@"; }
   `--context rancher-desktop`, Lab-Skripte (sie nutzen den aktuellen Kontext)
   nur nach `lab_guard`.
 - amd start.sh und stop.sh nie gegen AKS (stop.sh räumt Lab-Keycloak und
-  Lab-Broker-Queues über `127.0.0.1:8080` ab, egal welcher Kontext);
+  Lab-Broker-Queues über `127.0.0.1:8080` ab, egal welcher Kontext;
+  `aks_sam` und `aks_kc` verweigern sie);
   event-mesh-deployment start.sh und stop.sh gar nicht (`docker compose down -v`
   zerstört den Lab-Broker), nur `docker stop` und `start`.
 - AKS-Terraform nur in `infra/aks/broker`; Mac-Port 8080 ist der Lab-Broker, AKS
-  nutzt 18080 und 18081. `SAM_HOME` und `SAM_PLATFORM_TOKEN` nie in der
-  interaktiven Shell. Der LiteLLM-Key nur in `agent-mesh-deployment/.env.aks`
-  und SAM, nie in gpd-Dateien, Demo-Secrets, Key Vault, Backups oder git.
+  nutzt 18080 (SEMP), 18081 (Keycloak) und 18082 (Traefik-Dashboard).
+  `SAM_HOME` und `SAM_PLATFORM_TOKEN` nie in der interaktiven Shell. Der
+  LiteLLM-Key nur in `agent-mesh-deployment/.env.aks` und SAM, nie in
+  gpd-Dateien, Demo-Secrets, Key Vault, Backups oder git.
+- `sam` gegen AKS nur über `aks_sam` oder `TARGET=aks`-Skripte: Sie starten
+  den CLI mit `HOME=$AKS_SAM_HOME`, denn sam 2.542.1 legt den Login-Cache immer
+  unter `$HOME/Library/Application Support/sam/auth/` ab und ignoriert dafür
+  `SAM_HOME` und `--sam-home`. Ein `sam` direkt in der Shell liest und
+  überschreibt den Lab-Login; `sam config plan --url X` schickt den Token des
+  Caches unter HOME ohne URL-Prüfung an X, `SAM_PLATFORM_TOKEN` übersteuert den
+  Cache (die `TARGET=aks`-Skripte entfernen ihn).
 
 ### 1.7 Image-Regel und Digests
 
@@ -255,8 +268,11 @@ liegen nur in der ACR, `acr-pull` gibt es nur in `sam-solace-lab` und
 sie selbst setzen, sonst pinnt die Chart-Version (cert-manager, Monitoring).
 Kein `az acr import`, keine Registry-Overrides; Docker Hub erlaubt anonym 100
 Pulls je 6 h und IP. Claude trägt die Digests ein (19.11.: Broker
-`c0020e53ed48...`, Traefik `a6c0194dda77...`, neu gebaut); der Owner prüft vor
-A9, A12, A14 und A18:
+`c0020e53ed48...`, Traefik `a6c0194dda77...`, neu gebaut; Postgres 18
+`e754b839f447...`, PG 18.7, in `k8s/postgres-aks/postgres.yaml`); der Owner
+prüft vor A6 (curl), A9, A12, A14 und A18. Wandernde Tags (`17-alpine`,
+`18-trixie`) zeigen nach Patch-Releases einen neueren Digest; der gepinnte
+bleibt gültig, Wechsel nur bewusst:
 
 ```bash
 for i in docker.io/library/traefik:v3.7.19 quay.io/keycloak/keycloak:26.8.2 \
@@ -295,7 +311,9 @@ az keyvault show -n "$AKS_KV" --query "[location,properties.enableRbacAuthorizat
 ```
 
 Prüfung: `ok`, 16 Secrets, germanywestcentral, false (sonst bräuchte der Vault
-eine Rollenzuweisung). Forbidden direkt nach `set-policy`: 1-2 min warten.
+eine Rollenzuweisung). Forbidden direkt nach `set-policy`: `kv_new` legt dann
+nichts an; 1-2 min warten, die `kv_new`-Zeilen wiederholen (nur Fehlende
+entstehen).
 
 ### A2 ACR, Pull-Token, private Images
 
@@ -497,10 +515,13 @@ kaks run hairpin --rm -i --restart=Never --image="$CURL_IMG" -- \
   curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 "http://$FQDN/"   # 404
 ```
 
-Prüfung: Service-IP gleich `ingress-ip`, Image mit dem Digest aus 1.7. Liefert
-der Hairpin 000 oder Timeout, den Namen clusterintern auf die Traefik-ClusterIP
-legen (`fallthrough` ist Pflicht, sonst fällt das Cluster-DNS aus; entsteht der
-Service neu, Eintrag neu schreiben):
+Prüfung: Service-IP gleich `ingress-ip`, Image mit dem Digest aus 1.7.
+Dashboard nur per Port-Forward im eigenen Terminal:
+`aks_guard && kaks -n traefik port-forward deploy/traefik 18082:8080`, dann
+`http://127.0.0.1:18082/dashboard/`. Liefert der Hairpin 000 oder Timeout, den
+Namen clusterintern auf die Traefik-ClusterIP legen (`fallthrough` ist Pflicht,
+sonst fällt das Cluster-DNS aus; entsteht der Service neu, Eintrag neu
+schreiben):
 
 ```bash
 TIP=$(kaks -n traefik get svc traefik -o jsonpath='{.spec.clusterIP}')
@@ -580,10 +601,10 @@ kaks -n solace rollout status sts/solace-pubsubplus --timeout=600s
 kaks -n solace get pod,svc,pvc               # 1/1, ClusterIP, 64Gi Bound
 ```
 
-Prüfung wie kommentiert. Größe und Spool gelten ab dem ersten Boot (ändern heißt
-PVC löschen). Pod Pending (CPU): Requests der anderen Releases prüfen
-(`kaks describe node`), `size` bleibt `prod1k`; reicht der Node nicht, STOP und
-Owner-Entscheidung.
+Prüfung wie kommentiert. Größe, Spool und Kafka-Scaling gelten ab dem ersten
+Boot (ändern heißt PVC löschen). Pod Pending (CPU): Requests der anderen
+Releases prüfen (`kaks describe node`), `size` bleibt `prod1k`; reicht der Node
+nicht, STOP und Owner-Entscheidung.
 
 ### A13 Broker-VPNs und Client-Usernames
 
@@ -591,18 +612,25 @@ Ziel: VPNs wie im Lab; Client `sam` in VPN `sam`, `gpos` in VPN `default`,
 Client `default` in beiden aus.
 
 ```bash
-kaks -n solace port-forward svc/solace-pubsubplus 18080:8080   # Terminal 2, offen
+aks_guard && kaks -n solace port-forward svc/solace-pubsubplus 18080:8080   # Terminal 2, offen
 semp '/SEMP/v2/config/msgVpns?select=msgVpnName' | jq -r '.data[].msgVpnName'
-# nur "default"; steht ein weiteres VPN da: STOP, das ist der Lab-Broker
+# vor dem ersten apply nur "default" (ein internes "#config-sync" zählt nicht);
+# jedes weitere VPN, v. a. "amartens-test": STOP, das ist der Lab-Broker
 semp /SEMP/v2/monitor/about/api | jq -r .data.sempVersion     # 10.26.0.9219
+kaks -n solace get pod solace-pubsubplus-0 \
+  -o jsonpath='{.status.containerStatuses[0].imageID}{"\n"}'  # Digest aus 1.7
 tfa init && tfa plan && tfa apply
 semp '/SEMP/v2/config/msgVpns/sam/clientUsernames?select=clientUsername,enabled' |
   jq -c '.data[]'                            # sam true, default false
 ```
 
-Prüfung: VPN `default` ebenso (`gpos` true); zweites `tfa plan` leer. Scheitert
-Provider 1.3.0 (bisher nur gegen 10.25): Objekte per SEMPv2 anlegen.
-`terraform.tfstate` hält Passwörter (gitignored, nur lokal).
+Prüfung: VPN `default` ebenso (`gpos` true); zweites `tfa plan` leer.
+`sempVersion` ist seit 10.25.22 gleich dem Broker-Release, `imageID` zeigt
+unabhängig davon den Digest aus 1.7. `tfa plan` und `apply` brechen ohne
+Port-Forward oder bei VPN `amartens-test` ab. Scheitert Provider 1.3.0 (bisher
+nur gegen 10.25): Objekte per SEMPv2 anlegen. `terraform.tfstate` hält
+Passwörter (gitignored, durch `tfa` Modus 600, nur lokal; deshalb kein
+`-json`, `state pull` oder `-out`).
 
 ### A14 Keycloak (noch ohne Ingress)
 
@@ -619,15 +647,22 @@ kv keycloak-admin | kaks -n iam create secret generic keycloak-credentials \
   --dry-run=client -o yaml | kaks apply --server-side -f -
 kaks apply -f "$AKS_DIR/keycloak/keycloak.yaml"
 kaks -n iam rollout status deploy/keycloak --timeout=600s
-kaks -n iam port-forward svc/keycloak 18081:8080             # Terminal 3, offen
+aks_guard && kaks -n iam port-forward svc/keycloak 18081:8080   # Terminal 3, offen
 curl -s http://127.0.0.1:18081/auth/realms/solace-lab/.well-known/openid-configuration |
   jq -r .issuer                              # https://$FQDN/auth/realms/solace-lab
+curl -s \
+  http://127.0.0.1:18081/auth/realms/master/.well-known/openid-configuration |
+  jq -r .issuer   # optional: http://127.0.0.1:18081/auth/realms/master
 kv keycloak-admin | pbcopy; open http://127.0.0.1:18081/auth/admin/   # Login admin
 read -r '?Enter nach dem Login als admin '; pbcopy </dev/null
 ```
 
-Prüfung wie kommentiert, Admin-Konsole lädt. Erster Start baut selbst (Pfad;
-startupProbe rund 215 s); der Bootstrap-Admin entsteht nur bei leerer DB.
+Prüfung wie kommentiert, Admin-Konsole lädt (Master-Realm und Konsole nur über
+18081). Erster Start baut selbst (Pfad; startupProbe rund 215 s); der
+Bootstrap-Admin und der Realm-Import entstehen nur bei leerer DB. Zeigt der
+`solace-lab`-Issuer 127.0.0.1 statt `$FQDN`, stammt der Realm aus einer alten
+DB ohne `frontendUrl`: in der Konsole (Realm settings, Frontend URL) setzen oder
+mit leerem PVC `postgres-data` neu starten.
 
 ### A15 Realm-Inhalt und Keycloak-Ingress
 
@@ -650,7 +685,10 @@ shasum -c "$AKS_STATE/lab-env.sha"           # OK
 Prüfung: Client mit genau `https://$FQDN/api/v1/auth/callback`; 7 Gruppen, 7
 User; `KEYCLOAK_CLIENT_SECRET` in `$AMD/.env.aks`. Ingress nur, wenn
 `kc_set_passwords` mit Exit 0 endet (die Skripte setzen Passwort gleich
-Username). Alter Client mit falschen URIs: per Admin-REST löschen, Skript neu.
+Username). Ein neuer Client bekommt zusätzlich
+`post.logout.redirect.uris=https://$FQDN/*`. Alter Client mit anderen URIs:
+`setup-keycloak-client.sh` endet mit Exit 1, zeigt die gefundenen URIs und
+schreibt kein Secret; Client per Admin-REST löschen, Skript neu.
 
 ### A16 SAM installieren
 
@@ -675,7 +713,8 @@ semp '/SEMP/v2/monitor/msgVpns/sam/clients?select=clientUsername&count=100' |
   jq -r '.data[].clientUsername' | sort | uniq -c   # nur sam
 ```
 
-Prüfung: nur ACR-Images; `/health` `200 0` (Default-Zertifikat); `kaks get
+Prüfung: nur ACR-Images (`acr-set-by-sam-helm.invalid` heißt: Registry fehlt in
+`sam_helm`); `/health` `200 0` (Default-Zertifikat); `kaks get
 certificate -A` nur `traefik/ingress-tls`; `pg_isready` ohne Antwort; Dashboard
 `sam-token-cost` bleibt leer (Folge der NetworkPolicy, akzeptiert). Nur mit
 Prod-Zertifikat installieren (OIDC-Discovery); PG-Passwort ist ab dem ersten
@@ -685,15 +724,18 @@ Install fest: nur `sam_helm`, nie `--reuse-values`. Rückfall bei
 
 ### A17 sam-Login, provision.sh, SAM-Abnahme
 
-Ziel: eigener Token-Cache für AKS; RBAC, Modelle, max_tokens, Pricing und
-Entrypoint wie im Lab; Login und Chat belegt.
+Ziel: eigener Login-Cache für AKS (sam mit `HOME=$AKS_SAM_HOME`, 1.6); RBAC,
+Modelle, max_tokens, Pricing und Entrypoint wie im Lab; Login und Chat belegt.
 
 ```bash
 LC="$HOME/Library/Application Support/sam/auth/solace-lab.json"; stat -f %m "$LC"
 kv kc-user-sam-admin | pbcopy
 aks_sam sam auth login solace-lab --url "https://$FQDN"   # Browser: sam_admin
-pbcopy </dev/null; aks_sam sam api /api/v1/user           # sam_admin@solace.lab
-(cd "$AMD" && aks_sam ./scripts/provision.sh)
+pbcopy </dev/null
+AC="$HOME/.config/eurocis-aks/sam/Library/Application Support/sam/auth"
+ls "$AC/solace-lab.json"                     # vorhanden (AKS-Login)
+aks_sam sam api /api/v1/user                 # sam_admin@solace.lab
+(cd "$AMD" && aks_sam ./scripts/provision.sh)   # nie bei offener Freigabe
 aks_sam sam api /api/v1/platform/models --jq '.data[] | .alias // .name'
 curl -s -o /dev/null -w '%{http_code}\n' "https://$FQDN/gw/dev/"   # 401
 open "https://$FQDN/"                        # Login sam_admin, Chat "Antworte nur mit OK"
@@ -703,11 +745,22 @@ kaks -n traefik wait certificate/staging-probe --for=condition=Ready --timeout=1
 kaks delete -f "$AKS_DIR/tls/staging-probe.yaml"; kaks -n traefik delete secret staging-probe
 ```
 
-Prüfung: provision.sh OK (Models OK oder WARN); Aliase general, planning,
+Prüfung: `ls` findet den AKS-Cache, der Lab-Cache bleibt unverändert;
+provision.sh OK (Models OK oder WARN; ohne Google-Key wird `google gemini` mit
+WARNING übersprungen). Beim ersten Lauf nach einem Install setzt provision.sh
+max_tokens für general, planning und report_gen und startet awe dabei einmal
+neu (nur, wenn max_tokens neu gesetzt wurde, und nur, wenn die AKS-kubeconfig
+das SAM-Ingress für `$FQDN` in `sam-solace-lab` findet): Zusammenfassung
+`OK    max_tokens`. `WARN  max_tokens (exit 2, see above)` heißt Neustart
+verweigert (Ziel nicht belegt); dann awe von Hand neu starten (`kaks`-Befehl
+wie in G0-11b), solange keine Freigabe offen ist. Aliase general, planning,
 report_gen, image_gen, workflow, reasoning, coding, expert, fast; Login ohne
-Warnung; der Orchestrator antwortet (erst das beweist LiteLLM aus dem Cluster);
-die Staging-Probe wird Ready; `/gw/dev` bleibt (provision.sh, OIDC-geschützt).
-Logout "Invalid redirect uri": `post.logout.redirect.uris=https://$FQDN/*`.
+Warnung; der Orchestrator antwortet (erst das beweist LiteLLM aus dem
+Cluster); die Staging-Probe wird Ready; `/gw/dev` bleibt (provision.sh,
+OIDC-geschützt).
+Logout: Der Client hat `post.logout.redirect.uris=https://$FQDN/*` (setzt
+`setup-keycloak-client.sh`); nur ein alter Client ohne das Attribut zeigt
+"Invalid redirect uri".
 
 ### A18 Demo-DB, gpos-demo, öffentliche Prüfung
 
@@ -717,12 +770,12 @@ acht Ingresses in `gpos-demo`; Prüfung von außen und der SAM-NetworkPolicy.
 ```bash
 cd "$GPD"
 TARGET=aks scripts/install.sh pg && TARGET=aks scripts/install.sh db
-kaks -n gpos-data get pods,pvc               # gpos-postgres-0 1/1, Bound
+kaks -n gpos-data get pods,pvc # gpos-postgres-0 1/1, data-gpos-postgres-0 Bound
 ls ~/Downloads/Gebit/purchase-api-2.50.0.pb ~/Downloads/Gebit/receipt-api-2.13.0.pb
 TARGET=aks scripts/install.sh k8s
 kaks -n gpos-demo get deploy,ingress
 TARGET=aks make smoke                        # READY (Kasse 99, ohne SAM)
-scripts/aks-check.sh                         # alle OK, Exit 0
+scripts/aks-check.sh                         # aks-check: 21 OK, 0 FEHLER; Exit 0
 kaks -n sam-solace-lab get svc; sam_netpol_check   # jede Zeile "zu", Exit 0
 ```
 
@@ -744,7 +797,7 @@ read -r '?Enter nach dem Browser-Login als marktleitung '; pbcopy </dev/null
 TARGET=aks scripts/install.sh mesh           # mit Gate-Verifikation, ca. 11 min
 TARGET=aks scripts/broker.sh r1-show         # genau ein Flow auf gpos-booth-r1
 TARGET=aks scripts/check_hygiene.sh --platform
-cat build/aks/gate-verified                  # PASS, approve x3, deny x5, timeout x2
+cat build/aks/gate-verified   # result=PASS, target=aks, modes=approve:3,deny:5,timeout:2
 ```
 
 Prüfung: "== done (mesh)", Proben p1 p3 p4 notify r1 r3 r4 PASS,
@@ -761,7 +814,9 @@ Erst Lab, dann ACR; bis dahin brauchen WWS und Loyalty
 
 ```bash
 cd "$GPD" && make test && make push GPOS_VERSION=0.1.4   # Lab-Registry
-# Lab auf 0.1.4 umstellen (eigener Commit), dann:
+# Lab auf 0.1.4 umstellen (eigener Commit): newTag in
+# k8s/overlays/lab/kustomization.yaml und der Pin in scripts/tests/test_k8s.py
+# (expected-render.yaml folgt selbst), dann:
 lab_guard && scripts/install.sh k8s && make smoke && make e2e SCENARIO=S1
 az acr login -n "$AKS_ACR"                   # Token gilt rund 3 h
 docker tag registry.solace.lab/gpos-demo/gpos-demo:0.1.4 \
@@ -1012,15 +1067,16 @@ kaks -n traefik logs deploy/traefik --since=10m | jq -rR 'fromjson? | .ClientHos
   Rate-Limit ZeroSSL (4.3); am Stand sofort L3.
 - LLM ("Text aus Vorlage"): 429 = Limit des Lab-Keys (Demo läuft in L1,
   Lab-Nutzung pausieren); 401 = neuer Lab-Key zuerst in Lab-`.env` und Lab-SAM
-  (`lab_guard`, wie im Lab-README), dann `amd_env_aks` (ohne Anzeige),
-  Client-Secret per `aks_kc` wie in A15, `sam_helm`, provision.sh (im Freeze nur
-  als Ausnahme); Timeout = Egress-IP dem LiteLLM-Betreiber melden (nur bei
-  Allowlist).
+  (`lab_guard`, wie im Lab-README), dann `amd_env_aks` (ohne Anzeige; behält
+  das Client-Secret), `sam_helm` (startet gwe, awe und str neu: nie bei
+  offener Freigabe), provision.sh wie in A17 (im Freeze nur als Ausnahme);
+  Timeout = Egress-IP dem LiteLLM-Betreiber melden (nur bei Allowlist).
 - Node: Stopped heißt `aks_start`; NotReady über 10 min heißt L3, sonst L4;
   danach 4.4.
 - Missbrauch: Limit senken oder Route sperren, danach
   `(cd "$GPD" && TARGET=aks make demo-reset)`; Routen zurück mit
-  `(cd "$GPD" && TARGET=aks scripts/install.sh k8s)`.
+  `(cd "$GPD" && TARGET=aks scripts/install.sh k8s)`: startet die sechs
+  gpos-Deployments neu (kurze Unterbrechung), am Stand nur in einer Pause.
 - Login `marktleitung` gesperrt: endet nach höchstens 15 min, sofort per
   `kc_unlock` (Port-Forward 18081 wie in A14).
 - Hänger, "Technischer Fehler", zweite Anfrage: RUNBOOK, Abschnitt Störungen,
@@ -1028,7 +1084,9 @@ kaks -n traefik logs deploy/traefik --since=10m | jq -rR 'fromjson? | .ClientHos
 
 ```bash
 # Eingriffe: nur einzeln und bewusst ausführen
-kaks -n traefik delete secret ingress-tls && tls_restore         # Secret kaputt
+kaks -n traefik delete certificate ingress-tls &&                # Secret kaputt
+  kaks -n traefik delete secret ingress-tls --ignore-not-found && tls_restore &&
+  kaks apply -f "$AKS_DIR/tls/certificate.yaml"                  # wie A11
 kaks -n gpos-demo annotate ingress gpos-ui-pos nginx.ingress.kubernetes.io/limit-rpm=30 --overwrite
 kaks -n gpos-demo delete ingress gpos-wws-grpc                   # Route sperren
 kc_unlock marktleitung                                           # Login-Sperre
@@ -1040,11 +1098,17 @@ Neuaufbau (G3-Drill oder Notfall, nie am Messetag):
    `tls_backup && az aks delete -g "$AKS_RG" -n "$AKS_NAME" --yes` (löscht nur
    nach geprüftem Backup; nimmt die Node-RG mit VM, PVCs, LB und beiden IPs mit;
    das Label ist frei).
-2. Ohne Pause A3 bis A7 (gleicher Name, neue Adressen; LiteLLM ggf. neu melden).
+2. Ohne Pause A3 bis A7 (gleicher Name, neue Adressen; LiteLLM ggf. neu
+   melden); `aks_ips` (A6) meldet dabei einmal `ACHTUNG` für beide IPs
+   (erwartet, Register übernimmt sie).
 3. A8 und A9, cert-manager und Issuer aus A10, dann `tls_restore` und
    `certificate.yaml` (keine Neuausstellung).
-4. A12 bis A19; vor A13 den alten Terraform-State löschen; A15 schreibt ein
-   neues Client-Secret; A17 meldet sich im AKS-Home neu an.
+4. A12 bis A19; vor A13 den alten Terraform-State löschen
+   (`rm -f "$AKS_DIR"/broker/terraform.tfstate{,.backup}`); A15 schreibt ein
+   neues Client-Secret; A17 meldet sich im AKS-Home neu an, provision.sh
+   startet awe dabei einmal neu; vor A19
+   `rm -f "$GPD/build/aks/gate-verified"` (wie G2b), sonst überspringt
+   `install.sh mesh` die Gate-Verifikation auf der neuen Plattform.
 
 Key Vault und ACR überleben in `gebit-showcase`. Ohne TLS-Backup nur gegen
 staging üben.
@@ -1073,7 +1137,9 @@ az acr delete -n "$AKS_ACR" --yes
 az keyvault delete -n "$AKS_KV" && az keyvault purge -n "$AKS_KV" -l "$AKS_LOC"
 az resource list -g "$AKS_RG" -o table; nslookup "$FQDN"   # leer, NXDOMAIN
 rm -f "$AKS_KUBECONFIG" "$GPD/.env.aks" "$AMD/.env.aks"
-rm -rf "$AKS_STATE" "$GPD/mesh/.rendered/aks" "$GPD/build/aks"
+rm -f "$AKS_DIR"/broker/terraform.tfstate{,.backup}   # Client-Passwörter
+(cd "$GPD" && rm -rf mesh/.rendered/aks build/aks)   # feste Pfade
+rm -rf ~/.config/eurocis-aks                 # AKS_STATE inkl. sam-Login-Cache
 lab_guard && (cd "$GPD" && make smoke)       # Lab unverändert READY
 ```
 
@@ -1091,7 +1157,7 @@ aufräumen, lokale Exporte mit Messedaten löschen.
 | Let's Encrypt: geteilter Topf `azure.com` (nicht auf der PSL) | erst staging, Backup, ZeroSSL, Erneuerung um 15.01. |
 | Label-Verlust zwischen `az aks delete` und neuer IP | Neuaufbau nur im Drill, IP ohne Pause neu |
 | Lab und Stand teilen den Lab-Key; öffentliche Endpunkte verbrauchen Budget | Rate-Limits je IP, L1-Texte, Limits klären (7) |
-| Öffentlicher Approver: Fehlversuche sperren `marktleitung` bis 15 min | generiertes Passwort, Entsperren per Admin-REST |
+| Öffentlicher Approver: Fehlversuche sperren `marktleitung` bis 15 min | generiertes Passwort, Entsperren per Admin-REST, offene Punkte 7 und 8 |
 | Anonyme gRPC-Schreib-RPCs (Preis ändern, Coupon, Reset) sind öffentlich (Owner-Entscheidung 17.11.) | 60 Aufrufe je min und IP, `scripts/reset.sh` stellt den Demo-Stand her (akzeptiert) |
 | Gemeinsamer Origin von SAM und gpos (XSS in gpos könnte SAM-Tokens lesen) | gpos ohne Cookies, Web-Storage und `innerHTML` (akzeptiert) |
 | Neue BFF-Seiten ohne Pfad landen bei SAM (200) | Routentest in `test_k8s.py` |
@@ -1114,3 +1180,11 @@ Nur Owner-Entscheidungen; Technisches klärt der Schritt mit Rückfall.
 6. LiteLLM: Limits des Lab-Keys an Messetagen beim Betreiber erfragen.
 7. Approver-Login: Sperr-Risiko hinnehmen oder im AKS-Realm einen nicht
    erratbaren Login-Namen ohne E-Mail-Login?
+8. Booth-Identitäten (`sam_admin`, `marktleitung`) im öffentlichen Realm: Die
+   Namen stehen im Repo, fünf Fehlversuche über das Login-Formular (oder
+   Passwort-Grants) sperren jeden User bis 15 min, beliebig wiederholbar;
+   wirksam sind nur Brute-Force-Schutz aus oder nicht erratbare Namen (wie 7).
+   Wer ein Passwort hat, kann über die Account-Konsole das Passwort ändern oder
+   OTP einrichten. Hinnehmen oder in A15 per Admin-REST die Required Actions
+   `UPDATE_PASSWORD` und `CONFIGURE_TOTP` in `solace-lab` abschalten (nicht im
+   Realm-Import)?

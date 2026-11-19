@@ -1,28 +1,8 @@
-# Kubernetes part of the gpos demo (UC1-BUILD-SPEC 12.4), namespace gpos-demo.
-# Applied by scripts/install.sh k8s (kubectl apply -k k8s) AFTER it created the
-# Secrets gpos-broker, gpos-db and gpos-gebit-descriptors from .env and
-# GEBIT_DESCRIPTOR_DIR -- no Secret with values is ever a file in this repo.
+# Compatibility entry: `kubectl kustomize k8s` (UC1-BUILD-SPEC 12.4) renders the lab
+# overlay, byte-identical to the render before the base/overlay split. Scripts render
+# k8s/overlays/$TARGET (scripts/install.sh k8s); the AKS Postgres of the demo DB is
+# k8s/postgres-aks (scripts/install.sh pg).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: gpos-demo
-labels:
-  - pairs:
-      app.kubernetes.io/part-of: gpos-demo
-    includeSelectors: false
-    includeTemplates: true
 resources:
-  - namespace.yaml
-  - configmap.yaml
-  - certificate.yaml
-  - pos.yaml
-  - wws.yaml
-  - loyalty.yaml
-  - engine.yaml
-  - gate.yaml
-  - ui.yaml
-  - ingress-ui.yaml
-  - ingress-grpc.yaml
-images:
-  - name: gpos-demo
-    newName: registry.solace.lab/gpos-demo/gpos-demo
-    newTag: "0.1.3"
+  - overlays/lab

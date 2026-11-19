@@ -1,0 +1,32 @@
+# Let's Encrypt ClusterIssuers (runbook A10), cert-manager v1.21.
+# HTTP-01 through Traefik's ingress-nginx provider: the solver Ingress
+# gets spec.ingressClassName nginx. No contact e-mail (optional at Let's
+# Encrypt). The ACME account keys live in the Secrets named under
+# privateKeySecretRef (namespace cert-manager, created by cert-manager).
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-staging-account
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod-account
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx

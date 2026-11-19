@@ -1,0 +1,33 @@
+# AKS overlay (TARGET=aks, AKS-MIGRATION-PLAN 0.2 and A18): base plus
+#  - pull secret acr-pull in all six Deployments (scripts/install.sh creates it from
+#    the Key Vault; no Kyverno on AKS);
+#  - gpos-config: SAM_URL on the public name, GPOS_GRPC_REFLECTION_SCOPE all (read by
+#    image 0.1.4+, ignored by 0.1.3; the lab keeps the default "own");
+#  - the eight path Ingresses on the one public name (ingress-ui.yaml,
+#    ingress-grpc.yaml); TLS is Traefik's default certificate (tls with hosts only),
+#    so there is no Certificate and no secretName here.
+# No image: the ACR name is not in the repo. Deployments keep the base placeholder
+# "gpos-demo" and scripts/install.sh renders with
+#   scripts/k8s_render.py --image "$GPOS_IMAGE:$GPOS_VERSION"   (.env.aks)
+# which sets every demo container and refuses a render that still has the placeholder.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: gpos-demo
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: gpos-demo
+    includeSelectors: false
+    includeTemplates: true
+resources:
+  - ../../base
+  - ingress-ui.yaml
+  - ingress-grpc.yaml
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+          - name: acr-pull
+  - path: configmap-patch.yaml

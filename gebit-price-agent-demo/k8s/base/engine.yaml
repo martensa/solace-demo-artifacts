@@ -1,25 +1,24 @@
-# gpos-loyalty: Loyalty (showcase.loyalty.v1, gRPC 50052) and MCP gpos-loyalty-api on 8772.
+# gpos-engine: Engine: MCP gpos-booth-tools and the HTTP API /api on 8765, outbox relay and
+# watchdog. SAM's str reaches it as http://gpos-engine.gpos-demo.svc:8765/mcp.
 # Shape of bsg-trading-desk-demo/k8s and G0-07, hardened (spec 12.4).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gpos-loyalty
+  name: gpos-engine
   labels:
-    app: gpos-loyalty
+    app: gpos-engine
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gpos-loyalty
+      app: gpos-engine
   template:
     metadata:
       labels:
-        app: gpos-loyalty
+        app: gpos-engine
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
-      imagePullSecrets:
-        - name: registry-pull-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -27,30 +26,26 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: loyalty
+        - name: engine
           image: gpos-demo
           imagePullPolicy: Always
-          command: ["python", "-m", "gposdemo.loyalty"]
+          command: ["python", "-m", "gposdemo.engine"]
           env:
-            - name: GRPC_PORT
-              value: "50052"
             - name: MCP_PORT
-              value: "8772"
+              value: "8765"
             - name: GPOS_DSN
               valueFrom:
                 secretKeyRef:
                   name: gpos-db
-                  key: DSN_LOYALTY
+                  key: DSN_ENGINE
           envFrom:
             - configMapRef:
                 name: gpos-config
             - secretRef:
                 name: gpos-broker
           ports:
-            - name: grpc
-              containerPort: 50052
             - name: http
-              containerPort: 8772
+              containerPort: 8765
           readinessProbe:
             httpGet:
               path: /health
@@ -84,17 +79,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: gpos-loyalty
+  name: gpos-engine
   labels:
-    app: gpos-loyalty
+    app: gpos-engine
 spec:
   selector:
-    app: gpos-loyalty
+    app: gpos-engine
   ports:
-    - name: grpc
-      port: 50052
-      targetPort: grpc
-      appProtocol: kubernetes.io/h2c
     - name: http
-      port: 8772
+      port: 8765
       targetPort: http

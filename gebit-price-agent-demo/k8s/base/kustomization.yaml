@@ -1,0 +1,26 @@
+# Target-neutral part of the gpos demo (UC1-BUILD-SPEC 12.4), namespace gpos-demo:
+# namespace, gpos-config and the six Deployments with their Services. Nothing here
+# names a registry, a pull secret, a host or a certificate; the overlays add them:
+#   k8s/overlays/lab  Rancher Desktop lab (*.solace.lab, lab CA, Kyverno pull secret)
+#   k8s/overlays/aks  AKS showcase (one public name, Traefik, acr-pull, image per
+#                     scripts/k8s_render.py --image at install time)
+# scripts/install.sh k8s renders k8s/overlays/$TARGET AFTER it created the Secrets
+# gpos-broker, gpos-db and gpos-gebit-descriptors -- no Secret with values is ever a
+# file in this repo. "gpos-demo" is the image placeholder each overlay replaces.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: gpos-demo
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: gpos-demo
+    includeSelectors: false
+    includeTemplates: true
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - pos.yaml
+  - wws.yaml
+  - loyalty.yaml
+  - engine.yaml
+  - gate.yaml
+  - ui.yaml

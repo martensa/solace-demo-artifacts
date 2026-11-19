@@ -898,6 +898,73 @@ Consumed by the scripts only (never passed to Helm):
   manifests default to postgres/postgres; the demo install
   scripts source this `.env`, so overrides set here apply)
 
+### Remote target (optional variables)
+
+All unset, every script works on the lab exactly as described
+above. The EuroCIS showcase on AKS sets them through `aks_sam` and
+`aks_kc` of `../gebit-price-agent-demo/infra/aks/aks.sh`; the
+procedure is `../gebit-price-agent-demo/AKS-MIGRATION-PLAN.md`.
+
+- `SAM_ENV_FILE` -- env file loaded instead of `.env` (AKS:
+  `.env.aks`, git-ignored, mode 600, written by `amd_env_aks` in
+  aks.sh; `setup-keycloak-client.sh` adds the client secret). An
+  explicit file that does not exist is an error, never a fallback
+  to `.env`.
+- `SAM_URL` -- platform URL: every `sam config` call gets
+  `--url "$SAM_URL" --no-dotenv`, every `sam api` call
+  `--url "$SAM_URL"`.
+- `SAM_HOME` -- HOME the `sam` CLI runs with (`sam_cli_run` in
+  `scripts/lib/common.sh`). sam 2.542.1 keeps its login cache in
+  `$HOME/Library/Application Support/sam/auth/<target>.json` and
+  ignores `SAM_HOME` and `--sam-home` for it, so only another HOME
+  keeps the remote login apart from the lab login. The CLI then
+  also runs without `SAM_PLATFORM_TOKEN`. Remote login:
+  `aks_sam sam auth login solace-lab --url <SAM_URL>`.
+- `SAM_DNS_NAME`, `SAM_REDIRECT_URI` -- SAM host and the exact OIDC
+  redirect URI for `setup-keycloak-client.sh`; they count only
+  together with `SAM_ENV_FILE` (the lab client keeps
+  `sam.solace.lab` and its wildcard).
+
+`SAM_ENV_FILE`, `SAM_URL` and `SAM_HOME` are all set or all unset:
+`provision.sh` and the rbac, models and entrypoints scripts run
+`sam_target_check` right after loading the env file and stop with
+exit 1, before any call, on a partial set, a relative `SAM_HOME`,
+`SAM_HOME` equal to the real HOME or the lab sam home, or
+`SAM_ENV_FILE` equal to the lab `.env`. On a complete remote set
+it unsets `SAM_AUTH_TOKEN` and `SAM_PLATFORM_TOKEN` of the shell:
+the CLI would prefer them to its login cache, and only
+`sam_auth_token` sets `SAM_AUTH_TOKEN` again, from the remote cache.
+
+With a remote target:
+
+- `setup-keycloak-client.sh` and `setup-keycloak-users.sh` (remote
+  means `SAM_ENV_FILE` is set) need `KEYCLOAK_URL` and
+  `KEYCLOAK_ADMIN_PASSWORD` (no lab defaults; the password may come
+  from the environment). The password reaches curl on stdin, the
+  admin token through a curl config on a file descriptor, never in
+  an argv. The client script also needs `SAM_DNS_NAME` and
+  `SAM_REDIRECT_URI`, registers exactly that redirect URI plus
+  `post.logout.redirect.uris` `https://<SAM_DNS_NAME>/*`, and
+  refuses an existing client with other `redirectUris` (exit 1, no
+  secret written; delete the client, then re-run).
+- `apply-models.sh` hands the probe API keys to curl only through a
+  curl config on a file descriptor.
+- `set-max-tokens.sh` restarts awe only when `KUBECONFIG` names
+  exactly one kubeconfig file whose current context is not
+  `rancher-desktop` and an Ingress in `sam-solace-lab` of that
+  cluster serves the `SAM_URL` host; otherwise it prints the
+  restart command and exits 2 (provision.sh reports WARN).
+- `aks-values.yaml` is the second `-f` after
+  `local-k8s-values.yaml`, AKS only, applied by `sam_helm` in
+  aks.sh; the secrets and the ACR registries go to helm as a
+  values document on stdin. Never with `start.sh`, never against
+  the lab.
+- `start.sh`, `stop.sh`, the Keycloak teardown scripts,
+  `upgrade-preflight.sh` and `scripts/desktop/` read only `.env`
+  and target the lab (current kubectl context): never run them
+  inside `aks_sam` or `aks_kc` (both refuse them, as well as
+  `load-images.sh` and `purge-images.sh`).
+
 ### Helm Values (local-k8s-values.yaml)
 
 All non-sensitive configuration plus demo-only defaults are
@@ -981,8 +1048,10 @@ bootstrap user instead.
 ```text
 agent-mesh-deployment/
   .env.example                    Credentials + artifact paths
-  .gitignore                      Ignores .env, CLI cache
+  .gitignore                      Ignores .env, .env.aks, CLI cache
   local-k8s-values.yaml           Helm values (no secrets)
+  aks-values.yaml                 AKS overlay (second -f, sam_helm
+                                  only; see "Remote target")
   manifests/
     sam-tls-certificate.yaml      cert-manager Certificate
   scripts/

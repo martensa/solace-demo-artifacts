@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -11,9 +13,18 @@ import yaml
 import check_manifests
 import gen_connector_manifest as gen
 from conftest import ROOT
+import opslib
 from opslib import OpsError
 
 SPECS = {c.path.rsplit("/", 1)[1][:-5]: c for c in gen.CONNECTORS}
+
+
+@pytest.fixture(autouse=True)
+def lab_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests pin the lab: a TARGET exported by the caller's shell (or `TARGET=aks
+    make test`) must not leak in, also not through the paths fixed at import."""
+    monkeypatch.delenv("TARGET", raising=False)
+    monkeypatch.setattr(opslib, "TARGET", "lab")
 
 
 def tool(name: str, output: bool, description: str = "One  tool,\n folded.") -> dict:
@@ -112,3 +123,19 @@ def test_live_diff_names_the_changed_field() -> None:
         f"{spec.path}: get_sales_performance only live",
         f"{spec.path}: get_season_info only in the file",
     ]
+
+
+def test_live_tools_use_the_env_of_the_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    """check_manifests passes its env to kubectl_ui (TARGET=aks: AKS kubeconfig and
+    context, opslib.kubectl_base); the argv inside the pod is unchanged."""
+    calls: list[tuple[dict, list[str]]] = []
+
+    def kubectl_ui(env: dict, args: list[str], **_kw: object) -> subprocess.CompletedProcess:
+        calls.append((env, args))
+        return subprocess.CompletedProcess(args, 0, json.dumps([tool("get_article", False)]),
+                                           "")
+
+    monkeypatch.setattr(check_manifests, "kubectl_ui", kubectl_ui)
+    env = {"TARGET": "aks", "GPOS_NS": "gpos-demo"}
+    assert check_manifests.live_tools(env, "wws")[0]["name"] == "get_article"
+    assert calls == [(env, ["-m", "gposdemo.ui.ctl", "tools-list", "wws"])]

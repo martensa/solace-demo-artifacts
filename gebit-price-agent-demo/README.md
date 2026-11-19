@@ -4,7 +4,9 @@ GEBIT and Solace showcase "Preis- und Aktionsagent mit Freigabe" for
 EuroCIS 2027, built end to end on Solace Agent Mesh (SAM) 2.542.1 in
 the local lab. `UC1-BUILD-SPEC.md` is the binding build specification;
 this README covers setup and operation, `RUNBOOK.md` (German) the fair
-operation and the acceptance protocol.
+operation and the acceptance protocol. The fair itself runs on AKS:
+`AKS-MIGRATION-PLAN.md` (German) is the procedure there, and the same
+scripts serve both installations (see "AKS target").
 
 Core sentence of the demo: "KI schlägt vor. Regeln prüfen. Mensch
 entscheidet."
@@ -70,15 +72,29 @@ install; `--platform` checks the SAM objects after every mesh apply.
 - `app/` one Python 3.13 package `gposdemo`, one image, six commands
 - `proto/`, `data/`, `policy/`, `postgres/` contracts, master data,
   pricing policy, database schemas and seed
-- `k8s/` namespace `gpos-demo`: six Deployments, Services, ingresses,
-  certificate, ConfigMap `gpos-config`
+- `k8s/base/` namespace `gpos-demo`: ConfigMap `gpos-config`, six
+  Deployments and Services; no registry, host or certificate
+- `k8s/overlays/lab/` lab only: ingresses on `*.solace.lab`, lab-CA
+  certificate, Kyverno pull secret, image tag; `expected-render.yaml`
+  pins its render
+- `k8s/overlays/aks/` AKS: eight path ingresses on the one public
+  name, pull secret `acr-pull`, `gpos-config` patch; the image comes
+  from `scripts/k8s_render.py --image` at install time
+- `k8s/postgres-aks/` AKS demo DB (Postgres 18, namespace `gpos-data`)
+- `k8s/kustomization.yaml` compatibility entry, renders the lab overlay
+- `infra/aks/` AKS platform files: `aks.sh` (wrappers and helpers),
+  `env.aks.example` (template of `.env.aks`), Helm values, broker
+  Terraform, Keycloak, TLS and NetworkPolicy manifests
 - `mesh/` SAM resources: connectors, agents, workflows, the two
   entrypoint templates, RBAC copy, fallback F2 in `mesh/fallback/`
-- `scripts/` install, reset, broker, inbox, smoke and e2e tooling
-- `build/` (ignored) lab CA, tool lists, e2e logs, `gate-verified`
+- `scripts/` install, reset, broker, inbox, smoke and e2e tooling;
+  `aks-check.sh` read-only check of the public AKS name
+- `build/` (ignored) lab CA, tool lists, e2e logs, `gate-verified`;
+  `build/aks/` the same for `TARGET=aks`
 - `build/notes/` (ignored) local, unversioned working notes
 - `mesh/.rendered/` (ignored, chmod 700) rendered entrypoints with the
-  broker credentials, DB passwords, the applied `R1_MODE`
+  broker credentials, DB passwords, the applied `R1_MODE`;
+  `mesh/.rendered/aks/` for `TARGET=aks`
 
 ## Components and ports
 
@@ -89,8 +105,10 @@ install; `--platform` checks the SAM objects after every mesh apply.
 - `gpos-gate`: MCP `gpos-price-gate` 8766 (only `apply_price`)
 - `gpos-ui`: BFF, `/kasse`, `/monitor`, SSE on 8090 (Service port 80)
 
-Ingress hosts: `gpos.solace.lab` (UI) and `gpos-grpc`,
+Lab ingress hosts: `gpos.solace.lab` (UI) and `gpos-grpc`,
 `gpos-wws-grpc`, `gpos-loyalty-grpc` (`.solace.lab`, gRPC over TLS).
+On AKS the UI paths and the three gRPC services share the one public
+name with SAM and Keycloak (runbook 0.2).
 `scripts/install.sh k8s` leaves out an Ingress whose host and path an
 Ingress of another namespace already serves (the NGINX admission
 webhook would refuse it) and prints a WARNING naming that Ingress;
@@ -113,7 +131,8 @@ remove it, then run `scripts/install.sh k8s` again.
 
 ## Setup
 
-Order of spec 9.8. Every step is idempotent.
+Lab setup, order of spec 9.8 (AKS: see "AKS target"). Every step is
+idempotent.
 
 ```bash
 cp .env.example .env            # adjust; it never holds an LLM key
@@ -215,11 +234,86 @@ agent `gpos-price-approver-f2`, F2 variant of `gpos-price-approval`)
 after the main manifest. F2 trusts the model's reported status; its
 mandatory extra acceptance is `make e2e MODE=deny RUNS=5`.
 
+## AKS target
+
+`AKS-MIGRATION-PLAN.md` is the procedure (build A1 to A21, checks,
+operation, teardown); this section only says how the files and
+scripts behave there. `TARGET` is `lab` (default) or `aks`.
+
+- `infra/aks/aks.sh`: source it from the repo root in every AKS
+  terminal (`. gebit-price-agent-demo/infra/aks/aks.sh`). It defines
+  `kaks` and `haks` (kubectl and helm bound to the AKS kubeconfig
+  file and context), `aks_sam` and `aks_kc` (subshells for the
+  agent-mesh-deployment scripts and the `sam` CLI against AKS; they
+  refuse the lab-only scripts such as `start.sh` and `stop.sh`) and
+  the other helpers of runbook 1.5.
+- `.env.aks` (git-ignored, mode 600) is a copy of
+  `infra/aks/env.aks.example`; it names Key Vault secrets and holds
+  none, except the optional ZeroSSL key `ACME_EAB_HMAC` of runbook
+  4.3: only `zerossl_on` reads it, the scripts drop it on load.
+- With `TARGET=aks` the scripts
+  - read `.env.aks` only, never `.env`, and refuse to start when
+    `SAM_ENV_FILE`, `KEYCLOAK_CLIENT_SECRET` or the LLM key variable
+    of agent-mesh-deployment is set in the environment, when a URL
+    setting points to the lab (`solace.lab`, `host.docker.internal`,
+    `localhost`, `:8080`), when `E2E_CA_FILE` is the lab CA or
+    `GPOS_IMAGE` a lab image, when the namespaces, the DB pod or
+    `PG_MODE` differ from the template, or when `SAM_HOME` is
+    relative, the real `HOME` or the lab sam home (`scripts/lib.sh`
+    and the Python scripts check the same);
+  - run kubectl only with `AKS_KUBECONFIG` and `KUBE_CONTEXT` after
+    checking the AKS API server, never the current context, and psql
+    through `kubectl exec` in `gpos-data/gpos-postgres-0`;
+  - run the `sam` CLI with `HOME=$SAM_HOME` and `--url $SAM_URL`,
+    without a token of the shell: sam 2.542.1 keeps its login cache
+    under `HOME` only, so the AKS login
+    (`aks_sam sam auth login solace-lab --url https://<FQDN>`)
+    never touches the lab login;
+  - read secrets at runtime from the Key Vault (`AKS_KV`), through
+    pipes only;
+  - write `build/aks/` (gate record with `target=aks`, e2e logs,
+    lock) and `mesh/.rendered/aks/`;
+  - reach SEMP only through a port-forward on `127.0.0.1:18080`: the
+    broker tooling reuses an open one or opens its own, and stops
+    when the broker has the lab-only VPN (then it is the lab broker);
+  - verify TLS against the system trust store (`E2E_CA_FILE=system`).
+- `scripts/lib.sh` and the Python scripts also refuse a lab run
+  inside `aks_sam` or `aks_kc` (`SAM_ENV_FILE` set). Run every
+  command of this demo in a plain shell.
+- `scripts/install.sh pg|db|k8s|mesh|all`: `pg` (AKS only, a no-op in
+  the lab) applies namespace `gpos-data`, the Secret
+  `gpos-postgres-admin` (random, only if absent) and
+  `k8s/postgres-aks`; `db` runs the SQL through `kubectl exec`; `k8s`
+  needs `db` first, applies `acr-pull` and `gpos-broker` from the Key
+  Vault, renders `k8s/overlays/aks` with
+  `--image "$GPOS_IMAGE:$GPOS_VERSION"` and restarts all six
+  Deployments (a short outage); `all` is `pg`, `db`, `k8s`, `mesh`.
+- A rendered AKS entrypoint is applied only by
+  `TARGET=aks scripts/install.sh mesh` or through `aks_sam` (the line
+  in the rendered file), never with a plain `sam`.
+- Makefile: `build`, `push`, `k8s-up`, `manifests` and `demo-up`
+  refuse (they build or push the lab image; the ACR push is runbook
+  A20), `test-db`, `test-gebit` and `test-int` refuse (lab DB or
+  `.env`);
+  `status`, `logs`, `urls`, `port-forward`, `smoke`, `db-up`,
+  `mesh-up`, `e2e`, `gate-verify`, `demo-reset`, `demo-watch` and
+  `uninstall` follow `TARGET`.
+- `scripts/aks-check.sh [FQDN]` checks the public name read-only:
+  certificate (at least 14 days left), SAM, `/kasse`, `/monitor`,
+  `/api/state`, SSE, OIDC issuer, HSTS, no cookie, closed admin and
+  monitoring paths, gRPC routes. One `OK` or `FEHLER` line per check,
+  exit 0 only if all pass; needs curl, openssl and grpcurl, but no
+  kubeconfig, `.env.aks`, secret or login.
+
 ## Tests
 
 - `make test` unit tests of all packages plus `scripts/tests`
   (contracts of `mesh/`, `k8s/`, rendering, inbox rules, broker
-  convergence, hygiene), no Docker and no lab
+  convergence, hygiene, both targets of the scripts), no Docker and
+  no lab. The lab render must equal
+  `k8s/overlays/lab/expected-render.yaml`; the render tests skip
+  without kubectl. `make test` strips an exported `TARGET=aks`, and
+  `scripts/tests` drop `TARGET` themselves.
 - `make test-db`, `make test-gebit`, `make test-int` need the host
   Postgres or the GEBIT descriptor sets (read at runtime only)
 
@@ -228,5 +322,6 @@ mandatory extra acceptance is `make e2e MODE=deny RUNS=5`.
 `make uninstall` removes the SAM entrypoints, workflows, agents and
 connectors (REST DELETE, never `--prune`), the own R1 queue and the
 namespace. `scripts/uninstall.sh --drop-db` also drops the database.
-The role `gpos_marktleitung` and its claim mapping stay (shared with
-Gate 0).
+With `TARGET=aks` the namespace `gpos-data` (the demo DB) stays
+unless `--drop-db`. The role `gpos_marktleitung` and its claim mapping
+stay (shared with Gate 0).

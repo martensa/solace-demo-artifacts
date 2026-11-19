@@ -1,0 +1,130 @@
+# gRPC on the one public name, port 443 (AKS-MIGRATION-PLAN 0.2): one Prefix path per
+# service, so all RPCs of each service are public, including the anonymous write RPCs
+# (owner decision 17.11.2026), at 60 calls per minute and IP. TLS ends at Traefik,
+# backend-protocol GRPC = h2c to the Service port "grpc"; 3600 s timeouts for long
+# streams; no request buffering (streams), the 4 MiB message limit is the server's.
+# Reflection v1 and v1alpha go to gpos-pos without a limit (image 0.1.4+ answers for
+# all three services, GPOS_GRPC_REFLECTION_SCOPE=all). grpc.health.v1.Health has NO
+# path: health stays in-cluster (probes, smoke); from outside it lands at SAM and
+# fails (scripts/aks-check.sh). Dots in Prefix paths pass Traefik's
+# strictValidatePathType.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-grpc
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/limit-rpm: "60"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "1"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /de.gebit.rp.purchase.purchase.v2.service.PurchaseTransactionService/
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-pos
+                port:
+                  name: grpc
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-wws-grpc
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/limit-rpm: "60"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "1"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /de.showcase.wws.v1.service.MerchandiseService/
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-wws
+                port:
+                  name: grpc
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-loyalty-grpc
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/limit-rpm: "60"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "1"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /de.showcase.loyalty.v1.service.LoyaltyService/
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-loyalty
+                port:
+                  name: grpc
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpos-grpc-reflection
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /grpc.reflection.v1.ServerReflection/
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-pos
+                port:
+                  name: grpc
+          - path: /grpc.reflection.v1alpha.ServerReflection/
+            pathType: Prefix
+            backend:
+              service:
+                name: gpos-pos
+                port:
+                  name: grpc

@@ -5562,9 +5562,11 @@ gebit-price-agent-demo/
   policy/     pricing-policy.yaml
   postgres/   gen_seed.py  sql/00-roles.sql 10-pos.sql 20-wws.sql 30-loyalty.sql
               31-loyalty-uc1.sql 40-engine.sql 95-checks.sql  .generated/ (ignored)
-  k8s/        kustomization.yaml namespace.yaml configmap.yaml certificate.yaml
-              pos.yaml wws.yaml loyalty.yaml engine.yaml gate.yaml ui.yaml
-              ingress-ui.yaml ingress-grpc.yaml
+  k8s/        kustomization.yaml (-> overlays/lab)
+              base/ kustomization.yaml namespace.yaml configmap.yaml pos.yaml
+                    wws.yaml loyalty.yaml engine.yaml gate.yaml ui.yaml
+              overlays/lab/ kustomization.yaml certificate.yaml
+                    ingress-ui.yaml ingress-grpc.yaml expected-render.yaml
   mesh/       manifest.yaml manifest-rbac.yaml connectors/ agents/ workflows/
               entrypoints/gpos-booth-events.yaml.template
               entrypoints/gpos-probe-events.yaml.template rbac/
@@ -5656,12 +5658,16 @@ gepinnt und haben kein Make-Ziel (16.1 Nr. 27).
 
 ### 12.4 Kubernetes (`k8s/`, Namespace `gpos-demo`)
 
-- `kustomization.yaml`: `namespace: gpos-demo`, Label
+Dieser Abschnitt beschreibt das Lab. AKS (`k8s/overlays/aks`,
+`k8s/postgres-aks`, `TARGET=aks`): `AKS-MIGRATION-PLAN.md`.
+
+- `overlays/lab/kustomization.yaml`: `namespace: gpos-demo`, Label
   `app.kubernetes.io/part-of: gpos-demo` auch auf den Pod-Templates (`includeTemplates:
   true`, `includeSelectors: false`; `make logs` findet die Pods so), `images: [{name:
   gpos-demo, newName: registry.solace.lab/gpos-demo/gpos-demo, newTag: "0.1.3"}]`, alle
   Dateien unten.
-- `configmap.yaml` `gpos-config`: Werte aus 3.1 (ohne Geheimnisse); `install.sh k8s`
+- `base/configmap.yaml` `gpos-config`: Werte aus 3.1 (ohne Geheimnisse);
+  `install.sh k8s`
   überschreibt danach `GPOS_DEMO_DATE`, `GPOS_*_LOCATION`, `GPOS_DELIVERY`,
   `GATE_MIN_DELAY_S`, `GATE_GUARD`, `SAM_URL` mit gesetzten `.env`-Werten (`kubectl
   patch`), vor dem `rollout restart`; für diese Schlüssel ist `.env` maßgeblich.
@@ -5706,16 +5712,19 @@ gepinnt und haben kein Make-Ziel (16.1 Nr. 27).
   Ingress, andere Namespaces bleiben unberührt (Tests `scripts/tests/test_k8s.py`).
 - Deskriptor-Mount: Volume `secret: gpos-gebit-descriptors` read-only nach
   `/descriptors` [V: G0-07].
-- `certificate.yaml`: `Certificate gpos-demo` → Secret `gpos-demo-tls`, ECDSA 256,
+- `overlays/lab/certificate.yaml`: `Certificate gpos-demo` → Secret
+  `gpos-demo-tls`, ECDSA 256,
   `rotationPolicy: Always`, nur `dnsNames` `gpos.solace.lab`, `gpos-grpc.solace.lab`,
   `gpos-wws-grpc.solace.lab`, `gpos-loyalty-grpc.solace.lab`, `duration 2160h`,
   `renewBefore 720h`, ClusterIssuer `solace-lab-ca-issuer` (Kyverno-Regeln
   [V: G0-07]).
-- `ingress-ui.yaml`: Host `gpos.solace.lab` → `gpos-ui:80`, Annotationen
-  `ssl-redirect "true"`, `proxy-buffering "off"`, `proxy-read-timeout "3600"`,
-  `proxy-body-size "4m"`, TLS-Secret `gpos-demo-tls`, `ingressClassName: nginx`.
-- `ingress-grpc.yaml`: drei Ingresses (`gpos-grpc` → `gpos-pos:50051`,
-  `gpos-wws-grpc` → `gpos-wws:50053`, `gpos-loyalty-grpc` → `gpos-loyalty:50052`) mit
+- `overlays/lab/ingress-ui.yaml`: Host `gpos.solace.lab` → `gpos-ui:80`,
+  Annotationen `ssl-redirect "true"`, `proxy-buffering "off"`,
+  `proxy-read-timeout "3600"`, `proxy-body-size "4m"`, TLS-Secret
+  `gpos-demo-tls`, `ingressClassName: nginx`.
+- `overlays/lab/ingress-grpc.yaml`: drei Ingresses (`gpos-grpc` →
+  `gpos-pos:50051`, `gpos-wws-grpc` → `gpos-wws:50053`, `gpos-loyalty-grpc` →
+  `gpos-loyalty:50052`) mit
   `backend-protocol "GRPC"`, `ssl-redirect "true"`, `proxy-body-size "4m"`
   [V: G0-07]. Namespace `gpos-g0` (mit `gpos-g0-grpc`) am 12.11.2026 gelöscht;
   `gpos-grpc` legt der Owner gezielt als Einzelobjekt an (nicht `install.sh k8s`, das
@@ -6706,7 +6715,8 @@ WP-A Common und Build:
 - WP-A-7 Lesart (8.1): `/health` mit `db`/`bus`, sonst 503 `degraded`.
   `gposdemo/common/mcputil.py`
 - WP-A-8 offen (12.4): Liveness auf `/health` startet MCP-Pods bei DB- oder
-  Broker-Ausfall neu; 16.1 Nr. 22. `k8s/engine.yaml`, `gposdemo/common/bus.py`
+  Broker-Ausfall neu; 16.1 Nr. 22. `k8s/base/engine.yaml`,
+  `gposdemo/common/bus.py`
 - WP-A-9 Lesart (2.4, 3.3): Client-Name mit Suffix, 3 Startversuche, Wiederverbindung,
   Ack-Timeout 5 s. `gposdemo/common/bus.py`
 - WP-A-10 Lesart (2.4, 7.2, 7.3): `Telemetry(tz=…)`, `ts` mit ms, User Properties,
@@ -6953,7 +6963,7 @@ WP-G BFF und Oberflächen:
 - WP-G-7 Abweichung (10.1, 4.5): Trace-ID je Kasse, `header` ersetzt, breitere
   HTTP-Abbildung, `BFF-001..003`. `gposdemo/ui/facade.py`
 - WP-G-8 Lesart (10.1, 12.4, 13.3): `/health` der UI immer 200. `gposdemo/ui/bff.py`,
-  `k8s/ui.yaml`
+  `k8s/base/ui.yaml`
 - WP-G-9 Lesart (4.2, 10.3, 11.8): Karte aus `capturingInformation`.
   `gposdemo/ui/feed.py`, `gposdemo/pos/sim.py`
 - WP-G-10 Lesart (10.3): `TOUCH`/`SCANNER`, Wartezeiten der Szenarien.
@@ -7008,7 +7018,7 @@ WP-H Deployment, Mesh, Betrieb, Integration:
 - WP-H-11 Ergänzung (9.9, 9.8, 13.4): `--gate-verify`/`--gate-status`, Form von
   `build/gate-verified`. `scripts/e2e.py`
 - WP-H-12 Ergänzung (12.4): Label auf Pod-Templates, `enableServiceLinks: false`.
-  `k8s/kustomization.yaml`
+  `k8s/base/kustomization.yaml`
 - WP-H-13 Lesart (12.6): `uninstall.sh` über v1-Pfade, RBAC bleibt.
   `scripts/uninstall.sh`
 - WP-H-14 Lesart (12.6): Suchbereich und Ausgabe von `check_hygiene.sh`.
@@ -7062,7 +7072,7 @@ Prüfung (WP-AUDIT):
 - WP-AUDIT-6 Abweichung (8.5, 9.9, 12.1, 12.6): wie WP-H-1 und WP-H-2. `mesh/fallback/`
 - WP-AUDIT-7 Ergänzung (12.1, 12.5, 13.1): `scripts/tests`, `make test-ops`. `Makefile`
 - WP-AUDIT-8 Owner-Frage (8.4, 9.9): `GPOS_TOOL_STORE=101` auch bei Kasse 98;
-  16.1 Nr. 21. `k8s/configmap.yaml`
+  16.1 Nr. 21. `k8s/base/configmap.yaml`
 - WP-AUDIT-9 Lesart (11.4, 9.9, 16.2): `approved_at` mit Offset; neue Annahme A-24.
   `gposdemo/engine/gate/service.py`
 - WP-AUDIT-10 offen (13.2): Der Interpreter ersetzt keine Laufzeitprüfung.

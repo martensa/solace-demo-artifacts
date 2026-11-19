@@ -3,6 +3,7 @@
 #   scripts/e2e.sh --till 01 --scenario S1 --mode approve --runs 20
 #   scripts/e2e.sh --gate-verify            (make gate-verify, spec 9.9)
 # HTTPS against E2E_BASE_URL with E2E_CA_FILE; broker probes run in the pod.
+# TARGET=aks: .env.aks (E2E_CA_FILE=system), build/aks; see scripts/opslib.py.
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 [ -x "$DEMO_DIR/.venv/bin/python" ] || die ".venv missing: make venv"

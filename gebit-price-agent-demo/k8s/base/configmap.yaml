@@ -2,7 +2,8 @@
 # gpos-broker (SOLACE_*) and gpos-db (DSN_*); GPOS_DSN, GRPC_PORT, MCP_PORT and
 # HTTP_PORT are set per Deployment. scripts/install.sh k8s overlays the keys
 # GPOS_DEMO_DATE, GPOS_*_LOCATION, GPOS_DELIVERY, GATE_MIN_DELAY_S, GATE_GUARD
-# and SAM_URL from .env after `kubectl apply -k`. No LLM endpoint, key or model.
+# and SAM_URL from .env (TARGET=aks: .env.aks) after the apply; overlays/aks also
+# sets SAM_URL and GPOS_GRPC_REFLECTION_SCOPE. No LLM endpoint, key or model.
 apiVersion: v1
 kind: ConfigMap
 metadata:

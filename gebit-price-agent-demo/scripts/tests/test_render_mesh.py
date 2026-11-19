@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import opslib
 import render_mesh
 
 R1_TOPICS = [
@@ -17,6 +18,15 @@ R1_TOPICS = [
     "gebit/rp/purchase/v2/purchase_transaction/PurchaseTransactionClosed/DE/999/101/01/>",
     "gebit/rp/purchase/v2/purchase_transaction/PurchaseTransactionCancelled/DE/999/101/01/>",
 ]
+
+
+@pytest.fixture(autouse=True)
+def lab_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests pin the lab: a TARGET exported by the caller's shell (or `TARGET=aks
+    make test`) must not leak in, also not through the paths fixed at import."""
+    monkeypatch.delenv("TARGET", raising=False)
+    monkeypatch.setattr(opslib, "TARGET", "lab")
+    monkeypatch.setattr(render_mesh, "RENDERED", opslib.target_dirs("lab")[0])
 
 
 def render(tmp_path: Path, *extra: str) -> int:
@@ -100,6 +110,38 @@ def test_manifests_name_exactly_one_entrypoint(tmp_path: Path, dummy_broker) -> 
         manifest = yaml.safe_load((tmp_path / "out" / f"manifest-{part}.yaml").read_text())
         assert manifest["resources"] == {"entrypoints": [name]}
         assert manifest["target"]["url"] == "https://sam.solace.lab"
+
+
+LAB_MANIFEST_PROBE = """\
+# RENDERED by scripts/render_mesh.py -- contains no secret itself, but lives
+# next to the rendered entrypoint (chmod 600). Apply as sam_admin, NEVER --prune:
+#   cd mesh/.rendered && sam config apply -m manifest-probe.yaml
+kind: manifest
+name: gpos-uc1-probe-entrypoint
+description: >-
+  EuroCIS price agent UC1: the rendered gpos-probe-events entrypoint with the broker
+  credentials of the lab.
+target:
+  name: solace-lab
+  url: https://sam.solace.lab
+  auth:
+    type: oauth
+resources:
+  entrypoints:
+    - gpos-probe-events
+"""
+
+
+def test_lab_manifest_text_is_unchanged(tmp_path: Path, dummy_broker,
+                                        monkeypatch: pytest.MonkeyPatch) -> None:
+    """TARGET unset = lab: byte for byte the manifest before the AKS switch (1.4)."""
+    for key in ("TARGET", "SAM_URL"):
+        monkeypatch.delenv(key, raising=False)
+    assert render(tmp_path) == 0
+    assert (tmp_path / "out" / "manifest-probe.yaml").read_text() == LAB_MANIFEST_PROBE
+    booth = (tmp_path / "out" / "manifest-booth.yaml").read_text()
+    assert booth == LAB_MANIFEST_PROBE.replace("probe", "booth")
+    # the import-time lab paths: test_target_aks.test_lab_paths_are_unchanged (subprocess)
 
 
 def test_r1_mode_switch_needs_the_flag(tmp_path: Path, dummy_broker,

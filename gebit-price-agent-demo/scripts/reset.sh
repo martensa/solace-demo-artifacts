@@ -10,6 +10,7 @@
 #   --preflight: login/notify check on probe till 98 (spec 9.7)
 # Target < 15 s (A14). Run before every fair day and every probe, not only the
 # reset button of /kasse (which cannot reach the SAM inbox).
+# TARGET=aks: the same against AKS (scripts/lib.sh, .env.aks).
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 

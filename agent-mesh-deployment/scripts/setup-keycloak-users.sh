@@ -4,16 +4,36 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Optional environment (unset = the local lab, unchanged):
+#   SAM_ENV_FILE  env file instead of ../.env
+# KEYCLOAK_ADMIN_PASSWORD from the environment is used when the env
+# file does not set it (aks_kc passes it that way).
+ENV_FILE="${SAM_ENV_FILE:-$PROJECT_DIR/.env}"
+
 # --- Load environment variables -----------------------------------
-if [ ! -f "$PROJECT_DIR/.env" ]; then
-  echo "No .env file found. Copy .env.example to .env first."
+if [ ! -f "$ENV_FILE" ]; then
+  if [ -n "${SAM_ENV_FILE:-}" ]; then
+    echo "No env file found: $ENV_FILE"
+  else
+    echo "No .env file found. Copy .env.example to .env first."
+  fi
   exit 1
 fi
 
 # shellcheck source=/dev/null
-. "$PROJECT_DIR/.env"
+. "$ENV_FILE"
 
 # --- Defaults -----------------------------------------------------
+# An explicit env file (AKS) must name its Keycloak and admin
+# password itself: never fall back to the lab defaults below.
+if [ -n "${SAM_ENV_FILE:-}" ] && [ -z "${KEYCLOAK_URL:-}" ]; then
+  echo "ERROR: KEYCLOAK_URL is not set in $ENV_FILE." >&2
+  exit 1
+fi
+if [ -n "${SAM_ENV_FILE:-}" ] && [ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ]; then
+  echo "ERROR: KEYCLOAK_ADMIN_PASSWORD is not set (environment or $ENV_FILE)." >&2
+  exit 1
+fi
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://auth.solace.lab}"
 KEYCLOAK_REALM="${KEYCLOAK_REALM:-solace-lab}"
 KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
@@ -48,14 +68,30 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # --- Obtain admin token -------------------------------------------
+# With SAM_ENV_FILE (a remote Keycloak; aks_kc passes the admin
+# password from the Key Vault) neither the password nor the admin
+# token ever goes into an argv (visible to ps and process auditing):
+# the password reaches curl on stdin, the bearer header through a
+# curl config on a file descriptor (kc_curl below). The lab keeps its
+# argv as it always was.
 echo "Obtaining Keycloak admin token from ${KEYCLOAK_URL} ..."
-TOKEN_RESPONSE=$(curl -sk -X POST \
-  "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=password" \
-  -d "client_id=admin-cli" \
-  -d "username=${KEYCLOAK_ADMIN_USER}" \
-  -d "password=${KEYCLOAK_ADMIN_PASSWORD}")
+if [ -n "${SAM_ENV_FILE:-}" ]; then
+  TOKEN_RESPONSE=$(printf '%s' "$KEYCLOAK_ADMIN_PASSWORD" | curl -sk -X POST \
+    "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=password" \
+    -d "client_id=admin-cli" \
+    --data-urlencode "username=${KEYCLOAK_ADMIN_USER}" \
+    --data-urlencode "password@-")
+else
+  TOKEN_RESPONSE=$(curl -sk -X POST \
+    "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=password" \
+    -d "client_id=admin-cli" \
+    -d "username=${KEYCLOAK_ADMIN_USER}" \
+    -d "password=${KEYCLOAK_ADMIN_PASSWORD}")
+fi
 
 TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
 
@@ -66,6 +102,28 @@ if [ -z "$TOKEN" ]; then
 fi
 
 BASE="${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}"
+
+# --- Helper: curl with the admin bearer token ----------------------
+# Lab: the header is in the argv, passed by the caller as
+# ${AUTH_H[@]} exactly where it always was. Remote (SAM_ENV_FILE):
+# AUTH_H is empty and kc_curl reads the header from a curl config on
+# a file descriptor (printf is a builtin: no argv anywhere).
+if [ -n "${SAM_ENV_FILE:-}" ]; then
+  case "$TOKEN" in
+    *[!A-Za-z0-9._~+/=-]*)
+      echo "ERROR: the admin token has unexpected characters." >&2; exit 1 ;;
+  esac
+  AUTH_H=()
+else
+  AUTH_H=(-H "Authorization: Bearer ${TOKEN}")
+fi
+kc_curl() {
+  if [ -n "${SAM_ENV_FILE:-}" ]; then
+    curl --config <(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN") "$@"
+  else
+    curl "$@"
+  fi
+}
 
 # --- Helper: capitalize underscore-separated username -------------
 #   power_user    -> Power_User
@@ -83,8 +141,8 @@ capitalize_username() {
 # --- Helper: find group UUID by name ------------------------------
 get_group_id() {
   NAME="$1"
-  curl -sk "${BASE}/groups?search=${NAME}&exact=true" \
-    -H "Authorization: Bearer ${TOKEN}" \
+  kc_curl -sk "${BASE}/groups?search=${NAME}&exact=true" \
+    ${AUTH_H[@]+"${AUTH_H[@]}"} \
     | jq -r --arg n "$NAME" '.[] | select(.name==$n) | .id' \
     | head -1
 }
@@ -92,8 +150,8 @@ get_group_id() {
 # --- Helper: find user UUID by username ---------------------------
 get_user_id() {
   NAME="$1"
-  curl -sk "${BASE}/users?username=${NAME}&exact=true" \
-    -H "Authorization: Bearer ${TOKEN}" \
+  kc_curl -sk "${BASE}/users?username=${NAME}&exact=true" \
+    ${AUTH_H[@]+"${AUTH_H[@]}"} \
     | jq -r --arg n "$NAME" '.[] | select(.username==$n) | .id' \
     | head -1
 }
@@ -107,9 +165,9 @@ for GROUP in $SAM_GROUPS; do
   fi
 
   echo "Creating group '${GROUP}' ..."
-  HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -X POST \
+  HTTP_CODE=$(kc_curl -sk -o /dev/null -w "%{http_code}" -X POST \
     "${BASE}/groups" \
-    -H "Authorization: Bearer ${TOKEN}" \
+    ${AUTH_H[@]+"${AUTH_H[@]}"} \
     -H "Content-Type: application/json" \
     -d "{\"name\":\"${GROUP}\"}")
 
@@ -130,9 +188,9 @@ for USER in $SAM_USERS; do
     USER_UUID="$EXISTING"
   else
     echo "Creating user '${USER}' ..."
-    HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -X POST \
+    HTTP_CODE=$(kc_curl -sk -o /dev/null -w "%{http_code}" -X POST \
       "${BASE}/users" \
-      -H "Authorization: Bearer ${TOKEN}" \
+      ${AUTH_H[@]+"${AUTH_H[@]}"} \
       -H "Content-Type: application/json" \
       -d "{
         \"username\": \"${USER}\",
@@ -168,9 +226,9 @@ for USER in $SAM_USERS; do
   fi
 
   echo "Assigning user '${USER}' to group '${GROUP_NAME}' ..."
-  curl -sk -o /dev/null -X PUT \
+  kc_curl -sk -o /dev/null -X PUT \
     "${BASE}/users/${USER_UUID}/groups/${GROUP_UUID}" \
-    -H "Authorization: Bearer ${TOKEN}"
+    ${AUTH_H[@]+"${AUTH_H[@]}"}
 done
 
 # Note: Realm-import accounts ('admin', 'user') are deliberately

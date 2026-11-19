@@ -36,3 +36,11 @@ spikes/mm/cli-doc-*.txt
 spikes/mm/models.json
 # Voice recordings of unconfirmed origin stay local (multimodal spike).
 spikes/mm/*.wav
+# AKS broker Terraform (infra/aks/broker): state is ignored at the repo root;
+# plan files hold the TF_VAR_* passwords in plaintext, crash logs may too
+# (tfa refuses -out, these lines catch a plain terraform run)
+*.tfplan
+tfplan
+*.tfstate.*
+crash.log
+crash.*.log

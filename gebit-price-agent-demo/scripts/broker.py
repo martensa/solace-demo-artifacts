@@ -16,27 +16,45 @@
 The SEMP admin password is read at runtime from SEMP_PASSWORD_FROM (the
 event-mesh terraform.tfvars, key solace_1_password) and never printed; it only
 goes into the Authorization header of this process.
+
+TARGET=aks (AKS-MIGRATION-PLAN 1.4, A18): the password is the Key Vault secret
+SEMP_PASSWORD_KV (no tfvars fallback), SEMP_URL is a local port-forward
+(http://127.0.0.1:18080). Before the first SEMP call the port is probed: a
+listener there must answer SEMP v2 /monitor/about/api with the AKS admin password
+and must not have the lab-only VPN amartens-test ("Lab-Broker": abort); an open
+forward is reused, otherwise this process opens `kubectl port-forward -n solace
+svc/solace-pubsubplus 18080:8080` with the AKS kubeconfig and context itself and
+closes it at exit.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
+import http.client
 import json
 import re
+import socket
+import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from opslib import OpsError, SamApi, demo_env, demo_path
+from opslib import OpsError, SamApi, demo_env, demo_path, kubectl_base, kv_secret, target_of
 from render_mesh import RULES, r1_mode, r1_topics
 
+LAB_ONLY_VPN = "amartens-test"
+AKS_SEMP_HOST = "127.0.0.1"
+AKS_BROKER = ("solace", "svc/solace-pubsubplus", 8080)     # namespace, service, SEMP port
+FORWARD_WAIT_S = 20.0
 SAM_QUEUE_PREFIX_DEFAULT = "sam-solace-lab/q/eventmesh/"
 BOOTH_ENTRYPOINT = "gpos-booth-events"
 R1_RULE = "r1_booth_till"
@@ -78,10 +96,17 @@ class Semp:
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Semp:
-        password = read_semp_password(
-            demo_path(env.get("SEMP_PASSWORD_FROM",
-                              "../event-mesh-deployment/terraform/terraform.tfvars")),
-            env.get("SEMP_PASSWORD_KEY", "solace_1_password"))
+        if target_of(env) == "aks":
+            key, url = env.get("SEMP_PASSWORD_KV", ""), env.get("SEMP_URL", "")
+            if not (key and url):
+                raise OpsError("TARGET=aks: SEMP_PASSWORD_KV and SEMP_URL must be set in "
+                               ".env.aks (no tfvars fallback)")
+            password = kv_secret(env, key)
+        else:
+            password = read_semp_password(
+                demo_path(env.get("SEMP_PASSWORD_FROM",
+                                  "../event-mesh-deployment/terraform/terraform.tfvars")),
+                env.get("SEMP_PASSWORD_KEY", "solace_1_password"))
         token = base64.b64encode(f"{env.get('SEMP_USER', 'admin')}:{password}".encode()).decode()
         return cls(env.get("SEMP_URL", "http://localhost:8080").rstrip("/"),
                    env.get("BROKER_VPN", "default"), f"Basic {token}")
@@ -149,6 +174,108 @@ class Semp:
         flows = list(data.get("data") or [])
         next_uri = ((data.get("meta") or {}).get("paging") or {}).get("nextPageUri", "")
         return flows + (self.collection(next_uri) if next_uri else [])
+
+
+# -------------------------------------------------------------- AKS preflight
+
+
+def aks_semp_port(url: str) -> int:
+    """Local port of SEMP_URL on aks: only http://127.0.0.1:<port> (a port-forward;
+    the lab broker owns the Mac's 8080)."""
+    parts = urllib.parse.urlsplit(url)
+    try:
+        port = parts.port
+    except ValueError:
+        port = None
+    if parts.scheme != "http" or parts.hostname != AKS_SEMP_HOST or not port:
+        raise OpsError(f"TARGET=aks: SEMP_URL must be http://{AKS_SEMP_HOST}:<port> "
+                       "(port-forward to the AKS broker, runbook A13)")
+    return port
+
+
+def listening(port: int, timeout: float = 1.0) -> bool:
+    """Something accepts TCP connections on 127.0.0.1:port."""
+    try:
+        with socket.create_connection((AKS_SEMP_HOST, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def check_broker_identity(semp: Semp) -> str:
+    """The broker behind the forward speaks SEMP v2, accepts the AKS admin password
+    and is not the lab broker (VPN amartens-test exists only there). Returns the
+    sempVersion of /monitor/about/api (the SEMP API version, not the broker's)."""
+    try:
+        code, data = semp.request("GET", "monitor/about/api")
+        about = data.get("data") if isinstance(data, dict) else None
+        if code in (401, 403):
+            raise OpsError(f"SEMP {semp.base} rejects the AKS admin password (Key Vault "
+                           "SEMP_PASSWORD_KV): another broker listens there (Lab-Broker?); "
+                           "close that port-forward")
+        if code != 200 or not isinstance(about, dict) or "sempVersion" not in about:
+            raise OpsError(f"SEMP {semp.base}: /monitor/about/api answered {code}, "
+                           "not a SEMP v2 broker")
+        vpns = {str(row.get("msgVpnName")) for row in
+                semp.collection("config/msgVpns?count=100&select=msgVpnName")}
+    except (ValueError, OSError, http.client.HTTPException) as exc:
+        # HTTPException: a listener that is not HTTP at all (e.g. BadStatusLine)
+        raise OpsError(f"SEMP {semp.base}: no SEMP v2 answer ({type(exc).__name__})") from exc
+    if LAB_ONLY_VPN in vpns:
+        raise OpsError(f"SEMP {semp.base} has VPN {LAB_ONLY_VPN}: that is the Lab-Broker, "
+                       "abort (close the port-forward on this port)")
+    print(f"SEMP {semp.base}: AKS broker, SEMP API {about['sempVersion']}, VPNs "
+          f"{', '.join(sorted(vpns))}", file=sys.stderr)
+    return str(about["sempVersion"])
+
+
+@contextlib.contextmanager
+def port_forward(env: Mapping[str, str], port: int) -> Iterator[None]:
+    """`kubectl port-forward -n solace svc/solace-pubsubplus PORT:8080` with the AKS
+    kubeconfig and context, until the block ends (closed on every exit path)."""
+    ns, svc, remote = AKS_BROKER
+    cmd = kubectl_base(env) + ["-n", ns, "port-forward", "--address", AKS_SEMP_HOST, svc,
+                               f"{port}:{remote}"]
+    with tempfile.TemporaryFile() as errlog:
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                stderr=errlog)
+        try:
+            deadline = time.monotonic() + FORWARD_WAIT_S
+            while not listening(port, 0.5):
+                if proc.poll() is not None or time.monotonic() >= deadline:
+                    errlog.seek(0)
+                    detail = " ".join(errlog.read().decode(errors="replace").split())[-240:]
+                    raise OpsError(f"kubectl port-forward {ns}/{svc} {port}:{remote} failed: "
+                                   f"{detail or f'no listener after {FORWARD_WAIT_S:.0f} s'}")
+                time.sleep(0.2)
+            print(f"SEMP: port-forward {AKS_SEMP_HOST}:{port} -> {ns}/{svc}:{remote} opened "
+                  "(closed at exit)", file=sys.stderr)
+            yield
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+
+
+@contextlib.contextmanager
+def semp_session(env: Mapping[str, str]) -> Iterator[Semp]:
+    """The SEMP client of the target. lab: as before, no probe. aks: an open forward
+    on SEMP_URL is reused, otherwise opened here; the identity check runs before the
+    caller's first SEMP call; the password comes from the Key Vault."""
+    if target_of(env) != "aks":
+        yield Semp.from_env(env)
+        return
+    port = aks_semp_port(env.get("SEMP_URL", ""))
+    with contextlib.ExitStack() as stack:
+        if not listening(port):
+            stack.enter_context(port_forward(env, port))
+        semp = Semp.from_env(env)
+        check_broker_identity(semp)
+        yield semp
 
 
 def converge_r1(semp: Semp, queue: str, topics: list[str]) -> list[str]:
@@ -302,6 +429,25 @@ def cmd_ready(semp: Semp, env: Mapping[str, str], name: str, timeout: float,
         time.sleep(3)
 
 
+def run(args: argparse.Namespace, semp: Semp, env: Mapping[str, str]) -> int:
+    queue = env.get("R1_QUEUE", "gpos-booth-r1")
+    prefix = env.get("SAM_QUEUE_PREFIX", SAM_QUEUE_PREFIX_DEFAULT)
+    if args.cmd == "r1-create":
+        return cmd_r1_create(semp, env, queue)
+    if args.cmd == "r1-show":
+        return cmd_r1_show(semp, queue)
+    if args.cmd == "r1-switch":
+        return cmd_r1_switch(semp, env, queue, args.old, args.new, prefix)
+    if args.cmd == "r1-delete":
+        return cmd_r1_delete(semp, queue)
+    if args.cmd == "orphans":
+        return cmd_orphans(semp, prefix)
+    if args.cmd == "ready":
+        return cmd_ready(semp, env, args.entrypoint, args.timeout, queue, prefix)
+    print(len(semp.txflows(args.queue)))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -319,23 +465,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     try:
         env = demo_env()
-        semp = Semp.from_env(env)
-        queue = env.get("R1_QUEUE", "gpos-booth-r1")
-        prefix = env.get("SAM_QUEUE_PREFIX", SAM_QUEUE_PREFIX_DEFAULT)
-        if args.cmd == "r1-create":
-            return cmd_r1_create(semp, env, queue)
-        if args.cmd == "r1-show":
-            return cmd_r1_show(semp, queue)
-        if args.cmd == "r1-switch":
-            return cmd_r1_switch(semp, env, queue, args.old, args.new, prefix)
-        if args.cmd == "r1-delete":
-            return cmd_r1_delete(semp, queue)
-        if args.cmd == "orphans":
-            return cmd_orphans(semp, prefix)
-        if args.cmd == "ready":
-            return cmd_ready(semp, env, args.entrypoint, args.timeout, queue, prefix)
-        print(len(semp.txflows(args.queue)))
-        return 0
+        with semp_session(env) as semp:
+            return run(args, semp, env)
     except OpsError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

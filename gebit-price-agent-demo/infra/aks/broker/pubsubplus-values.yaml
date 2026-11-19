@@ -1,0 +1,59 @@
+# Helm values for the AKS event broker of the EuroCIS showcase
+# (AKS-MIGRATION-PLAN.md A12). Chart pubsubplus 3.10.0 from
+# https://solaceproducts.github.io/pubsubplus-kubernetes-helm-quickstart/helm-charts,
+# release "solace" in namespace "solace":
+#
+#   haks upgrade --install solace pubsubplus --version 3.10.0 -n solace \
+#     --repo <url above> -f "$AKS_DIR/broker/pubsubplus-values.yaml"
+#
+# The admin password is never in this file: it lives in the Secret
+# "solace-admin" (key username_admin_password), created from Key Vault
+# before the install. The chart looks the Secret up at render time and
+# fails if it is missing, so `helm template` without a cluster needs
+# --set solace.usernameAdminPasswordSecretName= to render.
+#
+# Size, spool and the Kafka scaling key are configuration keys that the
+# broker reads only on its first boot: changing them later means
+# deleting the PVC.
+
+solace:
+  redundancy: false
+  # 2 CPU / 6515Mi requests = limits (Guaranteed), 1000 connections.
+  size: prod1k
+  usernameAdminPasswordSecretName: solace-admin
+  extraEnvVars:
+    # Broker-wide spool in MB; matches the two VPNs of broker/main.tf
+    # (10000 MB each, module default).
+    - name: messagespool_maxspoolusage
+      value: "20000"
+    # The shared vpn module sets max_kafka_broker_connection_count = 300
+    # on every VPN, and a VPN may not exceed the system limit, which
+    # defaults to 0. Same value as the lab brokers
+    # (event-mesh-deployment/config/solace-*/solace_config_keys.env).
+    # Solace resource calculator (10.26): +300 MiB cgroup memory, total
+    # 5938 MiB required, inside the 6515Mi of prod1k; no extra CPU.
+    - name: system_scaling_maxkafkabrokerconnectioncount
+      value: "300"
+
+image:
+  # Public upstream image, pinned by its multi-arch index digest
+  # (linux/amd64 + linux/arm64). The chart renders
+  # "<repository>:<tag>", so "tag@digest" is a valid reference and the
+  # chart's version check still reads 10.26 from the tag.
+  repository: docker.io/solace/solace-pubsub-standard
+  tag: "10.26.0.9219@sha256:c0020e53ed487ecffed6a15ef7ff1086ce969fd8b772cb06cfefc044eff5c0c8"
+  # No pullSecretName: Docker Hub, anonymous pull.
+
+# Cluster-internal only (chart default is LoadBalancer = public IP).
+# SEMP is reached from the Mac only via
+#   kaks -n solace port-forward svc/solace-pubsubplus 18080:8080
+service:
+  type: ClusterIP
+
+storage:
+  persistent: true
+  useStorageClass: managed-csi-premium
+  size: 64Gi
+  # One mount point (/var/lib/solace) instead of the legacy
+  # per-element subPath mounts; recommended since broker 9.12.
+  useStorageGroup: true

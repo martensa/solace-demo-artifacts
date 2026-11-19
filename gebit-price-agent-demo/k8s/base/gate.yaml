@@ -1,26 +1,24 @@
-# gpos-pos: GEBIT Purchase API 2.50.0 simulator (gRPC 50051, runtime descriptor sets from the
-# Secret gpos-gebit-descriptors) and MCP gpos-pos-api / admin API on 8771.
+# gpos-gate: Gate: MCP gpos-price-gate on 8766, the only price-changing tool (apply_price).
+# Same DB role as the engine (gpos_engine); no relay, the engine publishes.
 # Shape of bsg-trading-desk-demo/k8s and G0-07, hardened (spec 12.4).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gpos-pos
+  name: gpos-gate
   labels:
-    app: gpos-pos
+    app: gpos-gate
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gpos-pos
+      app: gpos-gate
   template:
     metadata:
       labels:
-        app: gpos-pos
+        app: gpos-gate
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
-      imagePullSecrets:
-        - name: registry-pull-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -28,30 +26,26 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: pos
+        - name: gate
           image: gpos-demo
           imagePullPolicy: Always
-          command: ["python", "-m", "gposdemo.pos"]
+          command: ["python", "-m", "gposdemo.engine.gate"]
           env:
-            - name: GRPC_PORT
-              value: "50051"
             - name: MCP_PORT
-              value: "8771"
+              value: "8766"
             - name: GPOS_DSN
               valueFrom:
                 secretKeyRef:
                   name: gpos-db
-                  key: DSN_POS
+                  key: DSN_ENGINE
           envFrom:
             - configMapRef:
                 name: gpos-config
             - secretRef:
                 name: gpos-broker
           ports:
-            - name: grpc
-              containerPort: 50051
             - name: http
-              containerPort: 8771
+              containerPort: 8766
           readinessProbe:
             httpGet:
               path: /health
@@ -77,31 +71,21 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            - name: descriptors
-              mountPath: /descriptors
-              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 50Mi
-        - name: descriptors
-          secret:
-            secretName: gpos-gebit-descriptors
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: gpos-pos
+  name: gpos-gate
   labels:
-    app: gpos-pos
+    app: gpos-gate
 spec:
   selector:
-    app: gpos-pos
+    app: gpos-gate
   ports:
-    - name: grpc
-      port: 50051
-      targetPort: grpc
-      appProtocol: kubernetes.io/h2c
     - name: http
-      port: 8771
+      port: 8766
       targetPort: http

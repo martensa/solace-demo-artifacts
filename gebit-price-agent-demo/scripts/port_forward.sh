@@ -4,6 +4,7 @@
 #   8771 (pos) 8772 (loyalty) 8773 (wws), UI http://localhost:8090
 # The gRPC host names resolve via /etc/hosts (spec 12.4): emergency fallback for wws
 # and loyalty; POS gRPC only this way until the owner applies Ingress gpos-grpc.
+# TARGET=aks: the same ports from the AKS namespace (kubectl of scripts/lib.sh).
 set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 trap 'kill $(jobs -p) 2>/dev/null' EXIT INT TERM

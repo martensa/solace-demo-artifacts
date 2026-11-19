@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Render the two event-mesh entrypoints of the gpos demo (spec 9.6).
 
-  scripts/render_mesh.py                 render into mesh/.rendered/ (chmod 600)
+  scripts/render_mesh.py                 render into mesh/.rendered/ (chmod 600;
+                                         TARGET=aks: mesh/.rendered/aks/)
   scripts/render_mesh.py --switch-r1     allow an R1_MODE change (hard rule 4)
   scripts/render_mesh.py --mark-applied  record R1_MODE as applied (mesh/.rendered/r1_mode)
   scripts/render_mesh.py --r1-topics     print the five R1 topics of the booth till
@@ -19,7 +20,12 @@ mode stops (exit 3) unless --switch-r1 is given, because a switch leaves an
 orphaned queue that scripts/broker.sh r1-switch has to remove (finding 21).
 
 Credentials are read at runtime (BROKER_USERNAME/BROKER_PASSWORD or
-MQTT_USERNAME/MQTT_PASSWORD from BROKER_CREDENTIALS_FROM) and never printed.
+MQTT_USERNAME/MQTT_PASSWORD from BROKER_CREDENTIALS_FROM; TARGET=aks:
+BROKER_USERNAME and the Key Vault secret BROKER_PASSWORD_KV) and never printed.
+Like in the lab, the rendered entrypoints (and the --write-broker-env file) hold
+the gpos broker password itself: the SAM CLI applies files. They are chmod 600 in
+a 700 directory, gitignored; on aks mesh/.rendered/aks goes in the teardown
+(runbook 5), and install.sh deletes its broker env file right after the apply.
 """
 
 from __future__ import annotations
@@ -33,11 +39,10 @@ from pathlib import Path
 
 import yaml
 
-from opslib import (DEMO_DIR, RUN_IDENTITY_DEFAULT, OpsError, broker_credentials, demo_env,
-                    location_parts, write_private)
+from opslib import (DEMO_DIR, RENDERED, RUN_IDENTITY_DEFAULT, OpsError, broker_credentials,
+                    demo_env, location_parts, target_of, write_private)
 
 TEMPLATES = DEMO_DIR / "mesh" / "entrypoints"
-RENDERED = DEMO_DIR / "mesh" / ".rendered"
 R1_MODES = ("own", "sam")
 ENTRYPOINTS = {"booth": "gpos-booth-events", "probe": "gpos-probe-events"}
 RULES = {
@@ -52,12 +57,12 @@ _MARKER = re.compile(r"^\s*# (>>>|<<<) R1_MODE=(own|sam)\s*$")
 MANIFEST = """\
 # RENDERED by scripts/render_mesh.py -- contains no secret itself, but lives
 # next to the rendered entrypoint (chmod 600). Apply as sam_admin, NEVER --prune:
-#   cd mesh/.rendered && sam config apply -m {file}
+#   {apply}
 kind: manifest
 name: gpos-uc1-{part}-entrypoint
 description: >-
   EuroCIS price agent UC1: the rendered {entrypoint} entrypoint with the broker
-  credentials of the lab.
+  credentials of the {where}.
 target:
   name: solace-lab
   url: {sam_url}
@@ -145,12 +150,13 @@ def check_rendered(doc: dict, part: str, mode: str) -> None:
                            "with R1_MODE=own")
 
 
-def render_part(part: str, env: Mapping[str, str], mode: str, out: Path) -> Path:
+def render_part(part: str, env: Mapping[str, str], mode: str, out: Path,
+                creds: tuple[str, str] | None = None) -> Path:
     template = TEMPLATES / f"{ENTRYPOINTS[part]}.yaml.template"
     text = template.read_text(encoding="utf-8")
     if part == "booth":
         text = select_r1_block(text, mode)
-    user, password = broker_credentials(env)
+    user, password = creds or broker_credentials(env)
     text = substitute(text, placeholder_values(env),
                       {"__BROKER_USERNAME__": user, "__BROKER_PASSWORD__": password})
     doc = yaml.safe_load(text)
@@ -160,11 +166,25 @@ def render_part(part: str, env: Mapping[str, str], mode: str, out: Path) -> Path
     check_rendered(doc, part, mode)
     target = out / "entrypoints" / f"{ENTRYPOINTS[part]}.yaml"
     write_private(target, text)
+    sam_url = env.get("SAM_URL", "https://sam.solace.lab")
+    lab = target_of(env) == "lab"
     manifest = MANIFEST.format(file=f"manifest-{part}.yaml", part=part,
-                               entrypoint=ENTRYPOINTS[part],
-                               sam_url=env.get("SAM_URL", "https://sam.solace.lab"))
+                               entrypoint=ENTRYPOINTS[part], sam_url=sam_url,
+                               apply=apply_hint(f"manifest-{part}.yaml", sam_url, lab),
+                               where="lab" if lab else "AKS broker")
     write_private(out / f"manifest-{part}.yaml", manifest)
     return target
+
+
+def apply_hint(file: str, sam_url: str, lab: bool) -> str:
+    """The manual apply line of a rendered manifest. aks: only through aks_sam (AKS
+    SAM_HOME, no shell token; runbook 1.6): a plain `sam` would look the token up
+    under the target name solace-lab in the lab login cache and offer it to the
+    public name. The supported way is `TARGET=aks scripts/install.sh mesh`."""
+    if lab:
+        return f"cd mesh/.rendered && sam config apply -m {file}"
+    return (f'cd "$GPD/mesh/.rendered/aks" && aks_sam sam config apply --url {sam_url} '
+            f"--no-dotenv -m {file}")
 
 
 def r1_mode(env: Mapping[str, str]) -> str:
@@ -232,13 +252,15 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         previous = recorded_mode(args.out)
         if previous and previous != mode and not args.switch_r1:
-            print(f"ERROR: R1_MODE changes {previous} -> {mode}. Run "
+            prefix = "" if target_of(env) == "lab" else f"TARGET={target_of(env)} "
+            print(f"ERROR: R1_MODE changes {previous} -> {mode}. Run {prefix}"
                   "scripts/install.sh mesh --switch-r1 so that scripts/broker.sh "
                   f"r1-switch {previous} {mode} removes the orphaned queue "
                   "(hard rule 4).", file=sys.stderr)
             return 3
+        creds = broker_credentials(env)            # once (aks: one Key Vault read)
         for part in ("booth", "probe"):
-            target = render_part(part, env, mode, args.out)
+            target = render_part(part, env, mode, args.out, creds)
             suffix = f" (R1_MODE={mode})" if part == "booth" else ""
             print(f"rendered: {target}{suffix}")
         if previous and previous != mode:

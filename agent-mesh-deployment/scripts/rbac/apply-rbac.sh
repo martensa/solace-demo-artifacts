@@ -9,9 +9,13 @@ set -euo pipefail
 #
 # Prerequisites:
 #   1. SAM deployed and reachable at https://sam.solace.lab
+#      (or at $SAM_URL)
 #   2. A sam CLI login as the bootstrap admin:
 #        sam auth login solace-lab --url https://sam.solace.lab
 #      (log in as Keycloak demo user sam_admin / sam_admin)
+#
+# Optional environment (unset = the local lab): SAM_ENV_FILE,
+# SAM_HOME, SAM_URL -- see scripts/lib/common.sh.
 #
 # CLI resolution order (scripts/lib/common.sh): SAM_CLI_PATH from
 # .env, `sam` on PATH, else auto-extract from SAM_CLI_TAR into
@@ -21,29 +25,35 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-SAM_BASE="${SAM_BASE:-https://sam.solace.lab}"
-
 # --- Shared helpers (env, sam CLI resolution) ----------------------
 # shellcheck source=../lib/common.sh
 . "$PROJECT_DIR/scripts/lib/common.sh"
-load_env "$PROJECT_DIR"
+load_env "$PROJECT_DIR" "${SAM_ENV_FILE:-$PROJECT_DIR/.env}"
+sam_target_check "$PROJECT_DIR" || exit 1
 resolve_sam_cli
+
+# Messages only (the commands target SAM_URL via common.sh).
+SAM_BASE="${SAM_BASE:-$(sam_base_url)}"
 
 # --- Plan and apply -----------------------------------------------
 cd "$SCRIPT_DIR"
 echo ""
 echo "=== sam config plan ==="
-if ! "$SAM_CLI" config plan -m manifest.yaml; then
+if ! sam_cli_config plan -m manifest.yaml; then
   echo ""
   echo "Plan failed. If this is an authentication error, log in first:"
-  echo "  $SAM_CLI auth login solace-lab --url $SAM_BASE"
+  if [ -n "${SAM_HOME:-}" ]; then
+    echo "  $(sam_login_cmd)"
+  else
+    echo "  $SAM_CLI auth login solace-lab --url $SAM_BASE"
+  fi
   echo "(as Keycloak demo user sam_admin)"
   exit 1
 fi
 
 echo ""
 echo "=== sam config apply ==="
-"$SAM_CLI" config apply -m manifest.yaml
+sam_cli_config apply -m manifest.yaml
 
 # --- Default roles (fallback for unmapped users) -------------------
 # v1 parity: defaultRoles [sam_user]. There is no declarative kind
@@ -58,7 +68,7 @@ echo "=== sam config apply ==="
 echo ""
 echo "=== default roles -> [sam_user] ==="
 sam_auth_token || true
-SAM_USER_ID=$("$SAM_CLI" api /api/v1/platform/rbac/roles 2>/dev/null \
+SAM_USER_ID=$(sam_cli_api /api/v1/platform/rbac/roles 2>/dev/null \
   | python3 -c "
 import sys, json
 raw = ''.join(l for l in sys.stdin if l.lstrip().startswith(('{','[')))
@@ -67,12 +77,12 @@ rows = d.get('data') if isinstance(d, dict) else d
 print(next((r['id'] for r in rows or [] if r.get('name') == 'sam_user'), ''))" \
   2>/dev/null || true)
 if [ -n "${SAM_USER_ID:-}" ] && printf '{"roleIds": ["%s"]}' "$SAM_USER_ID" \
-     | "$SAM_CLI" api -X PUT /api/v1/platform/rbac/defaultRoles --input - >/dev/null 2>&1; then
+     | sam_cli_api -X PUT /api/v1/platform/rbac/defaultRoles --input - >/dev/null 2>&1; then
   echo "Default roles set to [sam_user] ($SAM_USER_ID)."
 else
   echo "WARNING: could not set default roles automatically."
   echo "Current value:"
-  "$SAM_CLI" api /api/v1/platform/rbac/defaultRoles 2>/dev/null || true
+  sam_cli_api /api/v1/platform/rbac/defaultRoles 2>/dev/null || true
   echo "Set manually with the sam_user role id:"
   echo "  echo '{\"roleIds\": [\"<id>\"]}' | $SAM_CLI api -X PUT /api/v1/platform/rbac/defaultRoles --input -"
 fi

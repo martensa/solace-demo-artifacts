@@ -1,0 +1,7 @@
+# Namespace of the demo DB on AKS; deleted only by `uninstall.sh --drop-db`.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpos-data
+  labels:
+    app.kubernetes.io/part-of: gpos-demo

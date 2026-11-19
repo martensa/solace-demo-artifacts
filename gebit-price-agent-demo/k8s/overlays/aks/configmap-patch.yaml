@@ -1,0 +1,10 @@
+# gpos-config on AKS: SAM_URL is only a link in the UI (no server call); install.sh
+# overlays it from .env.aks anyway. GPOS_GRPC_REFLECTION_SCOPE=all makes gpos-pos
+# (image 0.1.4+) answer reflection for all three gRPC services on the one name.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpos-config
+data:
+  SAM_URL: https://eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  GPOS_GRPC_REFLECTION_SCOPE: all

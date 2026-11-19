@@ -1,0 +1,130 @@
+# Traefik chart 42.4.1 (Traefik v3.7.19): AKS values (runbook A9).
+#
+# Traefik is the only entry point of the cluster: one LoadBalancer
+# Service on the static IP pip-aks-ingress (DNS label eurocis-showcase).
+# It serves the Ingresses of class nginx through the ingress-nginx
+# provider, so the SAM chart, Keycloak, the echo test and the gpos-demo
+# overlay keep their nginx.ingress.kubernetes.io/* annotations.
+# Contains no secrets.
+
+# Upstream image pinned by the multi-arch index digest of v3.7.19
+# (linux/arm64 included). versionOverride tells the chart the version
+# behind the digest. Update both together (runbook 1.7).
+image:
+  registry: docker.io
+  repository: library/traefik
+  digest: sha256:a6c0194dda77bcb804824580f36fa7edc56e315b1acfe933366c8b52844a78a4
+versionOverride: v3.7.19
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+deployment:
+  # The root filesystem is read-only; /tmp is a bounded emptyDir.
+  tmpVolume:
+    emptyDir:
+      sizeLimit: 2Gi
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+# The chart's own IngressClass "traefik" is not wanted; the class
+# "nginx" comes from extraObjects below.
+ingressClass:
+  enabled: false
+
+providers:
+  kubernetesCRD:
+    enabled: true
+    # Only the namespace traefik may define the TLSStore/TLSOption
+    # "default" (the chart creates the TLSStore there).
+    defaultTLSResourcesNamespace: traefik
+  kubernetesIngress:
+    enabled: false
+  kubernetesIngressNGINX:
+    enabled: true
+    ingressClass: nginx
+    controllerClass: k8s.io/ingress-nginx
+    allowSnippetAnnotations: false
+    publishService:
+      enabled: true
+
+ports:
+  # HTTP stays without a global redirect: the ACME HTTP-01 solver must be
+  # reachable on port 80. Ingresses redirect with the ssl-redirect
+  # annotation (308).
+  web: {}
+  websecure:
+    transport:
+      respondingTimeouts:
+        # Long-lived requests (gRPC streams, SSE, SAM): the default 60s
+        # read timeout would cancel them.
+        readTimeout: 3600s
+    http:
+      middlewares:
+        - traefik-hsts@kubernetescrd
+
+service:
+  annotations:
+    service.beta.kubernetes.io/azure-pip-name: pip-aks-ingress
+    service.beta.kubernetes.io/azure-load-balancer-resource-group: gebit-showcase-nodes
+    service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout: "30"
+  spec:
+    type: LoadBalancer
+    # Keeps the client IP (rate limits per client IP, X-Real-Ip).
+    externalTrafficPolicy: Local
+
+# Default certificate for every TLS router; Ingresses carry tls.hosts only.
+tlsStore:
+  default:
+    defaultCertificate:
+      secretName: ingress-tls
+
+accessLog:
+  enabled: true
+  format: json
+  fields:
+    headers:
+      defaultMode: drop
+    queryParameters:
+      defaultMode: drop
+
+# Dashboard only on the internal entry point "traefik" (container port
+# 8080, not part of the Service). Open it through the AKS helpers on a
+# free Mac port (8080 is the lab broker, 18080/18081 are taken by AKS):
+#   aks_guard && kaks -n traefik port-forward deploy/traefik 18082:8080
+# then http://127.0.0.1:18082/dashboard/
+ingressRoute:
+  dashboard:
+    enabled: true
+    entryPoints: ["traefik"]
+
+metrics:
+  prometheus:
+    serviceMonitor:
+      enabled: true
+
+extraObjects:
+  # The SAM chart and all other Ingresses use class nginx.
+  - apiVersion: networking.k8s.io/v1
+    kind: IngressClass
+    metadata:
+      name: nginx
+    spec:
+      controller: k8s.io/ingress-nginx
+  # HSTS for every HTTPS response (entry point middleware of websecure).
+  - apiVersion: traefik.io/v1alpha1
+    kind: Middleware
+    metadata:
+      name: hsts
+      namespace: traefik
+    spec:
+      headers:
+        stsSeconds: 604800
+        stsIncludeSubdomains: false
+        stsPreload: false

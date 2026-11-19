@@ -8,6 +8,9 @@
   sam_inbox.py watch                inbox watcher during the fair (make demo-watch)
   sam_inbox.py hygiene              count read gpos notifications (A-23)
 
+TARGET=aks: .env.aks, the SAM CLI with --url SAM_URL and the AKS SAM_HOME, the BFF
+on the public name, lock build/aks/sam_inbox.lock (scripts/opslib.py).
+
 Only entries of SAM_RUN_IDENTITY (marktleitung@solace.lab), category hil,
 promptState pending, whose JSON names `Ref GP-...` (fallback A-6: the A2UI info
 names Agent "gpos-price-approver"). Uses `sam api` as sam_admin (the CLI login
@@ -135,8 +138,8 @@ def main(argv: list[str] | None = None) -> int:
     answer.add_argument("ref")
     answer.add_argument("answer", choices=("approve", "deny"))
     args = ap.parse_args(argv)
-    env = demo_env()
     try:
+        env = demo_env()
         inbox = make_inbox(env)
         if args.cmd == "list":
             return cmd_list(inbox)

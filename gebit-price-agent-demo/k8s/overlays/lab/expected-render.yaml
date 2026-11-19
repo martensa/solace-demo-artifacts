@@ -1,0 +1,821 @@
+# Expected `kubectl kustomize k8s/overlays/lab` (= `kubectl kustomize k8s` before the
+# base/overlay split, 19.11.2026). Not a resource of any kustomization:
+# scripts/tests/test_k8s.py compares the live render with this file (comment lines
+# stripped; the image tag follows newTag of overlays/lab), so any other lab change is
+# a visible diff. Refresh only for an intended lab change, in gebit-price-agent-demo:
+#   F=k8s/overlays/lab/expected-render.yaml
+#   (sed -n '/^#/p' $F; kubectl kustomize k8s/overlays/lab) > $F.new && mv $F.new $F
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-demo
+---
+apiVersion: v1
+data:
+  CLOSE_MAX_AGE_SECONDS: "300"
+  DATA_DIR: /app/data
+  ENGINE_URL: http://gpos-engine:8765
+  GATE_GUARD: block
+  GATE_MIN_DELAY_S: "3"
+  GEBIT_DESCRIPTOR_SETS: /descriptors/purchase-api-2.50.0.pb:/descriptors/receipt-api-2.13.0.pb
+  GPOS_BOOTH_LOCATION: Root.DE.999.101.01
+  GPOS_BUS: solace
+  GPOS_COMPANY: "999"
+  GPOS_COUNTRY: DE
+  GPOS_DELIVERY: direct
+  GPOS_DEMO_DATE: "2027-02-16"
+  GPOS_PROBE_LOCATION: Root.DE.999.199.98
+  GPOS_TEST_LOCATION: Root.DE.999.199.99
+  GPOS_TOOL_STORE: "101"
+  GPOS_TZ: Europe/Berlin
+  LOG_LEVEL: INFO
+  LOYALTY_GRPC: gpos-loyalty:50052
+  POLICY_FILE: /app/policy/pricing-policy.yaml
+  POS_ADMIN_URL: http://gpos-pos:8771
+  POS_GRPC: gpos-pos:50051
+  PROPOSAL_EXPIRY_SECONDS: "150"
+  SAM_URL: https://sam.solace.lab
+  SHOWCASE_DESCRIPTOR_SET: /app/descriptors/showcase.pb
+  STALE_SECONDS: "20"
+  WWS_GRPC: gpos-wws:50053
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-config
+  namespace: gpos-demo
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: gpos-engine
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-engine
+  namespace: gpos-demo
+spec:
+  ports:
+  - name: http
+    port: 8765
+    targetPort: http
+  selector:
+    app: gpos-engine
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: gpos-gate
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-gate
+  namespace: gpos-demo
+spec:
+  ports:
+  - name: http
+    port: 8766
+    targetPort: http
+  selector:
+    app: gpos-gate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: gpos-loyalty
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-loyalty
+  namespace: gpos-demo
+spec:
+  ports:
+  - appProtocol: kubernetes.io/h2c
+    name: grpc
+    port: 50052
+    targetPort: grpc
+  - name: http
+    port: 8772
+    targetPort: http
+  selector:
+    app: gpos-loyalty
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: gpos-pos
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-pos
+  namespace: gpos-demo
+spec:
+  ports:
+  - appProtocol: kubernetes.io/h2c
+    name: grpc
+    port: 50051
+    targetPort: grpc
+  - name: http
+    port: 8771
+    targetPort: http
+  selector:
+    app: gpos-pos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: gpos-ui
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-ui
+  namespace: gpos-demo
+spec:
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  selector:
+    app: gpos-ui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: gpos-wws
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-wws
+  namespace: gpos-demo
+spec:
+  ports:
+  - appProtocol: kubernetes.io/h2c
+    name: grpc
+    port: 50053
+    targetPort: grpc
+  - name: http
+    port: 8773
+    targetPort: http
+  selector:
+    app: gpos-wws
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gpos-engine
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-engine
+  namespace: gpos-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-engine
+  template:
+    metadata:
+      labels:
+        app: gpos-engine
+        app.kubernetes.io/part-of: gpos-demo
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - python
+        - -m
+        - gposdemo.engine
+        env:
+        - name: MCP_PORT
+          value: "8765"
+        - name: GPOS_DSN
+          valueFrom:
+            secretKeyRef:
+              key: DSN_ENGINE
+              name: gpos-db
+        envFrom:
+        - configMapRef:
+            name: gpos-config
+        - secretRef:
+            name: gpos-broker
+        image: registry.solace.lab/gpos-demo/gpos-demo:0.1.3
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        name: engine
+        ports:
+        - containerPort: 8765
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+        resources:
+          limits:
+            memory: 384Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      enableServiceLinks: false
+      imagePullSecrets:
+      - name: registry-pull-secret
+      securityContext:
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - emptyDir:
+          sizeLimit: 50Mi
+        name: tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gpos-gate
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-gate
+  namespace: gpos-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-gate
+  template:
+    metadata:
+      labels:
+        app: gpos-gate
+        app.kubernetes.io/part-of: gpos-demo
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - python
+        - -m
+        - gposdemo.engine.gate
+        env:
+        - name: MCP_PORT
+          value: "8766"
+        - name: GPOS_DSN
+          valueFrom:
+            secretKeyRef:
+              key: DSN_ENGINE
+              name: gpos-db
+        envFrom:
+        - configMapRef:
+            name: gpos-config
+        - secretRef:
+            name: gpos-broker
+        image: registry.solace.lab/gpos-demo/gpos-demo:0.1.3
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        name: gate
+        ports:
+        - containerPort: 8766
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+        resources:
+          limits:
+            memory: 384Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      enableServiceLinks: false
+      imagePullSecrets:
+      - name: registry-pull-secret
+      securityContext:
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - emptyDir:
+          sizeLimit: 50Mi
+        name: tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gpos-loyalty
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-loyalty
+  namespace: gpos-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-loyalty
+  template:
+    metadata:
+      labels:
+        app: gpos-loyalty
+        app.kubernetes.io/part-of: gpos-demo
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - python
+        - -m
+        - gposdemo.loyalty
+        env:
+        - name: GRPC_PORT
+          value: "50052"
+        - name: MCP_PORT
+          value: "8772"
+        - name: GPOS_DSN
+          valueFrom:
+            secretKeyRef:
+              key: DSN_LOYALTY
+              name: gpos-db
+        envFrom:
+        - configMapRef:
+            name: gpos-config
+        - secretRef:
+            name: gpos-broker
+        image: registry.solace.lab/gpos-demo/gpos-demo:0.1.3
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        name: loyalty
+        ports:
+        - containerPort: 50052
+          name: grpc
+        - containerPort: 8772
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+        resources:
+          limits:
+            memory: 384Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      enableServiceLinks: false
+      imagePullSecrets:
+      - name: registry-pull-secret
+      securityContext:
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - emptyDir:
+          sizeLimit: 50Mi
+        name: tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gpos-pos
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-pos
+  namespace: gpos-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-pos
+  template:
+    metadata:
+      labels:
+        app: gpos-pos
+        app.kubernetes.io/part-of: gpos-demo
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - python
+        - -m
+        - gposdemo.pos
+        env:
+        - name: GRPC_PORT
+          value: "50051"
+        - name: MCP_PORT
+          value: "8771"
+        - name: GPOS_DSN
+          valueFrom:
+            secretKeyRef:
+              key: DSN_POS
+              name: gpos-db
+        envFrom:
+        - configMapRef:
+            name: gpos-config
+        - secretRef:
+            name: gpos-broker
+        image: registry.solace.lab/gpos-demo/gpos-demo:0.1.3
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        name: pos
+        ports:
+        - containerPort: 50051
+          name: grpc
+        - containerPort: 8771
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+        resources:
+          limits:
+            memory: 384Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+        - mountPath: /descriptors
+          name: descriptors
+          readOnly: true
+      enableServiceLinks: false
+      imagePullSecrets:
+      - name: registry-pull-secret
+      securityContext:
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - emptyDir:
+          sizeLimit: 50Mi
+        name: tmp
+      - name: descriptors
+        secret:
+          secretName: gpos-gebit-descriptors
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gpos-ui
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-ui
+  namespace: gpos-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-ui
+  template:
+    metadata:
+      labels:
+        app: gpos-ui
+        app.kubernetes.io/part-of: gpos-demo
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - python
+        - -m
+        - gposdemo.ui
+        env:
+        - name: HTTP_PORT
+          value: "8090"
+        envFrom:
+        - configMapRef:
+            name: gpos-config
+        - secretRef:
+            name: gpos-broker
+        image: registry.solace.lab/gpos-demo/gpos-demo:0.1.3
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        name: ui
+        ports:
+        - containerPort: 8090
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+        resources:
+          limits:
+            memory: 384Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+        - mountPath: /descriptors
+          name: descriptors
+          readOnly: true
+      enableServiceLinks: false
+      imagePullSecrets:
+      - name: registry-pull-secret
+      securityContext:
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - emptyDir:
+          sizeLimit: 50Mi
+        name: tmp
+      - name: descriptors
+        secret:
+          secretName: gpos-gebit-descriptors
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gpos-wws
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-wws
+  namespace: gpos-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-wws
+  template:
+    metadata:
+      labels:
+        app: gpos-wws
+        app.kubernetes.io/part-of: gpos-demo
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - python
+        - -m
+        - gposdemo.wws
+        env:
+        - name: GRPC_PORT
+          value: "50053"
+        - name: MCP_PORT
+          value: "8773"
+        - name: GPOS_DSN
+          valueFrom:
+            secretKeyRef:
+              key: DSN_WWS
+              name: gpos-db
+        envFrom:
+        - configMapRef:
+            name: gpos-config
+        - secretRef:
+            name: gpos-broker
+        image: registry.solace.lab/gpos-demo/gpos-demo:0.1.3
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        name: wws
+        ports:
+        - containerPort: 50053
+          name: grpc
+        - containerPort: 8773
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+        resources:
+          limits:
+            memory: 384Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      enableServiceLinks: false
+      imagePullSecrets:
+      - name: registry-pull-secret
+      securityContext:
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - emptyDir:
+          sizeLimit: 50Mi
+        name: tmp
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-demo
+  namespace: gpos-demo
+spec:
+  dnsNames:
+  - gpos.solace.lab
+  - gpos-grpc.solace.lab
+  - gpos-wws-grpc.solace.lab
+  - gpos-loyalty-grpc.solace.lab
+  duration: 2160h
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: solace-lab-ca-issuer
+  privateKey:
+    algorithm: ECDSA
+    rotationPolicy: Always
+    size: 256
+  renewBefore: 720h
+  secretName: gpos-demo-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: GRPC
+    nginx.ingress.kubernetes.io/proxy-body-size: 4m
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  labels:
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-grpc
+  namespace: gpos-demo
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: gpos-grpc.solace.lab
+    http:
+      paths:
+      - backend:
+          service:
+            name: gpos-pos
+            port:
+              name: grpc
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - gpos-grpc.solace.lab
+    secretName: gpos-demo-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: GRPC
+    nginx.ingress.kubernetes.io/proxy-body-size: 4m
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  labels:
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-loyalty-grpc
+  namespace: gpos-demo
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: gpos-loyalty-grpc.solace.lab
+    http:
+      paths:
+      - backend:
+          service:
+            name: gpos-loyalty
+            port:
+              name: grpc
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - gpos-loyalty-grpc.solace.lab
+    secretName: gpos-demo-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 4m
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  labels:
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-ui
+  namespace: gpos-demo
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: gpos.solace.lab
+    http:
+      paths:
+      - backend:
+          service:
+            name: gpos-ui
+            port:
+              name: http
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - gpos.solace.lab
+    secretName: gpos-demo-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: GRPC
+    nginx.ingress.kubernetes.io/proxy-body-size: 4m
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  labels:
+    app.kubernetes.io/part-of: gpos-demo
+  name: gpos-wws-grpc
+  namespace: gpos-demo
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: gpos-wws-grpc.solace.lab
+    http:
+      paths:
+      - backend:
+          service:
+            name: gpos-wws
+            port:
+              name: grpc
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - gpos-wws-grpc.solace.lab
+    secretName: gpos-demo-tls

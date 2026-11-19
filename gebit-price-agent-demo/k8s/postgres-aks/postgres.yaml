@@ -1,0 +1,124 @@
+# gpos-postgres: Postgres 18 for the demo DB gpos on AKS (pod gpos-postgres-0). The
+# demo Deployments reach it as gpos-postgres.gpos-data.svc.cluster.local:5432
+# (PG_HOST_FROM_PODS in .env.aks) with the role passwords of `install.sh db`.
+# Image: docker.io/library/postgres:18-trixie by its multi-arch index digest (arm64
+# node; resolved 19.11.2026, PG 18.7, runbook 1.7 prints the current digest). The
+# image runs as postgres = UID/GID 999 and keeps PGDATA in /var/lib/postgresql/18/docker
+# below its volume /var/lib/postgresql: the disk mounts there, so the disk's
+# lost+found never sits in PGDATA. Local socket = trust (initdb default of the image):
+# `kubectl exec ... psql -U postgres` needs no password; TCP from other pods needs one.
+# The image's STOPSIGNAL SIGINT (fast shutdown) is honoured by containerd.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: gpos-postgres
+  labels:
+    app: gpos-postgres
+spec:
+  serviceName: gpos-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpos-postgres
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  template:
+    metadata:
+      labels:
+        app: gpos-postgres
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:18-trixie@sha256:e754b839f447639b7004895f4d8a4bfcb4e9dbe3a1bc035f27f646562a16fd61
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gpos-postgres-admin
+                  key: password
+          ports:
+            - name: postgres
+              containerPort: 5432
+          # -h 127.0.0.1: the image's init server listens on the socket only, so the
+          # pod turns ready after the init, not during it
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-q", "-h", "127.0.0.1", "-p", "5432", "-U", "postgres",
+                        "-d", "postgres"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-q", "-h", "127.0.0.1", "-p", "5432", "-U", "postgres",
+                        "-d", "postgres"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-q", "-h", "127.0.0.1", "-p", "5432", "-U", "postgres",
+                        "-d", "postgres"]
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: run
+              mountPath: /run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: run
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: managed-csi
+        resources:
+          requests:
+            storage: 8Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpos-postgres
+  labels:
+    app: gpos-postgres
+spec:
+  selector:
+    app: gpos-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

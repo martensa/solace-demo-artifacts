@@ -1,0 +1,9 @@
+# Loki 6.55.0: AKS overlay (runbook A8), second -f after the lab values
+# (solace-lab-infrastructure/pki/manifests/05-loki-values.yaml).
+# The lab file has no lab-only settings (no storage class, registry or
+# host); the PVC uses the AKS default class. Only the canary DaemonSet
+# and the Helm test pod are switched off to save node capacity.
+lokiCanary:
+  enabled: false
+test:
+  enabled: false

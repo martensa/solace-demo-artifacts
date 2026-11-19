@@ -5,6 +5,7 @@ Run from the demo root:  .venv/bin/python -m pytest scripts/tests -q
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -14,6 +15,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
+# The tests are target-neutral: opslib fixes its paths from TARGET at import, so an
+# exported TARGET=aks of the shell must not reach it (the aks tests set TARGET themselves)
+os.environ.pop("TARGET", None)
 
 
 def load(rel: str) -> dict:

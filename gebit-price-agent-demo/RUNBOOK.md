@@ -4,6 +4,13 @@ Betriebshandbuch für Lab und Messestand (EuroCIS 2027, GEBIT + Solace).
 Verbindlich ist `UC1-BUILD-SPEC.md`; Aufbau und Befehle stehen in
 `README.md`. Alle Befehle laufen im Demo-Verzeichnis auf dem Mac.
 
+Die Befehle hier gelten für das Lab. Der Messestand läuft auf AKS:
+Aufbau, Tagesablauf (4.4), Störungen (4.7) und Rückbau stehen in
+`AKS-MIGRATION-PLAN.md`, dort laufen die Skripte mit `TARGET=aks`
+(`.env.aks`, `README.md` Abschnitt „AKS target“). Szenarien, Ablauf
+S1 und Störungsbilder hier gelten dort ebenso; `kubectl` heißt dort
+`kaks`.
+
 Kernsatz für Monitor und Gespräch: „KI schlägt vor. Regeln prüfen.
 Mensch entscheidet.“
 

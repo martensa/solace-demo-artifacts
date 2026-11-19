@@ -1,0 +1,52 @@
+# =============================================================
+# Public Keycloak paths on the shared name (AKS-MIGRATION-PLAN.md
+# 0.2, A15)
+# =============================================================
+#
+# Only the realm solace-lab and the static theme resources are
+# public. Not routed (they fall through to SAM on "/"): /auth/,
+# /auth/admin/, /auth/realms/master/ and every other realm. The
+# admin console and the admin REST API are reached only through
+#   kaks -n iam port-forward svc/keycloak 18081:8080
+#
+# IngressClass nginx = Traefik's ingress-nginx provider. tls lists
+# the host only: Traefik serves its default certificate
+# (Secret ingress-tls in namespace traefik). No cert-manager
+# annotation, so ingress-shim never creates a second Certificate.
+#
+# Apply only after kc_set_passwords ended with exit code 0 (A15).
+# =============================================================
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  namespace: iam
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: identity-provider
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eurocis-showcase.germanywestcentral.cloudapp.azure.com
+  rules:
+    - host: eurocis-showcase.germanywestcentral.cloudapp.azure.com
+      http:
+        paths:
+          - path: /auth/realms/solace-lab/
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
+          - path: /auth/resources/
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080

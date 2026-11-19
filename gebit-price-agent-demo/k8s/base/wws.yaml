@@ -1,26 +1,23 @@
-# gpos-ui: BFF: /kasse, /monitor, POS facade, SSE on 8090 (Service port 80). One replica:
-# the SSE fan-out is in-process. ui.ctl (probes, reset, tools-list) runs here.
+# gpos-wws: Merchandise management (showcase.wws.v1, gRPC 50053) and MCP gpos-wws-api on 8773.
 # Shape of bsg-trading-desk-demo/k8s and G0-07, hardened (spec 12.4).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gpos-ui
+  name: gpos-wws
   labels:
-    app: gpos-ui
+    app: gpos-wws
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gpos-ui
+      app: gpos-wws
   template:
     metadata:
       labels:
-        app: gpos-ui
+        app: gpos-wws
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
-      imagePullSecrets:
-        - name: registry-pull-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -28,21 +25,30 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: ui
+        - name: wws
           image: gpos-demo
           imagePullPolicy: Always
-          command: ["python", "-m", "gposdemo.ui"]
+          command: ["python", "-m", "gposdemo.wws"]
           env:
-            - name: HTTP_PORT
-              value: "8090"
+            - name: GRPC_PORT
+              value: "50053"
+            - name: MCP_PORT
+              value: "8773"
+            - name: GPOS_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: gpos-db
+                  key: DSN_WWS
           envFrom:
             - configMapRef:
                 name: gpos-config
             - secretRef:
                 name: gpos-broker
           ports:
+            - name: grpc
+              containerPort: 50053
             - name: http
-              containerPort: 8090
+              containerPort: 8773
           readinessProbe:
             httpGet:
               path: /health
@@ -68,27 +74,25 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            - name: descriptors
-              mountPath: /descriptors
-              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 50Mi
-        - name: descriptors
-          secret:
-            secretName: gpos-gebit-descriptors
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: gpos-ui
+  name: gpos-wws
   labels:
-    app: gpos-ui
+    app: gpos-wws
 spec:
   selector:
-    app: gpos-ui
+    app: gpos-wws
   ports:
+    - name: grpc
+      port: 50053
+      targetPort: grpc
+      appProtocol: kubernetes.io/h2c
     - name: http
-      port: 80
+      port: 8773
       targetPort: http

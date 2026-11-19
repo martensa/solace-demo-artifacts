@@ -1,0 +1,78 @@
+# =============================================================
+# NetworkPolicies for SAM's bundled persistence on AKS
+# (AKS-MIGRATION-PLAN.md table 1.4, A16)
+# =============================================================
+#
+# The bundled PostgreSQL keeps app users with password = username
+# and stores the LLM key in plain text; SeaweedFS holds every
+# artifact. Both must not be reachable from other namespaces (the
+# public gpos BFF runs in the same cluster without login). Enforced
+# by the Cilium dataplane (Azure CNI powered by Cilium).
+#
+# Selectors and ports come from `helm template agent-mesh
+# <SAM chart 2.3.10> -f agent-mesh-deployment/local-k8s-values.yaml`
+# (subcharts persistence-layer/postgresql and /seaweedfs, release
+# agent-mesh):
+#   agent-mesh-postgresql-0  labels app.kubernetes.io/name=postgresql,
+#                            app.kubernetes.io/instance=agent-mesh;
+#                            port 5432
+#   agent-mesh-seaweedfs-0   labels app.kubernetes.io/name=seaweedfs,
+#                            app.kubernetes.io/instance=agent-mesh;
+#                            `weed server -s3` (SeaweedFS 4.48
+#                            defaults): master 9333 and S3 8333
+#                            (the only Service ports), plus on the
+#                            pod IP volume 8080, filer 8888, gRPC
+#                            19333/18080/18888/18333, Iceberg REST
+#                            8181 and Lance 9101 -> the policy has no
+#                            port list and covers all of them.
+#
+# Allowed: every pod in sam-solace-lab (gwe, awe, str and their
+# s3-init/db-init init containers, the sam-doctor hook Job,
+# SeaweedFS talking to itself over its pod IP). Kubelet probes and
+# `kubectl exec`/`port-forward` are not affected.
+# Blocked: everything outside the namespace, including Grafana in
+# monitoring (dashboard sam-token-cost stays empty, accepted).
+#
+# Apply before the first SAM install:
+#   kaks apply -f "$AKS_DIR/sam/networkpolicies.yaml"
+# Check: sam_netpol_check (every target "zu").
+# =============================================================
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-mesh-postgresql-same-namespace
+  namespace: sam-solace-lab
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+      app.kubernetes.io/instance: agent-mesh
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5432
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-mesh-seaweedfs-same-namespace
+  namespace: sam-solace-lab
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: seaweedfs
+      app.kubernetes.io/instance: agent-mesh
+  policyTypes:
+    - Ingress
+  ingress:
+    # No port list: S3, master, volume, filer, their gRPC ports and
+    # the catalog listeners of `weed server -s3`.
+    - from:
+        - podSelector: {}

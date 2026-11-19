@@ -13,8 +13,20 @@ from typing import Any
 import pytest
 
 import e2e
+import opslib
 from conftest import ROOT, load
 from opslib import GATE_MODES, GATE_MODES_TEXT, OpsError, gate_hash, gate_verified
+
+
+@pytest.fixture(autouse=True)
+def lab_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests pin the lab: a TARGET exported by the caller's shell (or `TARGET=aks
+    make test`) must not leak in, also not through the paths fixed at import."""
+    monkeypatch.delenv("TARGET", raising=False)
+    monkeypatch.setattr(opslib, "TARGET", "lab")
+    build = opslib.target_dirs("lab")[1]
+    monkeypatch.setattr(e2e, "BUILD", build)
+    monkeypatch.setattr(e2e, "GATE_FILE", build / "gate-verified")
 
 
 def test_golden_outcomes_of_the_scenarios() -> None:
@@ -252,7 +264,7 @@ def test_awe_checks_expect_the_gated_tool_of_the_f2_approver() -> None:
 
 def test_unreadable_awe_log_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = object.__new__(e2e.E2E)
-    runner.agent_ids = {}
+    runner.agent_ids, runner.env = {}, {}
     calls: list[list[str]] = []
 
     def run(cmd: list[str], **_kw: Any) -> subprocess.CompletedProcess[str]:
@@ -504,7 +516,7 @@ def test_awe_parser_counts_the_planners_internal_tool_calls_of_this_run(
     assert (everything.planner_warnings, everything.planner_tasks) == (6, 2)
     # E2E.awe_tools hands the run start to the parser
     runner = object.__new__(e2e.E2E)
-    runner.agent_ids = ids
+    runner.agent_ids, runner.env = ids, {}
     monkeypatch.setattr(e2e.subprocess, "run", lambda cmd, **_kw: subprocess.CompletedProcess(
         cmd, 0, "\n".join(stuck_run_lines()), ""))
     assert runner.awe_tools(90, since).planner_warnings == 4

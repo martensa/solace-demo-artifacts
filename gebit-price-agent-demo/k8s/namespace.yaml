@@ -1,8 +1,0 @@
-# Kyverno clones registry-pull-secret into the namespace (G0-07). The Secrets
-# gpos-broker, gpos-db and gpos-gebit-descriptors come from scripts/install.sh.
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: gpos-demo
-  labels:
-    app.kubernetes.io/part-of: gpos-demo

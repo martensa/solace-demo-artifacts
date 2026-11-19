@@ -1,0 +1,19 @@
+# Demo DB on AKS (AKS-MIGRATION-PLAN A18): Postgres 18 in its own namespace gpos-data,
+# outside k8s/overlays/aks, so `install.sh k8s` and `uninstall.sh` (namespace
+# gpos-demo) never touch the data; only `uninstall.sh --drop-db` deletes gpos-data.
+# Applied by `TARGET=aks scripts/install.sh pg` after it created the Secret
+# gpos-postgres-admin (key password, random, only in the cluster). The roles, schemas
+# and seed come from `install.sh db` via `kubectl exec` (psql as postgres over the
+# local socket). Public image from Docker Hub by digest: no pull secret here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: gpos-data
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: gpos-demo
+    includeSelectors: false
+    includeTemplates: true
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - networkpolicy.yaml
