@@ -21,7 +21,7 @@ Artifacts produced (sketches, nothing applied anywhere):
   its strict schema (`helm template`, rc=0, 17 objects, all images from
   ACR, workload-identity label on gwe/awe/str) [V: `IMPL/aks/rendered-aks.yaml`;
   not versioned, regenerate with `helm template`,
-  `AKS-MIGRATION-PLAN.md:1601`]
+  `AKS-MIGRATION-PLAN.md` step A16]
 - `IMPL/aks/ingress-nginx-values-aks.yaml`, `ingress-grpc-example.yaml`,
   `clusterissuer-letsencrypt-dns.yaml`, `pubsubplus-values-aks.yaml`
   (YAML-parsed OK), `az-foundation.sketch.sh` (`bash -n` OK, never run)
@@ -127,7 +127,7 @@ CoreDNS NodeHosts hack, the SAM desktop wiring.
 | k3s 1.36 arm64 single node | AKS Standard tier 1.36, 2 x D8as_v6 amd64, 1 AZ | 3 x D4as_v6; arm64 Cobalt `D8ps_v6` (EUR 0.30/h vs 0.39/h, same arm64 images as lab) | amd64 matches the later GEBIT handover; arm64 is cheaper and gives image parity [V: retail prices API] |
 | ingress-nginx 1.15.1 | **same, self-installed, pinned, internal LB** | AKS App Routing **Gateway API** (`approuting-istio`, GA 2026) ; App Gateway for Containers | identical annotations/manifests; SAM chart only renders `Ingress` (see 2.4) |
 | cert-manager + lab CA + trust-manager + Kyverno CA injection | cert-manager + **Let's Encrypt DNS-01 (Azure DNS, workload identity)**; no custom CA needed anywhere | keep lab CA: SAM `samDeployment.customCA` + `truststore` ConfigMap, kiosk CA profiles | public trust removes the CA injection, the JVM truststore issue (Keycloak) and the iPad CA profile |
-| `registry.solace.lab` + Kyverno pull secret | **ACR Basic** attached to AKS (`--attach-acr`, kubelet AcrPull) -> no pull secret | ACR Standard (100 GiB) | chart validation fails if a listed pull secret is missing -> overlay sets `global.imagePullSecrets: []`. Superseded 18.11.2026 (überholt): pull token instead of `--attach-acr`, overlay sets `["acr-pull"]`, see `AKS-MIGRATION-PLAN.md` AKS-E21 |
+| `registry.solace.lab` + Kyverno pull secret | **ACR Basic** attached to AKS (`--attach-acr`, kubelet AcrPull) -> no pull secret | ACR Standard (100 GiB) | chart validation fails if a listed pull secret is missing -> overlay sets `global.imagePullSecrets: []`. Superseded 18.11.2026 (überholt): pull token instead of `--attach-acr`, overlay sets `["acr-pull"]`, see `AKS-MIGRATION-PLAN.md` 1.7 and A2 |
 | Keycloak 26.2 + own Postgres (ns `iam`) | **Keycloak 26.x in-cluster**, DB on PG Flexible, host `auth.<domain>`; same realm/scripts | Entra ID (`providerName` default `azure`, `claimKey: roles`) | demo identities, RBAC claim mappings and `defaultUserIdentity` stay unchanged; corporate MFA/conditional access on shared booth tablets is a show risk; Entra app registration needs tenant admin |
 | solace-1 (Docker) | **PubSub+ Standard 10.25.0.208 via `solacecharts/pubsubplus`**, `redundancy: false`, ClusterIP + internal LB for booth MQTT; VPNs/clients via the existing Terraform modules | Solace Cloud service in Azure GWC | parity (two VPNs, same ports), free edition, no extra network hop; Solace Cloud gives one VPN per service (two services or a VPN redesign) |
 | host Docker Postgres 18.3 + SAM bundled Postgres 18.0 | **Azure DB for PostgreSQL Flexible Server 18**, Burstable B2ms, VNet-integrated | in-cluster Postgres StatefulSet (+ SAM bundled persistence) | survives cluster rebuilds/stops, PITR backups, start/stop; PG 18 GA on Flexible since Nov 2025 [V: MS release notes] |
@@ -181,7 +181,7 @@ Applied as a second `-f` after the lab values (Helm replaces lists, so
 - `global.persistence.enabled: false`, `namespaceId: sam-solace-lab`
   (kept: topic prefix and mesh manifests unchanged),
   `global.imagePullSecrets: []` (superseded 18.11.2026: `["acr-pull"]`
-  with a pull token, see `AKS-MIGRATION-PLAN.md` AKS-E21).
+  with a pull token, see `AKS-MIGRATION-PLAN.md` A2).
 - `dataStores.database.{host,port,adminUsername,adminPassword,applicationPassword}`
   for PG Flexible; `dataStores.objectStorage.type: azure`,
   `workloadIdentity.enabled: true`, `dataStores.azure.accountName`,

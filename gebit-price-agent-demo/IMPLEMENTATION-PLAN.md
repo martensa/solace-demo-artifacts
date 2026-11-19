@@ -144,18 +144,19 @@ einer öffentlichen Ingress-IP (`pip-aks-ingress`, LB-Regeln nur für 80
 und 443); ausgehend nutzt der Cluster die AKS-verwaltete Egress-IP
 (Nachtrag 18.11.2026: beide IPs in der Node-Ressourcengruppe, ohne
 Lock und ohne Rollenzuweisung, weil der Owner nur Contributor ist;
-Einzelheiten in `AKS-MIGRATION-PLAN.md`, AKS-E21). Eigene Domain,
+Einzelheiten in `AKS-MIGRATION-PLAN.md`, Abschnitt 0). Eigene Domain,
 Azure-DNS-Zone und DNS-01 entfallen; TLS kommt per Let's Encrypt
 HTTP-01. Auf 443 routet der Ingress nach Pfaden: SAM auf `/`,
 Keycloak unter `/auth`, Kasse unter `https://<fqdn>/kasse`, Monitor
 unter `https://<fqdn>/monitor`, die drei gRPC-Dienste nach Dienstpfad
 (Reflection an); Einzelheiten in 5.2. Kasse und Monitor bleiben
-unverändert und ohne Login. Den API-Server erreichen nur freigegebene
-IPs [A: Vorschlag der Planung, der Owner kann abweichen]. Grafana,
-Prometheus, Broker-SEMP, die Keycloak-Admin-Konsole und das
+unverändert und ohne Login. Stand 19.11.2026: API-Server offen,
+Lab-LiteLLM-Key auch auf AKS, ein Betreiber, gRPC öffentlich mit allen
+RPCs und Reflection; Einzelheiten nur in `AKS-MIGRATION-PLAN.md`.
+Grafana, Prometheus, Broker-SEMP, die Keycloak-Admin-Konsole und das
 Traefik-Dashboard gibt es nur per Port-Forward. Missbrauchsschutz:
 Rate-Limits je Client-IP auf `/api/pos`, `/api/demo/reset` und
-`/api/events`, dazu rpm/tpm-Limits am Messe-Key. Alle Stellen dieses
+`/api/events`. Alle Stellen dieses
 Plans mit WireGuard, Tunnel oder AKS-Hostnamen je App sind
 nachgezogen (R24 und R25 neu). Die weiteren AKS-Entscheidungen vom
 17.11.2026 (1 Knoten `Standard_D8ps_v6` arm64 im Free-Tier ohne HA,
@@ -164,12 +165,11 @@ unter 1.500 €) stehen nur in `AKS-MIGRATION-PLAN.md`; Angaben zu
 Cluster, VM-Größe, Persistenz, Broker und Kosten an anderen Stellen
 (etwa E7, O4, G0b in 0.3, 0.4, 2.1, 2.2, 5.2 und AP12 in 6) geben
 noch den Stand vom 11.11. wieder. Ebenso überholt sind seit dem
-18.11.2026 (nur Contributor, AKS-E21) alle Stellen mit eigener
-Ressourcengruppe, VNet, PG Flexible, Blob per Workload Identity,
-Identitäten oder Rollenzuweisungen; die Pfade unter `infra/aks/`
-(Abschnitt 4, 5.2, 5.3) ersetzt `AKS-MIGRATION-PLAN.md` 5 durch
-`sli/aks/` (solace-lab-infrastructure), `amd/aks-values.yaml` und
-`emd/terraform-aks/`.
+18.11.2026 (nur Contributor, `AKS-MIGRATION-PLAN.md` Abschnitt 0) alle
+Stellen mit eigener Ressourcengruppe, VNet, PG Flexible, Blob per
+Workload Identity, Identitäten oder Rollenzuweisungen; die Dateien unter
+`infra/aks/` (Abschnitt 4, 5.2, 5.3) legt `AKS-MIGRATION-PLAN.md` 1.4 neu
+fest (`gebit-price-agent-demo/infra/aks/` und `amd/aks-values.yaml`).
 
 ### 0.3 Meilensteine
 
@@ -179,7 +179,7 @@ Identitäten oder Rollenzuweisungen; die Pfade unter `infra/aks/`
 | UC1 Erster Ende-zu-Ende-Schnitt | ab 11.11.2026 | Use Case 1 im Lab (0.6): Scans → Workflow-Analyse → Prüfung der gekauften Artikel nach `PurchaseTransactionClosed` → Vorschlag als Notification an die Marktleitung → Freigabe → Preisänderungsereignis; Abbildung auf G1 und die AP in `UC1-BUILD-SPEC.md` |
 | G0b Ketten- und AKS-Spike | 25.11., 03.12. und 11.12.2026 | 25.11.: Kette oder `workflow`-Knoten (Risiko R6, G0-08b) vor AP08 Teil 2; bis 03.12.: SAM 2.542.1 mit externer Persistenz auf AKS, LiteLLM und DSN-TLS (G0-11a); bis 11.12.: HITL-Pause und gRPC-Ingress auf AKS (G0-11b); G0-11a und G0-11b in Variante (b) erst in G2b (6.2); HTTPS-Rundlaufzeit zum öffentlichen Ingress mit AP12 S9 bis 18.12. |
 | G1 Vertikaler Schnitt | 11.12.2026 | TR1-Minimum Ende zu Ende im Lab: Kasse (`AddArticle`, `VoidArticlePosition`, Bar) → gRPC → GEBIT-Ereignis → SAM → Agent → Freigabe über SAM (B1; Rückfall D immer deployt) → Preis aus Postgres → nächster Scan |
-| G2a Loyalty, Foto, AKS bis SAM | 18.12.2026 | TR5 (Karte → Coupon) und TR3 (Foto, Testsatz) im Lab; AKS RA-Schritte 1–6 bis SAM; `<fqdn>` an einer öffentlichen Ingress-IP mit öffentlich vertrauenswürdigem ACME-Zertifikat per HTTP-01 (Let's Encrypt oder EAB-Rückfall-CA, R25), API-Server nur von freigegebenen IPs, HTTPS-RTT p95 ≤ 40 ms Kabel |
+| G2a Loyalty, Foto, AKS bis SAM | 18.12.2026 | TR5 (Karte → Coupon) und TR3 (Foto, Testsatz) im Lab; AKS RA-Schritte 1–6 bis SAM; `<fqdn>` an einer öffentlichen Ingress-IP mit öffentlich vertrauenswürdigem ACME-Zertifikat per HTTP-01 (Let's Encrypt oder EAB-Rückfall-CA, R25), API-Server aus allen Netzen (Admin-kubeconfig, `AKS-MIGRATION-PLAN.md` 0.1), HTTPS-RTT p95 ≤ 40 ms Kabel |
 | Feiertage | 21.12.2026–06.01.2027 | 11 Arbeitstage, je Person 4 Arbeitstage brutto (3,5 PT netto); tragen offiziell G2b-Arbeit |
 | G2b Funktionsumfang | 15.01.2027 | TR2, TR4, TR6, TR7 im Lab; Demo per `install.sh TARGET=aks` auf AKS; je ein TR1-Besuch über das öffentliche Internet vom Stand-Router (Leihgerät; Kabel-Uplink und 5G) und von einem Mobilfunk-Hotspot |
 | G3 Härtung | 22.01.2027 | AKS ist Hauptziel; Last (2 h Lab), 24-h-Dauerlauf, 10-h-Kiosklauf, Neuaufbau, L3-Drill, Evals; übrige Fehlerdrills in G4 |
@@ -238,7 +238,7 @@ O5, O6, O9; O8 ist am 17.11.2026 entfallen.
 | O2 | Keycloak-Benutzer `marktleitung@solace.lab`, Gruppe `marktleitung`, SAM-Rolle `gpos_marktleitung` mit `workflow:*:invoke`, `agent:*:invoke`, `notify:_:send`; die Rolle zusätzlich direkt per `spec.users: [marktleitung@solace.lab]`, weil Claim-Mappings an ein OIDC-Token gebunden sind und R4-Läufe nur einen Identitäts-String tragen [V: Doku rbacClaimMapping, rbacRole]; vor der ersten Anmeldung wirkt der Grant nicht [V: G0-02 P2] | 11.11. (umgesetzt) | ja; Rückfall: `power_user` als Freigebender |
 | O3 | Scope `notify:_:send` für `power_user`, ebenfalls direkt zugewiesen | – | bereits entschieden (10.11.2026), wird in G0 umgesetzt |
 | O4 | Azure-Subscription, Kostenstelle, vCPU-Quota (Dasv6, GWC), Abbautermin; Domain mit delegierter Azure-DNS-Zone entfällt (17.11.2026: Azure-Name `<fqdn>`, 0.2) | 13.11. | bis 13.11., sonst rutscht G0b |
-| O5 | LiteLLM-Messe-Key mit 150 USD und Alarmen bei 50 und 80 %; der Key wird in die SAM-Modellkonfiguration (Aliasse `fast`, `workflow`) eingetragen und bleibt dort (Owner-Vorgabe 10) | 13.11. | ja (Vision und Bildgenerierung kommen dazu) |
+| O5 | LiteLLM: Lab-Key (Owner-Entscheidung 19.11.2026) statt eigenem Messe-Schlüssel; der Key wird in die SAM-Modellkonfiguration (Aliasse `fast`, `workflow`) eingetragen und bleibt dort (Owner-Vorgabe 10) | 13.11. | ja (Vision und Bildgenerierung kommen dazu) |
 | O6 | AKS-Profil in `agent-mesh-deployment` (Skripte parametrisiert, etwa 0,5 PT, geteilte Infrastruktur) | 13.11. | ja |
 | O7 | Modellpreise für `fast` und `workflow` | – | bereits entschieden (10.11.2026) |
 | O8 | Privates, nicht öffentliches Git-Repo nur für `gebit-price-agent-demo/` (etwa im Konto des Owners oder in Azure DevOps), Zugriff für beide Entwickler und den Owner; der Eintrag in `.git/info/exclude` des öffentlichen Repos bleibt. Präzisiert die Vorgabe vom 10.11.2026 („Code lokal und von Git ausgenommen, bis GEBIT zustimmt“): ausgenommen bleibt das öffentliche Repo | 13.11. | entschieden (17.11.2026): entfällt, ersetzt durch GEBITs schriftliche Zustimmung (vom Owner bestätigt); das Verzeichnis liegt im öffentlichen Repo, GEBIT-Dateien nie |
@@ -596,8 +596,8 @@ Einschränkungen der nativen Karte, ehrlich benannt [V: RH 5.1]:
   Reflection- und Health-Pfade sind auf allen drei Servern gleich. Ab
   Image 0.1.4 beantwortet deshalb ein kombinierter Endpunkt die
   Reflection für alle drei Dienste aus beiden Deskriptor-Pools (GEBIT
-  aus dem Secret-Mount, Showcase aus dem Image; Arbeitspunkt in P6 von
-  `AKS-MIGRATION-PLAN.md`, [A: etwa 0,5 PT], dort gezählt). Bis dahin
+  aus dem Secret-Mount, Showcase aus dem Image; Arbeitspunkt in Schritt
+  A20 von `AKS-MIGRATION-PLAN.md`, [A: etwa 0,5 PT]). Bis dahin
   geht Reflection an `gpos-pos` [A], und `grpcurl` und Postman nutzen
   für Loyalty und Warenwirtschaft das lokale Deskriptor-Set
   (`-protoset`). gRPC-Health bleibt clusterintern.
@@ -2315,10 +2315,9 @@ gebit-price-agent-demo/
     overlays/gebit-lab/
   infra/aks/                  Stand 11.11.: az-foundation.sh, addons.sh, sam-values-aks.yaml,
                               broker/ (Terraform mit event-mesh-deployment-Modulen),
-                              start.sh, stop.sh; ersetzt laut AKS-MIGRATION-PLAN.md 5
-                              durch sli/aks/ (foundation.sh pre|post, setup-aks.sh,
-                              aks-start.sh, aks-stop.sh), amd/aks-values.yaml und
-                              emd/terraform-aks/
+                              start.sh, stop.sh; neu laut AKS-MIGRATION-PLAN.md 1.4:
+                              aks.sh, Values, tls/, broker/ (Terraform), keycloak/,
+                              sam/ und amd/aks-values.yaml
   infra/l3/                   sam-values-l3.yaml, export-le-certs.sh (AP14b)
   mesh/                       manifest.yaml, connectors/, agents/, workflows/,
                               entrypoints/*.template, .rendered/ (ignoriert),
@@ -2443,8 +2442,8 @@ Stand vom 11.11. wieder; dafür gilt `AKS-MIGRATION-PLAN.md`.
 | SAM-Persistenz | extern (PG Flexible + Azure Blob); `applicationPassword` nach Erstinstallation unveränderlich | [V: RA 2.3], [G0-11a] |
 | Broker | PubSub+ Standard 10.25.0.208 per Helm, `ClusterIP`, kein eigenes LB, SEMP nur per Port-Forward; MQTT vom Stand für Soll S2 (ESP32) hat keinen Weg (kein Tunnel, LB-Regeln nur 80 und 443) [A]; VPNs per Terraform-Modulen aus `event-mesh-deployment`; alle Lab-Standardpasswörter ersetzt | [V: RA 5.3] |
 | OIDC | Keycloak 26 im Cluster unter `/auth` auf `<fqdn>` (`KC_HTTP_RELATIVE_PATH=/auth`, `KC_HOSTNAME=https://<fqdn>/auth`, `KC_HTTP_MANAGEMENT_RELATIVE_PATH=/`, Probes bleiben `/health/*` auf 9000); Issuer `https://<fqdn>/auth/realms/solace-lab`; SAM-Callback `https://<fqdn>/api/v1/auth/callback`; Admin-Skripte nehmen `KEYCLOAK_URL` mit `/auth`; Admin-Konsole nur per Port-Forward (ob `KC_HOSTNAME_ADMIN` nötig ist, klärt P3); gleicher Realm, Identitäten `*@solace.lab` unverändert | [V: RA 1.3]; Pfade: Owner-Entscheidung 17.11.2026 |
-| LiteLLM | ausgehend über die AKS-verwaltete Egress-IP (Adresse erst nach dem Create bekannt, neu bei jedem Neuaufbau); etwa 100 ms zusätzlich pro Aufruf; Messe-Key nur in der SAM-Modellkonfiguration (O5) | [A: RA 5.2], [G0-11a] |
-| Stand-Zugang | öffentlich über HTTPS (TCP 443) auf `<fqdn>`, ohne WireGuard; Kabel-Uplink, Rückfall 5G; Kasse und Monitor ohne Login; Rate-Limits je Client-IP (Komponente `public-guard`, `externalTrafficPolicy: Local`) auf `/api/pos`, `/api/demo/reset`, `/api/events`, dazu rpm/tpm-Limits am Messe-Key; drei gRPC-Dienste öffentlich mit Reflection (nach Dienstpfad, siehe gRPC-Zeile); API-Server nur von freigegebenen IPs (`sli/aks/aks-allow-me.sh`) [A]; öffentlich sind nur LoadBalancer-Services von Traefik (VAP); Grafana, Prometheus, Broker-SEMP, Keycloak-Admin-Konsole und Traefik-Dashboard nur per Port-Forward | Owner-Entscheidung 17.11.2026 (`AKS-MIGRATION-PLAN.md`), Abnahme AP12 |
+| LiteLLM | ausgehend über die AKS-verwaltete Egress-IP (Adresse erst nach dem Create bekannt, neu bei jedem Neuaufbau); etwa 100 ms zusätzlich pro Aufruf; Lab-Key (Owner-Entscheidung 19.11.2026) nur in der SAM-Modellkonfiguration (O5) | [A: RA 5.2], [G0-11a] |
+| Stand-Zugang | öffentlich über HTTPS (TCP 443) auf `<fqdn>`, ohne WireGuard; Kabel-Uplink, Rückfall 5G; Kasse und Monitor ohne Login; Rate-Limits je Client-IP (`externalTrafficPolicy: Local`) auf `/api/pos`, `/api/demo/reset`, `/api/events`; drei gRPC-Dienste öffentlich mit Reflection (nach Dienstpfad, siehe gRPC-Zeile); API-Server aus allen Netzen (Admin-kubeconfig); öffentlich ist nur der LoadBalancer-Service von Traefik; Grafana, Prometheus, Broker-SEMP, Keycloak-Admin-Konsole und Traefik-Dashboard nur per Port-Forward | Owner-Entscheidung 17.11.2026 (`AKS-MIGRATION-PLAN.md`), Abnahme AP12 |
 | Monitoring | schlankes kube-prometheus-stack + Loki + Alloy, SAM-Dashboards aus `agent-mesh-deployment` | [V: RA 1.3] |
 
 Bewusst getragene Kompromisse des einen Namens (Owner-Entscheidung
@@ -2458,8 +2457,9 @@ Bewusst getragene Kompromisse des einen Namens (Owner-Entscheidung
 - Das Lab behält Hosts je App und ingress-nginx; das Overlay `aks`
   (Pfad-Ingress für `gpos-ui`, Keycloak unter `/auth`, gRPC nach
   Dienstpfad) weicht also vom Lab ab. Die NGINX-Ingress-Manifeste
-  laufen auf beiden; Traefik-eigene Einstellungen beweist erst P2.
-- SAM ruft sich selbst und Keycloak über `<fqdn>` auf. P1 testet den
+  laufen auf beiden; Traefik-eigene Einstellungen beweist erst
+  `AKS-MIGRATION-PLAN.md` A11.
+- SAM ruft sich selbst und Keycloak über `<fqdn>` auf. A9 dort testet den
   Hairpin; scheitert er, zeigt ein `coredns-custom`-Eintrag den Namen
   auf die ClusterIP von Traefik.
 - Die Weiterleitung `/` → `/monitor` der `gpos-ui` ist nicht
@@ -2482,7 +2482,7 @@ global:
   # Pull-Token aks-pull, Owner-Entscheidung 18.11.2026 (kein AcrPull am
   # Kubelet); Secret acr-pull vor helm install per
   # sli/aks/acr-pull.sh sam-solace-lab anlegen, weil der Chart jedes
-  # genannte Secret per lookup prüft (AKS-MIGRATION-PLAN.md P5 Schritt 2)
+  # genannte Secret per lookup prüft (AKS-MIGRATION-PLAN.md A16)
   imagePullSecrets: ["acr-pull"]
 environmentVariables:
   SAM_OBSERVABILITY_ENABLED: "true"
@@ -2502,7 +2502,7 @@ ingress:
 ### 5.3 Deployment-Skripte und Ablauf
 
 1. `infra/aks/az-foundation.sh` (Stand 11.11.; ersetzt durch die
-   Skripte in `sli/aks/` nach `AKS-MIGRATION-PLAN.md` 5.1, AKS-E21,
+   Schritte A1 bis A7 in `AKS-MIGRATION-PLAN.md` (Dateien in 1.4),
    alle nur mit Contributor):
    - `foundation.sh pre|post`: Key Vault im Access-Policy-Modus und
      ACR Basic (`--role-assignment-mode rbac`) mit Pull-Token
@@ -2519,7 +2519,8 @@ ingress:
 
    Es gibt keine RG-, VNet- oder Identitätsanlage, kein PG Flexible,
    kein Storage-Konto mit Workload Identity, keine Rollenzuweisung und
-   keinen Lock; SAM-Persistenz gebündelt im Cluster (AKS-E7).
+   keinen Lock; SAM-Persistenz gebündelt im Cluster
+   (`AKS-MIGRATION-PLAN.md` 0.1).
 2. `infra/aks/addons.sh` (Traefik v3 statt ingress-nginx, cert-manager
    mit HTTP-01-Issuern für LE-Staging, LE-Prod und den EAB-Rückfall,
    PriorityClasses, PubSub+, Keycloak, Monitoring).
@@ -2590,7 +2591,7 @@ Muss-Umfang (Rollen in 6.4, Zuordnung je Woche in 7.3):
 | AP09b | Chat-HITL: Agent `gpos-price-approver` im SAM-WebUI-Chat als `marktleitung` ruft das gegatete `apply_price` über `gpos-price-gate`; bedingtes Muss: Pflicht nur bei Rückfall D als Messe-Standard; G0-02 entschied B1, also Tiefenecke | G0-02 T15, AP08 | 1 | 10/10 Freigabekarten in Chat und Inbox; Preis aktiv ≤ 2,5 s nach Freigabe; geprüft mit `APPROVAL_SURFACE=A` und `=B` |
 | AP10 | Multimodal TR3: `/foto`, BFF-Publish, R2 und Workflow im Hauptweg A2b (`load_photo`, Agent-Knoten `gpos-price-scout`, G0-05), `match_competitor_price` mit Schranke auf `readable`, Preis und Katalogtreffer, Rückfall A2, Prompt; Requisiten drucken (Prospekt matt laminiert, Kundenkarten, Steuerkarten) bis 04.12.2026; Testsatz 30 + 20 Negative bis 16.12.2026 | AP08, G0-05 (Druckvorlagen und Probedruck vorher in KW46, als Eingang für G0-05) | 6 | ≥ 28/30 Requisitenfotos korrekt erkannt; 0/20 Negativfotos lösen einen Vorschlag aus (Schwelle gilt nach der G0-05-Fotoprüfung); Werte auf dem Monitor p90 ≤ 5 s |
 | AP11 | `gpos-ui`: BFF-SSE, `/monitor` (Zonen, Zähler, Ticker, Attract), `/freigabe`, `/kasse` + `/kunde` (Kacheln, Scanner-Puffer, Storno), `/op`, `/etikett` (Spiegel); die `/kasse`-Kacheln (1,5 PT) baut Entwickler A | AP04a, AP06 | 14 | Scan → Zeile p95 < 0,3 s; `/monitor`, `/kasse`, `/kunde` und `/freigabe` laufen 10 h am Stück im Kiosk-Browser der Messe-Hardware über den öffentlichen Ingress gegen AKS, parallel zum 24-h-Lauf in G3: 0 manuelle Reloads, Browser-Speicher stabil (±20 %), Attract-Loop läuft; 5-m-Lesetest von 3 Nicht-Team-Personen bestanden |
-| AP12 | AKS nach RA 6.2, Schritte 1–10 (S1 Subscription bis S10 Härtung): Foundation, Add-ons, Broker, Keycloak, SAM extern, ACR, Overlay `aks` mit Pfad-Routing auf einem Namen, gRPC-Ingress nach Dienstpfad, öffentlicher Zugang (API-Server-Allowlist, Rate-Limits), Wartungsfenster, Stop/Start | O4, O6; S6–S10 nach G0-11a | 12,5 | `install.sh TARGET=aks all` aus leerem Namespace ≤ 30 min; je ein TR1-Besuch Ende zu Ende über das öffentliche Internet (`https://<fqdn>/kasse`) vom Stand-Router (Leihgerät; Kabel-Uplink und 5G) und von einem Mobilfunk-Hotspot; HTTPS-RTT p95 ≤ 40 ms Kabel; API-Server nur von freigegebenen IPs erreichbar (`kubectl` von einer anderen IP scheitert); genau eine öffentliche Ingress-IP (`pip-aks-ingress`, nur 80 und 443) am Traefik-Service, sonst nur die Egress-IP; öffentlich vertrauenswürdiges ACME-Zertifikat per HTTP-01 für `<fqdn>` gültig (Let's Encrypt oder EAB-Rückfall-CA, R25) |
+| AP12 | AKS nach RA 6.2, Schritte 1–10 (S1 Subscription bis S10 Härtung): Foundation, Add-ons, Broker, Keycloak, SAM extern, ACR, Overlay `aks` mit Pfad-Routing auf einem Namen, gRPC-Ingress nach Dienstpfad, öffentlicher Zugang (Rate-Limits), Wartungsfenster, Stop/Start | O4, O6; S6–S10 nach G0-11a | 12,5 | `install.sh TARGET=aks all` aus leerem Namespace ≤ 30 min; je ein TR1-Besuch Ende zu Ende über das öffentliche Internet (`https://<fqdn>/kasse`) vom Stand-Router (Leihgerät; Kabel-Uplink und 5G) und von einem Mobilfunk-Hotspot; HTTPS-RTT p95 ≤ 40 ms Kabel; API-Server nur von freigegebenen IPs erreichbar (`kubectl` von einer anderen IP scheitert); genau eine öffentliche Ingress-IP (`pip-aks-ingress`, nur 80 und 443) am Traefik-Service, sonst nur die Egress-IP; öffentlich vertrauenswürdiges ACME-Zertifikat per HTTP-01 für `<fqdn>` gültig (Let's Encrypt oder EAB-Rückfall-CA, R25) |
 | AP13 | Tests, Evals, Last: Vertragstests, `hitl_e2e.py`, zwei Eval-Experimente, Last 2 h Lab und 24 h AKS, Neuaufbau-Drill | alle | 6 | Kriterien in 8; Neuaufbau AKS aus dem Nichts ≤ 4 h |
 | AP14 | Betrieb: Preflight mit Kanarienlauf, Runbook, Tagesroutine, Exporte, Freeze-Snapshots | AP12 | 3,5 | Preflight READY < 15 min aus kalt; Kanarienlauf pausiert in der Inbox |
 | AP14b | L3-Profil: Overlay `k8s/overlays/l3` und SAM-Values `l3` mit dem AKS-Namen `<fqdn>` und denselben Pfaden wie auf AKS (SAM `dnsName`, Keycloak unter `/auth` mit Hostname und Issuer, Redirect-URIs, BFF-Keycloak-Client, gpos-Pfade), LE-Zertifikat per Skript aus AKS exportiert, Seed per `install.sh db` identisch | AP12 | 2 | L3-Drill am Stand-Router mit einem iPad ohne Profil: TR1 mit Freigabe (Fläche A oder D) ≤ 3 min; je ein Drill in G3 und G4; dabei läuft das Lab-MacBook warm im Profil `l3`, die ≤ 3 min messen die Router-DNS-Umschaltung bis zur TR1-Freigabe; der Wechsel `lab` ↔ `l3` ist ein eigener Runbook-Schritt mit gemessener Dauer und Ansage |
@@ -2812,8 +2813,8 @@ Die Spalte „Bis“ nennt den geplanten Termin und den Stand vom 11.11.
 | G0-09 | Agentenlatenz und Umlaute (alt G0-5/6) | 20 Aufrufe je Agent; Pfad Agent → Vorlage → MCP → Engine → SMF → Browser mit „ä ö ü ß €“ | p50 ≤ 5,5 s, p90 ≤ 7 s; UTF-8 korrekt oder deterministische Reparatur | ASCII mit Wortliste (D 6.8) | 0,25 | A | 20.11.; teilweise 11.11., MCP-Pfad und zwei Agents offen |
 | G0-10 | Broker-Optionen (alt G0-7/9) | persistent + Demotion; TTL der SAM-Queue; `existingQueueName` | beides empfangen; Entscheidung eigene Queue dokumentiert | SAM-Queue mit Veraltungsschutz 20 s | 0,25 | B | 20.11.; bestanden 11.11., gwe-Neustart offen |
 | G0-11a | SAM 2.542.1 auf AKS mit externer Persistenz | nach AP12 S1–S5 (SAM braucht für Lauf und `provision.sh` den Broker aus S4 und Keycloak aus S5, Keycloak braucht cert-manager und Ingress aus S3; RA 6.2): Helm mit Overlay, `provision.sh`, ein Workflow-Lauf, Neustart aller Pods, Artefakt in Blob, Zugriff per `kubectl port-forward`; Prüfungen (2) ein `fast`-Agent- und ein Vision-Aufruf (Agent `gpos-price-scout`, A2b; `describe_image` entfällt nach G0-05) über die SAM-Modellaliase von AKS aus und (4) TLS der SAM-DSNs zu PG Flexible | Lauf grün, nach Neustart unverändert; (2) und (4) grün | gebündelte Persistenz auf `managed-csi-premium` | 1 | C (in b: A) | 03.12. (in b: G2b); wartet auf O4 |
-| G0-11b | HITL und gRPC auf AKS | nach AP12 S3, S5, S6: Prüfungen (1) Flag an, gegateter Spike-Lauf pausiert, awe-Neustart, Freigabe per Inbox als `marktleitung` und (3) `grpcurl list/call` über `<fqdn>:443` (TLS, Routing nach Dienstpfad, Reflection an) mit dem Spike-Server `spikes/grpc-spike/gebitsim` vom Entwickler-Mac; `gebitsim` braucht das GEBIT-Deskriptor-Set als Secret in Azure und läuft dort nur nach schriftlicher Owner-Bestätigung (AKS-E16 in `AKS-MIGRATION-PLAN.md`, spätestens 09.12.), das Secret wird direkt nach dem Test gelöscht; ohne Bestätigung (3) nach Zustimmung des Plan-Eigners mit einem Testserver ohne GEBIT-Material (eigener Showcase-Deskriptor) als dokumentierte Abweichung, sonst nach G2b | (1) und (3) grün; G0-11 gilt erst als bestanden, wenn G0-11a und G0-11b grün sind (alle vier Prüfungen) | (1) wie G0-02: Fläche D plus AP09b auf AKS; (3) gRPC nur clusterintern, Tiefenecke per Port-Forward | 0,5 | C (in b: A) | 11.12. (in b: G2b); wartet auf O4 |
-| G0-12 | LiteLLM-Messe-Key und Modellpreise | Key beantragen, Budgetzeitraum klären, Key in die SAM-Modellkonfiguration eintragen (nur dort, Owner-Vorgabe 10), Preise für `fast` und `workflow` setzen | Key-Termin bestätigt; Kostenansicht zeigt Kosten | Vorlagentexte (L1) bei Budgetgrenze | 0,25 | A | 20.11.; Preise gesetzt, Key wartet auf O5 |
+| G0-11b | HITL und gRPC auf AKS | nach AP12 S3, S5, S6: Prüfungen (1) Flag an, gegateter Spike-Lauf pausiert, awe-Neustart, Freigabe per Inbox als `marktleitung` und (3) `grpcurl list/call` über `<fqdn>:443` (TLS, Routing nach Dienstpfad, Reflection an) mit dem Spike-Server `spikes/grpc-spike/gebitsim` vom Owner-Mac; `gebitsim` braucht das GEBIT-Deskriptor-Set als Secret in Azure und läuft dort nur nach schriftlicher Owner-Bestätigung (`AKS-MIGRATION-PLAN.md` 0.1, spätestens 09.12.), das Secret wird direkt nach dem Test gelöscht; ohne Bestätigung (3) nach Zustimmung des Plan-Eigners mit einem Testserver ohne GEBIT-Material (eigener Showcase-Deskriptor) als dokumentierte Abweichung, sonst nach G2b | (1) und (3) grün; G0-11 gilt erst als bestanden, wenn G0-11a und G0-11b grün sind (alle vier Prüfungen) | (1) wie G0-02: Fläche D plus AP09b auf AKS; (3) gRPC nur clusterintern, Tiefenecke per Port-Forward | 0,5 | C (in b: A) | 11.12. (in b: G2b); wartet auf O4 |
+| G0-12 | LiteLLM-Lab-Key (Owner-Entscheidung 19.11.2026) und Modellpreise | Key beantragen, Budgetzeitraum klären, Key in die SAM-Modellkonfiguration eintragen (nur dort, Owner-Vorgabe 10), Preise für `fast` und `workflow` setzen | Key-Termin bestätigt; Kostenansicht zeigt Kosten | Vorlagentexte (L1) bei Budgetgrenze | 0,25 | A | 20.11.; Preise gesetzt, Key wartet auf O5 |
 | G0-13 | Postgres-DDL aller Schemas auf PG 18; SMF-Publisher | Wegwerf-DB, alle SQL-Dateien zweimal, Seeds; `solace-pubsubplus` im Ziel-Image (Python 3.13, arm64 und amd64) installieren und persistent auf VPN `sam` an `gebit/rp/...` und `gpos/v1/...` publizieren (Test-Queue) | DDL fehlerfrei und idempotent; Wheel auf beiden Architekturen; Nachrichten persistent in der Test-Queue | DDL-Korrektur vor AP03; scheitert das Wheel, Basis `python:3.12-slim` wie BSG | 0,5 | B | 18.11.; bestanden 11.11. |
 | G0-14 | Teams-DM für Workflow-HIL (Kann) | Teams-Entrypoint auf AKS, Kanal für `marktleitung` aktivieren | Anfrage in Teams beantwortbar | entfällt | – | – | G2b |
 | | **Summe AP01 (G0-01 bis G0-13 ohne G0-06)** | | | | **10,25** | | |
@@ -2845,7 +2846,7 @@ für C gilt derselbe Faktor.
 |---|---|---|---|---|---|---|---|---|---|---|
 | G0 | 11.–20.11.2026 (G0-08b 25.11., G0-11a 03.12., G0-11b 11.12.; deren PT zählen in G1) | 8 | 16 | 13,9 | 13,5 | – | – | – | Spikes, Gerüst, Schemas; Fragen an GEBIT am 13.11. | 7.1 erfüllt oder Rückfall gewählt |
 | G1 | 23.11.–11.12.2026 | 15 | 30 | 26,0 | 24,75 | 15 | 13,0 | 11,5 | TR1-Minimum: AP04a, AP06 TR1, AP07a, AP08 und AP09 für TR1, BFF-SSE-Grundkanal, `/kasse`, `/kunde`, `/freigabe`; Requisiten gedruckt; G0-08b, G0-11a, G0-11b; AKS S1–S6 | 10 TR1-Besuche in Folge ohne Eingriff im Lab; Messwerte nach 8.8 für die TR1-Segmente ohne Monitor (Scan → Zeile, Scan → `proposal/draft`, Scan → KI-Text, `approval/pending` → Inbox, Tipp → Preis aktiv), Monitor-Segmente ab G2b; Vertragstests aus AP04a grün (11 GEBIT-Beispiele, strikt re-parsebar) |
-| G2a | 14.–18.12.2026 | 5 | 10 | 8,7 | 8,5 | 5 | 4,3 | 3,75 | TR5-Kartenpfad, TR3 mit Testsatz und TR3-Policy, AKS S7–S8, S9 öffentlicher Zugang (API-Server-Allowlist, Rate-Limits) | TR5: 5 Live-Läufe Karte → Coupon auf `/kunde`; TR3-Testsatz ≥ 28/30 korrekt, 0/20 Negative mit Vorschlag (vorbehaltlich der G0-05-Fotoprüfung); AKS RA-Schritte 1–6 bis SAM grün; `<fqdn>` an einer öffentlichen Ingress-IP mit öffentlich vertrauenswürdigem ACME-Zertifikat per HTTP-01 (Let's Encrypt oder EAB-Rückfall-CA, R25); API-Server nur von freigegebenen IPs; HTTPS-RTT p95 ≤ 40 ms Kabel |
+| G2a | 14.–18.12.2026 | 5 | 10 | 8,7 | 8,5 | 5 | 4,3 | 3,75 | TR5-Kartenpfad, TR3 mit Testsatz und TR3-Policy, AKS S7–S8, S9 öffentlicher Zugang (Rate-Limits) | TR5: 5 Live-Läufe Karte → Coupon auf `/kunde`; TR3-Testsatz ≥ 28/30 korrekt, 0/20 Negative mit Vorschlag (vorbehaltlich der G0-05-Fotoprüfung); AKS RA-Schritte 1–6 bis SAM grün; `<fqdn>` an einer öffentlichen Ingress-IP mit öffentlich vertrauenswürdigem ACME-Zertifikat per HTTP-01 (Let's Encrypt oder EAB-Rückfall-CA, R25); API-Server aus allen Netzen (Admin-kubeconfig, `AKS-MIGRATION-PLAN.md` 0.1); HTTPS-RTT p95 ≤ 40 ms Kabel |
 | G2b (Feiertage) | 21.12.2026–06.01.2027 | 11 Arbeitstage (25.12. und 01.01. gesetzlich frei), je Person 4 brutto (3,5 PT netto) verplant | 8 | 6,9 | 6,5 | 4 | 3,5 | 2,5 | TR2, TR6, Rabatte und Coupons, Layouts, Testsatz unter Messelicht-Simulation, Zugang über 5G und Mobilfunk-Hotspot, Router-DNS für L3 und L3-Kopie | – |
 | G2b | 07.–15.01.2027 | 7 | 14 | 12,1 | 10,75 | 7 | 6,1 | 5,5 | TR4, TR7, Policy, Loyalty-Bonende, BFF-SSE für Monitor und Ticker, `/monitor` live, AP09b, AKS S10, L3-Profil, `/op` | alle Golden-Szenarien grün; je Auslöser 5 Live-Läufe im Lab; Demo per `install.sh TARGET=aks`; je ein TR1-Besuch Ende zu Ende über das öffentliche Internet vom Stand-Router (Leihgerät; Kabel-Uplink und 5G) und von einem Mobilfunk-Hotspot; Monitor-Segmente nach 8.8 |
 | G3 | 18.–22.01.2027 | 5 | 10 | 8,7 | 8,25 | 5 | 4,3 | 4,0 | AKS Hauptziel, Watchdogs, HITL-Härtung, Evals, Hintergrundkassen, Vertragstests, 2-h-Lab-Last, 24-h-Lauf, Neuaufbau, 10-h-Kiosklauf, L3-Drill | Kriterien 8.6; aus 8.7 der L3-Drill (AP14b), übrige Fehlerdrills in G4 (AP15); Preflight READY < 15 min |
@@ -2874,7 +2875,7 @@ Spalte C.
 | 48 | 23.–27.11. | G0-08b 1; AP08 Teil 2 TR1-Ressourcen 2; AP09 Notify-Client 1,25 (Σ 4,25) | AP03 0,5; AP04a 3,75 (Σ 4,25) | AP12 S1 0,5; AP12 S2 1,5; AP12 S3 Add-ons 1,5; AP04a Container, k8s 0,5 (Σ 4) |
 | 49 | 30.11.–04.12. | AP09 Zuordnung, Antwort, Wächter 1,25; AP11 BFF-SSE-Grundkanal (`/kasse`, `/kunde`, `/freigabe`) 0,75; AP11 `/kasse`, `/kunde` 0,75; AP10 Requisiten drucken 0,5; AP11 `/freigabe` 0,75 (Σ 4) | AP04a 3,5; AP06 TR1 0,75 (Σ 4,25) | AP12 S4 Broker 1; AP12 S5 Keycloak 1; G0-11a 1; AP08 `install.sh mesh` 0,75 (Σ 3,75) |
 | 50 | 07.–11.12. | AP07a TR1-Tools 2; AP09 TR1 Ende zu Ende 0,5; AP11 `/freigabe` 0,25; Puffer G1 1 (Σ 3,75) | AP06 TR1 3,25; Puffer G1 1 (Σ 4,25); **G1** | AP12 S6 2; G0-11b 0,5; AP04a gRPC-Ingress Lab 0,75; AP14 Preflight 0,5 (Σ 3,75) |
-| 51 | 14.–18.12. | AP10 R2, Workflow, A2b, Testsatz bis 16.12. 3,5; AP07b Foto-Tools 0,75 (Σ 4,25) | AP05a Kartenpfad 3,5; AP06 TR3-Policy und Slots (`competitor_price`), TR5-Erkennung (`member`) 0,75 (Σ 4,25); **G2a** | AP12 S7 0,5; AP12 S8 1,5; AP12 S9 öffentlicher Zugang (API-Server-Allowlist, Rate-Limits) und HTTPS-RTT 0,5; AP07b Loyalty-Tools, `member`-Zweig vom Stub auf echte Tools 0,75; AP14 Runbook 0,5 (Σ 3,75) |
+| 51 | 14.–18.12. | AP10 R2, Workflow, A2b, Testsatz bis 16.12. 3,5; AP07b Foto-Tools 0,75 (Σ 4,25) | AP05a Kartenpfad 3,5; AP06 TR3-Policy und Slots (`competitor_price`), TR5-Erkennung (`member`) 0,75 (Σ 4,25); **G2a** | AP12 S7 0,5; AP12 S8 1,5; AP12 S9 öffentlicher Zugang (Rate-Limits) und HTTPS-RTT 0,5; AP07b Loyalty-Tools, `member`-Zweig vom Stub auf echte Tools 0,75; AP14 Runbook 0,5 (Σ 3,75) |
 | 52–1 | 21.12.–06.01. | AP10 Testsatz unter Messelicht-Simulation erweitern 0,75; AP11 `/monitor`-Layout 1,5; AP11 `/freigabe`-Layout 1 (Σ 3,25) | AP06 TR2, TR6 1,25; AP04b Rabatte, Coupons 1,5; AP05b 0,5 (Σ 3,25) | AP12 S9 Zugang über 5G und Mobilfunk-Hotspot, Router-DNS für L3, L3-Kopie 1; AP14 1; AP13 `hitl_e2e.py` 0,5 (Σ 2,5) |
 | 1–2 | 07.–15.01. | AP08 Ressourcen TR2, TR4, TR6, TR7 0,75; AP09b 1; AP11 BFF-SSE Monitor und Ticker 1,25; AP11 `/kasse`, `/kunde` Ausbau 0,75; AP11 `/monitor` live 1,5; Puffer G2 0,5 (Σ 5,75) | AP06 TR4, TR7, Policy, Validator 1,5; AP05b 1,5; AP04b 1; Puffer G2 1 (Σ 5); **G2b** | AP12 S10 1,5; AP14b 1; AP14 1; AP11 `/op` 1,5; Puffer G2 0,5 (Σ 5,5) |
 | 3 | 18.–22.01. | AP06 Watchdogs L1/L2 1; AP09 HITL-Härtung 1,5; AP13 Evals 1,25; Puffer G3 0,5 (Σ 4,25) | AP04b Hintergrundkassen, EFT 1,5; AP05b 1; AP13 Vertragstests 0,5; AP13 Last Lab 0,5; Puffer G3 0,5 (Σ 4); **G3** | AP13 24 h AKS, Neuaufbau 2; AP14b L3-Drill G3 0,5; AP11 Kiosk 10 h 0,5; Puffer G3 1 (Σ 4) |
