@@ -1,6 +1,6 @@
 # AKS-Aufbau: EuroCIS-Showcase (Runbook)
 
-Stand 19.11.2026. Dieses Runbook baut den Messe-Stack der GEBIT-Demo (SAM,
+Stand 23.11.2026. Dieses Runbook baut den Messe-Stack der GEBIT-Demo (SAM,
 Keycloak, Broker, gpos-Demo, Monitoring) auf AKS auf und regelt Betrieb und
 Rückbau bis nach der EuroCIS (16.-18.02.2027); es ist die einzige Quelle für
 AKS. Die lange Fassung bleibt in git (20a6316, davor 9f66efd, 7a860c5).
@@ -23,7 +23,7 @@ GEBIT-Stellvertretung hat kein Azure und nutzt nur die öffentlichen UIs.
 | Netz | AKS-verwaltetes VNet, Azure CNI Overlay mit Cilium, AKS-verwaltete Egress-IP (neu nach jedem Neuaufbau) |
 | Zugang | Admin-kubeconfig `~/.kube/aks-eurocis.yaml` (600, nie in `~/.kube/config`), Kontext `aks-eurocis-admin`; lokale Accounts an; API-Server aus allen Netzen |
 | Entra | nicht integriert: Für einen Betreiber reicht das Admin-Zertifikat, Entra brächte kubelogin und Bindings ohne Nutzen |
-| Updates, Laufzeit | Auto-Upgrade `none`, Node-OS `SecurityPatch` Mi 08:00-12:00; Sperre 20.01. und 27.01.-20.02.2027; Nachtstopp bis 04.02., ab 05.02. 24/7 |
+| Updates, Laufzeit | Auto-Upgrade `none`, Node-OS `None` (keine automatischen Node-Patches, Refresh von Hand, 4.2); kein Wartungsfenster (A7 entfällt); Nachtstopp bis 04.02., ab 05.02. 24/7 |
 | Name | Standard-IP `pip-aks-ingress` (statisch, Node-RG) mit DNS-Label `eurocis-showcase`; Traefik bindet sie per `azure-pip-name` |
 | TLS | cert-manager v1.21.3, Let's Encrypt HTTP-01 (erst staging, dann prod), ein Zertifikat als Traefik-Default; Backup im Key Vault; Rückfall ZeroSSL |
 | Ingress | Traefik v3.7.19 (Chart 42.4.1, Image per Digest) mit ingress-nginx-Provider, IngressClass `nginx`; einziger LoadBalancer-Service |
@@ -75,7 +75,7 @@ Budget.
 
 | Wann | Was |
 |---|---|
-| ab 19.11.2026 | Abschnitt 1, dann A1-A7 (sofort möglich) |
+| ab 19.11.2026 | Abschnitt 1, dann A1-A6 (sofort möglich) |
 | bis 27.11. | A8-A11 (Plattform, Prod-Zertifikat) |
 | bis 02.12. / 03.12. | A12-A17 (Broker, Keycloak, SAM) / Gate G0-11a |
 | bis 10.12. | A18-A19 (GEBIT-Demo, Mesh) |
@@ -173,7 +173,6 @@ Pfade ohne Ordner liegen unter `gebit-price-agent-demo/infra/aks/`.
 | `aks.sh` | Variablen, Wrapper und Helfer (1.5) | 1.3 |
 | `env.aks.example` | Vorlage für `gebit-price-agent-demo/.env.aks` (ohne Punkt, sonst greift `.env.*`) | 1.3 |
 | `agent-mesh-deployment/.gitignore` | Zeile `.env.aks` | 1.3 |
-| `maint-window.json` | Wartungsfenster und Sperrtermine (Inhalt in A7) | A7 |
 | `monitoring-values-aks.yaml` | Overlay zu den Lab-Values: etcd, Controller-Manager, Scheduler und kube-proxy aus (verwaltete Control Plane, Cilium ohne kube-proxy), `NodeClockNotSynchronising` wieder an; Prometheus-PVC 16Gi `managed-csi-premium`, Grafana-Admin aus Secret `grafana-admin`, kein Ingress; zusätzliche Datasources nur Loki und Tempo (ohne SAM Platform DB), die Chart-Datasources Prometheus und Alertmanager bleiben | A8 |
 | `loki-values-aks.yaml` | `lokiCanary` und `test` aus | A8 |
 | `traefik-values.yaml` | Image `traefik` per Digest mit `versionOverride: v3.7.19`, `checkNewVersion: false`; Provider `kubernetesIngressNGINX` an (`ingressClass: nginx`, `controllerClass: k8s.io/ingress-nginx`, keine Snippets, `publishService` an), `kubernetesCRD` an, `kubernetesIngress` und eigene IngressClass aus; `extraObjects`: IngressClass `nginx` (Controller `k8s.io/ingress-nginx`, verlangt das SAM-Chart) und Middleware `traefik/hsts` (`stsSeconds: 604800`, ohne `includeSubDomains` und Preload); `websecure`: `readTimeout: 3600s`, Middleware `traefik-hsts@kubernetescrd`; `web` ohne Redirect (HTTP-01); Service `LoadBalancer`, `externalTrafficPolicy: Local`, Annotationen `azure-pip-name: pip-aks-ingress`, `azure-load-balancer-resource-group: gebit-showcase-nodes`, `azure-load-balancer-tcp-idle-timeout: "30"`, nie `azure-dns-label-name`; `tlsStore.default.defaultCertificate.secretName: ingress-tls`; Access-Log JSON, Header und Query-Parameter `drop`; `/tmp` emptyDir 2Gi; Requests 100m/256Mi, Limit 512Mi; Dashboard nur intern; ServiceMonitor an | A9 |
@@ -365,7 +364,7 @@ az aks create -g "$AKS_RG" -n "$AKS_NAME" -l "$AKS_LOC" \
   --network-plugin azure --network-plugin-mode overlay --network-dataplane cilium \
   --pod-cidr 10.244.0.0/16 --service-cidr 10.0.0.0/16 --dns-service-ip 10.0.0.10 \
   --load-balancer-managed-outbound-ip-count 1 \
-  --auto-upgrade-channel none --node-os-upgrade-channel SecurityPatch \
+  --auto-upgrade-channel none --node-os-upgrade-channel None \
   --no-ssh-key --tags "${TAGS[@]}" -o none
 az aks nodepool update -g "$AKS_RG" --cluster-name "$AKS_NAME" \
   -n main --max-surge 1 -o none
@@ -375,7 +374,7 @@ networkProfile.networkPolicy,autoUpgradeProfile.nodeOsUpgradeChannel]"
 az group show -n "$AKS_NODE_RG" --query "keys(tags)" -o tsv   # Owner, Created Date
 ```
 
-Prüfung: 1.36.5, Free, gebit-showcase-nodes, cilium, cilium, SecurityPatch.
+Prüfung: 1.36.5, Free, gebit-showcase-nodes, cilium, cilium, None.
 Create dauert rund 10 min; Failed: `az aks delete` und neu.
 `RequestDisallowedByPolicy` heißt Tags fehlen; scheitert ein späteres Update
 daran (Azure/AKS #5856), dreimal mit 60 s Pause wiederholen, dann
@@ -442,31 +441,26 @@ Prüfung: Pull ohne ImagePullBackOff; LLM-Test 401 oder 200 (ohne Key). 000 oder
 Timeout: Der Owner klärt mit dem LiteLLM-Betreiber eine IP-Allowlist und meldet
 die Egress-IP (nach jedem Neuaufbau erneut).
 
-### A7 Wartungsfenster und Sperrtermine
+### A7 Wartungsfenster (entfällt)
 
-Ziel: SecurityPatch nur Mi 08:00-12:00, keine geplante Wartung am 20.01. und vom
-27.01. bis 20.02.2027. `maint-window.json`:
-
-```json
-{ "maintenanceWindow": {
-    "schedule": { "weekly": { "intervalWeeks": 1, "dayOfWeek": "Wednesday" } },
-    "durationHours": 4, "utcOffset": "+01:00", "startTime": "08:00",
-    "notAllowedDates": [ { "start": "2027-01-20", "end": "2027-01-20" },
-                         { "start": "2027-01-27", "end": "2027-02-20" } ] } }
-```
+Owner-Entscheidung 23.11.2026: kein Wartungsfenster, keine Sperrtermine. Dafür
+steht der Node-OS-Kanal auf `None` (A3): AKS spielt keine Node-Patches
+automatisch ein, das Node-Image erneuert der Owner von Hand (4.2). Der Cluster
+vom 23.11. wurde mit `SecurityPatch` angelegt und per `az aks update
+--node-os-upgrade-channel None` umgestellt; ein Neuaufbau setzt `None` in A3
+direkt. Die AKS-Plattformwartung (Releases, Add-ons) hat damit keinen festen
+Termin und läuft meist ohne Node-Neustart.
 
 ```bash
-for n in default aksManagedNodeOSUpgradeSchedule; do
-  az aks maintenanceconfiguration add -g "$AKS_RG" --cluster-name "$AKS_NAME" \
-    -n "$n" --config-file "$AKS_DIR/maint-window.json" -o none
-done
-az aks maintenanceconfiguration list -g "$AKS_RG" --cluster-name "$AKS_NAME" -o json \
-  --query "[].{n:name,t:maintenanceWindow.startTime,x:maintenanceWindow.notAllowedDates}"
+az aks show -g "$AKS_RG" -n "$AKS_NAME" -o tsv --query \
+  "[autoUpgradeProfile.upgradeChannel,autoUpgradeProfile.nodeOsUpgradeChannel]"
+az aks maintenanceconfiguration list -g "$AKS_RG" --cluster-name "$AKS_NAME" \
+  --query "length([])" -o tsv
 ```
 
-Prüfung: beide mit 08:00 und Sperren; Änderungen per
-`maintenanceconfiguration update`. Gestoppt keine Wartung: Mi bis 08:00
-starten, sonst entfällt das Fenster dieser Woche.
+Prüfung: `none`, `None` und 0 Wartungskonfigurationen. Nie `SecurityPatch`
+oder `NodeImage` zurückstellen: ohne Fenster patcht AKS dann jederzeit, bei
+einem Node mit Minuten Komplettausfall.
 
 ### A8 Monitoring
 
@@ -935,8 +929,8 @@ aks_sam sam task send --url "https://$FQDN" -f "$GPD/spikes/mm/img/competitor_ta
 
 - [ ] 100 Läufe an den Probetagen mit mindestens 98 % ohne Rückfall.
 - [ ] Zertifikat: notAfter nach dem 10.04.2027, renewalTime nach dem 20.02.2027;
-  ACR-Token bis 2027-02-28; Node-Image wie nach dem 26.01.; Wartungssperre
-  aktiv; Git-Tag gleich Image-Tag.
+  ACR-Token bis 2027-02-28; Node-Image wie nach dem 26.01.; Node-OS-Kanal
+  `None` (A7); Git-Tag gleich Image-Tag.
 - [ ] Ab 05.02. 24/7 bis 19.02. (`aks_stop` verweigert).
 - [ ] L3-Drill (4.6) zweites Mal, falls L3 bleibt; Fehlerdrills nach
   IMPLEMENTATION-PLAN 8.7 mit `kaks`: `kaks -n solace delete pod
@@ -956,11 +950,11 @@ aks_sam sam task send --url "https://$FQDN" -f "$GPD/spikes/mm/img/competitor_ta
   Egress-IP zählt nur bei einer LiteLLM-Allowlist. `RequestDisallowedByPolicy`:
   wie in A3.
 
-### 4.2 Wartung und Sperre
+### 4.2 Node-Image-Refresh
 
-Letztes automatisches Fenster Mi 13.01.2027, dann Sperre (A7); AKS darf sie für
-dringende Wartung brechen (Rückfall L3/L4). Letzter Node-Image-Refresh von Hand
-Di 26.01.2027 (Surge-Node, einige Minuten Ausfall):
+Keine automatische Node-Wartung (Kanal `None`, A7 entfällt): Der Node bleibt
+auf seinem Image, bis der Owner es erneuert. Refresh von Hand nur an Tagen ohne
+Termin (Surge-Node, einige Minuten Ausfall), zuletzt Di 26.01.2027:
 
 ```bash
 az vm list-usage -l "$AKS_LOC" -o tsv --query "[?name.value=='cores'].[currentValue,limit]"   # >= 16 frei
@@ -1098,7 +1092,7 @@ Neuaufbau (G3-Drill oder Notfall, nie am Messetag):
    `tls_backup && az aks delete -g "$AKS_RG" -n "$AKS_NAME" --yes` (löscht nur
    nach geprüftem Backup; nimmt die Node-RG mit VM, PVCs, LB und beiden IPs mit;
    das Label ist frei).
-2. Ohne Pause A3 bis A7 (gleicher Name, neue Adressen; LiteLLM ggf. neu
+2. Ohne Pause A3 bis A6 (gleicher Name, neue Adressen; LiteLLM ggf. neu
    melden); `aks_ips` (A6) meldet dabei einmal `ACHTUNG` für beide IPs
    (erwartet, Register übernimmt sie).
 3. A8 und A9, cert-manager und Issuer aus A10, dann `tls_restore` und
@@ -1152,7 +1146,7 @@ aufräumen, lokale Exporte mit Messedaten löschen.
 
 | Risiko | Gegenmaßnahme |
 |---|---|
-| Ein Node ohne HA: jeder Node-Vorgang ist Minuten Komplettausfall | Refresh 26.01., Wartungssperre, L3, L4 |
+| Ein Node ohne HA: jeder Node-Vorgang ist Minuten Komplettausfall | Node-OS-Kanal `None`, Refresh nur von Hand (zuletzt 26.01.), L3, L4 |
 | Admin-kubeconfig ist ein Dauerschlüssel, API-Server offen, jeder Contributor kann sie holen | Datei 600, FileVault, im Notfall `az aks rotate-certs`, Rückbau |
 | Let's Encrypt: geteilter Topf `azure.com` (nicht auf der PSL) | erst staging, Backup, ZeroSSL, Erneuerung um 15.01. |
 | Label-Verlust zwischen `az aks delete` und neuer IP | Neuaufbau nur im Drill, IP ohne Pause neu |

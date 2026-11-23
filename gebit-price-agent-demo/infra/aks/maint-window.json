@@ -1,5 +1,0 @@
-{ "maintenanceWindow": {
-    "schedule": { "weekly": { "intervalWeeks": 1, "dayOfWeek": "Wednesday" } },
-    "durationHours": 4, "utcOffset": "+01:00", "startTime": "08:00",
-    "notAllowedDates": [ { "start": "2027-01-20", "end": "2027-01-20" },
-                         { "start": "2027-01-27", "end": "2027-02-20" } ] } }
