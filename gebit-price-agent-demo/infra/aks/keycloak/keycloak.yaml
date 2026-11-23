@@ -14,7 +14,11 @@
 #     (keycloak/ingress.yaml, applied in A15)
 #   - realm solace-lab without users and roles (scripts create
 #     groups and users), self-service password reset off,
-#     brute-force protection as in the lab
+#     brute-force protection OFF (owner decision 23.11.2026: the
+#     booth logins are public in the repo, so the lab lockout would
+#     let anyone block them; the passwords are 128-bit random from
+#     Key Vault). The import counts only on an empty DB: a running
+#     realm is switched by kc_bruteforce_off (A15)
 #   - PVC on managed-csi-premium, memory limit 1536Mi
 #
 # Hostnames (Keycloak hostname v2):
@@ -211,7 +215,7 @@ data:
       "duplicateEmailsAllowed": false,
       "resetPasswordAllowed": false,
       "editUsernameAllowed": false,
-      "bruteForceProtected": true,
+      "bruteForceProtected": false,
       "permanentLockout": false,
       "maxFailureWaitSeconds": 900,
       "minimumQuickLoginWaitSeconds": 60,

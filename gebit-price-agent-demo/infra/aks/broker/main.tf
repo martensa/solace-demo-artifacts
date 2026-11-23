@@ -106,6 +106,10 @@ provider "solacebroker" {
 # username gpos). Unlike the lab, SEMP over the message bus stays off:
 # nothing on AKS uses it (tfa and the scripts use SEMP over HTTP on the
 # port-forward), and the gpos password lives in internet-facing pods.
+# The shared module switches off the show, admin, admin-client and
+# distributed-cache command classes; the master switch
+# sempOverMsgBusEnabled stays at its default (on), so no SEMP command is
+# accepted over the bus (checked on 10.26.0.9219, 23.11.2026).
 module "vpn_default" {
   source    = "../../../../event-mesh-deployment/terraform/modules/vpn"
   providers = { solacebroker = solacebroker.aks }

@@ -564,6 +564,26 @@ kc_unlock() (   # kc_unlock USER: lift the brute-force lock of one realm user
   [ "$code" = 204 ]
 )
 
+kc_bruteforce_off() (   # realm solace-lab without brute-force lockout (owner 23.11.2026)
+  # The booth logins are public in the repo: with the lockout anyone could block
+  # them by failing five times. Partial realm PUT; token only in a curl config.
+  set -o pipefail
+  _aks_noxtrace || return 1
+  _aks_kc_pf || return 1
+  tok=$(kc_token) || return 1
+  code=$(printf '%s' '{"bruteForceProtected": false}' |
+    curl -s -o /dev/null -w '%{http_code}' --max-time 15 -X PUT \
+      -H 'Content-Type: application/json' \
+      --config <(printf 'header = "Authorization: Bearer %s"\n' "$(_aks_cq "$tok")") \
+      --data-binary @- "$AKS_KC_URL/admin/realms/solace-lab") || code=000
+  [ "$code" = 204 ] || { _aks_err "kc_bruteforce_off: PUT HTTP $code"; return 1; }
+  now=$(curl -s --max-time 15 \
+    --config <(printf 'header = "Authorization: Bearer %s"\n' "$(_aks_cq "$tok")") \
+    "$AKS_KC_URL/admin/realms/solace-lab" | jq -r '.bruteForceProtected') || now=""
+  printf 'kc_bruteforce_off: solace-lab bruteForceProtected=%s\n' "${now:-?}"
+  [ "$now" = false ]
+)
+
 semp() (   # semp PATH: SEMP GET over the port-forward 18080 (admin from solace-admin)
   set -o pipefail
   case ${1:-} in
