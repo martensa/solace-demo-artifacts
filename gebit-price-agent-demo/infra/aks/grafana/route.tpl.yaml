@@ -1,0 +1,41 @@
+# Grafana under https://<FQDN>/grafana/ (runbook A11, owner decision of
+# 23.11.2026), reachable only from the IPs of the allowlist: Traefik answers
+# every other client with 403 before the request reaches Grafana.
+#
+# A template: grafana_allow in infra/aks/aks.sh puts the allowlist (quoted
+# CIDRs, the caller's own IP plus GRAFANA_ALLOW of the gitignored .env.aks)
+# in place of the placeholder and pipes the result into kaks apply. Never
+# commit a rendered copy: the owner's IPs do not belong in the public repo.
+#
+# Grafana serves from the sub path itself (root_url and serve_from_sub_path
+# in monitoring-values-aks.yaml), so nothing strips the prefix. The router
+# uses Traefik's default certificate (TLSStore default -> ingress-tls) and
+# the HSTS middleware of the websecure entry point. Traefik sees the real
+# client IP (externalTrafficPolicy Local, checked in A11), which the
+# ipAllowList compares; X-Forwarded-For is not trusted for it.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: grafana-allow
+  namespace: monitoring
+spec:
+  ipAllowList:
+    sourceRange: [__GRAFANA_ALLOW__]
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`eurocis-showcase.germanywestcentral.cloudapp.azure.com`) && (Path(`/grafana`) || PathPrefix(`/grafana/`))
+      middlewares:
+        - name: grafana-allow
+      services:
+        - name: kube-prometheus-grafana
+          port: 80
+  tls: {}

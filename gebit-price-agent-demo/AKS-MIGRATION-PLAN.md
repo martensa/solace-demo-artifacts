@@ -29,7 +29,7 @@ GEBIT-Stellvertretung hat kein Azure und nutzt nur die öffentlichen UIs.
 | Ingress | Traefik v3.7.19 (Chart 42.4.1, Image per Digest) mit ingress-nginx-Provider, IngressClass `nginx`; einziger LoadBalancer-Service |
 | Images | privat (SAM-Offline-Images, gpos-demo) in ACR Basic, Pull per Token `aks-pull`; öffentlich direkt upstream per Digest (1.7) |
 | Secrets | Key Vault (Access Policies): generierte Passwörter, ACR-Token, TLS-Backup; der LiteLLM-Key (Lab-Key) nur in SAM |
-| Monitoring | kube-prometheus-stack 83.5.0, Loki 6.55.0, Tempo 2.0.0, Alloy 1.11.0 wie im Lab; Prometheus auf PVC; nur Port-Forward |
+| Monitoring | kube-prometheus-stack 83.5.0, Loki 6.55.0, Tempo 2.0.0, Alloy 1.11.0 wie im Lab; Prometheus auf PVC; per Port-Forward, Grafana zusätzlich unter `/grafana/` nur für die IP-Allowlist (Owner-Entscheidung 23.11.) |
 | Keycloak | 26.8.2 mit Postgres im Cluster (Namespace `iam`), Realm `solace-lab` mit den Lab-Usern, unter `/auth` |
 | Broker | PubSub+ Standard 10.26.0.9219 (Chart 3.10.0, `prod1k`), nur ClusterIP, VPNs `default` und `sam`; der Lab-Broker bleibt 10.25.0.208 |
 | SAM | 2.542.1 (Chart 2.3.10, str 1.80.2), gebündelte Persistenz (Postgres, SeaweedFS 2 CPU/2Gi), eigenes PG-Superuser-Passwort, NetworkPolicy |
@@ -58,7 +58,8 @@ dazu Reflection; gRPC-Health bleibt intern.
 | `/de.showcase.loyalty.v1.service.LoyaltyService/` | `gpos-loyalty` | `Prefix`, alle RPCs inkl. `IssueCoupon`; 60 je min und IP |
 | `/grpc.reflection.v1.ServerReflection/` und `v1alpha` | `gpos-pos` | ohne Limit; ab 0.1.4 für alle drei Dienste |
 | `/freigabe`, `/foto`, `/op`, `/etikett` | kein Pfad | bis zur Owner-Entscheidung (7) |
-| Grafana, Prometheus, SEMP, Keycloak-Admin, Traefik-Dashboard | kein Pfad | nur Port-Forward |
+| `/grafana/` | Grafana | nur IPs der Allowlist (`grafana_allow`, A11; nie Stand- oder 5G-IP), alle anderen 403 von Traefik; Login `admin` |
+| Prometheus, SEMP, Keycloak-Admin, Traefik-Dashboard | kein Pfad | nur Port-Forward |
 
 Alle Limits zählen je Client-IP (`limit-burst-multiplier: "1"`, Antwort 429);
 alle Standgeräte teilen eine NAT-IP (Kalibrierung A21).
@@ -138,7 +139,8 @@ Zwei lokale Dateien, gitignored, Modus 600, nie in git, Chats oder Backups:
   `gpos`, SEMP `127.0.0.1:18080`, `PG_MODE=kubectl`; nie Passwörter). Der Owner
   trägt nur `AKS_ACR` und `AKS_KV` ein (global eindeutig; nur diese übernimmt
   aks.sh in die Shell); `OWNER_TAG`, `CREATED_DATE` nur, falls `gebit-showcase`
-  keine Tags liefert, `ACME_EAB_*` nur im ZeroSSL-Rückfall (4.3).
+  keine Tags liefert, `ACME_EAB_*` nur im ZeroSSL-Rückfall (4.3),
+  `GRAFANA_ALLOW` optional (weitere eigene IPs für Grafana, A11).
   `SAM_HOME=$HOME/.config/eurocis-aks/sam` ist das HOME, mit dem der sam CLI
   für AKS läuft (absolut, nie `$HOME` oder `~/Library/Application Support/sam`,
   1.6); der AKS-Login liegt darunter in
@@ -173,7 +175,8 @@ Pfade ohne Ordner liegen unter `gebit-price-agent-demo/infra/aks/`.
 | `aks.sh` | Variablen, Wrapper und Helfer (1.5) | 1.3 |
 | `env.aks.example` | Vorlage für `gebit-price-agent-demo/.env.aks` (ohne Punkt, sonst greift `.env.*`) | 1.3 |
 | `agent-mesh-deployment/.gitignore` | Zeile `.env.aks` | 1.3 |
-| `monitoring-values-aks.yaml` | Overlay zu den Lab-Values: etcd, Controller-Manager, Scheduler und kube-proxy aus (verwaltete Control Plane, Cilium ohne kube-proxy), `NodeClockNotSynchronising` wieder an; Prometheus-PVC 16Gi `managed-csi-premium`, Grafana-Admin aus Secret `grafana-admin`, kein Ingress; zusätzliche Datasources nur Loki und Tempo (ohne SAM Platform DB), die Chart-Datasources Prometheus und Alertmanager bleiben | A8 |
+| `monitoring-values-aks.yaml` | Overlay zu den Lab-Values: etcd, Controller-Manager, Scheduler und kube-proxy aus (verwaltete Control Plane, Cilium ohne kube-proxy), `NodeClockNotSynchronising` wieder an; Prometheus-PVC 16Gi `managed-csi-premium`, Grafana-Admin aus Secret `grafana-admin`, kein Chart-Ingress, Grafana unter `/grafana/` (`root_url`, `serve_from_sub_path`; die Probes bleiben auf `/api/health`); zusätzliche Datasources nur Loki und Tempo (ohne SAM Platform DB), die Chart-Datasources Prometheus und Alertmanager bleiben | A8 |
+| `grafana/route.tpl.yaml` | in `monitoring`: Middleware `grafana-allow` (`ipAllowList`, Platzhalter `__GRAFANA_ALLOW__`) und IngressRoute `grafana` (Pfad `/grafana` und alles unter `/grafana/`, `websecure`, Default-Zertifikat); nur `grafana_allow` rendert und wendet an, nie eine gerenderte Kopie committen | A11 |
 | `loki-values-aks.yaml` | `lokiCanary` und `test` aus | A8 |
 | `traefik-values.yaml` | Image `traefik` per Digest mit `versionOverride: v3.7.19`, `checkNewVersion: false`; Provider `kubernetesIngressNGINX` an (`ingressClass: nginx`, `controllerClass: k8s.io/ingress-nginx`, keine Snippets, `publishService` an), `kubernetesCRD` an, `kubernetesIngress` und eigene IngressClass aus; `extraObjects`: IngressClass `nginx` (Controller `k8s.io/ingress-nginx`, verlangt das SAM-Chart) und Middleware `traefik/hsts` (`stsSeconds: 604800`, ohne `includeSubDomains` und Preload); `websecure`: `readTimeout: 3600s`, Middleware `traefik-hsts@kubernetescrd`; `web` ohne Redirect (HTTP-01); Service `LoadBalancer`, `externalTrafficPolicy: Local`, Annotationen `azure-pip-name: pip-aks-ingress`, `azure-load-balancer-resource-group: gebit-showcase-nodes`, `azure-load-balancer-tcp-idle-timeout: "30"`, nie `azure-dns-label-name`; `tlsStore.default.defaultCertificate.secretName: ingress-tls`; Access-Log JSON, Header und Query-Parameter `drop`; `/tmp` emptyDir 2Gi; Requests 100m/256Mi, Limit 512Mi; Dashboard nur intern; ServiceMonitor an | A9 |
 | `tls/issuers.yaml` | ClusterIssuer `letsencrypt-staging` und `letsencrypt-prod`, HTTP-01 mit Klasse `nginx`, ohne Kontakt-Mail | A10 |
@@ -190,7 +193,7 @@ Pfade ohne Ordner liegen unter `gebit-price-agent-demo/infra/aks/`.
 | amd-Skripte | ohne gesetzte Variablen wie heute: `SAM_ENV_FILE` statt `.env`, `SAM_HOME` (HOME des sam CLI, Login-Cache darunter), `SAM_URL` (mit `--url "$SAM_URL" --no-dotenv` an jedem `sam config plan/apply` und `--url "$SAM_URL"` an jedem `sam api`), `SAM_DNS_NAME` und `SAM_REDIRECT_URI` in `scripts/lib/common.sh`, `provision.sh`, rbac-, models- und entrypoints-Apply, beiden `setup-keycloak-*.sh` und gpd `spikes/g0/keycloak-marktleitung.sh`; `SAM_ENV_FILE`, `SAM_URL`, `SAM_HOME` nur alle drei (`aks_sam`) oder keine, sonst Exit 1 vor jedem Aufruf, ebenso bei fehlender `SAM_ENV_FILE`, Lab-`.env` als `SAM_ENV_FILE` oder `SAM_HOME` relativ, gleich `$HOME` oder Lab-sam-Home; mit `SAM_ENV_FILE` verlangen die Keycloak-Skripte `KEYCLOAK_URL` und `KEYCLOAK_ADMIN_PASSWORD` (`setup-keycloak-client.sh` auch `SAM_DNS_NAME`, `SAM_REDIRECT_URI`), kein Lab-Rückfall; Lab-Regression: `lab_guard`, dann im Lab `setup-keycloak-client.sh` ("already exists") und `provision.sh` (OK), Lab-`.env` unverändert | A15 |
 | gpd-Skripte | `scripts/lib.sh` und `opslib.py` mit `TARGET=lab/aks` (Default lab; aks: `.env.aks`, AKS-kubeconfig und -Kontext, Abbruch bei Lab-URLs wie `solace.lab`, `host.docker.internal`, `localhost`, `:8080`, Ausgaben `build/aks` und `mesh/.rendered/aks`); `install.sh` mit Teilen `pg/db/k8s/mesh/all`, psql per `kubectl exec`, `acr-pull` in `gpos-demo`, ohne Kyverno, Certificate und Lab-CA (`k8s` startet die sechs gpos-Deployments neu); `Makefile`: `build`, `push`, `k8s-up`, `manifests`, `demo-up` verweigern `TARGET=aks` (ACR-Push per A20), `status`, `logs`, `urls` folgen `TARGET`; `broker.sh/.py` prüfen bei aks erst `127.0.0.1:18080` (SEMP `about/api` und VPN-Prüfung) und nutzen einen offenen Port-Forward, sonst öffnen sie ihn selbst; Abbruch, wenn ein nur im Lab vorhandenes VPN existiert (Lab-Broker) | A18 |
 | gpd `k8s/` | `base/` (Namespace, ConfigMap `gpos-config`, sechs Deployments und Services); `overlays/lab/` (`certificate.yaml`, `ingress-ui.yaml`, `ingress-grpc.yaml`, Kyverno-Pull-Secret, Image-Tag; Render byte-gleich wie heute, gepinnt in `expected-render.yaml`; `k8s/kustomization.yaml` verweist darauf); `overlays/aks/` (`ingress-ui.yaml` und `ingress-grpc.yaml` mit den acht Ingresses aus 0.2, gRPC je Dienst mit `pathType: Prefix`; `configmap-patch.yaml` mit `SAM_URL` und `GPOS_GRPC_REFLECTION_SCOPE: all`; Patch `acr-pull`, kein Image); `k8s/postgres-aks/` (`namespace.yaml`; `postgres.yaml`: StatefulSet und Service `gpos-postgres`, Postgres 18 per Digest, UID 999, PVC 8Gi `managed-csi` an `/var/lib/postgresql`; `networkpolicy.yaml`: 5432 nur aus `gpos-demo`) | A18 |
-| gpd `scripts/aks-check.sh` | nur lesend gegen öffentliche Endpunkte, 21 Prüfungen (optional anderer FQDN als Argument; curl mit `-q`, ignoriert `~/.curlrc`): Zertifikat (FEHLER unter 14 Tagen Restlaufzeit); SAM `/` 200; `/kasse`, `/monitor` mit Titel; `/api/state` 200; kein Cookie auf `/kasse`, `/monitor`, `/api/state`; `http://` 308; HSTS ohne `includeSubDomains`; SSE `/api/events` (ungepuffertes hello); OIDC-Issuer; `/auth/admin/`, `/auth/realms/master/`, Grafana, Prometheus, Traefik-Dashboard und -API, SEMP zu (Inhalt prüfen, SAM antwortet sonst 200; Basic/Digest-Login-Abfrage oder SEMP-JSON-Fehler gilt als offen); `grpcurl list`; je gRPC-Dienst eine Route (unbekannte Methode, Antwort vom gRPC-Server); `grpc.health.v1.Health/Check` von außen scheitert; Exit 0 nur bei allen OK | A18 |
+| gpd `scripts/aks-check.sh` | nur lesend gegen öffentliche Endpunkte, 21 Prüfungen (optional anderer FQDN als Argument; curl mit `-q`, ignoriert `~/.curlrc`): Zertifikat (FEHLER unter 14 Tagen Restlaufzeit); SAM `/` 200; `/kasse`, `/monitor` mit Titel; `/api/state` 200; kein Cookie auf `/kasse`, `/monitor`, `/api/state`; `http://` 308; HSTS ohne `includeSubDomains`; SSE `/api/events` (ungepuffertes hello); OIDC-Issuer; `/auth/admin/`, `/auth/realms/master/`, Prometheus, Traefik-Dashboard und -API, SEMP zu (Inhalt prüfen, SAM antwortet sonst 200; Basic/Digest-Login-Abfrage oder SEMP-JSON-Fehler gilt als offen); Grafana (`/grafana/`) standardmäßig zu (403 der Allowlist oder keine Route), mit `AKS_CHECK_GRAFANA=frei` muss `/grafana/api/health` 200 mit `database ok` liefern (Grafana-Modus nach Netz: aus einem freigegebenen Netz `frei`, sonst ohne, auch am Stand); `grpcurl list`; je gRPC-Dienst eine Route (unbekannte Methode, Antwort vom gRPC-Server); `grpc.health.v1.Health/Check` von außen scheitert; Exit 0 nur bei allen OK | A18 |
 | gpd `scripts/tests/test_k8s.py` | Routentest: jede Route aus `app/gposdemo/ui/bff.py` genau einmal "öffentlich" oder "offen"; jede gpos-ui-Route außer `/api/events` hat `proxy-body-size` und `proxy-request-buffering: "on"`; jeder der drei gRPC-Dienste hat genau einen öffentlichen `Prefix`-Pfad; Abnahme `make test` grün, Lab-Render-Diff leer, Lab-Smoke READY | A18 |
 
 ### 1.5 aks.sh: Wrapper und Helfer
@@ -233,6 +236,7 @@ haks() { KUBECONFIG="$AKS_KUBECONFIG" helm --kube-context "$AKS_CONTEXT" "$@"; }
 | `zerossl_on` | Secret `zerossl-eab` aus `ACME_EAB_HMAC` (Pipe), Issuer aus der Vorlage mit `ACME_EAB_KID`, Certificate `ingress-tls` auf Issuer `zerossl` patchen, auf Ready warten, `tls_backup` |
 | `net_check` | `nc` auf 8080, 9000, 8008, 55555 und die NodePorts des Traefik-Service (web, websecure, `healthCheckNodePort`) der Ingress-IP, je Port `<IP>:<Port> zu` oder `OFFEN`; 200 HTTPS-Abrufe von `/api/state` über eine Verbindung: `HTTPS https://$FQDN/api/state: N von 200 mit 200, M Verbindung(en), p50 X ms, p95 Y ms`; Exit 0 nur ohne `OFFEN` und mit 200 von 200 |
 | `sam_netpol_check` | aus `gpos-demo/deploy/gpos-ui` (Container `ui`) per Python-Socket (3 s): jeden Port der Services `*postgresql*` und `*seaweedfs*` in `sam-solace-lab` per Service-Name, jeden Container-Port ihrer Pods per Pod-IP, bei SeaweedFS dazu alle Standard-Listener von `weed server -s3` 4.48, die der Service nicht listet (Volume 8080/18080, Filer 8888/18888, Master 9333/19333, S3 8333/18333, Iceberg 8181, Lance 9101); je Ziel `<ziel>:<port> zu (Grund)`, `OFFEN` oder `FEHLER (DNS)`; Exit 0 nur, wenn jede Zeile `zu` ist |
+| `aks_myip`, `grafana_allow [CIDR...]`, `grafana_off` | eigene öffentliche IP aus dem Traefik-Access-Log einer Probe-Anfrage (kein fremder Dienst); `grafana_allow` ersetzt die Allowlist durch eigene IP, `GRAFANA_ALLOW` aus `.env.aks` und die Argumente (nur öffentliche Netze, IPv4 mindestens /16, IPv6 mindestens /48, keine Zonen-ID), rendert `grafana/route.tpl.yaml` in Python (IPs nie in argv, nur auf einem Terminal angezeigt, sonst nur die Anzahl) und prüft beide Seiten: Exit 0 nur bei eigener IP 200 und 403 aus dem Cluster; jede andere Antwort aus dem Cluster entfernt die Route wieder; `grafana_off` löscht IngressRoute und Middleware (Grafana nur per Port-Forward) |
 
 ### 1.6 Lab-Schutzregeln
 
@@ -464,8 +468,9 @@ einem Node mit Minuten Komplettausfall.
 
 ### A8 Monitoring
 
-Ziel: Monitoring wie im Lab, nur Port-Forward; vor Traefik, weil dessen
-ServiceMonitor die CRDs braucht.
+Ziel: Monitoring wie im Lab per Port-Forward (Grafana dazu ab A11 unter
+`/grafana/` mit Allowlist); vor Traefik, weil dessen ServiceMonitor die CRDs
+braucht.
 
 ```bash
 aks_guard && M="$SLI/pki/manifests" && H=https://grafana.github.io/helm-charts
@@ -484,12 +489,13 @@ haks upgrade --install tempo tempo --repo https://grafana-community.github.io/he
 haks upgrade --install alloy alloy --repo "$H" --version 1.11.0 -n monitoring \
   -f "$M/05-alloy-values.yaml" --wait
 kv grafana-admin | pbcopy                    # danach pbcopy </dev/null
-kaks -n monitoring port-forward svc/kube-prometheus-grafana 3000:80
+kaks -n monitoring port-forward svc/kube-prometheus-grafana 3000:80   # /grafana/
 ```
 
 Prüfung: vier Releases, Pods Running, PVCs Bound, kein Ingress; Grafana
-(`http://127.0.0.1:3000`, admin) zeigt Loki-Logs. Lab-`05-monitoring.yaml` nicht
-anwenden (Kyverno). Besucher-IPs liegen 7 Tage in Loki.
+(`http://127.0.0.1:3000/grafana/`, admin) zeigt Loki-Logs. Lab-
+`05-monitoring.yaml` nicht anwenden (Kyverno). Besucher-IPs liegen 7 Tage in
+Loki.
 
 ### A9 Traefik und Hairpin
 
@@ -577,6 +583,23 @@ kaks -n traefik get certificaterequest       # keine Ressourcen
 Prüfung wie kommentiert. `cloudapp.azure.com` fehlt auf der Public Suffix List,
 alle Azure-Kunden teilen 50 neue Zertifikate je 7 Tage: `rateLimited` heißt
 sofort ZeroSSL (4.3). Erneuerungen: 5 je 7 Tage, daher `tls_backup`.
+
+Grafana unter `/grafana/` (Owner-Entscheidung 23.11.2026), nur für die IPs
+der Allowlist; `grafana_allow` nimmt die eigene IP (aus dem Traefik-Log) und
+`GRAFANA_ALLOW` aus `.env.aks`:
+
+```bash
+aks_guard && grafana_allow   # eigene IP 200 (Soll 200), aus dem Cluster 403 (Soll 403)
+AKS_CHECK_GRAFANA=frei "$GPD/scripts/aks-check.sh" | grep grafana   # OK frei
+```
+
+Prüfung wie kommentiert; `https://$FQDN/grafana/` zeigt den Login (`admin`,
+Passwort per `kv grafana-admin | pbcopy`). Neue eigene IP (Büro, zu Hause):
+`grafana_allow` erneut, die alte fällt aus der Liste. Weitere feste IPs nur
+in `GRAFANA_ALLOW`, nie im Repo. Nie aus dem Standnetz oder per 5G freigeben:
+Dort teilen viele Geräte die IP (Stand-NAT mit Kiosk und Tablet, CGNAT des
+Providers) und sähen den Login; am Stand Grafana per Port-Forward (A8).
+Schließen: `grafana_off`.
 
 ### A12 Broker
 
@@ -769,7 +792,7 @@ ls ~/Downloads/Gebit/purchase-api-2.50.0.pb ~/Downloads/Gebit/receipt-api-2.13.0
 TARGET=aks scripts/install.sh k8s
 kaks -n gpos-demo get deploy,ingress
 TARGET=aks make smoke                        # READY (Kasse 99, ohne SAM)
-scripts/aks-check.sh                         # aks-check: 21 OK, 0 FEHLER; Exit 0
+AKS_CHECK_GRAFANA=frei scripts/aks-check.sh  # 21 OK, 0 FEHLER (Mac in der Allowlist)
 kaks -n sam-solace-lab get svc; sam_netpol_check   # jede Zeile "zu", Exit 0
 ```
 
@@ -886,7 +909,9 @@ aks_sam sam task send --url "https://$FQDN" -f "$GPD/spikes/mm/img/competitor_ta
 
 ### G2a (18.12.2026): Name, Zertifikat, eine IP, RTT
 
-- [ ] `"$GPD/scripts/aks-check.sh"` alle OK, keine Warnung im Browser.
+- [ ] `"$GPD/scripts/aks-check.sh"` alle OK: vom Mac mit
+  `AKS_CHECK_GRAFANA=frei`, aus einem Netz außerhalb der Allowlist (5G) ohne;
+  keine Warnung im Browser.
 - [ ] `dig +short "$FQDN"` = `ingress-ip`; ein LoadBalancer-Service; LB-Regeln
   nur 80 und 443 (A9).
 - [ ] `net_check` per Kabel aus Lab- oder Büronetz: keine Zeile `OFFEN`,
@@ -911,7 +936,8 @@ aks_sam sam task send --url "https://$FQDN" -f "$GPD/spikes/mm/img/competitor_ta
 
 ### G3 (22.01.2027): Neuaufbau, Dauerlauf, Kiosk, Netz, L3
 
-- [ ] Neuaufbau nach 4.7 bis `aks-check.sh` und Preflight grün in höchstens 4 h
+- [ ] Neuaufbau nach 4.7 bis `aks-check.sh` (Grafana-Modus nach Netz, 1.4) und
+  Preflight grün in höchstens 4 h
   (falls der Drill bleibt, Punkt 3 in 7); nach dem TLS-Restore keine neue
   CertificateRequest.
 - [ ] 24-h-Lauf Mo 18.01. 12:00 bis Di 19.01. 12:00 (450 POS-Läufe je Stunde,
@@ -936,8 +962,8 @@ aks_sam sam task send --url "https://$FQDN" -f "$GPD/spikes/mm/img/competitor_ta
   IMPLEMENTATION-PLAN 8.7 mit `kaks`: `kaks -n solace delete pod
   solace-pubsubplus-0`, awe-Neustart in Pause, LiteLLM aus.
 - [ ] Freeze: erlaubt sind nur ein Traefik-Patch (Digest und `versionOverride`,
-  danach `aks-check.sh` und Smoke), Limit senken oder Route sperren (4.7) und
-  TLS-Restore.
+  danach `aks-check.sh` und Smoke), Limit senken oder Route sperren (4.7),
+  TLS-Restore, `grafana_off` und `grafana_allow` (nur aus Büro oder zu Hause).
 
 ## 4. Betrieb
 
@@ -997,7 +1023,7 @@ es Hairpin oder Routing (A9), kein Fall für einen CA-Wechsel.
 
 ```bash
 aks_start                                    # bis 04.02., >= 60 min vor Bedarf
-cd "$GPD" && scripts/aks-check.sh && TARGET=aks make smoke
+cd "$GPD" && scripts/aks-check.sh && TARGET=aks make smoke   # Stand: Grafana 403
 TARGET=aks scripts/broker.sh r1-show         # genau ein Flow
 TARGET=aks scripts/reset.sh --scope day --preflight   # < 15 s, notify PASS
 aks_sam sam task send --url "https://$FQDN" "Antworte nur mit: OK"
@@ -1084,6 +1110,7 @@ kaks -n traefik delete certificate ingress-tls &&                # Secret kaputt
 kaks -n gpos-demo annotate ingress gpos-ui-pos nginx.ingress.kubernetes.io/limit-rpm=30 --overwrite
 kaks -n gpos-demo delete ingress gpos-wws-grpc                   # Route sperren
 kc_unlock marktleitung                                           # Login-Sperre
+grafana_off                                  # Grafana zu (zurück: grafana_allow, A11)
 ```
 
 Neuaufbau (G3-Drill oder Notfall, nie am Messetag):
@@ -1096,7 +1123,8 @@ Neuaufbau (G3-Drill oder Notfall, nie am Messetag):
    melden); `aks_ips` (A6) meldet dabei einmal `ACHTUNG` für beide IPs
    (erwartet, Register übernimmt sie).
 3. A8 und A9, cert-manager und Issuer aus A10, dann `tls_restore` und
-   `certificate.yaml` (keine Neuausstellung).
+   `certificate.yaml` (keine Neuausstellung), danach `grafana_allow` (A11, nie
+   aus Stand- oder 5G-Netz).
 4. A12 bis A19; vor A13 den alten Terraform-State löschen
    (`rm -f "$AKS_DIR"/broker/terraform.tfstate{,.backup}`); A15 schreibt ein
    neues Client-Secret; A17 meldet sich im AKS-Home neu an, provision.sh
@@ -1122,6 +1150,7 @@ Vor Rückgabe der Leihgeräte (falls L3 vorbereitet): Lab-CA von Kiosk-PCs und
 Tablet entfernen, Router-DNS-Einträge `gpos`, `sam`, `auth.solace.lab` und
 L3-Lesezeichen löschen; erledigt mit Datum protokollieren.
 
+Vor Rückbau oder Übergabe `grafana_off` (die Allowlist trägt eigene IPs).
 Rückbau erst nach der Owner-Entscheidung (Rückbau oder Übergabe):
 
 ```bash
@@ -1139,8 +1168,8 @@ lab_guard && (cd "$GPD" && make smoke)       # Lab unverändert READY
 
 Nie `az group delete -n gebit-showcase` (Owner-Entscheidung); Purge ist
 endgültig; den Lab-Key nicht deaktivieren. Danach ist `eurocis-showcase` frei
-belegbar: Links und QR-Codes nicht weiterverwenden. Allowlist und ZeroSSL-Konto
-aufräumen, lokale Exporte mit Messedaten löschen.
+belegbar: Links und QR-Codes nicht weiterverwenden. LiteLLM-Allowlist und
+ZeroSSL-Konto aufräumen, lokale Exporte mit Messedaten löschen.
 
 ## 6. Risiken
 
@@ -1155,7 +1184,8 @@ aufräumen, lokale Exporte mit Messedaten löschen.
 | Anonyme gRPC-Schreib-RPCs (Preis ändern, Coupon, Reset) sind öffentlich (Owner-Entscheidung 17.11.) | 60 Aufrufe je min und IP, `scripts/reset.sh` stellt den Demo-Stand her (akzeptiert) |
 | Gemeinsamer Origin von SAM und gpos (XSS in gpos könnte SAM-Tokens lesen) | gpos ohne Cookies, Web-Storage und `innerHTML` (akzeptiert) |
 | Neue BFF-Seiten ohne Pfad landen bei SAM (200) | Routentest in `test_k8s.py` |
-| Traefik weicht vom Lab-ingress-nginx ab (Defaults, 429 statt 503) | nur AKS-Prüfungen zählen, `aks-check.sh` nach jedem Patch |
+| Traefik weicht vom Lab-ingress-nginx ab (Defaults, 429 statt 503) | nur AKS-Prüfungen zählen, `aks-check.sh` nach jedem Patch (Grafana-Modus nach Netz, 1.4) |
+| Grafana unter `/grafana/` öffentlich geroutet (Login, Besucher-IPs in Loki) | IP-Allowlist in Traefik (403 vor Grafana), nie Stand- oder 5G-IP freigeben (geteilte NAT-/CGNAT-IP), starkes Admin-Passwort aus dem Key Vault, Brute-Force-Schutz von Grafana, `aks-check.sh` ohne `AKS_CHECK_GRAFANA` aus fremdem Netz (G2a), `grafana_off` vor Rückbau oder Übergabe |
 | ACR-Token läuft am 28.02.2027 ab; Docker Hub limitiert anonyme Pulls | Prüfung vor dem 26.01. und in G4; Digests, keine Pull-Schleifen |
 
 ## 7. Offene Punkte

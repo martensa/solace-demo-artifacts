@@ -670,8 +670,13 @@ def respond(method, url):
             '{"issuer":"https://%s/auth/realms/solace-lab"}' % parts.netloc
     if path == "/auth/admin/" and "kc-admin-open" in FAULTS:
         return "302", {"location": "http://127.0.0.1:18081/auth/admin/master/console/"}, ""
+    if path.startswith("/grafana/") and "grafana-403" in FAULTS:  # Traefik ipAllowList
+        return "403", {"content-type": "text/plain; charset=utf-8"}, "Forbidden"
     if path == "/grafana/login" and "grafana-open" in FAULTS:
         return "200", {"content-type": "text/html"}, "<title>Grafana</title>"
+    if path == "/grafana/api/health" and "grafana-open" in FAULTS:
+        return "200", {"content-type": "application/json"}, \
+            '{"database": "ok", "version": "12.4.3"}'
     if path == "/SEMP/v2/monitor/about/api" and FAULTS & {"semp-open", "semp-json"}:
         # a routed broker without credentials: 401 with SEMP's JSON error envelope
         headers = {"content-type": "application/json"}
@@ -749,13 +754,15 @@ sys.exit({"curl": curl, "openssl": openssl, "grpcurl": grpcurl}[tool](sys.argv[1
 '''
 AKS_CHECKS = ["tls", "sam /", "http -> https 308", "/kasse", "/monitor", "/api/state",
               "kein Cookie (gpos)", "hsts", "/api/events (SSE)", "oidc-issuer",
-              "keycloak-admin zu", "keycloak master zu", "grafana zu", "prometheus zu",
+              "keycloak-admin zu", "keycloak master zu", "grafana allowlist", "prometheus zu",
               "traefik-dashboard zu", "semp zu", "grpcurl list", "grpc purchase", "grpc wws",
               "grpc loyalty", "grpc health zu"]
 
 
-def run_aks_check(tmp_path: Path, faults: str = "") -> tuple[int, dict[str, str], str]:
-    """aks-check.sh with fake curl/openssl/grpcurl -> (exit, check -> OK|FEHLER, log)."""
+def run_aks_check(tmp_path: Path, faults: str = "", grafana: str | None = None
+                  ) -> tuple[int, dict[str, str], str]:
+    """aks-check.sh with fake curl/openssl/grpcurl -> (exit, check -> OK|FEHLER, log);
+    ``grafana`` sets AKS_CHECK_GRAFANA (None: unset, the default "zu")."""
     bash = Path("/bin/bash")
     if not bash.exists():
         pytest.skip("/bin/bash missing")
@@ -768,6 +775,8 @@ def run_aks_check(tmp_path: Path, faults: str = "") -> tuple[int, dict[str, str]
     log.write_text("", encoding="utf-8")
     env = {"PATH": f"{fake_bin}:/usr/bin:/bin", "HOME": str(tmp_path), "TMPDIR": str(tmp_path),
            "FAKE_AKS": faults, "FAKE_LOG": str(log), "LC_ALL": "C"}
+    if grafana is not None:
+        env["AKS_CHECK_GRAFANA"] = grafana
     proc = subprocess.run([str(bash), str(ROOT / "scripts/aks-check.sh")], env=env,
                           capture_output=True, text=True, timeout=120)
     results = {}
@@ -800,7 +809,7 @@ def test_aks_check_reports_each_fault(tmp_path: Path) -> None:
     code, results, _ = run_aks_check(tmp_path, faults)
     assert code == 1
     assert {c for c, s in results.items() if s == "FEHLER"} == {
-        "tls", "/kasse", "hsts", "grafana zu", "grpc health zu", "keycloak-admin zu",
+        "tls", "/kasse", "hsts", "grafana allowlist", "grpc health zu", "keycloak-admin zu",
         "kein Cookie (gpos)", "grpcurl list"}
     code, results, _ = run_aks_check(tmp_path, "down")
     assert code == 1 and results["grpc health zu"] == results["semp zu"] == "FEHLER"
@@ -814,6 +823,29 @@ def test_aks_check_sees_a_target_behind_a_login_as_open(tmp_path: Path, fault: s
     code, results, _ = run_aks_check(tmp_path, fault)
     assert code == 1
     assert {c for c, s in results.items() if s == "FEHLER"} == {check}
+
+
+def test_aks_check_counts_the_allowlist_403_as_closed(tmp_path: Path) -> None:
+    # outside the allowlist Traefik answers 403 before Grafana: closed for this caller
+    code, results, _ = run_aks_check(tmp_path, "grafana-403")
+    assert code == 0 and set(results.values()) == {"OK"}
+
+
+@pytest.mark.parametrize("faults, ok", [("grafana-open", True), ("grafana-403", False),
+                                        ("", False)])
+def test_aks_check_frei_needs_grafana_to_answer(tmp_path: Path, faults: str, ok: bool) -> None:
+    # from an allowlisted IP Grafana must answer; a 403 or no route (SAM) is a failure
+    code, results, _ = run_aks_check(tmp_path, faults, grafana="frei")
+    assert results["grafana allowlist"] == ("OK" if ok else "FEHLER")
+    assert {c for c, s in results.items() if s == "FEHLER"} <= {"grafana allowlist"}
+    assert code == (0 if ok else 1)
+
+
+def test_aks_check_refuses_an_unknown_grafana_mode(tmp_path: Path) -> None:
+    proc = subprocess.run(["/bin/bash", str(ROOT / "scripts/aks-check.sh")],
+                          env={"PATH": "/usr/bin:/bin", "AKS_CHECK_GRAFANA": "offen"},
+                          capture_output=True, text=True, timeout=30)
+    assert proc.returncode == 2 and "AKS_CHECK_GRAFANA=zu|frei" in proc.stderr
 
 
 def test_aks_check_keeps_a_bearer_401_of_sam_closed(tmp_path: Path) -> None:

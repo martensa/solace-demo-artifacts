@@ -154,7 +154,9 @@ unverändert und ohne Login. Stand 19.11.2026: API-Server offen,
 Lab-LiteLLM-Key auch auf AKS, ein Betreiber, gRPC öffentlich mit allen
 RPCs und Reflection; Einzelheiten nur in `AKS-MIGRATION-PLAN.md`.
 Grafana, Prometheus, Broker-SEMP, die Keycloak-Admin-Konsole und das
-Traefik-Dashboard gibt es nur per Port-Forward. Missbrauchsschutz:
+Traefik-Dashboard gibt es nur per Port-Forward (Nachtrag 23.11.2026:
+Grafana zusätzlich unter `/grafana/`, nur für eine IP-Allowlist, alle
+anderen 403; `AKS-MIGRATION-PLAN.md` 0.2 und A11). Missbrauchsschutz:
 Rate-Limits je Client-IP auf `/api/pos`, `/api/demo/reset` und
 `/api/events`. Alle Stellen dieses
 Plans mit WireGuard, Tunnel oder AKS-Hostnamen je App sind

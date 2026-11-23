@@ -3,6 +3,9 @@
 # A18, G2a, 4.4): one line OK or FEHLER per check, exit 0 only if every check is OK.
 #   scripts/aks-check.sh [FQDN]     default: the showcase name below
 # Needs curl, openssl and grpcurl; no kubeconfig, no .env.aks, no secret, no login.
+# Grafana (/grafana/) is open only for the IP allowlist of grafana_allow: by default the
+# caller counts as outside it (Grafana must not answer); from an allowlisted IP run
+# AKS_CHECK_GRAFANA=frei scripts/aks-check.sh, then Grafana must answer.
 # Read-only: GET requests, /kasse and /api/state for the test till 99 (the booth till
 # stays untouched), the gRPC routes probed with a method no service has (the server
 # answers UNIMPLEMENTED, no RPC runs). At most one request per rate-limited path;
@@ -21,7 +24,12 @@ LOYALTY=de.showcase.loyalty.v1.service.LoyaltyService
 CERT_MIN_DAYS=14
 
 case "${1:-}" in
-  -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+  -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+esac
+GRAFANA_MODE="${AKS_CHECK_GRAFANA:-zu}"
+case "$GRAFANA_MODE" in
+  zu|frei) ;;
+  *) echo "usage: AKS_CHECK_GRAFANA=zu|frei $0 [FQDN]  (got '$GRAFANA_MODE')" >&2; exit 2 ;;
 esac
 NAME="${1:-$FQDN_DEFAULT}"
 case "$NAME" in
@@ -235,7 +243,24 @@ closed() {  # closed CHECK ERE PATH... -> OK when no PATH answers with content m
 closed "keycloak-admin zu" '<title>[^<]*keycloak|/admin/master/console' /auth/admin/
 closed "keycloak master zu" '"realm" *: *"master"|/realms/master/protocol' \
   /auth/realms/master/ /auth/realms/master/.well-known/openid-configuration
-closed "grafana zu" '<title>[^<]*grafana|"database" *: *"ok"' /grafana/login /grafana/api/health
+# Grafana behind Traefik's ipAllowList: outside the list Traefik answers 403 before
+# Grafana (an absent route lands at SAM: also closed); inside it Grafana answers
+grafana_marker='<title>[^<]*grafana|"database" *: *"ok"'
+if [ "$GRAFANA_MODE" = zu ]; then
+  fails_before=$FAILS
+  closed "grafana allowlist" "$grafana_marker" /grafana/login /grafana/api/health
+  [ "$FAILS" -gt "$fails_before" ] &&
+    echo "Hinweis: steht diese IP in der Grafana-Allowlist, dann AKS_CHECK_GRAFANA=frei $0" >&2
+else
+  code="$(fetch grafana "$BASE/grafana/api/health")"
+  if [ "$code" = 200 ] && body_has grafana '"database" *: *"ok"'; then
+    ok "grafana allowlist" "frei für diese IP: /grafana/api/health=200"
+  elif [ "$code" = 403 ]; then
+    fail "grafana allowlist" "HTTP 403: diese IP ist nicht in der Allowlist (grafana_allow)"
+  else
+    fail "grafana allowlist" "HTTP $code ohne Grafana: Route fehlt (grafana_allow)"
+  fi
+fi
 closed "prometheus zu" '<title>[^<]*prometheus|"goVersion"' /graph \
   /prometheus/api/v1/status/buildinfo
 closed "traefik-dashboard zu" '<title>[^<]*traefik|"routers" *:' /dashboard/ /api/rawdata

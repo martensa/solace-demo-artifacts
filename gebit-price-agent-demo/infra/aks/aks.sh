@@ -12,8 +12,9 @@
 #   cluster is reached only through kaks/haks (explicit kubeconfig file and
 #   context) or the subshells of aks_sam/aks_kc.
 # - Only AKS_ACR and AKS_KV are read from gebit-price-agent-demo/.env.aks
-#   into the shell; the fallbacks (OWNER_TAG, CREATED_DATE, ACME_EAB_*) are
-#   read on demand, SAM_HOME and SAM_URL only by aks_sam/aks_kc to compare
+#   into the shell; the fallbacks (OWNER_TAG, CREATED_DATE, ACME_EAB_*) and
+#   GRAFANA_ALLOW (grafana_allow) are read on demand, SAM_HOME and SAM_URL
+#   only by aks_sam/aks_kc to compare
 #   them with AKS_SAM_HOME and https://$FQDN. The LLM key is read only in two
 #   subshells: amd_env_aks
 #   copies it from file to file, sam_helm hands it to helm on stdin.
@@ -927,6 +928,108 @@ sys.exit(rc)
   case $out in *OFFEN*) rc=1 ;; esac
   [ -n "$out" ] || { _aks_err "sam_netpol_check: keine Ausgabe aus gpos-demo/deploy/gpos-ui"; rc=1; }
   return $rc
+)
+
+aks_myip() (   # own public IP as Traefik sees it: one probe request, read from its access log
+  # (no third-party service). Inside $( ... ) every tool is called via "command":
+  # that text is parsed at run time, when the operator's aliases are active again.
+  set -o pipefail
+  aks_guard || return 1
+  tag="aks-myip-$(command od -An -N6 -tx1 /dev/urandom | command tr -d ' \n')"
+  command curl -q -s -o /dev/null --max-time 10 "https://$FQDN/$tag" ||
+    { _aks_err "aks_myip: keine Antwort von https://$FQDN"; return 1; }
+  i=0 ip=""
+  while [ -z "$ip" ] && [ $i -lt 10 ]; do
+    sleep 1
+    i=$((i + 1))
+    ip=$(kaks -n traefik logs deploy/traefik --since=2m 2>/dev/null |
+      command grep -F "\"RequestPath\":\"/$tag\"" | command tail -1 |
+      command sed -n 's/.*"ClientHost":"\([^"]*\)".*/\1/p')
+  done
+  [ -n "$ip" ] || { _aks_err "aks_myip: Probe nicht im Access-Log von Traefik"; return 1; }
+  printf '%s\n' "$ip"
+)
+
+grafana_off() (   # remove the Grafana route and its allowlist: /grafana/ closed for everyone
+  aks_guard || return 1
+  kaks -n monitoring delete ingressroute grafana --ignore-not-found &&
+    kaks -n monitoring delete middleware grafana-allow --ignore-not-found || return 1
+  echo "grafana_off: Route und Allowlist entfernt, Grafana nur per Port-Forward"
+)
+
+grafana_allow() (   # grafana_allow [CIDR...]: /grafana/ only for own IP + GRAFANA_ALLOW + CIDRs
+  # Replaces the whole allowlist (an old home or office IP drops out), applies
+  # the IngressRoute and proves both sides: 200 from here, 403 from inside the
+  # cluster. Any other cluster answer removes the route again (fail closed).
+  # Never from the booth network or 5G (shared NAT/CGNAT IP, runbook A11).
+  # The IPs never reach argv or a file; they are shown only on a terminal.
+  set -o pipefail
+  aks_guard || return 1
+  tpl="$AKS_DIR/grafana/route.tpl.yaml"
+  [ -f "$tpl" ] && command grep -q '__GRAFANA_ALLOW__' "$tpl" ||
+    { _aks_err "grafana_allow: $tpl fehlt oder ohne Platzhalter"; return 1; }
+  kaks -n monitoring get svc kube-prometheus-grafana -o name >/dev/null ||
+    { _aks_err "grafana_allow: Service monitoring/kube-prometheus-grafana fehlt (A8)"; return 1; }
+  me=$(aks_myip) || return 1
+  # stdin: one network per word (commas and blanks separate); only public
+  # networks, IPv4 at least /16, IPv6 at least /48, no zone id, duplicates
+  # dropped. stdout: "# N" and the template with the JSON-quoted list.
+  doc=$( { printf '%s\n' "$me" "$(_aks_env GRAFANA_ALLOW)"; printf '%s\n' "$@"; } |
+    command python3 -c '
+import ipaddress, json, re, sys
+out = []
+for raw in re.split(r"[\s,]+", sys.stdin.read().strip()):
+    if not raw:
+        continue
+    if not re.fullmatch(r"[0-9A-Fa-f:.]+(/[0-9]{1,3})?", raw):
+        sys.exit("grafana_allow: keine IP/kein CIDR: " + raw)
+    try:
+        net = ipaddress.ip_network(raw, strict=False)
+    except ValueError:
+        sys.exit("grafana_allow: keine IP/kein CIDR: " + raw)
+    if not net.is_global or net.prefixlen < (16 if net.version == 4 else 48):
+        sys.exit("grafana_allow: nicht öffentlich oder zu weit: " + str(net))
+    if str(net) not in out:
+        out.append(str(net))
+if not out:
+    sys.exit("grafana_allow: leere Allowlist")
+tpl = open(sys.argv[1], encoding="utf-8").read()
+print("# %d" % len(out))
+sys.stdout.write(tpl.replace("__GRAFANA_ALLOW__", ", ".join(json.dumps(n) for n in out)))
+' "$tpl") || return 1
+  n=$(printf '%s\n' "$doc" | command sed -n '1s/^# //p')
+  printf '%s\n' "$doc" | kaks apply -f - || return 1
+  if [ -t 1 ]; then
+    printf 'grafana_allow: https://%s/grafana/ nur für %s\n' "$FQDN" \
+      "$(printf '%s\n' "$doc" | command sed -n 's/^ *sourceRange: \[\(.*\)\]$/\1/p')"
+  else
+    printf 'grafana_allow: https://%s/grafana/ nur für %s Netz(e)\n' "$FQDN" "$n"
+  fi
+  # Traefik picks the new route up within seconds; then both sides of the rule
+  i=0 own="" inside=""
+  while [ $i -lt 12 ]; do
+    sleep 5
+    i=$((i + 1))
+    own=$(command curl -q -s -o /dev/null -w '%{http_code}' --max-time 10 \
+      "https://$FQDN/grafana/api/health")
+    [ "$own" = 200 ] && break
+  done
+  pod="grafana-probe-$(command od -An -N4 -tx1 /dev/urandom | command tr -d ' \n')"
+  out=$(kaks -n default run "$pod" --rm -i --quiet --restart=Never \
+    --image="$CURL_IMG" -- curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 \
+    "https://$FQDN/grafana/api/health" 2>&1)
+  inside=$(printf '%s\n' "$out" | command tr -d '\r' | command grep -E '^[0-9]{3}$' |
+    command tail -1)
+  printf 'grafana_allow: eigene IP %s (Soll 200), aus dem Cluster %s (Soll 403)\n' \
+    "${own:-000}" "${inside:-000}"
+  if [ "$inside" != 403 ]; then
+    [ -n "$inside" ] || printf '%s\n' "$out" | command tail -3 >&2
+    _aks_err "grafana_allow: Sperre nicht belegt, Route wird entfernt"
+    grafana_off
+    return 1
+  fi
+  [ "$own" = 200 ] ||
+    { _aks_err "grafana_allow: eigene IP bekommt $own (Allowlist greift, Route bleibt)"; return 1; }
 )
 
 # restore the operator's alias expansion (switched off at the top)

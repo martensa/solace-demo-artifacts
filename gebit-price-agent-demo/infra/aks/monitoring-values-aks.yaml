@@ -3,11 +3,13 @@
 # Second -f after the lab values
 # (solace-lab-infrastructure/pki/manifests/05-monitoring-values.yaml).
 # Neutralises every lab-only setting of that file for the AKS showcase:
-# no Ingress (Grafana only via port-forward), no lab CA issuer, no lab
-# host name, no lab SAM DB datasource with its demo password,
-# Grafana admin from the existing Secret grafana-admin (created in A8
-# from Key Vault), Prometheus on a managed-csi-premium PVC.
-# Contains no secrets.
+# no chart Ingress, no lab CA issuer, no lab host name, no lab SAM DB
+# datasource with its demo password, Grafana admin from the existing
+# Secret grafana-admin (created in A8 from Key Vault), Prometheus on a
+# managed-csi-premium PVC. Grafana serves from the sub path /grafana/:
+# publicly only through the Traefik IngressRoute with IP allowlist
+# (grafana/route.tpl.yaml, grafana_allow), else via port-forward at
+# http://127.0.0.1:3000/grafana/. Contains no secrets.
 
 # Managed control plane: etcd, controller-manager and scheduler are not
 # reachable from the cluster, and Azure CNI powered by Cilium runs
@@ -51,8 +53,19 @@ grafana:
     existingSecret: grafana-admin
     userKey: admin-user
     passwordKey: admin-password
+  # The chart Ingress stays off: the public route is the IngressRoute of
+  # grafana_allow, which adds the IP allowlist (an Ingress of the
+  # ingress-nginx provider has no allowlist here).
   ingress:
     enabled: false
+  # Grafana itself serves under /grafana/ (links, redirects, assets), so
+  # the route needs no prefix strip and the port-forward works too
+  # (http://127.0.0.1:3000/grafana/). The chart probes keep /api/health:
+  # Grafana 12.4.3 answers it at the root as well (checked 23.11.2026).
+  grafana.ini:
+    server:
+      root_url: https://eurocis-showcase.germanywestcentral.cloudapp.azure.com/grafana/
+      serve_from_sub_path: true
   # Replaces the lab list (lists are not merged): only Loki and Tempo.
   # The built-in Prometheus and Alertmanager datasources of the chart
   # stay; dashboards and tracesToMetrics need them.

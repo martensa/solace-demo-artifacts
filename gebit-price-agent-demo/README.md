@@ -84,7 +84,8 @@ install; `--platform` checks the SAM objects after every mesh apply.
 - `k8s/kustomization.yaml` compatibility entry, renders the lab overlay
 - `infra/aks/` AKS platform files: `aks.sh` (wrappers and helpers),
   `env.aks.example` (template of `.env.aks`), Helm values, broker
-  Terraform, Keycloak, TLS and NetworkPolicy manifests
+  Terraform, Keycloak, TLS and NetworkPolicy manifests, the Grafana
+  route template (`grafana/route.tpl.yaml`)
 - `mesh/` SAM resources: connectors, agents, workflows, the two
   entrypoint templates, RBAC copy, fallback F2 in `mesh/fallback/`
 - `scripts/` install, reset, broker, inbox, smoke and e2e tooling;
@@ -246,7 +247,11 @@ scripts behave there. `TARGET` is `lab` (default) or `aks`.
   file and context), `aks_sam` and `aks_kc` (subshells for the
   agent-mesh-deployment scripts and the `sam` CLI against AKS; they
   refuse the lab-only scripts such as `start.sh` and `stop.sh`) and
-  the other helpers of runbook 1.5.
+  the other helpers of runbook 1.5, among them `grafana_allow`:
+  Grafana under `/grafana/` only for the caller's own IP (read from
+  the Traefik access log) plus the optional `GRAFANA_ALLOW` of
+  `.env.aks`; everyone else gets 403. Never run it from the booth
+  network or 5G (shared IP); `grafana_off` closes the route again.
 - `.env.aks` (git-ignored, mode 600) is a copy of
   `infra/aks/env.aks.example`; it names Key Vault secrets and holds
   none, except the optional ZeroSSL key `ACME_EAB_HMAC` of runbook
@@ -303,7 +308,10 @@ scripts behave there. `TARGET` is `lab` (default) or `aks`.
   `/api/state`, SSE, OIDC issuer, HSTS, no cookie, closed admin and
   monitoring paths, gRPC routes. One `OK` or `FEHLER` line per check,
   exit 0 only if all pass; needs curl, openssl and grpcurl, but no
-  kubeconfig, `.env.aks`, secret or login.
+  kubeconfig, `.env.aks`, secret or login. Grafana counts as closed
+  by default (403 of the allowlist); from an allowlisted IP run
+  `AKS_CHECK_GRAFANA=frei scripts/aks-check.sh`, then Grafana must
+  answer.
 
 ## Tests
 
